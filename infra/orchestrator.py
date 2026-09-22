@@ -183,7 +183,7 @@ Write a file `WORKER_BLOCKED.md` in /workspace explaining why, then exit.
         worker_cmd = 'export HOME=/home/worker && export PATH=$PATH:/home/worker/.local/bin && agy -p "$(cat /workspace/.worker_task.txt)" --dangerously-skip-permissions'
 
         docker_cmd = [
-            "docker", "run", "--rm", "--network", "host",
+            "docker", "run", "--rm",
             "--name", self.container_name,
             "--env", f"HOST_UID={host_uid}",
             "--env", f"HOST_GID={host_gid}",
@@ -208,7 +208,7 @@ Write a file `WORKER_BLOCKED.md` in /workspace explaining why, then exit.
         validate_cmd = f"export PATH=$PATH:/usr/local/bin && {self.test_cmd}"
 
         docker_cmd = [
-            "docker", "run", "--rm", "--network", "host",
+            "docker", "run", "--rm",
             "--env", f"HOST_UID={host_uid}",
             "--env", f"HOST_GID={host_gid}",
             "-v", f"{self.worktree_path}:/workspace:z",
