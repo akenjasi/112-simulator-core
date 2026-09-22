@@ -4,11 +4,10 @@ All domain models must be imported here so that Base.metadata
 is fully populated before create_all() is called.
 """
 
-from sqlalchemy.orm import DeclarativeBase
+from sqlalchemy.orm import declarative_base
 
 
-class Base(DeclarativeBase):
-    pass
+Base = declarative_base()
 
 
 # ─── Domain model registry ────────────────────────────────────────────────────

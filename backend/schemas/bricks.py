@@ -9,12 +9,16 @@ class Emotion(str, Enum):
 
 
 class Intent(str, Enum):
-    intro = "intro"
-    caller_id = "caller_id"
-    address = "address"
-    situation = "situation"
-    victims = "victims"
-    outro = "outro"
+    greeting = "greeting"          # 0
+    address = "address"            # 1
+    address_details = "address_details"  # 2
+    situation = "situation"        # 3
+    victims = "victims"            # 4
+    caller_id = "caller_id"        # 5
+    phone = "phone"                # 6
+    repeat = "repeat"              # 7
+    bureaucracy = "bureaucracy"    # 8
+    outro = "outro"                # 9
 
 
 class Brick(BaseModel):

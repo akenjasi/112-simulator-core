@@ -1,4 +1,6 @@
+import inspect
 import re
+import httpx
 from typing import List
 
 from backend.schemas.factoids import Factoid, FactoidGenerationRequest, FactoidsResponse
@@ -81,15 +83,21 @@ def build_prompt(request: FactoidGenerationRequest) -> str:
 
 async def call_llm_api(prompt: str) -> str:
     """
-    Асинхронная функция-заглушка вызова LLM API.
-    Позже здесь будет реальный HTTP-запрос (через httpx) к Ollama / vLLM.
+    Вызов LLM API через httpx.AsyncClient (формат OpenAI API).
     """
-    return (
-        "SM1: У нас начался пожар.\n"
-        "SM2: Всё в дыму!\n"
-        "SD1: Огонь перекидывается.\n"
-        "SD2: Ничего не видно!"
-    )
+    url = "http://localhost:11434/v1/chat/completions"
+    payload = {
+        "model": "qwen2.5:7b",
+        "messages": [
+            {"role": "user", "content": prompt}
+        ]
+    }
+    async with httpx.AsyncClient() as client:
+        response = await client.post(url, json=payload, timeout=60.0)
+        data = response.json()
+        if inspect.isawaitable(data):
+            data = await data
+        return data["choices"][0]["message"]["content"]
 
 
 async def generate_factoids(request: FactoidGenerationRequest) -> FactoidsResponse:

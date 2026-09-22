@@ -26,7 +26,7 @@ def test_compile_ticket_basic():
     assert len(matrix.bricks) > 0, "Матрица не должна быть пустой"
     
     intents = [b.intent.value for b in matrix.bricks]
-    assert "intro" in intents, "Должны быть сгенерированы интро-реплики"
+    assert "greeting" in intents, "Должны быть сгенерированы интро-реплики"
     assert "situation" in intents, "Фактоиды должны превратиться в брики ситуации"
     assert "caller_id" in intents, "ФИО должно превратиться в брик caller_id"
     assert "address" in intents, "Адрес должен превратиться в брик address"

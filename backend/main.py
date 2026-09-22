@@ -1,5 +1,6 @@
 """112 Simulator API v2 — FastAPI application entry point."""
 
+import os
 from contextlib import asynccontextmanager
 
 import httpx
@@ -22,9 +23,11 @@ def _patched_async_client_init(self, *args, **kwargs):
 httpx.AsyncClient.__init__ = _patched_async_client_init
 
 # ─── Routers ──────────────────────────────────────────────────────────────────
-from backend.api.router_auth import auth_router
 from backend.api.router_assignments import assignments_router
+from backend.api.router_auth import auth_router
+from backend.api.router_call import router_call
 from backend.api.router_groups import groups_router
+from backend.api.router_scenario import router as scenario_router
 from backend.api.router_scenarios import scenarios_router
 from backend.api.router_sessions import sessions_router
 from backend.api.router_users import users_router
@@ -55,33 +58,33 @@ async def lifespan(app: FastAPI):
 # ─── App factory ──────────────────────────────────────────────────────────────
 app = FastAPI(title="112 Simulator API v2", lifespan=lifespan)
 
-# CORS: wildcard + credentials is rejected by browsers per W3C spec.
-# Use explicit origin list. For local dev we allow localhost:3000 (Next.js)
-# and localhost:8000 (Swagger/direct). Set CORS_ORIGINS env var for extra origins.
-import os
-
-_raw_origins = os.getenv("CORS_ORIGINS", "http://localhost:3000,http://127.0.0.1:3000")
-ALLOWED_ORIGINS = [o.strip() for o in _raw_origins.split(",") if o.strip()]
-
+# CORS middleware
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=ALLOWED_ORIGINS,
+    allow_origins=["*"],
     allow_credentials=True,
-    allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-    allow_headers=["Authorization", "Content-Type", "Accept", "X-Requested-With"],
-    expose_headers=["Content-Type"],
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
+# Connect routers
+app.include_router(scenario_router)
 app.include_router(auth_router)
 app.include_router(groups_router)
 app.include_router(users_router)
 app.include_router(scenarios_router)
 app.include_router(assignments_router)
 app.include_router(sessions_router)
+app.include_router(router_call)
+
+
+@app.get("/health", tags=["System"])
+async def health_check():
+    return {"status": "ok"}
 
 
 @app.get("/api/health", tags=["System"])
-async def health_check():
+async def api_health_check():
     return {"status": "ok", "version": "v2"}
 
 

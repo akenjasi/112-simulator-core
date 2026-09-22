@@ -1,6 +1,7 @@
 import uuid
 from datetime import datetime, timezone
 from sqlalchemy import (
+    Integer,
     String,
     DateTime,
     JSON,
@@ -8,6 +9,18 @@ from sqlalchemy import (
 )
 from sqlalchemy.orm import Mapped, mapped_column
 from backend.models.base import Base
+
+
+class ScenarioTicketModel(Base):
+    __tablename__ = "scenario_ticket_models"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    ticket_uuid: Mapped[str] = mapped_column(
+        String,
+        nullable=False,
+        default=lambda: str(uuid.uuid4()),
+    )
+    matrix_json: Mapped[dict] = mapped_column(JSON, default=dict)
 
 
 class ScenarioTicket(Base):

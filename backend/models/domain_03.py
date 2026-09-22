@@ -2,6 +2,7 @@ import uuid
 from datetime import datetime, timezone
 from typing import Optional
 from sqlalchemy import (
+    Integer,
     String,
     Boolean,
     DateTime,
@@ -12,6 +13,15 @@ from sqlalchemy import (
 )
 from sqlalchemy.orm import Mapped, mapped_column
 from backend.models.base import Base
+
+
+class SessionStateModel(Base):
+    __tablename__ = "session_states"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    session_id: Mapped[str] = mapped_column(String, nullable=False)
+    panic_level: Mapped[int] = mapped_column(Integer, default=0)
+    asked_intents: Mapped[str] = mapped_column(String, default="")
 
 
 # Table creation is handled by the lifespan hook in main.py (async, correct).
