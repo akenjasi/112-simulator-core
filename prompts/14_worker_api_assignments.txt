@@ -1,0 +1,22 @@
+You are a Builder Worker. You are operating in a LIVE environment.
+CRITICAL RULES:
+1. You may create `backend/api/router_assignments.py` and `backend/schemas/assignments.py`.
+2. You must modify `backend/main.py` to include your new router.
+3. DO NOT touch database models.
+
+TASK: Implement Assignments Admin API.
+
+STEP 1: Create `backend/schemas/assignments.py`.
+- Define `AssignmentCreate` BaseModel: `scenario_id` (str), `session_type` (str), `assigned_by` (str), `available_from` (datetime), `deadline` (datetime).
+- Define `AssignmentResponse` BaseModel: `assignment_id` (str), `scenario_id` (str, nullable), `session_type` (str), `assigned_by` (str), `available_from` (datetime), `deadline` (datetime). Set `model_config = {"from_attributes": True}`.
+
+STEP 2: Create `backend/api/router_assignments.py`.
+- Create `assignments_router = APIRouter(prefix="/api/admin/assignments", tags=["Admin Assignments"])`.
+- Implement `GET /`: returns `list[AssignmentResponse]`. Queries all from `domain_03.Assignment`. Use `Depends(get_db)`.
+- Implement `POST /`: accepts `AssignmentCreate`, returns `AssignmentResponse`. Creates a new `Assignment` in DB.
+
+STEP 3: Register in `backend/main.py`.
+- Import the router and do `app.include_router(assignments_router)`.
+
+SUCCESS CRITERION:
+`pytest tests/14_test_api_assignments.py -v` must pass.

@@ -1,0 +1,11 @@
+You are a Builder Worker for a "Clean Room Rewrite" migration.
+TASK: Create Database Connection Manager (Domain 07).
+
+STEP:
+Create `backend/database.py`.
+- Initialize SQLAlchemy `create_async_engine`. Use `os.getenv("DATABASE_URL", "sqlite+aiosqlite:///:memory:")`.
+- Create `AsyncSessionLocal` using `sessionmaker` with `class_=AsyncSession` and `expire_on_commit=False`.
+- Create an async generator `get_db()` that yields a session from `AsyncSessionLocal` and closes it on exit.
+
+SUCCESS CRITERION:
+`pytest tests/01_test_database.py -v` returns 0.

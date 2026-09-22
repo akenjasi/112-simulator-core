@@ -1,0 +1,23 @@
+You are a Builder Worker. You are operating in a LIVE environment, NOT a sandbox. 
+CRITICAL RULES:
+1. ONLY create/modify `backend/models/domain_03.py`.
+2. DO NOT touch ANY other files in the project. Do not modify `backend/models/domain_01.py` or `domain_02.py`. Do not touch tests.
+
+TASK: Create SQLAlchemy models for Domain 03 (Simulation Runtime).
+
+STEP:
+Create `backend/models/domain_03.py`.
+- Import `Base` from `backend.models.base`.
+- Implement `Assignment`, `ExamSession`, `CardActionSession`, `ReferenceMaterial`.
+- Primary keys MUST auto-generate a UUIDv4 string on instantiation: `default=lambda: str(uuid.uuid4())`.
+- Foreign keys should use strings (e.g. `ForeignKey("scenario_tickets.scenario_id")`, `ForeignKey("users.user_id")`). Note: `assignments.assignment_id`.
+- JSON fields MUST have correct defaults (`default=list` for arrays, `default=dict` for objects).
+
+SCHEMA:
+1. `assignments`: assignment_id (PK), scenario_id (FK: scenario_tickets), card_pool_ids (JSON, default []), session_type (String, CheckConstraint IN ('CALL_SIMULATION', 'CARD_ACTIONS')), card_pool_source (String, Nullable), mode (String, default 'TRAINING', CheckConstraint IN ('TRAINING', 'EXAM')), group_id (FK: student_groups), cadet_id (FK: users), assigned_by (FK: users), available_from (DateTime), deadline (DateTime), is_active (Boolean, default True).
+2. `exam_sessions`: session_id (PK), session_type (String), assignment_id (FK: assignments.assignment_id), cadet_id (FK: users.user_id), status (String), browser_call (JSON, default {}), dynamic_state (JSON, default {}), dialogue_log (JSON, default []), offline_buffer (JSON, default []), start_time (DateTime, default NOW), end_time (DateTime, Nullable).
+3. `card_action_sessions`: session_id (PK), assignment_id (FK: assignments), cadet_id (FK: users), status (String), card_queue (JSON, default []), card_results (JSON, default {}), offline_buffer (JSON, default []), start_time (DateTime, default NOW), end_time (DateTime, Nullable).
+4. `reference_materials`: material_id (PK), title (String), content_html (String), category (String, Nullable), tags (JSON, default []), created_by (FK: users), created_at (DateTime, default NOW), is_active (Boolean, default True).
+
+SUCCESS CRITERION:
+`pytest tests/06_test_domain_03_models.py -v` must pass.

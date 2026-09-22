@@ -1,0 +1,8 @@
+worktrees/
+reports/
+__pycache__/
+*.pyc
+.env
+data/*.db
+data/llm_cache/
+.deps/

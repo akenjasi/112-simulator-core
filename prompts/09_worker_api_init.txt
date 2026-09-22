@@ -1,0 +1,15 @@
+You are a Builder Worker. You are operating in a LIVE environment.
+CRITICAL RULES:
+1. ONLY create/modify `backend/main.py`.
+2. DO NOT touch ANY database model files.
+
+TASK: Initialize FastAPI Application.
+
+STEP:
+Create `backend/main.py`.
+- Import `FastAPI` from `fastapi`.
+- Create `app = FastAPI(title="112 Simulator API v2")`.
+- Implement a simple GET endpoint at `/api/health` that returns `{"status": "ok"}`.
+
+SUCCESS CRITERION:
+`pytest tests/09_test_api_health.py -v` must pass.

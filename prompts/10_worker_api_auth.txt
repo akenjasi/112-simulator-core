@@ -1,0 +1,24 @@
+You are a Builder Worker. You are operating in a LIVE environment.
+CRITICAL RULES:
+1. You may create `backend/api/router_auth.py` and `backend/schemas/auth.py`.
+2. You must modify `backend/main.py` to include your new router.
+3. DO NOT touch database models.
+
+TASK: Implement Authentication Endpoints (Domain 06).
+
+STEP 1: Create `backend/schemas/auth.py`.
+- Define a Pydantic `BaseModel` called `LoginRequest` with `username` (str), `password` (str), `role` (str).
+
+STEP 2: Create `backend/api/router_auth.py`.
+- Create an `APIRouter`.
+- Add `@router.post("/api/auth/login")`.
+- The endpoint must accept `LoginRequest` and a DB session dependency (`Depends(get_db)` from `backend.database`).
+- Query the `User` model (from `backend.models.domain_01`).
+- If a user matches the `username`, `password_hash == req.password`, and `role`, return `{"token": f"sess_{req.username}", "user": {"username": user.username, "role": user.role}}`.
+- Else, raise `HTTPException(status_code=401, detail="Invalid credentials")`.
+
+STEP 3: Register in `backend/main.py`.
+- Import the router and do `app.include_router(auth_router)`.
+
+SUCCESS CRITERION:
+`pytest tests/10_test_api_auth.py -v` must pass.

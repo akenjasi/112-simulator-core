@@ -1,0 +1,18 @@
+You are a Builder Worker. You are operating in a LIVE environment.
+CRITICAL RULES:
+1. You may modify `backend/api/router_sessions.py`.
+2. DO NOT touch database models or main.py.
+
+TASK: Connect AI Engine to Runtime Session Message API (Domain 06).
+
+STEP 1: Modify `backend/api/router_sessions.py`.
+- Import `RuntimeRouter` from `backend.core.runtime_router`.
+- In `POST /sessions/{session_id}/message`, instantiate `router = RuntimeRouter(session_id=session_id)`.
+- Replace the STUB reply logic. Call `ai_result = router.process_message(message=req.text, session_id=session_id)`.
+- The `ai_result` has `reply_text` and optionally `audio_id`. 
+- Append the bot reply to `session.dialogue_log`: `{"role": "CALLER", "text": ai_result.get("reply_text", "Error"), "timestamp": ...}`.
+- Save the session.
+- Return `{"reply": ai_result.get("reply_text", ""), "audio_id": ai_result.get("audio_id")}`.
+
+SUCCESS CRITERION:
+`pytest tests/21_test_api_session_message_ai.py -v` must pass.

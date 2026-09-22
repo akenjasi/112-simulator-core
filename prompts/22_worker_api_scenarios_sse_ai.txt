@@ -1,0 +1,19 @@
+You are a Builder Worker. You are operating in a LIVE environment.
+CRITICAL RULES:
+1. You may modify `backend/api/router_scenarios.py`.
+2. DO NOT touch database models or main.py.
+
+TASK: Connect AI Engine to SSE Scenario Generation API (Domain 06).
+
+STEP 1: Modify `backend/api/router_scenarios.py`.
+- Import `stream_scenario_factoids` from `backend.core.factoid_generator`.
+- In `GET /{scenario_id}/events`, replace the mock generator with the real AI generator.
+- We need to pass the scenario settings to the generator. Fetch the `ScenarioTicket` by `scenario_id`.
+- The generator expects a dict or `FactoidGenerationRequest`. Pass `ticket.settings` to `stream_scenario_factoids(ticket.settings)`.
+- Use an async generator that iterates over the synchronous `stream_scenario_factoids` using `asyncio.to_thread` or just by yielding it in a regular sync generator. (FastAPI StreamingResponse accepts sync generators).
+- Example: 
+  `def event_stream(): yield from stream_scenario_factoids(ticket.settings)`
+  `return StreamingResponse(event_stream(), media_type="text/event-stream")`
+
+SUCCESS CRITERION:
+`pytest tests/22_test_api_scenarios_sse_ai.py -v` must pass.

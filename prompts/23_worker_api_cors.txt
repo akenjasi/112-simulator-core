@@ -1,0 +1,9 @@
+You are a Builder Worker. You are operating in a LIVE environment.
+CRITICAL RULES:
+1. ONLY modify `backend/main.py`.
+TASK: Add CORSMiddleware to FastAPI.
+STEP:
+- Import `CORSMiddleware` from `fastapi.middleware.cors`.
+- Add the middleware to `app` with `allow_origins=["*"]`, `allow_credentials=True`, `allow_methods=["*"]`, `allow_headers=["*"]`.
+SUCCESS CRITERION:
+`pytest tests/23_test_cors.py -v` must pass.

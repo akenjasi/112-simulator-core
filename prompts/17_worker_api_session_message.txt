@@ -1,0 +1,23 @@
+You are a Builder Worker. You are operating in a LIVE environment.
+CRITICAL RULES:
+1. You may modify `backend/api/router_sessions.py` and `backend/schemas/sessions.py`.
+2. DO NOT touch database models or main.py.
+
+TASK: Implement Runtime Session Message API (Domain 06).
+
+STEP 1: Modify `backend/schemas/sessions.py`.
+- Define `MessageRequest` BaseModel: `text` (str).
+- Define `MessageResponse` BaseModel: `reply` (str), `audio_id` (str, optional), `tts_url` (str, optional).
+
+STEP 2: Modify `backend/api/router_sessions.py`.
+- Add `POST /sessions/{session_id}/message`.
+- Accepts `MessageRequest`. Returns `MessageResponse`.
+- Uses `Depends(get_db)`.
+- Queries `ExamSession` by `session_id`.
+- Appends the operator message to `session.dialogue_log`: `{"role": "OPERATOR", "text": req.text, "timestamp": datetime.datetime.now().isoformat()}`.
+- Appends a STUB bot reply to `session.dialogue_log`: `{"role": "CALLER", "text": "Stub reply", "timestamp": ...}`.
+- Saves the session (you may need to reassign the list or use `flag_modified` from sqlalchemy.orm.attributes if JSON tracking doesn't trigger).
+- Returns `{"reply": "Stub reply"}`.
+
+SUCCESS CRITERION:
+`pytest tests/17_test_api_session_message.py -v` must pass.

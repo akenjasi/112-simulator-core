@@ -1,0 +1,13 @@
+You are a Builder Worker. You are operating in a LIVE environment.
+CRITICAL RULES:
+1. You may modify `backend/api/router_scenarios.py` and `backend/schemas/scenarios.py`.
+2. DO NOT touch database models or main.py.
+
+TASK: Implement Scenario Generation Triggers API (Domain 06).
+
+STEP 1: Modify `backend/api/router_scenarios.py`.
+- Add `POST /{scenario_id}/generate`. Returns `{"job_id": "mock_job_123"}` for now (will connect to AI later). Uses `Depends(get_db)`. Verify `ScenarioTicket` exists.
+- Add `POST /{scenario_id}/compile`. Returns `{"success": True}`. Verify `ScenarioTicket` exists.
+
+SUCCESS CRITERION:
+`pytest tests/19_test_api_scenarios_generate.py -v` must pass.

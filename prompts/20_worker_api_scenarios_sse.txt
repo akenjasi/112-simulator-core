@@ -1,0 +1,17 @@
+You are a Builder Worker. You are operating in a LIVE environment.
+CRITICAL RULES:
+1. You may modify `backend/api/router_scenarios.py` and `backend/schemas/scenarios.py`.
+2. DO NOT touch database models or main.py.
+
+TASK: Implement Server-Sent Events API for Scenario Generation (Domain 06).
+
+STEP 1: Modify `backend/api/router_scenarios.py`.
+- Import `StreamingResponse` from `fastapi.responses`.
+- Add `GET /{scenario_id}/events`.
+- Verify `ScenarioTicket` exists.
+- Return a `StreamingResponse` that calls an async generator yielding Server-Sent Events (SSE). 
+- The generator should yield at least one event like: `event: status\ndata: {"text": "Generation started..."}\n\n`
+- The `media_type` of the response MUST be `"text/event-stream"`.
+
+SUCCESS CRITERION:
+`pytest tests/20_test_api_scenarios_sse.py -v` must pass.

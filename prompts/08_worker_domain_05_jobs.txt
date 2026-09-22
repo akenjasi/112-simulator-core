@@ -1,0 +1,20 @@
+You are a Builder Worker. You are operating in a LIVE environment, NOT a sandbox. 
+CRITICAL RULES:
+1. ONLY create/modify `backend/models/domain_05.py`.
+2. DO NOT touch ANY other files in the project. Do not modify models from Domain 01, 02, 03, or 04. Do not touch tests.
+
+TASK: Create SQLAlchemy models for Domain 05 (Bricks Matrix) and Import Jobs.
+
+STEP:
+Create `backend/models/domain_05.py`.
+- Import `Base` from `backend.models.base`.
+- Implement `BricksMatrixRef` and `ImportJob`.
+- Primary keys MUST auto-generate a UUIDv4 string on instantiation: `default=lambda: str(uuid.uuid4())` (except `ticket_id` which acts as PK and FK).
+- Foreign keys should use strings (e.g. `ForeignKey("scenario_tickets.scenario_id")`, `ForeignKey("users.user_id")`).
+
+SCHEMA:
+1. `bricks_matrix_refs`: ticket_id (String/UUID, PK, FK to scenario_tickets.scenario_id), bricks_file (String), total_bricks (Integer, default 0), tts_compiled (Boolean, default False), compiled_at (DateTime, Nullable). Note: `ticket_id` is passed during init, no need for auto-generation.
+2. `import_jobs`: job_id (String/UUID, PK, auto-generate UUIDv4), imported_by (FK: users.user_id), filename (String), status (String), imported_count (Integer, default 0), failed_count (Integer, default 0), errors (JSON, default []), created_at (DateTime, default NOW), finished_at (DateTime, Nullable).
+
+SUCCESS CRITERION:
+`pytest tests/08_test_domain_05_and_jobs.py -v` must pass.

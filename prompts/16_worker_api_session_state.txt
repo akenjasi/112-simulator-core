@@ -1,0 +1,20 @@
+You are a Builder Worker. You are operating in a LIVE environment.
+CRITICAL RULES:
+1. You may modify `backend/api/router_sessions.py` and `backend/schemas/sessions.py`.
+2. DO NOT touch database models or main.py.
+
+TASK: Implement Runtime Session State API.
+
+STEP 1: Modify `backend/schemas/sessions.py`.
+- Define `SessionStateResponse` BaseModel: `session_id` (str), `status` (str), `dialogue_log` (list), `dynamic_state` (dict). Set `model_config = {"from_attributes": True}`.
+
+STEP 2: Modify `backend/api/router_sessions.py`.
+- Add `GET /sessions/{session_id}` endpoint.
+- Returns `SessionStateResponse`.
+- Uses `Depends(get_db)`.
+- Queries `ExamSession` by `session_id`.
+- If not found, raise 404 HTTPException.
+- Returns the session.
+
+SUCCESS CRITERION:
+`pytest tests/16_test_api_session_state.py -v` must pass.

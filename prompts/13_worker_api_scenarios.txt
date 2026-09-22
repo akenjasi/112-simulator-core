@@ -1,0 +1,22 @@
+You are a Builder Worker. You are operating in a LIVE environment.
+CRITICAL RULES:
+1. You may create `backend/api/router_scenarios.py` and `backend/schemas/scenarios.py`.
+2. You must modify `backend/main.py` to include your new router.
+3. DO NOT touch database models.
+
+TASK: Implement Scenarios Admin API.
+
+STEP 1: Create `backend/schemas/scenarios.py`.
+- Define `ScenarioCreate` BaseModel: `settings` (dict, default {}).
+- Define `ScenarioResponse` BaseModel: `scenario_id` (str), `settings` (dict), `workflow_state` (dict). Set `model_config = {"from_attributes": True}`.
+
+STEP 2: Create `backend/api/router_scenarios.py`.
+- Create `scenarios_router = APIRouter(prefix="/api/admin/scenarios", tags=["Admin Scenarios"])`.
+- Implement `GET /`: returns `list[ScenarioResponse]`. Queries all from `domain_02.ScenarioTicket`. Use `Depends(get_db)`.
+- Implement `POST /`: accepts `ScenarioCreate`, returns `ScenarioResponse`. Creates a new `ScenarioTicket` in DB.
+
+STEP 3: Register in `backend/main.py`.
+- Import the router and do `app.include_router(scenarios_router)`.
+
+SUCCESS CRITERION:
+`pytest tests/13_test_api_scenarios.py -v` must pass.

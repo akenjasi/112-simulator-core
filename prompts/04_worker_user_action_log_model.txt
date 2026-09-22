@@ -1,0 +1,13 @@
+You are a Builder Worker for a "Clean Room Rewrite" migration.
+TASK: Add UserActionLog model for Domain 01.
+
+STEP:
+Modify `backend/models/domain_01.py`.
+- Add `UserActionLog` class mapping to `user_action_log`.
+- Primary key `log_id` MUST auto-generate a UUIDv4 string on instantiation: `default=lambda: str(uuid.uuid4())`.
+
+SCHEMA:
+log_id (String/UUID, PK), user_id (String/UUID, ForeignKey to users.user_id, Nullable), role (String, Nullable), action (String), target_entity (String, Nullable), target_id (String, Nullable), ip_address (String, Nullable), details (String, Nullable), timestamp (DateTime, Default NOW).
+
+SUCCESS CRITERION:
+`pytest tests/04_test_user_action_log_model.py -v` returns 0.

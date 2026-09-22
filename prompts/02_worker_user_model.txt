@@ -1,0 +1,17 @@
+You are a Builder Worker for a "Clean Room Rewrite" migration.
+TASK: Create User model for Domain 01.
+
+STEP:
+Create `backend/models/domain_01.py`.
+- Import `Base` from `backend.models.base`.
+- Implement ONLY the `User` class mapping to table `users`.
+- Use `sqlalchemy.orm.Mapped` and `mapped_column`.
+- Primary key `user_id` MUST auto-generate a UUIDv4 string on instantiation: `default=lambda: str(uuid.uuid4())`.
+- JSON field `group_ids` MUST default to empty list (`default=list`).
+- `role` MUST have `CheckConstraint("role IN ('ADMIN', 'TEACHER', 'CADET')", name="role_check")` in `__table_args__`.
+
+SCHEMA:
+user_id (String/UUID, PK), username (String, Unique), password_hash (String), role (String), full_name (String, Nullable), specialization (String, Nullable), group_ids (JSON), last_login (DateTime, Nullable), failed_login_attempts (Integer, Default 0), locked_until (DateTime, Nullable), password_changed_at (DateTime, Nullable), created_at (DateTime, Default NOW), is_active (Boolean, Default True).
+
+SUCCESS CRITERION:
+`pytest tests/02_test_user_model.py -v` returns 0.

@@ -1,0 +1,17 @@
+You are a Builder Worker for a "Clean Room Rewrite" migration.
+TASK: Create ScenarioTicket model for Domain 02.
+
+STEP:
+Create `backend/models/domain_02.py`.
+- Import `Base` from `backend.models.base`.
+- Add `ScenarioTicket` class mapping to `scenario_tickets`.
+- Use `sqlalchemy.orm.Mapped` and `mapped_column`.
+- Primary key `scenario_id` MUST auto-generate a UUIDv4 string on instantiation: `default=lambda: str(uuid.uuid4())`.
+- JSON dict fields (`workflow_state`, `settings`, `ground_truth`, `ai_content`) MUST default to empty dict (`default=dict`).
+- JSON list fields (`reference_material_ids`, `version_history`) MUST default to empty list (`default=list`).
+
+SCHEMA:
+scenario_id (String/UUID, PK), workflow_state (JSON, Default {}), settings (JSON, Default {}), ground_truth (JSON, Default {}), ai_content (JSON, Default {}), reference_material_ids (JSON, Default []), version_history (JSON, Default []), created_at (DateTime, Default NOW).
+
+SUCCESS CRITERION:
+`pytest tests/05_test_scenario_ticket_model.py -v` returns 0.

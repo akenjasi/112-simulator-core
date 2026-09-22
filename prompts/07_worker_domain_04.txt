@@ -1,0 +1,22 @@
+You are a Builder Worker. You are operating in a LIVE environment, NOT a sandbox. 
+CRITICAL RULES:
+1. ONLY create/modify `backend/models/domain_04.py`.
+2. DO NOT touch ANY other files in the project. Do not modify models from Domain 01, 02, or 03. Do not touch tests.
+
+TASK: Create SQLAlchemy models for Domain 04 (Evaluation & Reporting).
+
+STEP:
+Create `backend/models/domain_04.py`.
+- Import `Base` from `backend.models.base`.
+- Implement `IncidentCard`, `EvaluationResult`, `SessionReport`.
+- Primary keys MUST auto-generate a UUIDv4 string on instantiation: `default=lambda: str(uuid.uuid4())`.
+- Foreign keys should use strings (e.g. `ForeignKey("exam_sessions.session_id")`, `ForeignKey("users.user_id")`).
+- JSON fields MUST have correct defaults (`default=list` for arrays, `default=dict` for objects).
+
+SCHEMA:
+1. `incident_cards`: card_id (PK), session_id (FK: exam_sessions, Nullable), scenario_id (FK: scenario_tickets, Nullable), operator_id (FK: users, Nullable), card_origin (String), filled_data (JSON, default {}), assigned_services (JSON, default {}), status (String, default 'open'), created_at (DateTime, default NOW).
+2. `evaluation_results`: evaluation_id (PK), card_id (FK: incident_cards), session_id (FK: exam_sessions, Nullable), scores (JSON, default {}), metrics (JSON, default {}), grammar (JSON, default {}), errors_list (JSON, default []), expert_comment (String, Nullable), expert_modified_at (DateTime, Nullable), expert_modified_by (FK: users, Nullable), evaluated_at (DateTime, default NOW).
+3. `session_reports`: report_id (PK), assignment_id (FK: assignments, Nullable), group_id (FK: student_groups, Nullable), teacher_id (FK: users), session_type (String), summary (JSON, default {}), per_cadet (JSON, default {}), ai_insights (JSON, default {}), export_meta (JSON, default {}), is_attestation (Boolean, default False), generated_at (DateTime, default NOW).
+
+SUCCESS CRITERION:
+`pytest tests/07_test_domain_04_models.py -v` must pass.
