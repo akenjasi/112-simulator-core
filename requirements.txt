@@ -18,6 +18,9 @@ asyncpg>=0.29.0            # PostgreSQL async driver (cloud)
 passlib[bcrypt]>=1.7.4     # password hashing
 python-jose[cryptography]>=3.3.0  # JWT
 
+# ─── System / Monitoring ──────────────────────────────────────────────────────
+psutil>=5.9.0
+
 # ─── Testing ──────────────────────────────────────────────────────────────────
 pytest>=8.0.0
 pytest-asyncio>=0.24.0

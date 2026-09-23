@@ -75,3 +75,29 @@ def decode_access_token(token: str) -> Optional[dict]:
         return payload
     except JWTError:
         return None
+
+
+def check_teacher_user_management(
+    current_user_role: str,
+    target_user_role: Optional[str] = None,
+    new_role: Optional[str] = None,
+) -> None:
+    """Validate that if current user is TEACHER, they can only operate on CADET accounts.
+
+    Raises HTTP 403 Forbidden if a TEACHER attempts to create, update, or delete
+    an ADMIN or TEACHER account, or assign a non-CADET role.
+    """
+    if current_user_role == "TEACHER":
+        if target_user_role is not None and target_user_role != "CADET":
+            from fastapi import HTTPException, status
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Teachers can only manage CADET accounts",
+            )
+        if new_role is not None and new_role != "CADET":
+            from fastapi import HTTPException, status
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Teachers can only manage CADET accounts",
+            )
+

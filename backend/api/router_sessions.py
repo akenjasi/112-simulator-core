@@ -4,6 +4,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm.attributes import flag_modified
 
+from backend.core.deps import require_role
 from backend.core.runtime_router import RuntimeRouter
 from backend.database import get_db
 from backend.models.domain_03 import Assignment, ExamSession
@@ -18,7 +19,11 @@ from backend.schemas.sessions import (
     SubmitCardResponse,
 )
 
-sessions_router = APIRouter(prefix="/api/v2", tags=["Runtime Sessions"])
+sessions_router = APIRouter(
+    prefix="/api/v2",
+    tags=["Runtime Sessions"],
+    dependencies=[Depends(require_role("ADMIN", "TEACHER", "CADET"))],
+)
 
 
 @sessions_router.post(

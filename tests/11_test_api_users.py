@@ -13,24 +13,23 @@ async def init_db():
         await conn.run_sync(Base.metadata.drop_all)
 
 @pytest.mark.asyncio
-async def test_users_crud():
-    async with AsyncClient(app=app, base_url="http://test") as ac:
-        # Create
-        res = await ac.post("/api/admin/users", json={
-            "username": "new_cadet",
-            "password": "pwd",
-            "role": "CADET",
-            "full_name": "Ivanov I.I."
-        })
-        assert res.status_code == 200
-        data = res.json()
-        assert data["username"] == "new_cadet"
-        assert "user_id" in data
+async def test_users_crud(auth_client):
+    # Create
+    res = await auth_client.post("/api/admin/users", json={
+        "username": "new_cadet",
+        "password": "pwd",
+        "role": "CADET",
+        "full_name": "Ivanov I.I."
+    })
+    assert res.status_code == 200
+    data = res.json()
+    assert data["username"] == "new_cadet"
+    assert "user_id" in data
 
-        # List
-        res2 = await ac.get("/api/admin/users")
-        assert res2.status_code == 200
-        users = res2.json()
-        assert isinstance(users, list)
-        assert len(users) == 1
-        assert users[0]["username"] == "new_cadet"
+    # List
+    res2 = await auth_client.get("/api/admin/users")
+    assert res2.status_code == 200
+    users = res2.json()
+    assert isinstance(users, list)
+    assert any(u["username"] == "new_cadet" for u in users)
+

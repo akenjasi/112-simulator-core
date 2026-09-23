@@ -9,6 +9,7 @@ from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from backend.core.deps import require_role
 from backend.core.dialogue_router import process_turn
 from backend.core.intent_classifier import classify_intent
 from backend.core.tts_engine import generate_audio
@@ -20,7 +21,11 @@ from backend.schemas.router import SessionState
 
 logger = logging.getLogger(__name__)
 
-router_call = APIRouter(prefix="/api/v1/call", tags=["Call Runtime"])
+router_call = APIRouter(
+    prefix="/api/v1/call",
+    tags=["Call Runtime"],
+    dependencies=[Depends(require_role("ADMIN", "TEACHER", "CADET"))],
+)
 router = router_call
 
 DEFAULT_RESPONSES = {

@@ -24,6 +24,7 @@ httpx.AsyncClient.__init__ = _patched_async_client_init
 
 # ─── Routers ──────────────────────────────────────────────────────────────────
 from backend.api.router_assignments import assignments_router
+from backend.api.router_audit import audit_router
 from backend.api.router_auth import auth_router
 from backend.api.router_call import router_call
 from backend.api.router_classifier import classifier_router
@@ -35,6 +36,8 @@ from backend.api.router_scenarios import scenarios_router
 from backend.api.router_sessions import sessions_router
 from backend.api.router_users import users_router
 from backend.api.router_analytics import analytics_router
+from backend.api.router_admin import admin_router
+from backend.core.audit_middleware import AuditMiddleware
 
 
 # ─── Database lifespan ────────────────────────────────────────────────────────
@@ -63,6 +66,9 @@ async def lifespan(app: FastAPI):
 # ─── App factory ──────────────────────────────────────────────────────────────
 app = FastAPI(title="112 Simulator API v2", lifespan=lifespan)
 
+# Audit middleware
+app.add_middleware(AuditMiddleware)
+
 # CORS middleware
 app.add_middleware(
     CORSMiddleware,
@@ -85,6 +91,8 @@ app.include_router(router_dds)
 app.include_router(classifier_router)
 app.include_router(reports_router)
 app.include_router(analytics_router)
+app.include_router(audit_router)
+app.include_router(admin_router)
 
 
 

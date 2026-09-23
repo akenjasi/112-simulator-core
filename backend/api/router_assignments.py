@@ -2,12 +2,15 @@ from fastapi import APIRouter, Depends
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from backend.core.deps import require_role
 from backend.database import get_db
 from backend.models.domain_03 import Assignment
 from backend.schemas.assignments import AssignmentCreate, AssignmentResponse
 
 assignments_router = APIRouter(
-    prefix="/api/admin/assignments", tags=["Admin Assignments"]
+    prefix="/api/admin/assignments",
+    tags=["Admin Assignments"],
+    dependencies=[Depends(require_role("ADMIN", "TEACHER"))],
 )
 router = assignments_router
 

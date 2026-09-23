@@ -44,13 +44,13 @@ async def init_db():
         await conn.run_sync(Base.metadata.drop_all)
 
 @pytest.mark.asyncio
-async def test_get_session_state(init_db):
+async def test_get_session_state(init_db, auth_client):
     session_id = init_db
     
-    async with AsyncClient(app=app, base_url="http://test") as ac:
-        res = await ac.get(f"/api/v2/sessions/{session_id}")
-        assert res.status_code == 200
-        data = res.json()
-        assert data["session_id"] == session_id
-        assert data["status"] == "active"
-        assert "dialogue_log" in data
+    res = await auth_client.get(f"/api/v2/sessions/{session_id}")
+    assert res.status_code == 200
+    data = res.json()
+    assert data["session_id"] == session_id
+    assert data["status"] == "active"
+    assert "dialogue_log" in data
+

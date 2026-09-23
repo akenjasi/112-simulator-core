@@ -2,11 +2,16 @@ from fastapi import APIRouter, Depends
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from backend.core.deps import require_role
 from backend.database import get_db
 from backend.models.domain_01 import StudentGroup
 from backend.schemas.groups import GroupCreate, GroupResponse
 
-groups_router = APIRouter(prefix="/api/admin/groups", tags=["Admin Groups"])
+groups_router = APIRouter(
+    prefix="/api/admin/groups",
+    tags=["Admin Groups"],
+    dependencies=[Depends(require_role("ADMIN", "TEACHER"))],
+)
 router = groups_router
 
 

@@ -38,16 +38,16 @@ async def init_db():
         await conn.run_sync(Base.metadata.drop_all)
 
 @pytest.mark.asyncio
-async def test_start_session(init_db):
+async def test_start_session(init_db, auth_client):
     assignment_id, cadet_id = init_db
     
-    async with AsyncClient(app=app, base_url="http://test") as ac:
-        # Start Session
-        res = await ac.post(f"/api/v2/assignments/{assignment_id}/sessions/start", json={
-            "cadet_id": cadet_id
-        })
-        assert res.status_code == 200
-        data = res.json()
-        assert "session_id" in data
-        assert data["session_type"] == "CALL_SIMULATION"
-        assert data["status"] == "active"
+    # Start Session
+    res = await auth_client.post(f"/api/v2/assignments/{assignment_id}/sessions/start", json={
+        "cadet_id": cadet_id
+    })
+    assert res.status_code == 200
+    data = res.json()
+    assert "session_id" in data
+    assert data["session_type"] == "CALL_SIMULATION"
+    assert data["status"] == "active"
+

@@ -5,10 +5,12 @@ from httpx import AsyncClient
 from backend.main import app
 from backend.database import engine, AsyncSessionLocal
 from backend.models.base import Base
+from backend.core.security import create_access_token
 from backend.models.domain_01 import User, StudentGroup
 from backend.models.domain_02 import ScenarioTicket
 from backend.models.domain_03 import Assignment, ExamSession
 from backend.models.domain_04 import IncidentCard, EvaluationResult
+
 
 
 @pytest.fixture(autouse=True)
@@ -180,12 +182,18 @@ async def test_analytics_endpoints():
         )
         session.add(eval4)
 
+        teacher = User(username="teacher_analytics", password_hash="h", role="TEACHER")
+        session.add(teacher)
+
         await session.commit()
         u1_id = u1.user_id
         g_id = group.group_id
+        token = create_access_token(subject=teacher.user_id, role="TEACHER")
+        headers = {"Authorization": f"Bearer {token}"}
 
-    async with AsyncClient(app=app, base_url="http://test") as ac:
+    async with AsyncClient(app=app, base_url="http://test", headers=headers) as ac:
         # 1. Test Heatmap
+
         res_hm = await ac.get("/api/analytics/heatmap", params={"group_id": g_id})
         assert res_hm.status_code == 200
         heatmap = res_hm.json()

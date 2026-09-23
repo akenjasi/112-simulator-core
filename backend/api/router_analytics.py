@@ -10,6 +10,7 @@ from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.core.analytics_engine import build_error_heatmap, calculate_trends
+from backend.core.deps import require_role
 from backend.database import get_db
 from backend.models.domain_01 import StudentGroup, User
 from backend.models.domain_02 import ScenarioTicket
@@ -25,7 +26,11 @@ from backend.schemas.analytics import (
 
 logger = logging.getLogger(__name__)
 
-analytics_router = APIRouter(prefix="/api/analytics", tags=["Analytics"])
+analytics_router = APIRouter(
+    prefix="/api/analytics",
+    tags=["Analytics"],
+    dependencies=[Depends(require_role("ADMIN", "TEACHER"))],
+)
 router = analytics_router
 
 

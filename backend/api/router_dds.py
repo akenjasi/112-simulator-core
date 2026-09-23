@@ -8,12 +8,17 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm.attributes import flag_modified
 
+from backend.core.deps import require_role
 from backend.core.sla_monitor import calculate_sla_status, update_service_status
 from backend.database import get_db
 from backend.models.domain_04 import IncidentCard
 from backend.schemas.dds import DDSActionRequest, DDSCardResponse
 
-router_dds = APIRouter(prefix="/api/dds", tags=["DDS"])
+router_dds = APIRouter(
+    prefix="/api/dds",
+    tags=["DDS"],
+    dependencies=[Depends(require_role("ADMIN", "TEACHER"))],
+)
 router = router_dds
 
 TERMINAL_STATUSES = {

@@ -46,7 +46,7 @@ async def init_db():
         await conn.run_sync(Base.metadata.drop_all)
 
 @pytest.mark.asyncio
-async def test_session_message_ai(init_db, monkeypatch):
+async def test_session_message_ai(init_db, monkeypatch, auth_client):
     session_id = init_db
     
     # Mock RuntimeRouter to not load llama weights
@@ -59,17 +59,17 @@ async def test_session_message_ai(init_db, monkeypatch):
     import backend.core.runtime_router
     monkeypatch.setattr(backend.core.runtime_router, "RuntimeRouter", MockRouter)
     
-    async with AsyncClient(app=app, base_url="http://test") as ac:
-        res = await ac.post(f"/api/v2/sessions/{session_id}/message", json={
-            "text": "Система-112, слушаю вас."
-        })
-        assert res.status_code == 200
-        data = res.json()
-        assert data["reply"] == "Mock AI response"
-        assert data["audio_id"] == "mock_123"
-        
-        state_res = await ac.get(f"/api/v2/sessions/{session_id}")
-        log = state_res.json()["dialogue_log"]
-        assert len(log) >= 2
-        assert log[0]["text"] == "Система-112, слушаю вас."
-        assert log[1]["text"] == "Mock AI response"
+    res = await auth_client.post(f"/api/v2/sessions/{session_id}/message", json={
+        "text": "Система-112, слушаю вас."
+    })
+    assert res.status_code == 200
+    data = res.json()
+    assert data["reply"] == "Mock AI response"
+    assert data["audio_id"] == "mock_123"
+    
+    state_res = await auth_client.get(f"/api/v2/sessions/{session_id}")
+    log = state_res.json()["dialogue_log"]
+    assert len(log) >= 2
+    assert log[0]["text"] == "Система-112, слушаю вас."
+    assert log[1]["text"] == "Mock AI response"
+

@@ -8,10 +8,11 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-from fastapi import APIRouter, BackgroundTasks, HTTPException, Query, status
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, status
 from fastapi.responses import FileResponse
 from sqlalchemy import select
 
+from backend.core.deps import require_role
 from backend.core.reports_engine import (
     calculate_final_score,
     generate_csv_from_data,
@@ -30,7 +31,11 @@ from backend.schemas.reports import (
 
 logger = logging.getLogger(__name__)
 
-reports_router = APIRouter(prefix="/api/reports", tags=["Reports"])
+reports_router = APIRouter(
+    prefix="/api/reports",
+    tags=["Reports"],
+    dependencies=[Depends(require_role("ADMIN", "TEACHER"))],
+)
 
 # In-memory dictionary for task status tracking
 TASKS: Dict[str, Dict[str, Any]] = {}

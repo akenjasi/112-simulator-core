@@ -4,6 +4,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 import backend.core.factoid_generator as factoid_generator
+from backend.core.deps import require_role
 from backend.core.factoid_generator import stream_scenario_factoids
 from backend.database import get_db
 from backend.models.domain_02 import ScenarioTicket
@@ -14,7 +15,11 @@ from backend.schemas.scenarios import (
     ScenarioResponse,
 )
 
-scenarios_router = APIRouter(prefix="/api/admin/scenarios", tags=["Admin Scenarios"])
+scenarios_router = APIRouter(
+    prefix="/api/admin/scenarios",
+    tags=["Admin Scenarios"],
+    dependencies=[Depends(require_role("ADMIN", "TEACHER"))],
+)
 router = scenarios_router
 
 

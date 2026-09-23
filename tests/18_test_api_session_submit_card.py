@@ -43,20 +43,20 @@ async def init_db():
         await conn.run_sync(Base.metadata.drop_all)
 
 @pytest.mark.asyncio
-async def test_session_submit_card(init_db):
+async def test_session_submit_card(init_db, auth_client):
     session_id, user_id = init_db
     
-    async with AsyncClient(app=app, base_url="http://test") as ac:
-        res = await ac.post(f"/api/v2/sessions/{session_id}/submit_card", json={
-            "operator_id": user_id,
-            "filled_data": {"address": "Minsk"},
-            "assigned_services": ["101"]
-        })
-        assert res.status_code == 200
-        data = res.json()
-        assert "card_id" in data
-        assert data["session_status"] == "COMPLETED"
-        
-        # Check if session was closed
-        state_res = await ac.get(f"/api/v2/sessions/{session_id}")
-        assert state_res.json()["status"] == "COMPLETED"
+    res = await auth_client.post(f"/api/v2/sessions/{session_id}/submit_card", json={
+        "operator_id": user_id,
+        "filled_data": {"address": "Minsk"},
+        "assigned_services": ["101"]
+    })
+    assert res.status_code == 200
+    data = res.json()
+    assert "card_id" in data
+    assert data["session_status"] == "COMPLETED"
+    
+    # Check if session was closed
+    state_res = await auth_client.get(f"/api/v2/sessions/{session_id}")
+    assert state_res.json()["status"] == "COMPLETED"
+

@@ -23,7 +23,7 @@ async def init_db():
         await conn.run_sync(Base.metadata.drop_all)
 
 @pytest.mark.asyncio
-async def test_scenario_sse_events_ai(init_db, monkeypatch):
+async def test_scenario_sse_events_ai(init_db, monkeypatch, auth_client):
     scenario_id = init_db
     
     # Mock generator to avoid loading Llama
@@ -33,9 +33,9 @@ async def test_scenario_sse_events_ai(init_db, monkeypatch):
         
     monkeypatch.setattr(backend.core.factoid_generator, "stream_scenario_factoids", mock_stream)
     
-    async with AsyncClient(app=app, base_url="http://test") as ac:
-        res = await ac.get(f"/api/admin/scenarios/{scenario_id}/events")
-        assert res.status_code == 200
-        assert "text/event-stream" in res.headers.get("content-type", "")
-        content = res.text
-        assert "Mock LLM Generation" in content
+    res = await auth_client.get(f"/api/admin/scenarios/{scenario_id}/events")
+    assert res.status_code == 200
+    assert "text/event-stream" in res.headers.get("content-type", "")
+    content = res.text
+    assert "Mock LLM Generation" in content
+

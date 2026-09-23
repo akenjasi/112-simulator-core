@@ -4,12 +4,26 @@ from fastapi.testclient import TestClient
 # Импортируем приложение после того, как агент его создаст
 from backend.main import app
 
+from backend.core.deps import get_current_user
+from backend.models.domain_01 import User
+
 client = TestClient(app)
+
+@pytest.fixture(autouse=True)
+def override_auth():
+    app.dependency_overrides[get_current_user] = lambda: User(
+        user_id="admin_123",
+        role="ADMIN",
+        is_active=True,
+    )
+    yield
+    app.dependency_overrides.pop(get_current_user, None)
 
 def test_healthcheck():
     response = client.get("/health")
     assert response.status_code == 200
     assert response.json() == {"status": "ok"}
+
 
 from unittest.mock import patch, AsyncMock
 

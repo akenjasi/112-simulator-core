@@ -6,6 +6,7 @@ from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.core.classifier_rules import calculate_recommended_services
+from backend.core.deps import require_role
 from backend.database import get_db
 from backend.models.domain_06 import ClassifierRecord
 from backend.schemas.classifier import (
@@ -14,7 +15,11 @@ from backend.schemas.classifier import (
     ClassifierRecordResponse,
 )
 
-router = APIRouter(prefix="/api/classifier", tags=["Classifier"])
+router = APIRouter(
+    prefix="/api/classifier",
+    tags=["Classifier"],
+    dependencies=[Depends(require_role("ADMIN", "TEACHER"))],
+)
 classifier_router = router
 
 
