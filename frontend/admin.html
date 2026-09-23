@@ -1,0 +1,328 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Панель Администратора | Система-112 Москва</title>
+  <link rel="stylesheet" href="/css/admin.css">
+</head>
+<body>
+
+  <!-- Header -->
+  <header class="admin-header">
+    <div style="display: flex; align-items: center; gap: 16px;">
+      <div class="brand-badge-admin">🛡️ SEC-ADMIN 112</div>
+      <div class="brand-title">
+        <h1>Панель Главного Администратора Комплекса</h1>
+        <p>Управление доступом RBAC, монитор серверных ресурсов и журнал аудита</p>
+      </div>
+    </div>
+    <div style="display: flex; align-items: center; gap: 16px;">
+      <div class="admin-clock" id="admin-clock">00:00:00 MSK</div>
+      <a href="/teacher.html" class="btn btn-secondary btn-sm" style="text-decoration: none;">🎓 Кабинет Преподавателя</a>
+    </div>
+  </header>
+
+  <!-- Navigation Bar -->
+  <nav class="admin-tabs-bar">
+    <button class="tab-btn active" data-tab="users">
+      👥 Пользователи и Роли (RBAC)
+    </button>
+    <button class="tab-btn" data-tab="stats">
+      🖥️ Системные ресурсы сервера
+    </button>
+    <button class="tab-btn" data-tab="audit">
+      📜 Журнал аудита действий
+    </button>
+    <button class="tab-btn" data-tab="backup">
+      💾 Резервное копирование
+    </button>
+  </nav>
+
+  <!-- Content -->
+  <main class="admin-content">
+
+    <!-- TAB 1: RBAC USERS MANAGEMENT -->
+    <section class="view-panel active" id="view-users">
+      <div class="section-header">
+        <h2>👥 Управление пользователями и правами доступа (Role-Based Access Control)</h2>
+        <button class="btn btn-admin" onclick="openAddUserModal()">
+          ➕ Добавить пользователя
+        </button>
+      </div>
+
+      <div class="data-card">
+        <table class="admin-table">
+          <thead>
+            <tr>
+              <th>Логин</th>
+              <th>ФИО / Должность</th>
+              <th>Роль в системе</th>
+              <th>Ведомство / Служба</th>
+              <th>Статус</th>
+              <th style="text-align: right;">Действия</th>
+            </tr>
+          </thead>
+          <tbody id="users-tbody">
+            <!-- Rendered by admin_panel.js -->
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- TAB 2: SYSTEM HARDWARE RESOURCE MONITOR -->
+    <section class="view-panel" id="view-stats">
+      <div class="section-header">
+        <h2>🖥️ Монитор системных ресурсов сервера (Real-Time CPU/RAM Telemetry)</h2>
+        <button class="btn btn-secondary" onclick="loadSystemStats()">
+          🔄 Обновить метрики
+        </button>
+      </div>
+
+      <div class="system-gauges-grid">
+        <!-- CPU Gauge -->
+        <div class="gauge-card">
+          <div class="gauge-header">
+            <span>ЗАГРУЗКА ПРОЦЕССОРА (CPU)</span>
+            <span>CPU Load</span>
+          </div>
+          <div class="gauge-value-big" id="stat-cpu-val">0%</div>
+          <div class="gauge-bar-track">
+            <div class="gauge-bar-fill" id="stat-cpu-bar" style="width: 0%; background: var(--accent-green);"></div>
+          </div>
+          <div class="gauge-footer">
+            <span>Архитектура: x86_64 Multi-Core</span>
+            <span>Оптимизация Python 3.14</span>
+          </div>
+        </div>
+
+        <!-- RAM Gauge -->
+        <div class="gauge-card">
+          <div class="gauge-header">
+            <span>ОПЕРАТИВНАЯ ПАМЯТЬ (RAM)</span>
+            <span>Memory Usage</span>
+          </div>
+          <div class="gauge-value-big" id="stat-mem-val">0%</div>
+          <div class="gauge-bar-track">
+            <div class="gauge-bar-fill" id="stat-mem-bar" style="width: 0%; background: var(--accent-cyan);"></div>
+          </div>
+          <div class="gauge-footer">
+            <span id="stat-mem-sub">0 МБ / 0 МБ</span>
+            <span>Resident Set Size</span>
+          </div>
+        </div>
+
+        <!-- Active Sockets -->
+        <div class="gauge-card">
+          <div class="gauge-header">
+            <span>АКТИВНЫЕ СОКЕТЫ И СЕССИИ</span>
+            <span>Live Connections</span>
+          </div>
+          <div class="gauge-value-big" id="stat-sockets-val">0</div>
+          <div style="margin: 12px 0; font-size: 13px; color: var(--accent-blue);">
+            ● Онлайн курсанты и подключенные ДДС
+          </div>
+          <div class="gauge-footer">
+            <span>WebSocket / FastHTTP</span>
+            <span>Status: Healthy</span>
+          </div>
+        </div>
+
+        <!-- Latency -->
+        <div class="gauge-card">
+          <div class="gauge-header">
+            <span>ВРЕМЯ ОТКЛИКА API (LATENCY)</span>
+            <span>Ping / Delay</span>
+          </div>
+          <div class="gauge-value-big" id="stat-ping-val" style="color: var(--accent-green);">0 мс</div>
+          <div style="margin: 12px 0; font-size: 13px; color: var(--text-muted);">
+            Отклик локального IPC и SQLite
+          </div>
+          <div class="gauge-footer">
+            <span>SLA: &lt; 50 мс</span>
+            <span>Air-Gapped: Да</span>
+          </div>
+        </div>
+
+        <!-- Database Storage -->
+        <div class="gauge-card">
+          <div class="gauge-header">
+            <span>ОБЪЕМ БАЗЫ ДАННЫХ (STORAGE)</span>
+            <span>SQLite Engine</span>
+          </div>
+          <div class="gauge-value-big" id="stat-db-val">0 КБ</div>
+          <div style="margin: 12px 0; font-size: 13px; color: var(--text-secondary);">
+            Файл: data/simulator_storage.db
+          </div>
+          <div class="gauge-footer">
+            <span>WAL Mode: Enabled</span>
+            <span>ACID Verified</span>
+          </div>
+        </div>
+
+        <!-- Server Uptime -->
+        <div class="gauge-card">
+          <div class="gauge-header">
+            <span>ВРЕМЯ НЕПРЕРЫВНОЙ РАБОТЫ</span>
+            <span>System Uptime</span>
+          </div>
+          <div class="gauge-value-big" id="stat-uptime-val" style="font-size: 24px;">0ч 0м 0с</div>
+          <div style="margin: 12px 0; font-size: 13px; color: var(--text-muted);">
+            Статус ядра тренажера: Бесперебойно
+          </div>
+          <div class="gauge-footer">
+            <span>Zero Failures</span>
+            <span>100% Availability</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- TAB 3: AUDIT LOG -->
+    <section class="view-panel" id="view-audit">
+      <div class="section-header">
+        <h2>📜 Журнал аудита действий (Audit Logger & Telemetry)</h2>
+        <div class="section-actions">
+          <button class="btn btn-secondary" onclick="loadAuditLogs()">
+            🔄 Обновить журнал
+          </button>
+        </div>
+      </div>
+
+      <!-- Filters Row -->
+      <div class="filter-row">
+        <select id="audit-filter-user" class="form-control" style="width: 200px;" onchange="AdminState.filters.user = this.value; filterAuditLogs();">
+          <option value="all">Все пользователи</option>
+        </select>
+
+        <select id="audit-filter-action" class="form-control" style="width: 200px;" onchange="AdminState.filters.action = this.value; filterAuditLogs();">
+          <option value="all">Все типы событий</option>
+          <option value="start_call">Начало вызова (start_call)</option>
+          <option value="send_message">Сообщение диалога (send_message)</option>
+          <option value="submit_card">Регистрация карточки (submit_card)</option>
+          <option value="dds_status">Действие ДДС (dds_status)</option>
+          <option value="teacher">Вмешательство методиста (teacher)</option>
+          <option value="backup">Резервное копирование (backup)</option>
+          <option value="user">Управление пользователями (user)</option>
+        </select>
+
+        <input type="text" class="form-control" placeholder="🔍 Поиск по деталям события..." style="flex: 1; min-width: 250px;" oninput="AdminState.filters.search = this.value; filterAuditLogs();">
+      </div>
+
+      <div class="data-card">
+        <table class="admin-table">
+          <thead>
+            <tr>
+              <th style="width: 170px;">Время события</th>
+              <th style="width: 150px;">Пользователь</th>
+              <th style="width: 160px;">Тип действия</th>
+              <th>Подробности события и параметры</th>
+            </tr>
+          </thead>
+          <tbody id="audit-tbody">
+            <!-- Rendered by admin_panel.js -->
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- TAB 4: DATA BACKUP MANAGEMENT -->
+    <section class="view-panel" id="view-backup">
+      <div class="section-header">
+        <h2>💾 Резервное копирование данных и снимки состояния (Snapshots)</h2>
+        <div class="section-actions" style="display:flex; align-items:center; gap: 15px;">
+          <div style="border: 1px solid var(--border-color); padding: 5px; border-radius: 5px; background:var(--bg-tertiary);">
+             <span style="font-size:12px;">Пакетный импорт сценариев (JSON):</span>
+             <input type="file" id="importScenariosFile" accept=".json" onchange="uploadScenarios(this)" style="font-size: 12px; margin-left: 5px;">
+          </div>
+        </div>
+      </div>
+
+      <div class="backup-summary-box">
+        <div class="backup-stats">
+          <div class="backup-stat-item">
+            <span style="color: var(--text-secondary);">Текущая база данных:</span>
+            <strong>simulator_storage.db</strong>
+          </div>
+          <div class="backup-stat-item">
+            <span style="color: var(--text-secondary);">Каталог архивов:</span>
+            <strong>/data/backups/</strong>
+          </div>
+          <div class="backup-stat-item">
+            <span style="color: var(--text-secondary);">Режим отказоустойчивости:</span>
+            <strong style="color: var(--accent-green);">Горячий снимок без остановки</strong>
+          </div>
+        </div>
+
+        <button class="btn btn-admin" id="btn-create-backup" onclick="triggerBackupCreation()">
+          💾 Создать резервную копию базы данных
+        </button>
+      </div>
+
+      <div class="data-card">
+        <table class="admin-table">
+          <thead>
+            <tr>
+              <th>Имя архивного файла</th>
+              <th>Размер</th>
+              <th>Дата и время создания</th>
+              <th>Статус проверки</th>
+              <th style="text-align: right;">Действия</th>
+            </tr>
+          </thead>
+          <tbody id="backups-tbody">
+            <!-- Rendered by admin_panel.js -->
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- User Edit / Add Modal -->
+  <div class="modal-overlay" id="user-modal" style="display: none;">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h3 id="modal-user-title">Пользователь</h3>
+        <button class="modal-close-btn" onclick="closeUserModal()">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div class="form-group">
+          <label for="user-form-username">Имя пользователя (Логин):</label>
+          <input type="text" id="user-form-username" class="form-control" placeholder="cadet_ivanov">
+        </div>
+        <div class="form-group">
+          <label for="user-form-fullname">ФИО и должность:</label>
+          <input type="text" id="user-form-fullname" class="form-control" placeholder="Иванов Иван Иванович (Курсант 1002)">
+        </div>
+        <div class="form-group">
+          <label for="user-form-role">Роль в комплексе (RBAC):</label>
+          <select id="user-form-role" class="form-control">
+            <option value="operator">🎧 Курсант 112 (Оператор приема вызовов)</option>
+            <option value="instructor">🎓 Преподаватель (Методист / Контроль)</option>
+            <option value="dds">🚒 Диспетчер ДДС (Службы 101/102/103/ЖКХ)</option>
+            <option value="admin">🛡️ Администратор комплекса</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label for="user-form-service">Ведомство / Служба / Район:</label>
+          <input type="text" id="user-form-service" class="form-control" value="Служба 112 Москвы">
+        </div>
+        <div class="form-group">
+          <label for="user-form-status">Статус учетной записи:</label>
+          <select id="user-form-status" class="form-control">
+            <option value="active">● Активен</option>
+            <option value="inactive">○ Отключен</option>
+          </select>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" onclick="closeUserModal()">Отмена</button>
+        <button class="btn btn-admin" onclick="saveUserFromModal()">Сохранить</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="/js/admin_panel.js"></script>
+</body>
+</html>

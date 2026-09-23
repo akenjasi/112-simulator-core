@@ -6,6 +6,7 @@ from contextlib import asynccontextmanager
 import httpx
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import RedirectResponse
 from fastapi.staticfiles import StaticFiles
 
 # ─── Compatibility patch ───────────────────────────────────────────────────────
@@ -106,13 +107,22 @@ async def api_health_check():
     return {"status": "ok", "version": "v2"}
 
 
+# ─── React SPA frontend (DDS) ─────────────────────────────────────────────────
+_PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+_REACT_OUT_DIR = os.path.normpath(os.path.join(_PROJECT_ROOT, "frontend_react", "out"))
+
+@app.get("/dds", include_in_schema=False)
+async def redirect_dds():
+    return RedirectResponse(url="/dds/")
+
+if os.path.isdir(_REACT_OUT_DIR):
+    app.mount("/dds", StaticFiles(directory=_REACT_OUT_DIR, html=True), name="dds_frontend")
+
+
 # ─── Legacy HTML frontend (static) ────────────────────────────────────────────
 # index.html = login page, admin.html, teacher.html, operator.html
 # All JS files use relative /api/... paths → must be served from same origin as API (:8000)
-_FRONTEND_PATH = os.path.normpath(os.path.join(
-    os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
-    "..", "112_simulator", "frontend"
-))
+_FRONTEND_PATH = os.path.normpath(os.path.join(_PROJECT_ROOT, "frontend"))
 
 if os.path.isdir(_FRONTEND_PATH):
     # IMPORTANT: mount AFTER all include_router() calls.

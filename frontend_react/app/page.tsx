@@ -1,0 +1,620 @@
+"use client"
+
+import { useState, useEffect, useRef } from "react"
+import { dispatcherData as initialData, emptyDispatcherData, type DispatcherData } from "@/lib/dispatcher-data"
+import { ddsScenarios, type DdsScenario } from "@/lib/dds-scenarios"
+import { TopBar } from "@/components/dispatcher/top-bar"
+import { CallerPanel } from "@/components/dispatcher/caller-panel"
+import { IncidentPanel } from "@/components/dispatcher/incident-panel"
+import { ServicesBar } from "@/components/dispatcher/services-bar"
+import { Tutorial } from "@/components/tutorial"
+import { DispatchPanel } from "@/components/dispatcher/dispatch-panel"
+import { Award, AlertTriangle, CheckCircle, XCircle, Clock } from "lucide-react"
+
+export default function Page() {
+  const [liveScenarios, setLiveScenarios] = useState<any[]>([])
+
+  useEffect(() => {
+    fetch("/api/dds/scenarios")
+      .then(res => res.json())
+      .then(data => {
+        if (data.scenarios && data.scenarios.length > 0) {
+          setLiveScenarios(data.scenarios)
+        }
+      })
+      .catch(err => console.error("Ошибка загрузки карточек ДДС:", err))
+  }, [])
+
+  const [demoIndex, setDemoIndex] = useState(0)
+  const currentScenario = liveScenarios.length > 0 ? liveScenarios[demoIndex] : ddsScenarios[0]
+
+  const [data, setData] = useState<DispatcherData>(emptyDispatcherData)
+  const [networkStatus, setNetworkStatus] = useState<"offline" | "waiting" | "active">("offline")
+  const [slaTimer, setSlaTimer] = useState<number | null>(null)
+  const [slaViolated, setSlaViolated] = useState<boolean>(false)
+  const [isTutorialRunning, setIsTutorialRunning] = useState<boolean>(false)
+  const slaIntervalRef = useRef<NodeJS.Timeout | null>(null)
+
+  // Cadet decision & dispatch recording
+  const [isCardAccepted, setIsCardAccepted] = useState(false)
+  const [userDecision, setUserDecision] = useState<"Принята" | "Не принята" | null>(null)
+  const [userComment, setUserComment] = useState("")
+  const [userOrderNumber, setUserOrderNumber] = useState("")
+  const [whoAccepted, setWhoAccepted] = useState("")
+  const [summary, setSummary] = useState("")
+  const [showEndShiftModal, setShowEndShiftModal] = useState(false)
+
+  // Play beep sound when timer expires
+  const playTimeoutBeep = () => {
+    try {
+      const AudioCtx = window.AudioContext || (window as any).webkitAudioContext
+      if (AudioCtx) {
+        const ctx = new AudioCtx()
+        const osc = ctx.createOscillator()
+        const gain = ctx.createGain()
+        osc.type = "sawtooth"
+        osc.frequency.setValueAtTime(880, ctx.currentTime) // 880 Hz sharp alert beep
+        gain.gain.setValueAtTime(0.2, ctx.currentTime)
+        // Two beeps
+        gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.3)
+        osc.connect(gain)
+        gain.connect(ctx.destination)
+        osc.start()
+        osc.stop(ctx.currentTime + 0.35)
+        setTimeout(() => {
+          try {
+            const ctx2 = new AudioCtx()
+            const osc2 = ctx2.createOscillator()
+            const gain2 = ctx2.createGain()
+            osc2.type = "sawtooth"
+            osc2.frequency.setValueAtTime(880, ctx2.currentTime)
+            gain2.gain.setValueAtTime(0.2, ctx2.currentTime)
+            gain2.gain.exponentialRampToValueAtTime(0.01, ctx2.currentTime + 0.4)
+            osc2.connect(gain2)
+            gain2.connect(ctx2.destination)
+            osc2.start()
+            osc2.stop(ctx2.currentTime + 0.45)
+          } catch {}
+        }, 400)
+      }
+    } catch (e) {
+      console.warn("AudioContext error on timeout beep:", e)
+    }
+  }
+
+  // Start/Restart SLA Timer
+  const startSlaTimer = () => {
+    if (slaIntervalRef.current) {
+      clearInterval(slaIntervalRef.current)
+      slaIntervalRef.current = null
+    }
+    setSlaTimer(30)
+    setSlaViolated(false)
+
+    slaIntervalRef.current = setInterval(() => {
+      setSlaTimer((prev) => {
+        if (prev === null) return null
+        const next = prev - 1
+        if (next <= 0) {
+          setSlaViolated(true)
+          playTimeoutBeep()
+          return 0
+        }
+        return next
+      })
+    }, 1000)
+  }
+
+  // Load ticket scenario into view
+  const loadScenario = (index: number) => {
+    if (liveScenarios.length === 0) return; // Ждем загрузки
+    
+    const sc = (liveScenarios[index] || liveScenarios[0]) as any
+    const rawCard = sc.cardData || {}
+    const rawPhones = rawCard.phones || {}
+    const rawIncident = rawCard.incident || {}
+    const rawCaller = rawCard.caller || {}
+    const rawStatuses = rawCard.statuses || {}
+    const rawEmergency = rawCard.emergency || {}
+    const rawClassification = rawCard.classification || {}
+
+    const servicesList = Array.isArray(rawCard.services)
+      ? rawCard.services.map((s: any, idx: number) => {
+          if (typeof s === "string") {
+            return {
+              id: `srv_${idx}`,
+              name: s,
+              time: "12:00",
+              status: "Получена службой",
+              isRejected: false,
+              history: [
+                { op: "Система", time: "20.09.2026 12:00:00", status: "Добавлена" },
+                { op: "Система", time: "20.09.2026 12:00:00", status: "Получена службой" },
+              ],
+            }
+          }
+          return {
+            id: s.id || `srv_${idx}`,
+            name: s.name || "Служба",
+            time: s.time || "12:00",
+            status: s.status || "Получена службой",
+            isRejected: !!s.isRejected,
+            history: Array.isArray(s.history) ? s.history : [],
+          }
+        })
+      : []
+
+    const normalizedData: DispatcherData = {
+      connection: rawCard.connection || "Установлено",
+      phones: {
+        aon: rawPhones.aon || sc.caller_phone || "---",
+        provided: rawPhones.provided || sc.caller_phone || "---",
+        onSite: rawPhones.onSite || "",
+      },
+      incident: {
+        number: rawIncident.number || String(sc.ticketNumber || sc.id || "101-2024"),
+        savedAt: rawIncident.savedAt || "20.09.2026 00:00:00",
+        operator: rawIncident.operator || "Система",
+      },
+      caller: {
+        name: rawCaller.name || sc.caller_name || "Неизвестно",
+        role: rawCaller.role || "Очевидец",
+        address: rawCaller.address || sc.address || "Неизвестно",
+      },
+      statuses: {
+        injured: rawStatuses.injured || (sc.has_victims ? "да" : "нет"),
+        ambulanceRefusal: rawStatuses.ambulanceRefusal || "нет",
+        blocked: rawStatuses.blocked || "нет",
+      },
+      emergency: {
+        cs: !!rawEmergency.cs,
+        cp: !!rawEmergency.cp,
+      },
+      classification: {
+        section: rawClassification.section || sc.category || "Не указано",
+        title: rawClassification.title || sc.title || "Не указано",
+        class: rawClassification.class || "Экстренная",
+        visClass: rawClassification.visClass || "bg-red-500",
+      },
+      services: servicesList,
+    }
+
+    setData(normalizedData)
+    setIsCardAccepted(false)
+    setUserDecision(null)
+    setUserComment("")
+    setUserOrderNumber("")
+    setWhoAccepted("")
+    setSummary("")
+    startSlaTimer()
+  }
+
+  // Switch to next demo card
+  const nextDemoCard = () => {
+    if (liveScenarios.length === 0) return;
+    const nextIdx = (demoIndex + 1) % liveScenarios.length
+    setDemoIndex(nextIdx)
+    loadScenario(nextIdx)
+  }
+
+  const handleConnect = () => {
+    if (liveScenarios.length === 0) {
+      alert("Карточки еще загружаются с сервера...");
+      return;
+    }
+    setIsTutorialRunning(false)
+    setNetworkStatus("waiting")
+    setTimeout(() => {
+      setNetworkStatus("active")
+      loadScenario(demoIndex)
+    }, 1000)
+  }
+
+  // Cadet actions: Pencil status change
+  const handleStatusChange = async (
+    serviceName: string,
+    nextStatus: string,
+    commentText: string,
+    orderNumber: string
+  ) => {
+    // 1. Stop SLA timer on primary decision
+    if (slaIntervalRef.current) {
+      clearInterval(slaIntervalRef.current)
+      slaIntervalRef.current = null
+    }
+
+    const decision = (nextStatus === "Не принята" || nextStatus === "Отказ от выполнения работ")
+      ? "Не принята"
+      : "Принята"
+
+    setUserDecision(decision)
+    setUserComment(commentText)
+    setUserOrderNumber(orderNumber)
+
+    const isRej = decision === "Не принята"
+    const now = new Date()
+    const pad = (n: number) => String(n).padStart(2, "0")
+    const timeStr = `${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}`
+    const shortTime = `${pad(now.getHours())}:${pad(now.getMinutes())}`
+
+    const finalComment = orderNumber ? `[Наряд: ${orderNumber}] ${commentText}` : commentText
+    const finalCardId = currentScenario.id || data.incident.number.replace("Происшествие ", "")
+
+    try {
+      const response = await fetch("/api/dds/action", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          card_id: finalCardId,
+          service_name: serviceName,
+          status: nextStatus,
+          comment: finalComment,
+          duplicate_id: "",
+          user_name: "Диспетчер ДДС",
+        }),
+      })
+      const resData = await response.json()
+      if (resData && resData.evaluation) {
+        console.log("evaluation", resData.evaluation)
+      }
+    } catch (err) {
+      console.error("Failed to submit DDS action:", err)
+    }
+
+    // Update state
+    setData((prev) => {
+      const updatedServices = prev.services.map((srv) => {
+        if (srv.name === serviceName) {
+          return {
+            ...srv,
+            status: nextStatus,
+            time: shortTime,
+            orderNumber: orderNumber,
+            isRejected: isRej,
+            history: [
+              ...srv.history,
+              {
+                op: "оп. 14",
+                time: timeStr,
+                status: nextStatus,
+                orderNumber: orderNumber,
+                comment: commentText,
+                isRejected: isRej,
+              },
+            ],
+          }
+        }
+        return srv
+      })
+      return { ...prev, services: updatedServices }
+    })
+  }
+
+  // Calculate Deterministic Score (0 - 100)
+  const calculateScore = () => {
+    const isTrick = currentScenario.isTrick
+    const expected = currentScenario.expectedDecision
+    const actual = userDecision
+
+    let slaScore = 0
+    let decisionScore = 0
+    let justificationScore = 0
+    let dispatchScore = 0
+
+    // 1. SLA 30s (+20)
+    if (!slaViolated && actual !== null) {
+      slaScore = 20
+    }
+
+    // 2. Decision accuracy (+35)
+    if (actual === expected) {
+      decisionScore = 35
+    }
+
+    // 3. Justification or Requisite completeness (+20)
+    if (isTrick) {
+      if (actual === "Не принята" && userComment.trim().length >= 15) {
+        justificationScore = 20
+      }
+    } else {
+      // Normal ticket: properly registered
+      if (actual === "Принята") {
+        justificationScore = 20
+      }
+    }
+
+    // 4. Dispatch call and fields (+25)
+    if (isTrick) {
+      // Rejection does not require dispatch call
+      if (actual === "Не принята") {
+        dispatchScore = 25
+      }
+    } else {
+      // Normal ticket requires call & telephony fields
+      if (whoAccepted.trim().length > 0 && summary.trim().length > 0) {
+        dispatchScore = 25
+      } else if (whoAccepted.trim().length > 0 || summary.trim().length > 0) {
+        dispatchScore = 10
+      }
+    }
+
+    const total = slaScore + decisionScore + justificationScore + dispatchScore
+
+    return {
+      total,
+      slaScore,
+      decisionScore,
+      justificationScore,
+      dispatchScore,
+      passed: total >= 70,
+    }
+  }
+
+  const scoreResult = calculateScore()
+  const displayData = isTutorialRunning ? initialData : data
+  const displaySlaTimer = isTutorialRunning ? 30 : slaTimer
+
+  return (
+    <div className={`flex h-screen w-full overflow-hidden select-none flex-col bg-[#c9ced1] ${
+      slaViolated ? "ring-4 ring-red-600 shadow-2xl shadow-red-500/30" : ""
+    }`}>
+      
+      {/* Permanent Status Banner */}
+      <div className={`w-full z-50 flex shrink-0 items-center justify-between px-4 2xl:px-8 py-2 2xl:py-3 border-b-2 shadow-md transition-colors ${
+        networkStatus === "active" 
+          ? "bg-[#2b3a42] border-[#157dbd] text-white" 
+          : "bg-[#303335] border-orange-500 text-white"
+      }`}>
+        {networkStatus === "offline" ? (
+          <>
+            <span className="font-bold text-sm 2xl:text-lg">Режим: Учебный тренажер ДДС (Ожидание старта)</span>
+            <div className="flex items-center gap-3">
+              <button onClick={handleConnect} type="button" className="px-4 2xl:px-6 py-1.5 2xl:py-2 bg-[#157dbd] text-white text-[11px] 2xl:text-sm uppercase tracking-wide rounded-sm hover:bg-[#136ba3] transition-colors font-bold shadow">
+                Начать смену
+              </button>
+              <button
+                onClick={() => setIsTutorialRunning(true)}
+                type="button"
+                className="px-4 2xl:px-6 py-1.5 2xl:py-2 bg-[#1f2b31] border border-[#157dbd] text-[#4ade80] text-[11px] 2xl:text-sm uppercase tracking-wide rounded-sm hover:bg-[#157dbd] hover:text-white transition-colors font-bold"
+              >
+                Обучение
+              </button>
+            </div>
+          </>
+        ) : networkStatus === "waiting" ? (
+          <span className="font-bold text-sm 2xl:text-lg text-orange-400 animate-pulse">Инициализация экзаменационных билетов...</span>
+        ) : (
+          <div className="flex w-full items-center justify-between">
+            <div className="flex items-center gap-3">
+              <span className="font-bold text-xs 2xl:text-base text-[#4ade80] flex items-center gap-1.5">
+                <span className="h-2.5 w-2.5 rounded-full bg-[#4ade80] animate-ping" />
+                Смена активна (ДДС-112)
+              </span>
+              <span className="bg-[#1f2b31] border border-blue-400/40 text-blue-300 px-3 py-0.5 rounded text-xs 2xl:text-sm font-semibold">
+                Билет {demoIndex + 1} из {liveScenarios.length || ddsScenarios.length}: {currentScenario.title}
+              </span>
+              {currentScenario.isTrick && (
+                <span className="bg-amber-900/60 border border-amber-500 text-amber-300 px-2 py-0.5 rounded text-[11px] font-bold">
+                  ⚠️ Билет с подвохом
+                </span>
+              )}
+            </div>
+
+
+
+            <button 
+              onClick={() => setShowEndShiftModal(true)} 
+              className="px-4 py-1.5 text-xs 2xl:text-sm bg-red-600 hover:bg-red-700 text-white rounded font-bold transition shadow"
+            >
+              Завершить смену
+            </button>
+          </div>
+        )}
+      </div>
+
+      <Tutorial run={isTutorialRunning} onFinish={() => setIsTutorialRunning(false)} />
+      <TopBar data={displayData} slaTimer={displaySlaTimer} slaViolated={slaViolated} />
+
+      <div className="flex flex-1 gap-3 px-2 py-1 overflow-hidden">
+        <CallerPanel data={displayData} />
+        <div className="flex flex-1 flex-col gap-2 overflow-y-auto pr-2 pb-2">
+          <IncidentPanel data={displayData} />
+          <DispatchPanel 
+            isCardAccepted={isCardAccepted} 
+            whoAccepted={whoAccepted}
+            setWhoAccepted={setWhoAccepted}
+            summary={summary}
+            setSummary={setSummary}
+          />
+        </div>
+      </div>
+
+      <div className="shrink-0 z-50 w-full">
+        <ServicesBar 
+          data={displayData} 
+          onStatusChange={handleStatusChange} 
+          onAccept={() => setIsCardAccepted(true)} 
+          onNextCard={nextDemoCard} 
+        />
+      </div>
+
+      {/* Protocol Evaluation Modal (Завершение смены) */}
+      {showEndShiftModal && (
+        <div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/70 backdrop-blur-sm p-4 animate-in fade-in duration-200">
+          <div className="bg-white rounded-lg shadow-2xl max-w-xl w-full flex flex-col text-[#111827] overflow-hidden border border-gray-300">
+            {/* Modal Header */}
+            <div className="bg-[#303335] text-white px-6 py-4 flex items-center justify-between border-b border-gray-700">
+              <div className="flex items-center gap-2">
+                <Award className="h-6 w-6 text-amber-400" />
+                <div>
+                  <h2 className="text-lg 2xl:text-xl font-bold">Протокол аттестации диспетчера ДДС</h2>
+                  <p className="text-xs text-gray-400">Регламент первичного реагирования ЕКП 2025</p>
+                </div>
+              </div>
+              <button 
+                onClick={() => setShowEndShiftModal(false)}
+                className="text-gray-400 hover:text-white"
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* Checklist Breakdown */}
+            <div className="p-6 flex flex-col gap-4 max-h-[75vh] overflow-y-auto">
+              {/* Ticket Info Banner */}
+              <div className="bg-gray-50 border border-gray-200 rounded-md p-3 text-xs flex flex-col gap-1">
+                <div className="flex justify-between font-bold text-gray-800 text-sm">
+                  <span>Билет #{demoIndex + 1}: {currentScenario.ticketNumber}</span>
+                  <span className={currentScenario.isTrick ? "text-amber-700" : "text-blue-700"}>
+                    {currentScenario.isTrick ? "⚠️ Билет с подвохом" : "✓ Штатная ситуация"}
+                  </span>
+                </div>
+                <p className="text-gray-600 mt-0.5">{currentScenario.explanation}</p>
+              </div>
+
+              {/* 4 Deterministic Criteria */}
+              <div className="flex flex-col gap-2.5">
+                {/* 1. SLA */}
+                <div className="flex items-start justify-between p-3 rounded border border-gray-200 bg-white">
+                  <div className="flex items-start gap-2.5">
+                    {scoreResult.slaScore > 0 ? (
+                      <CheckCircle className="h-5 w-5 text-emerald-600 shrink-0 mt-0.5" />
+                    ) : (
+                      <XCircle className="h-5 w-5 text-red-600 shrink-0 mt-0.5" />
+                    )}
+                    <div>
+                      <div className="font-semibold text-sm">1. Норматив 30 секунд (SLA реагирования)</div>
+                      <div className="text-xs text-gray-500">
+                        {scoreResult.slaScore > 0 
+                          ? "Решение принято вовремя в пределах регламентного интервала." 
+                          : "Нарушен 30-секундный норматив реагирования или решение не принято."}
+                      </div>
+                    </div>
+                  </div>
+                  <span className={`font-mono font-bold text-sm ${scoreResult.slaScore > 0 ? "text-emerald-600" : "text-red-600"}`}>
+                    +{scoreResult.slaScore} / 20
+                  </span>
+                </div>
+
+                {/* 2. Decision */}
+                <div className="flex items-start justify-between p-3 rounded border border-gray-200 bg-white">
+                  <div className="flex items-start gap-2.5">
+                    {scoreResult.decisionScore > 0 ? (
+                      <CheckCircle className="h-5 w-5 text-emerald-600 shrink-0 mt-0.5" />
+                    ) : (
+                      <XCircle className="h-5 w-5 text-red-600 shrink-0 mt-0.5" />
+                    )}
+                    <div>
+                      <div className="font-semibold text-sm">2. Корректность решения (Принята / Не принята)</div>
+                      <div className="text-xs text-gray-500">
+                        Эталон: <b className="text-gray-800">{currentScenario.expectedDecision}</b>. Курсант выбрал: <b className="text-gray-800">{userDecision || "Не выбрано"}</b>.
+                      </div>
+                    </div>
+                  </div>
+                  <span className={`font-mono font-bold text-sm ${scoreResult.decisionScore > 0 ? "text-emerald-600" : "text-red-600"}`}>
+                    +{scoreResult.decisionScore} / 35
+                  </span>
+                </div>
+
+                {/* 3. Justification / Requisites */}
+                <div className="flex items-start justify-between p-3 rounded border border-gray-200 bg-white">
+                  <div className="flex items-start gap-2.5">
+                    {scoreResult.justificationScore > 0 ? (
+                      <CheckCircle className="h-5 w-5 text-emerald-600 shrink-0 mt-0.5" />
+                    ) : (
+                      <XCircle className="h-5 w-5 text-red-600 shrink-0 mt-0.5" />
+                    )}
+                    <div>
+                      <div className="font-semibold text-sm">
+                        {currentScenario.isTrick ? "3. Обоснование отказа по регламенту" : "3. Регистрация наряда / реквизитов"}
+                      </div>
+                      <div className="text-xs text-gray-500">
+                        {currentScenario.isTrick 
+                          ? userComment.trim().length >= 15
+                            ? `Обоснование зафиксировано (${userComment.trim().length} симв.): "${userComment.slice(0, 45)}..."`
+                            : "Обоснование отсутствует или менее обязательных 15 символов."
+                          : userDecision === "Принята"
+                          ? "Карточка принята на подведомственной территории."
+                          : "Ошибочный отказ в приеме штатной карточки."}
+                      </div>
+                    </div>
+                  </div>
+                  <span className={`font-mono font-bold text-sm ${scoreResult.justificationScore > 0 ? "text-emerald-600" : "text-red-600"}`}>
+                    +{scoreResult.justificationScore} / 20
+                  </span>
+                </div>
+
+                {/* 4. Dispatch Call & Telephony */}
+                <div className="flex items-start justify-between p-3 rounded border border-gray-200 bg-white">
+                  <div className="flex items-start gap-2.5">
+                    {scoreResult.dispatchScore > 0 ? (
+                      <CheckCircle className="h-5 w-5 text-emerald-600 shrink-0 mt-0.5" />
+                    ) : (
+                      <XCircle className="h-5 w-5 text-red-600 shrink-0 mt-0.5" />
+                    )}
+                    <div>
+                      <div className="font-semibold text-sm">4. Отработка вызова дежурному (Телефонограмма)</div>
+                      <div className="text-xs text-gray-500">
+                        {currentScenario.isTrick
+                          ? "Для отклоненной карточки вызов не требуется (зачет автоматом)."
+                          : whoAccepted.trim().length > 0 && summary.trim().length > 0
+                          ? `Звонок выполнен. Принял: ${whoAccepted}, Суть: ${summary}`
+                          : "Поля телефонограммы («Кто принял», «Суть») не заполнены после звонка."}
+                      </div>
+                    </div>
+                  </div>
+                  <span className={`font-mono font-bold text-sm ${scoreResult.dispatchScore > 0 ? "text-emerald-600" : "text-red-600"}`}>
+                    +{scoreResult.dispatchScore} / 25
+                  </span>
+                </div>
+              </div>
+
+              {/* Total Score & Grade */}
+              <div className="border-t border-gray-200 pt-4 flex items-center justify-between bg-gray-50 p-4 rounded-md">
+                <div>
+                  <div className="text-xs text-gray-500 font-medium uppercase tracking-wider">Итоговый результат:</div>
+                  <div className={`text-2xl 2xl:text-3xl font-extrabold ${
+                    scoreResult.total >= 85 ? "text-emerald-600" : scoreResult.total >= 70 ? "text-amber-600" : "text-red-600"
+                  }`}>
+                    {scoreResult.total} из 100 баллов
+                  </div>
+                </div>
+
+                <div className={`px-4 py-2 rounded-lg font-bold text-sm text-center ${
+                  scoreResult.passed 
+                    ? "bg-emerald-100 text-emerald-800 border border-emerald-300"
+                    : "bg-red-100 text-red-800 border border-red-300"
+                }`}>
+                  {scoreResult.total >= 85 
+                    ? "АТТЕСТАЦИЯ ПРОЙДЕНА 🟢" 
+                    : scoreResult.total >= 70 
+                    ? "ЗАЧЁТ С ЗАМЕЧАНИЯМИ 🟡" 
+                    : "НЕ СДАНО 🔴"}
+                </div>
+              </div>
+            </div>
+
+            {/* Modal Footer */}
+            <div className="bg-gray-100 px-6 py-3 border-t border-gray-200 flex items-center justify-between">
+              <button 
+                onClick={() => {
+                  setShowEndShiftModal(false)
+                  nextDemoCard()
+                }}
+                className="px-4 py-2 bg-[#157dbd] text-white text-xs 2xl:text-sm font-bold rounded hover:bg-[#136ba3] transition"
+              >
+                Следующий билет →
+              </button>
+              <button 
+                onClick={() => setShowEndShiftModal(false)}
+                className="px-4 py-2 bg-gray-200 text-gray-800 text-xs 2xl:text-sm font-semibold rounded hover:bg-gray-300 transition"
+              >
+                Закрыть протокол
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}

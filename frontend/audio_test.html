@@ -1,0 +1,1634 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Система-112: Фонотека голосовых реплик (Edge-TTS) — Билеты 1 и 2</title>
+    <link rel="stylesheet" href="css/pov112.css">
+    <style>
+        :root {
+            --bg-page: #ffffff;
+            --bg-panel: #ffffff;
+            --bg-card: #ffffff;
+            --bg-card-hover: #ffffff;
+            --border-color: #26354a;
+            --border-highlight: #3b82f6;
+            --text-main: #e2e8f0;
+            --text-muted: #94a3b8;
+            --text-accent: #60a5fa;
+            --color-emergency: #ef4444;
+            --color-warning: #f59e0b;
+            --color-success: #ffffff;
+            --color-violet: #8b5cf6;
+            --font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+            --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+        }
+
+        body {
+            background-color: var(--bg-page);
+            color: var(--text-main);
+            font-family: var(--font-family);
+            margin: 0;
+            padding: 0;
+            line-height: 1.5;
+        }
+
+        .audio-app-container {
+            max-width: 1440px;
+            margin: 0 auto;
+            padding: 24px 28px 60px 28px;
+        }
+
+        /* Header */
+        .app-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            background: #ffffff;
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            padding: 18px 24px;
+            margin-bottom: 24px;
+            box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+        }
+
+        .header-title-wrap {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+        }
+
+        .badge-112 {
+            background: #ffffff;
+            color: #ffffff;
+            font-weight: 900;
+            font-size: 22px;
+            padding: 8px 16px;
+            border-radius: 8px;
+            letter-spacing: 1px;
+            box-shadow: 0 0 15px rgba(239, 68, 68, 0.4);
+        }
+
+        .header-text h1 {
+            margin: 0;
+            font-size: 20px;
+            font-weight: 700;
+            color: #ffffff;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .header-text p {
+            margin: 4px 0 0 0;
+            font-size: 13px;
+            color: var(--text-muted);
+        }
+
+        .header-dsp-controls {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+        }
+
+        .dsp-toggle-pill {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            background: rgba(30, 41, 59, 0.8);
+            border: 1px solid var(--border-color);
+            padding: 6px 14px;
+            border-radius: 20px;
+            font-size: 12px;
+            color: var(--text-muted);
+            cursor: pointer;
+            transition: all 0.2s ease;
+            user-select: none;
+        }
+
+        .dsp-toggle-pill.active {
+            background: rgba(59, 130, 246, 0.15);
+            border-color: var(--border-highlight);
+            color: #93c5fd;
+        }
+
+        .dsp-toggle-pill .dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: #64748b;
+        }
+
+        .dsp-toggle-pill.active .dot {
+            background: #3b82f6;
+            box-shadow: 0 0 8px #3b82f6;
+        }
+
+        /* Top Nav Selector Bar */
+        .controls-panel {
+            background: var(--bg-panel);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            padding: 16px 24px;
+            margin-bottom: 24px;
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: space-between;
+            align-items: center;
+            gap: 16px;
+        }
+
+        .selector-group {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .selector-label {
+            font-size: 12px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.8px;
+            color: var(--text-muted);
+        }
+
+        .btn-group {
+            display: flex;
+            background: #ffffff;
+            border: 1px solid var(--border-color);
+            border-radius: 8px;
+            padding: 3px;
+            gap: 2px;
+        }
+
+        .btn-toggle {
+            background: transparent;
+            border: none;
+            color: var(--text-muted);
+            padding: 7px 16px;
+            font-size: 13px;
+            font-weight: 600;
+            border-radius: 6px;
+            cursor: pointer;
+            transition: all 0.15s ease;
+        }
+
+        .btn-toggle:hover {
+            color: #ffffff;
+            background: rgba(255, 255, 255, 0.05);
+        }
+
+        .btn-toggle.active {
+            background: var(--border-highlight);
+            color: #ffffff;
+            box-shadow: 0 2px 8px rgba(59, 130, 246, 0.4);
+        }
+
+        .action-buttons {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .btn-action {
+            background: #ffffff;
+            color: var(--text-main);
+            border: 1px solid #334155;
+            padding: 8px 16px;
+            border-radius: 8px;
+            font-size: 13px;
+            font-weight: 600;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            transition: all 0.2s ease;
+        }
+
+        .btn-action:hover {
+            background: #ffffff; color: #ffffff;
+            border-color: #475569;
+            color: #ffffff;
+        }
+
+        .btn-action.btn-primary {
+            background: #ffffff;
+            border-color: #3b82f6;
+            color: #ffffff;
+        }
+
+        .btn-action.btn-primary:hover {
+            background: #ffffff;
+            box-shadow: 0 0 12px rgba(37, 99, 235, 0.4);
+        }
+
+        .btn-action.btn-stop {
+            background: #451a1a;
+            border-color: #7f1d1d;
+            color: #fca5a5;
+        }
+
+        .btn-action.btn-stop:hover {
+            background: #7f1d1d;
+            color: #ffffff;
+        }
+
+        /* Applicant Persona Card */
+        .applicant-card {
+            background: #ffffff;
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            padding: 20px 24px;
+            margin-bottom: 28px;
+            box-shadow: 0 4px 16px rgba(0,0,0,0.3);
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 24px;
+        }
+
+        @media (max-width: 900px) {
+            .applicant-card {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        .persona-main {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .persona-header {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .persona-avatar {
+            font-size: 32px;
+            background: #ffffff;
+            border: 1px solid #334155;
+            width: 52px;
+            height: 52px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 12px;
+        }
+
+        .persona-names h2 {
+            margin: 0;
+            font-size: 18px;
+            font-weight: 700;
+            color: #ffffff;
+        }
+
+        .persona-tags {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+            margin-top: 4px;
+        }
+
+        .badge-tag {
+            font-size: 11px;
+            font-weight: 600;
+            padding: 2px 8px;
+            border-radius: 4px;
+            background: #ffffff;
+            color: #cbd5e1;
+            border: 1px solid #334155;
+        }
+
+        .badge-voice {
+            background: rgba(139, 92, 246, 0.15);
+            border-color: #8b5cf6;
+            color: #c4b5fd;
+            font-family: var(--font-mono);
+        }
+
+        .badge-category {
+            background: rgba(239, 68, 68, 0.15);
+            border-color: #ef4444;
+            color: #fca5a5;
+        }
+
+        .persona-details {
+            font-size: 13px;
+            color: #cbd5e1;
+            background: rgba(255, 255, 255, 0.9);
+            border-radius: 8px;
+            padding: 10px 14px;
+            border: 1px solid rgba(255,255,255,0.05);
+        }
+
+        /* Panic Gauge */
+        .persona-metrics {
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            gap: 12px;
+        }
+
+        .metric-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .metric-title {
+            font-size: 13px;
+            font-weight: 600;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .panic-badge {
+            font-size: 12px;
+            font-weight: 700;
+            padding: 4px 10px;
+            border-radius: 6px;
+            letter-spacing: 0.5px;
+        }
+
+        .panic-gauge-wrap {
+            height: 14px;
+            background: #ffffff;
+            border-radius: 7px;
+            border: 1px solid #334155;
+            overflow: hidden;
+            position: relative;
+        }
+
+        .panic-gauge-fill {
+            height: 100%;
+            border-radius: 6px;
+            transition: width 0.4s ease;
+        }
+
+        .fill-red { background: #ffffff; }
+        .fill-orange { background: #ffffff; }
+        .fill-green { background: #ffffff; }
+
+        .persona-voice-info {
+            font-size: 12px;
+            color: var(--text-muted);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        /* Now Playing Banner */
+        .now-playing-banner {
+            background: #ffffff, rgba(139, 92, 246, 0.15));
+            border: 1px solid #3b82f6;
+            border-radius: 10px;
+            padding: 12px 20px;
+            margin-bottom: 24px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+            animation: pulseBanner 2s infinite ease-in-out;
+        }
+
+        @keyframes pulseBanner {
+            0% { border-color: rgba(59, 130, 246, 0.6); }
+            50% { border-color: rgba(139, 92, 246, 0.9); }
+            100% { border-color: rgba(59, 130, 246, 0.6); }
+        }
+
+        .now-playing-left {
+            display: flex;
+            align-items: center;
+            gap: 14px;
+        }
+
+        .eq-bars {
+            display: flex;
+            align-items: flex-end;
+            gap: 3px;
+            height: 20px;
+        }
+
+        .eq-bar {
+            width: 3px;
+            background: #60a5fa;
+            border-radius: 2px;
+            animation: bounce 0.6s infinite ease-in-out alternate;
+        }
+
+        .eq-bar:nth-child(1) { height: 16px; animation-delay: 0.1s; }
+        .eq-bar:nth-child(2) { height: 10px; animation-delay: 0.3s; }
+        .eq-bar:nth-child(3) { height: 18px; animation-delay: 0.2s; }
+        .eq-bar:nth-child(4) { height: 12px; animation-delay: 0.4s; }
+
+        @keyframes bounce {
+            0% { transform: scaleY(0.3); }
+            100% { transform: scaleY(1.0); }
+        }
+
+        .now-playing-text {
+            font-size: 13px;
+            color: #ffffff;
+        }
+
+        .now-playing-id {
+            font-family: var(--font-mono);
+            color: #93c5fd;
+            font-weight: 700;
+        }
+
+        /* Intent Sections */
+        .intent-section {
+            margin-bottom: 28px;
+        }
+
+        .intent-header {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 12px;
+            border-bottom: 1px solid var(--border-color);
+            padding-bottom: 8px;
+        }
+
+        .intent-title {
+            font-size: 15px;
+            font-weight: 700;
+            color: #f1f5f9;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .intent-count {
+            background: #ffffff;
+            color: var(--text-muted);
+            font-size: 11px;
+            font-weight: 700;
+            padding: 2px 8px;
+            border-radius: 10px;
+            font-family: var(--font-mono);
+        }
+
+        .phrases-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(420px, 1fr));
+            gap: 14px;
+        }
+
+        @media (max-width: 640px) {
+            .phrases-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        .phrase-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: 10px;
+            padding: 14px 16px;
+            transition: all 0.2s ease;
+            position: relative;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+        }
+
+        .phrase-card:hover {
+            background: var(--bg-card-hover);
+            border-color: #334155;
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(0,0,0,0.25);
+        }
+
+        .phrase-card.playing {
+            border-color: #3b82f6;
+            background: #ffffff;
+            box-shadow: 0 0 16px rgba(59, 130, 246, 0.35);
+        }
+
+        .phrase-card-top {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 10px;
+            gap: 8px;
+        }
+
+        .phrase-audio-id {
+            font-family: var(--font-mono);
+            font-size: 11px;
+            color: #94a3b8;
+            background: #ffffff;
+            padding: 2px 6px;
+            border-radius: 4px;
+            border: 1px solid #ffffff;
+        }
+
+        .phrase-badges {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .badge-prosody {
+            font-family: var(--font-mono);
+            font-size: 10px;
+            font-weight: 600;
+            padding: 2px 6px;
+            border-radius: 4px;
+            background: #ffffff;
+            color: #94a3b8;
+        }
+
+        .badge-rate {
+            color: #38bdf8;
+            border: 1px solid rgba(56, 189, 248, 0.3);
+        }
+
+        .badge-pitch {
+            color: #f472b6;
+            border: 1px solid rgba(244, 114, 182, 0.3);
+        }
+
+        .phrase-text {
+            font-size: 14px;
+            font-weight: 500;
+            color: #ffffff;
+            margin-bottom: 10px;
+            line-height: 1.45;
+        }
+
+        .phrase-context {
+            font-size: 11px;
+            color: var(--text-muted);
+            font-style: italic;
+            margin-bottom: 12px;
+            border-left: 2px solid #334155;
+            padding-left: 8px;
+        }
+
+        .phrase-card-footer {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-top: 1px solid rgba(255,255,255,0.06);
+            padding-top: 10px;
+            margin-top: auto;
+        }
+
+        .btn-play-phrase {
+            background: #ffffff;
+            color: #ffffff;
+            border: 1px solid #334155;
+            border-radius: 6px;
+            padding: 5px 12px;
+            font-size: 12px;
+            font-weight: 600;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            transition: all 0.15s ease;
+        }
+
+        .btn-play-phrase:hover {
+            background: #3b82f6;
+            border-color: #2563eb;
+        }
+
+        .phrase-card.playing .btn-play-phrase {
+            background: #ef4444;
+            border-color: #dc2626;
+            color: #ffffff;
+        }
+
+        .phrase-status-tag {
+            font-size: 11px;
+            color: #64748b;
+            font-family: var(--font-mono);
+        }
+
+        .phrase-card.playing .phrase-status-tag {
+            color: #60a5fa;
+            font-weight: 700;
+        }
+
+        /* Demo run banner */
+        .demo-modal-overlay {
+            position: fixed;
+            bottom: 24px;
+            right: 24px;
+            background: #ffffff;
+            border: 2px solid #3b82f6;
+            border-radius: 12px;
+            padding: 16px 20px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.6);
+            z-index: 1000;
+            max-width: 400px;
+            display: none;
+        }
+
+        .demo-modal-overlay.active {
+            display: block;
+        }
+
+        .demo-modal-title {
+            font-size: 14px;
+            font-weight: 700;
+            color: #ffffff;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 8px;
+        }
+
+        /* Barge-In Styles */
+        .barge-in-badge {
+            background: #ffffff;
+            color: #ffffff;
+            font-weight: 800;
+            font-size: 11px;
+            padding: 3px 8px;
+            border-radius: 4px;
+            letter-spacing: 0.5px;
+            box-shadow: 0 0 10px rgba(245, 158, 11, 0.4);
+        }
+
+        .barge-in-sticky-bar {
+            position: sticky;
+            top: 12px;
+            z-index: 999;
+            background: #ffffff;
+            border: 2px solid #818cf8;
+            border-radius: 12px;
+            padding: 14px 20px;
+            margin-bottom: 24px;
+            box-shadow: 0 12px 32px rgba(0,0,0,0.7), 0 0 20px rgba(99, 102, 241, 0.35);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 16px;
+            animation: slideDown 0.25s ease-out;
+        }
+
+        @keyframes slideDown {
+            from { transform: translateY(-15px); opacity: 0; }
+            to { transform: translateY(0); opacity: 1; }
+        }
+
+        .barge-in-info {
+            display: flex;
+            align-items: center;
+            gap: 14px;
+        }
+
+        .barge-in-pulse-icon {
+            font-size: 26px;
+            animation: pulseRecord 1s infinite alternate;
+        }
+
+        @keyframes pulseRecord {
+            from { transform: scale(1.0); }
+            to { transform: scale(1.2); }
+        }
+
+        .barge-in-meta strong {
+            font-size: 15px;
+            color: #ffffff;
+            font-family: var(--font-mono);
+        }
+
+        .barge-in-meta p {
+            margin: 2px 0 0 0;
+            font-size: 13px;
+            color: #c7d2fe;
+        }
+
+        .barge-in-controls {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .btn-interrupt-barge {
+            background: #ffffff;
+            color: #ffffff;
+            font-size: 14px;
+            font-weight: 800;
+            padding: 10px 22px;
+            border-radius: 8px;
+            border: 2px solid #f87171;
+            cursor: pointer;
+            box-shadow: 0 0 18px rgba(239, 68, 68, 0.6);
+            animation: interruptGlow 1.2s infinite;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            transition: transform 0.15s ease;
+        }
+
+        .btn-interrupt-barge:hover {
+            transform: scale(1.04);
+            background: #ffffff;
+        }
+
+        @keyframes interruptGlow {
+            0% { box-shadow: 0 0 10px rgba(239, 68, 68, 0.4); }
+            50% { box-shadow: 0 0 25px rgba(239, 68, 68, 0.9); }
+            100% { box-shadow: 0 0 10px rgba(239, 68, 68, 0.4); }
+        }
+
+        /* Chunk Sentence Chips in Phrase Cards */
+        .chunk-sentence-container {
+            margin: 10px 0 14px 0;
+            background: rgba(255, 255, 255, 0.9);
+            border: 1px solid rgba(59, 130, 246, 0.25);
+            border-radius: 8px;
+            padding: 10px 12px;
+        }
+
+        .chunk-container-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 11px;
+            font-weight: 700;
+            color: #93c5fd;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 8px;
+        }
+
+        .chunk-chips-list {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+
+        .chunk-chip {
+            font-size: 12px;
+            padding: 6px 10px;
+            border-radius: 6px;
+            background: #ffffff;
+            border: 1px solid #334155;
+            color: #e2e8f0;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 8px;
+            transition: all 0.2s ease;
+        }
+
+        .chunk-chip-text {
+            line-height: 1.35;
+        }
+
+        .chunk-chip-idx {
+            font-family: var(--font-mono);
+            font-size: 10px;
+            color: #94a3b8;
+            background: #ffffff;
+            padding: 2px 6px;
+            border-radius: 4px;
+            white-space: nowrap;
+        }
+
+        .chunk-chip.speaking {
+            background: rgba(37, 99, 235, 0.25);
+            border-color: #60a5fa;
+            color: #ffffff;
+            font-weight: 600;
+            box-shadow: 0 0 12px rgba(59, 130, 246, 0.45);
+        }
+
+        .chunk-chip.speaking .chunk-chip-idx {
+            background: #2563eb;
+            color: #ffffff;
+            font-weight: 700;
+        }
+
+        .chunk-chip.completed {
+            background: rgba(16, 185, 129, 0.12);
+            border-color: rgba(16, 185, 129, 0.4);
+            color: #a7f3d0;
+        }
+
+        .chunk-chip.completed .chunk-chip-idx {
+            background: rgba(16, 185, 129, 0.3);
+            color: #6ee7b7;
+        }
+
+        .chunk-chip.interrupted {
+            background: rgba(239, 68, 68, 0.2);
+            border-color: #ef4444;
+            color: #fca5a5;
+        }
+
+        .chunk-chip.interrupted .chunk-chip-idx {
+            background: #dc2626;
+            color: #ffffff;
+        }
+
+        .chunk-chip.skipped {
+            opacity: 0.35;
+            text-decoration: line-through;
+        }
+
+        .btn-play-chunks {
+            background: #ffffff;
+            color: #ffffff;
+            border: 1px solid #6366f1;
+            border-radius: 6px;
+            padding: 5px 12px;
+            font-size: 12px;
+            font-weight: 600;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            transition: all 0.15s ease;
+        }
+
+        .btn-play-chunks:hover {
+            background: #ffffff;
+            box-shadow: 0 0 10px rgba(99, 102, 241, 0.4);
+        }
+
+        .interruption-alert-toast {
+            background: #7f1d1d;
+            border: 1px solid #f87171;
+            color: #fee2e2;
+            padding: 8px 14px;
+            border-radius: 8px;
+            font-size: 12px;
+            font-weight: 600;
+            margin-top: 8px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            animation: fadeIn 0.2s ease-in;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+    </style>
+</head>
+<body>
+
+<div class="audio-app-container">
+    <!-- Header -->
+    <header class="app-header">
+        <div class="header-title-wrap">
+            <div class="badge-112">112</div>
+            <div class="header-text">
+                <h1>Фонотека голосовых реплик заявителей (Edge-TTS)</h1>
+                <p>Билеты 1 и 2 • 6 ситуаций • 216 реальных MP3 реплик • Живая разговорная речь • DSP фильтр 300–3400 Гц</p>
+            </div>
+        </div>
+
+        <div class="header-dsp-controls">
+            <div class="dsp-toggle-pill active" id="toggle-filter" title="Включить/выключить телефонный полосовой фильтр G.711 (300-3400 Гц)">
+                <span class="dot"></span>
+                <span>Фильтр 300-3400 Гц</span>
+            </div>
+            <div class="dsp-toggle-pill active" id="toggle-noise" title="Включить/выключить фоновый шум телефонной линии">
+                <span class="dot"></span>
+                <span>Шум линии</span>
+            </div>
+            <div class="dsp-toggle-pill active" id="toggle-click" title="Включить/выключить транковый бип радиообмена">
+                <span class="dot"></span>
+                <span>Радио-бип</span>
+            </div>
+        </div>
+    </header>
+
+    <!-- Selector Bar -->
+    <div class="controls-panel">
+        <div class="selector-group">
+            <span class="selector-label">Билет:</span>
+            <div class="btn-group" id="ticket-selector">
+                <button class="btn-toggle active" data-ticket="1">Билет 1</button>
+                <button class="btn-toggle" data-ticket="2">Билет 2</button>
+            </div>
+        </div>
+
+        <div class="selector-group">
+            <span class="selector-label">Ситуация:</span>
+            <div class="btn-group" id="situation-selector">
+                <button class="btn-toggle active" data-situation="1">Ситуация 1</button>
+                <button class="btn-toggle" data-situation="2">Ситуация 2</button>
+                <button class="btn-toggle" data-situation="3">Ситуация 3</button>
+            </div>
+        </div>
+
+        <div class="selector-group">
+            <span class="selector-label">Режим:</span>
+            <div class="btn-group" id="mode-selector">
+                <button class="btn-toggle active" data-mode="full" title="Воспроизведение реплики единым аудиофайлом">🎧 Полные фразы</button>
+                <button class="btn-toggle" data-mode="chunks" id="btn-mode-barge-in" title="Дробление по отдельным предложениям для тестирования перебивания (Barge-In)">⚡ Barge-In (По предложениям)</button>
+            </div>
+        </div>
+
+        <div class="action-buttons">
+            <button class="btn-action" id="btn-random-phrase" title="Воспроизвести случайную реплику текущей ситуации">
+                🎲 Случайная фраза
+            </button>
+            <button class="btn-action btn-primary" id="btn-demo-run" title="Последовательное воспроизведение диалога">
+                ▶️ Демонстрационный прогон
+            </button>
+            <button class="btn-action btn-stop" id="btn-stop-all" title="Остановить воспроизведение">
+                ⏹️ Стоп
+            </button>
+        </div>
+    </div>
+
+    <!-- Sticky Barge-In Panel (активен при воспроизведении по предложениям) -->
+    <div class="barge-in-sticky-bar" id="barge-in-sticky-bar" style="display: none;">
+        <div class="barge-in-info">
+            <div class="barge-in-pulse-icon">🎙️</div>
+            <div class="barge-in-meta">
+                <strong id="barge-in-bar-title">Речь заявителя по предложениям</strong>
+                <p id="barge-in-bar-text">«...»</p>
+            </div>
+        </div>
+        <div class="barge-in-controls">
+            <button class="btn-interrupt-barge" id="btn-barge-in-hit" onclick="interruptApplicantNow()">
+                ✋ ПЕРЕБИТЬ ЗАЯВИТЕЛЯ (Barge-In) [Пробел]
+            </button>
+            <button class="btn-action btn-stop" onclick="stopPlayback()">✕ Закрыть</button>
+        </div>
+    </div>
+
+    <!-- Applicant Persona Card -->
+    <div class="applicant-card" id="applicant-card">
+        <div class="persona-main">
+            <div class="persona-header">
+                <div class="persona-avatar" id="persona-avatar">👨</div>
+                <div class="persona-names">
+                    <h2 id="persona-name">Сидоров Иван Сергеевич</h2>
+                    <div class="persona-tags">
+                        <span class="badge-tag" id="persona-gender">Мужской пол</span>
+                        <span class="badge-tag badge-voice" id="persona-voice">ru-RU-DmitryNeural</span>
+                        <span class="badge-tag badge-category" id="persona-category">Пожары и задымления</span>
+                        <span class="badge-tag" id="persona-age">Зрелый (46-60)</span>
+                    </div>
+                </div>
+            </div>
+            <div class="persona-details" id="persona-details">
+                Взволнован, сообщает обстоятельства произошедшего. Хрипловатый баритон, резкие фразы.
+            </div>
+        </div>
+
+        <div class="persona-metrics">
+            <div class="metric-header">
+                <span class="metric-title">Уровень стресса и паники заявителя</span>
+                <span class="panic-badge" id="persona-panic-badge" style="background: rgba(239,68,68,0.2); color: #fca5a5;">75% ПАНИКА</span>
+            </div>
+            <div class="panic-gauge-wrap">
+                <div class="panic-gauge-fill fill-red" id="persona-gauge" style="width: 75%;"></div>
+            </div>
+            <div class="persona-voice-info">
+                <span>⚡ Тембр голоса:</span>
+                <strong id="persona-timbre" style="color: #ffffff;">хрипловатый баритон, резкие фразы</strong>
+            </div>
+        </div>
+    </div>
+
+    <!-- Now Playing Active Banner -->
+    <div class="now-playing-banner" id="now-playing-banner" style="display: none;">
+        <div class="now-playing-left">
+            <div class="eq-bars">
+                <div class="eq-bar"></div>
+                <div class="eq-bar"></div>
+                <div class="eq-bar"></div>
+                <div class="eq-bar"></div>
+            </div>
+            <div class="now-playing-text">
+                Воспроизведение: <span class="now-playing-id" id="np-audio-id">t01_q01_greeting_01</span>
+                &mdash; <span id="np-text" style="color: #cbd5e1;">«...»</span>
+            </div>
+        </div>
+        <button class="btn-action btn-stop" style="padding: 4px 12px; font-size: 12px;" onclick="stopPlayback()">
+            Остановить ✕
+        </button>
+    </div>
+
+    <!-- Phrases Container -->
+    <div id="phrases-container">
+        <!-- Rendered dynamically -->
+    </div>
+</div>
+
+<!-- Scripts -->
+<script src="js/audio_dsp.js"></script>
+<script src="audio/tickets_1_2_data.js"></script>
+<script src="audio/barge_in_chunks.js"></script>
+
+<script>
+    // State
+    let currentTicket = "1";
+    let currentSituation = "1";
+    let currentMode = "full"; // 'full' or 'chunks'
+    let isChunkSequenceActive = false;
+    let isDemoRunning = false;
+    let demoStepIndex = 0;
+    let activeAudioId = null;
+
+    // DSP Toggles
+    let filterEnabled = true;
+    let noiseEnabled = true;
+    let clickEnabled = true;
+
+    // Phrase Bank Data
+    let phraseBank = window.AUDIO_PHRASE_BANK_TICKETS_1_2 || null;
+
+    // AudioDSP Instance
+    const audioDsp = (typeof window !== 'undefined' && window.audioDsp) ? window.audioDsp : new AudioDSP();
+
+    // Intent groups mapping (атомарная модульная структура реплик)
+    const INTENT_META = {
+        'greeting': {
+            title: 'Первичный вызов',
+            icon: '🚨',
+            desc: 'Первичное обращение заявителя: суть беды и срочный крик о помощи'
+        },
+        'cliche_rage': {
+            title: 'Универсальный протест/гнев на бюрократию',
+            icon: '⚡',
+            desc: 'Естественный человеческий гнев на канцелярский опрос, проволочки и затягивание времени'
+        },
+        'address': {
+            title: 'Точный адрес',
+            icon: '📍',
+            desc: 'Строго только адрес и навигационные ориентиры (без спойлеров других фактов)'
+        },
+        'details': {
+            title: 'Обстоятельства ЧС',
+            icon: '🔥',
+            desc: 'Строго суть происходящего: открытое пламя, дым, оружие, разрушения, авария'
+        },
+        'victims': {
+            title: 'Пострадавшие',
+            icon: '🚑',
+            desc: 'Строго статус людей: наличие пострадавших, травмы и необходимость скорой помощи'
+        },
+        'caller_id': {
+            title: 'Данные заявителя',
+            icon: '👤',
+            desc: 'Строго ФИО и подтверждение контактного номера телефона'
+        },
+        'deescalation': {
+            title: 'Успокоение',
+            icon: '🛡️',
+            desc: 'Согласие и готовность отвечать после того, как оператор успокоил'
+        },
+        'urgency_silence': {
+            title: 'Тревога при молчании оператора',
+            icon: '⏳',
+            desc: 'Естественная тревожная реакция на затянувшиеся паузы и молчание в эфире'
+        },
+        'deadlock_guard': {
+            title: 'Защита от тупика диалога',
+            icon: '🧭',
+            desc: 'Пресечение нерелевантных вопросов и возврат к спасению людей'
+        },
+        'closing_instructions': {
+            title: 'Завершение',
+            icon: '📞',
+            desc: 'Инструкции до прибытия экстренных служб и окончание разговора'
+        }
+    };
+
+    // Initialize App
+    async function init() {
+        // Fallback: If window.AUDIO_PHRASE_BANK_TICKETS_1_2 not loaded, fetch from data/
+        if (!phraseBank) {
+            try {
+                const res = await fetch('data/audio_phrase_bank.json');
+                if (res.ok) {
+                    const full = await res.json();
+                    phraseBank = {
+                        "1": full.tickets["1"],
+                        "2": full.tickets["2"]
+                    };
+                }
+            } catch (err) {
+                console.warn('Cannot fetch phrase bank:', err);
+            }
+        }
+
+        bindControls();
+        renderSituation();
+    }
+
+    function bindControls() {
+        // Ticket buttons
+        document.querySelectorAll('#ticket-selector .btn-toggle').forEach(btn => {
+            btn.onclick = () => {
+                document.querySelectorAll('#ticket-selector .btn-toggle').forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+                currentTicket = btn.dataset.ticket;
+                renderSituation();
+            };
+        });
+
+        // Situation buttons
+        document.querySelectorAll('#situation-selector .btn-toggle').forEach(btn => {
+            btn.onclick = () => {
+                document.querySelectorAll('#situation-selector .btn-toggle').forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+                currentSituation = btn.dataset.situation;
+                renderSituation();
+            };
+        });
+
+        // Mode buttons
+        document.querySelectorAll('#mode-selector .btn-toggle').forEach(btn => {
+            btn.onclick = () => {
+                document.querySelectorAll('#mode-selector .btn-toggle').forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+                currentMode = btn.dataset.mode;
+                renderSituation();
+            };
+        });
+
+        // Spacebar shortcut to interrupt applicant speech
+        window.addEventListener('keydown', (e) => {
+            if (e.code === 'Space' && isChunkSequenceActive) {
+                e.preventDefault();
+                interruptApplicantNow();
+            }
+        });
+
+        // DSP Toggles
+        const tFilter = document.getElementById('toggle-filter');
+        tFilter.onclick = () => {
+            filterEnabled = !filterEnabled;
+            tFilter.classList.toggle('active', filterEnabled);
+        };
+
+        const tNoise = document.getElementById('toggle-noise');
+        tNoise.onclick = () => {
+            noiseEnabled = !noiseEnabled;
+            tNoise.classList.toggle('active', noiseEnabled);
+        };
+
+        const tClick = document.getElementById('toggle-click');
+        tClick.onclick = () => {
+            clickEnabled = !clickEnabled;
+            tClick.classList.toggle('active', clickEnabled);
+        };
+
+        // Actions
+        document.getElementById('btn-random-phrase').onclick = playRandomPhrase;
+        document.getElementById('btn-demo-run').onclick = startDemoRun;
+        document.getElementById('btn-stop-all').onclick = stopPlayback;
+    }
+
+    function renderSituation() {
+        stopPlayback();
+
+        if (!phraseBank || !phraseBank[currentTicket] || !phraseBank[currentTicket][currentSituation]) {
+            document.getElementById('phrases-container').innerHTML = '<div style="color: #ef4444; padding: 20px;">Данные для выбранного билета не найдены.</div>';
+            return;
+        }
+
+        const sitData = phraseBank[currentTicket][currentSituation];
+        const persona = sitData.persona || {};
+        const phrases = sitData.phrases || {};
+
+        // Update situation button titles
+        const situationTitles = {
+            "1": {
+                "1": "Сит. 1: Пожар депо (Киевский)",
+                "2": "Сит. 2: Драка у посольства",
+                "3": "Сит. 3: Ребенок (Мама)"
+            },
+            "2": {
+                "1": "Сит. 1: Мусоропровод (Берзарина)",
+                "2": "Сит. 2: Скандал Мегафон",
+                "3": "Сит. 3: Машина в Яузе"
+            }
+        };
+
+        document.querySelectorAll('#situation-selector .btn-toggle').forEach(btn => {
+            const sId = btn.dataset.situation;
+            if (situationTitles[currentTicket] && situationTitles[currentTicket][sId]) {
+                btn.innerText = situationTitles[currentTicket][sId];
+            } else {
+                btn.innerText = `Ситуация ${sId}`;
+            }
+        });
+
+        // 1. Update Applicant Card
+        document.getElementById('persona-avatar').innerText = persona.gender === 'female' ? '👩' : '👨';
+        document.getElementById('persona-name').innerText = persona.caller_name || 'Заявитель';
+        document.getElementById('persona-gender').innerText = persona.gender === 'female' ? 'Женский пол' : 'Мужской пол';
+        document.getElementById('persona-voice').innerText = persona.gender === 'female' ? 'ru-RU-SvetlanaNeural' : 'ru-RU-DmitryNeural';
+        document.getElementById('persona-category').innerText = persona.category || 'Происшествие';
+        document.getElementById('persona-age').innerText = persona.age_group || 'Зрелый';
+        document.getElementById('persona-details').innerText = persona.personality || 'Взволнован, сообщает обстоятельства произошедшего.';
+        document.getElementById('persona-timbre').innerText = persona.voice_timbre || 'резкие фразы';
+
+        const panic = persona.panic_level || 75;
+        const panicBadge = document.getElementById('persona-panic-badge');
+        const gaugeFill = document.getElementById('persona-gauge');
+        panicBadge.innerText = `${panic}% ${panic > 70 ? 'ПАНИКА' : (panic > 45 ? 'АГРЕССИЯ' : 'КОНСТРУКТИВ')}`;
+        gaugeFill.style.width = `${panic}%`;
+        gaugeFill.className = `panic-gauge-fill ${panic > 70 ? 'fill-red' : (panic > 45 ? 'fill-orange' : 'fill-green')}`;
+
+        // 2. Group phrases by intent
+        const grouped = {};
+        for (const [key, phrase] of Object.entries(phrases)) {
+            const intent = phrase.intent || 'details';
+            if (!grouped[intent]) grouped[intent] = [];
+            grouped[intent].push(phrase);
+        }
+
+        // 3. Render Intent Groups
+        const container = document.getElementById('phrases-container');
+        container.innerHTML = '';
+
+        for (const [intentKey, meta] of Object.entries(INTENT_META)) {
+            const items = grouped[intentKey] || [];
+            if (items.length === 0) continue;
+
+            const sectionEl = document.createElement('div');
+            sectionEl.className = 'intent-section';
+
+            sectionEl.innerHTML = `
+                <div class="intent-header">
+                    <span class="intent-title">${meta.icon} ${meta.title}</span>
+                    <span class="intent-count">${items.length} реплик</span>
+                </div>
+                <div class="phrases-grid">
+                    ${items.map(p => renderPhraseCard(p)).join('')}
+                </div>
+            `;
+
+            container.appendChild(sectionEl);
+        }
+    }
+
+    function renderPhraseCard(p) {
+        const speed = p.prosody ? p.prosody.speed : 1.0;
+        const pitch = p.prosody ? p.prosody.pitch : '0%';
+        const rateDiff = Math.round((speed - 1.0) * 100);
+        const rateStr = (rateDiff >= 0 ? '+' : '') + rateDiff + '%';
+        const pitchStr = String(pitch).replace('%', 'Hz');
+
+        const chunks = (currentTicket === "1" && window.BARGE_IN_CHUNKS && window.BARGE_IN_CHUNKS[currentSituation]) 
+            ? window.BARGE_IN_CHUNKS[currentSituation][p.audio_id] 
+            : null;
+        const hasChunks = !!(chunks && chunks.length > 0);
+
+        return `
+            <div class="phrase-card" id="card-${p.audio_id}">
+                <div class="phrase-card-top">
+                    <span class="phrase-audio-id">${p.audio_id}</span>
+                    <div class="phrase-badges">
+                        <span class="badge-prosody badge-rate" title="Темп">${rateStr}</span>
+                        <span class="badge-prosody badge-pitch" title="Высота тона">${pitchStr}</span>
+                        <span class="badge-prosody" title="Эмоция">${p.emotion || 'panic'}</span>
+                        ${hasChunks ? `<span class="barge-in-badge" title="Реплика разбита на синтагмы. Поддерживает мгновенное перебивание оператором">⚡ ${chunks.length} предл.</span>` : ''}
+                    </div>
+                </div>
+                <div class="phrase-text">«${p.text}»</div>
+                ${p.context_note ? `<div class="phrase-context">${p.context_note}</div>` : ''}
+
+                ${hasChunks ? `
+                <div class="chunk-sentence-container" id="chunks-wrap-${p.audio_id}">
+                    <div class="chunk-container-header">
+                        <span>⚡ Дробление фразы (${chunks.length} предл.)</span>
+                        <button class="btn-play-chunks" onclick="playPhraseChunks('${p.audio_id}', this)" title="Воспроизвести по предложениям с поддержкой перебивания">
+                            <span>⚡</span> По предложениям
+                        </button>
+                    </div>
+                    <div class="chunk-chips-list">
+                        ${chunks.map(c => `
+                            <div class="chunk-chip" id="chip-${c.chunk_id}">
+                                <span class="chunk-chip-text">«${c.text}»</span>
+                                <span class="chunk-chip-idx">#${c.index}</span>
+                            </div>
+                        `).join('')}
+                    </div>
+                    <div id="toast-${p.audio_id}" style="display: none;"></div>
+                </div>
+                ` : ''}
+
+                <div class="phrase-card-footer">
+                    <button class="btn-play-phrase" onclick="${hasChunks && currentMode === 'chunks' ? `playPhraseChunks('${p.audio_id}', this)` : `playPhrase('${p.audio_id}', this)`}">
+                        <span>${hasChunks && currentMode === 'chunks' ? '⚡' : '▶️'}</span> ${hasChunks && currentMode === 'chunks' ? 'По предложениям' : 'Воспроизвести'}
+                    </button>
+                    <span class="phrase-status-tag" id="status-${p.audio_id}">${hasChunks ? `${chunks.length} чанков • MP3` : 'MP3'}</span>
+                </div>
+            </div>
+        `;
+    }
+
+    async function playPhrase(audioId, btnEl) {
+        if (activeAudioId === audioId && !isChunkSequenceActive) {
+            stopPlayback();
+            return;
+        }
+
+        stopPlayback();
+        activeAudioId = audioId;
+        isChunkSequenceActive = false;
+
+        // Path to audio file
+        const tFolder = 't' + String(currentTicket).padStart(2, '0');
+        const audioUrl = `audio/${tFolder}/${audioId}.mp3`;
+
+        // Highlight card
+        const card = document.getElementById(`card-${audioId}`);
+        if (card) {
+            card.classList.add('playing');
+            const btn = card.querySelector('.btn-play-phrase');
+            if (btn) btn.innerHTML = '<span>⏹️</span> Стоп';
+        }
+
+        // Show banner
+        const banner = document.getElementById('now-playing-banner');
+        document.getElementById('np-audio-id').innerText = audioId;
+        const phraseText = card ? card.querySelector('.phrase-text').innerText : '';
+        document.getElementById('np-text').innerText = phraseText;
+        banner.style.display = 'flex';
+
+        try {
+            await audioDsp.playAudioFile(audioUrl, {
+                applyTelephoneFilter: filterEnabled,
+                withLineNoise: noiseEnabled,
+                withRadioClick: clickEnabled,
+                onEnd: () => {
+                    if (activeAudioId === audioId) {
+                        clearActiveHighlight(audioId);
+                    }
+                }
+            });
+        } catch (err) {
+            console.warn('Audio playback error:', err);
+            clearActiveHighlight(audioId);
+        }
+    }
+
+    function playPhraseChunks(audioId, btnEl) {
+        if (activeAudioId === audioId && isChunkSequenceActive) {
+            stopPlayback();
+            return;
+        }
+
+        stopPlayback();
+        activeAudioId = audioId;
+        isChunkSequenceActive = true;
+
+        const chunks = (currentTicket === "1" && window.BARGE_IN_CHUNKS && window.BARGE_IN_CHUNKS[currentSituation]) 
+            ? window.BARGE_IN_CHUNKS[currentSituation][audioId] 
+            : null;
+
+        if (!chunks || chunks.length === 0) {
+            console.warn('No chunks found for', audioId);
+            playPhrase(audioId, btnEl);
+            return;
+        }
+
+        // Highlight card
+        const card = document.getElementById(`card-${audioId}`);
+        if (card) {
+            card.classList.add('playing');
+            const btn = card.querySelector('.btn-play-chunks') || card.querySelector('.btn-play-phrase');
+            if (btn) btn.innerHTML = '<span>⏹️</span> Стоп';
+        }
+
+        // Reset all chips in this card
+        chunks.forEach(c => {
+            const chip = document.getElementById(`chip-${c.chunk_id}`);
+            if (chip) {
+                chip.className = 'chunk-chip';
+                const idxSpan = chip.querySelector('.chunk-chip-idx');
+                if (idxSpan) idxSpan.innerText = `#${c.index}`;
+            }
+        });
+        const toastEl = document.getElementById(`toast-${audioId}`);
+        if (toastEl) toastEl.style.display = 'none';
+
+        // Show sticky barge-in bar
+        const stickyBar = document.getElementById('barge-in-sticky-bar');
+        const barTitle = document.getElementById('barge-in-bar-title');
+        const barText = document.getElementById('barge-in-bar-text');
+        if (stickyBar) {
+            stickyBar.style.display = 'flex';
+            barTitle.innerText = `🎙️ Заявитель говорит (${chunks.length} предл.). Нажмите [ПЕРЕБИТЬ] или Пробел:`;
+            barText.innerText = `«${chunks[0].text}»`;
+        }
+
+        const chunkUrls = chunks.map(c => {
+            let u = c.url;
+            return u.startsWith('/') ? u.slice(1) : u;
+        });
+
+        audioDsp.playChunkSequence(chunkUrls, {
+            pauseBetweenMs: 160,
+            applyTelephoneFilter: filterEnabled,
+            withLineNoise: noiseEnabled,
+            withRadioClick: clickEnabled,
+            volume: 1.0,
+            onChunkStart: (idx, total, url) => {
+                const chunk = chunks[idx];
+                const chip = document.getElementById(`chip-${chunk.chunk_id}`);
+                if (chip) {
+                    chip.classList.add('speaking');
+                    chip.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+                }
+                if (stickyBar) {
+                    barTitle.innerText = `🎙️ Звучит предложение ${idx + 1} из ${total}:`;
+                    barText.innerText = `«${chunk.text}»`;
+                }
+            },
+            onChunkEnd: (idx, total, url) => {
+                const chunk = chunks[idx];
+                const chip = document.getElementById(`chip-${chunk.chunk_id}`);
+                if (chip) {
+                    chip.classList.remove('speaking');
+                    chip.classList.add('completed');
+                }
+            },
+            onInterrupted: (info) => {
+                const interruptedIdx = info.chunkIndex !== undefined ? info.chunkIndex : 0;
+                const total = info.totalChunks || chunks.length;
+                
+                // Mark current chip interrupted
+                if (chunks[interruptedIdx]) {
+                    const chip = document.getElementById(`chip-${chunks[interruptedIdx].chunk_id}`);
+                    if (chip) {
+                        chip.classList.remove('speaking');
+                        chip.classList.add('interrupted');
+                        const idxSpan = chip.querySelector('.chunk-chip-idx');
+                        if (idxSpan) idxSpan.innerText = '⚡ ПЕРЕБИТ!';
+                    }
+                }
+
+                // Mark remaining chips skipped
+                for (let k = interruptedIdx + 1; k < total; k++) {
+                    if (chunks[k]) {
+                        const chip = document.getElementById(`chip-${chunks[k].chunk_id}`);
+                        if (chip) {
+                            chip.classList.add('skipped');
+                            const idxSpan = chip.querySelector('.chunk-chip-idx');
+                            if (idxSpan) idxSpan.innerText = 'не озвучено';
+                        }
+                    }
+                }
+
+                // Show toast in card
+                if (toastEl) {
+                    toastEl.innerHTML = `
+                        <div class="interruption-alert-toast">
+                            <span>✋</span>
+                            <span><strong>Заявитель перебит оператором!</strong> Остановлен на предложении #${interruptedIdx + 1} из ${total}. Остаток фразы заявитель не произнёс.</span>
+                        </div>
+                    `;
+                    toastEl.style.display = 'block';
+                }
+
+                if (stickyBar) {
+                    barTitle.innerText = `✋ ЗАЯВИТЕЛЬ ПЕРЕБИТ ОПЕРАТОРОМ!`;
+                    barText.innerText = `Прервано на предложении #${interruptedIdx + 1} из ${total}. Звук заявителя моментально остановлен.`;
+                    setTimeout(() => {
+                        if (!isChunkSequenceActive) {
+                            stickyBar.style.display = 'none';
+                        }
+                    }, 4000);
+                }
+
+                isChunkSequenceActive = false;
+                clearActiveHighlight(audioId);
+            },
+            onEnd: () => {
+                if (stickyBar) {
+                    barTitle.innerText = `✅ Реплика завершена полностью`;
+                    barText.innerText = `Все ${chunks.length} предложений прозвучали без перебивания оператором.`;
+                    setTimeout(() => {
+                        if (!isChunkSequenceActive) {
+                            stickyBar.style.display = 'none';
+                        }
+                    }, 2500);
+                }
+                isChunkSequenceActive = false;
+                clearActiveHighlight(audioId);
+            }
+        });
+    }
+
+    function interruptApplicantNow() {
+        if (audioDsp) {
+            audioDsp.interruptApplicant('manual_barge_in');
+        }
+    }
+
+    function clearActiveHighlight(audioId) {
+        const card = document.getElementById(`card-${audioId}`);
+        if (card) {
+            card.classList.remove('playing');
+            const btn = card.querySelector('.btn-play-phrase');
+            if (btn) {
+                const chunks = (currentTicket === "1" && window.BARGE_IN_CHUNKS && window.BARGE_IN_CHUNKS[currentSituation]) 
+                    ? window.BARGE_IN_CHUNKS[currentSituation][audioId] 
+                    : null;
+                const hasChunks = !!(chunks && chunks.length > 0);
+                btn.innerHTML = `<span>${hasChunks && currentMode === 'chunks' ? '⚡' : '▶️'}</span> ${hasChunks && currentMode === 'chunks' ? 'По предложениям' : 'Воспроизвести'}`;
+            }
+            const chunkBtn = card.querySelector('.btn-play-chunks');
+            if (chunkBtn) {
+                chunkBtn.innerHTML = '<span>⚡</span> По предложениям';
+            }
+        }
+        document.getElementById('now-playing-banner').style.display = 'none';
+        if (activeAudioId === audioId) {
+            activeAudioId = null;
+        }
+    }
+
+    function stopPlayback() {
+        isDemoRunning = false;
+        isChunkSequenceActive = false;
+        if (audioDsp) {
+            audioDsp.stopCurrentAudioFile();
+            audioDsp.cancelSpeech();
+        }
+        const stickyBar = document.getElementById('barge-in-sticky-bar');
+        if (stickyBar) {
+            stickyBar.style.display = 'none';
+        }
+        if (activeAudioId) {
+            clearActiveHighlight(activeAudioId);
+        }
+    }
+
+    function playRandomPhrase() {
+        if (!phraseBank || !phraseBank[currentTicket] || !phraseBank[currentTicket][currentSituation]) return;
+        const phrases = Object.values(phraseBank[currentTicket][currentSituation].phrases || {});
+        if (phrases.length === 0) return;
+
+        const randomP = phrases[Math.floor(Math.random() * phrases.length)];
+        const card = document.getElementById(`card-${randomP.audio_id}`);
+        if (card) {
+            card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+        playPhrase(randomP.audio_id);
+    }
+
+    async function startDemoRun() {
+        stopPlayback();
+        isDemoRunning = true;
+
+        const sitData = phraseBank[currentTicket][currentSituation];
+        const phrases = sitData.phrases || {};
+
+        // Sequence of realistic call stages
+        const flowIntents = [
+            'greeting_01',
+            'cliche_rage_01',
+            'deescalation_01',
+            'address_01',
+            'details_01',
+            'victims_01',
+            'closing_01'
+        ];
+
+        for (const suffix of flowIntents) {
+            if (!isDemoRunning) break;
+
+            const tFolder = 't' + String(currentTicket).padStart(2, '0');
+            const qFolder = 'q' + String(currentSituation).padStart(2, '0');
+            const audioId = `${tFolder}_${qFolder}_${suffix}`;
+
+            const card = document.getElementById(`card-${audioId}`);
+            if (card) {
+                card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            }
+
+            await playPhrase(audioId);
+            // Brief pause between dialogue steps
+            if (isDemoRunning) {
+                await new Promise(r => setTimeout(r, 600));
+            }
+        }
+
+        isDemoRunning = false;
+    }
+
+    // Auto-init on load
+    window.addEventListener('DOMContentLoaded', init);
+</script>
+
+</body>
+</html>

@@ -1,0 +1,285 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Система-112: V2 Пайплайн</title>
+    <style>
+        body { font-family: sans-serif; margin: 0; padding: 20px; background: #f0f2f5; display: flex; flex-direction: column; height: 100vh; box-sizing: border-box; }
+        .container { display: flex; flex: 1; gap: 20px; overflow: hidden; }
+        .sidebar { width: 300px; background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); display: flex; flex-direction: column; gap: 15px; }
+        .main { flex: 1; background: white; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); display: flex; flex-direction: column; }
+        
+        h2, h3 { margin-top: 0; font-size: 1.2rem; }
+        select, button, input { padding: 10px; font-size: 1rem; border: 1px solid #ccc; border-radius: 4px; }
+        button { background: #007bff; color: white; cursor: pointer; font-weight: bold; border: none; }
+        button:hover { background: #0056b3; }
+        button:disabled { background: #ccc; cursor: not-allowed; }
+        button.danger { background: #dc3545; }
+        button.danger:hover { background: #c82333; }
+        
+        .chat-log { flex: 1; padding: 20px; overflow-y: auto; display: flex; flex-direction: column; gap: 10px; }
+        .msg { max-width: 80%; padding: 10px 15px; border-radius: 15px; }
+        .msg.operator { background: #e3f2fd; align-self: flex-end; border-bottom-right-radius: 0; }
+        .msg.applicant { background: #f1f0f0; align-self: flex-start; border-bottom-left-radius: 0; }
+        
+        .chat-input { display: flex; padding: 20px; border-top: 1px solid #eee; gap: 10px; }
+        .chat-input input { flex: 1; }
+        
+        .debug-panel { background: #333; color: #0f0; padding: 15px; font-family: monospace; border-radius: 4px; font-size: 0.9rem; overflow-wrap: break-word; }
+        .debug-panel div { margin-bottom: 5px; }
+        .debug-panel span.val { color: #fff; font-weight: bold; }
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <!-- Левая панель управления -->
+        <div class="sidebar">
+            <h2>Настройки сессии</h2>
+            
+            <label for="ticket-select">Выберите V2-билет:</label>
+            <select id="ticket-select">
+                <option value="">Загрузка...</option>
+            </select>
+            
+            <button id="btn-start">Начать звонок</button>
+            <button id="btn-reset" class="danger">Сбросить</button>
+            
+            <hr>
+            
+            <h3>Debug V2 Router</h3>
+            <div class="debug-panel">
+                <div>Intent: <span id="dbg-intent" class="val">-</span></div>
+                <div>Category: <span id="dbg-category" class="val">-</span></div>
+                <div>Emotion: <span id="dbg-emotion" class="val">-</span></div>
+                <div>Panic Level: <span id="dbg-panic" class="val">-</span></div>
+                <div>Event: <span id="dbg-event" class="val">-</span></div>
+                <div style="color: #ff9">Latency: <span id="dbg-latency" class="val">-</span> ms</div>
+            </div>
+            
+            <audio id="audio-player" style="display:none"></audio>
+        </div>
+
+        <!-- Центральная панель чата -->
+        <div class="main">
+            <div class="chat-log" id="chat-log">
+                <div style="text-align: center; color: #888; font-style: italic; margin-top: auto; margin-bottom: auto;">
+                    Выберите билет и нажмите "Начать звонок"
+                </div>
+            </div>
+            
+            <form class="chat-input" id="chat-form">
+                <input type="text" id="msg-input" placeholder="Введите реплику оператора..." autocomplete="off" disabled>
+                <button type="submit" id="btn-send" disabled>Отправить</button>
+            </form>
+        </div>
+    </div>
+
+    <script>
+        let currentSessionId = null;
+        let isPlaying = false;
+        const audioPlayer = document.getElementById("audio-player");
+        
+        const UI = {
+            ticketSelect: document.getElementById("ticket-select"),
+            btnStart: document.getElementById("btn-start"),
+            btnReset: document.getElementById("btn-reset"),
+            chatLog: document.getElementById("chat-log"),
+            chatForm: document.getElementById("chat-form"),
+            msgInput: document.getElementById("msg-input"),
+            btnSend: document.getElementById("btn-send"),
+            
+            // Debug fields
+            dbgIntent: document.getElementById("dbg-intent"),
+            dbgCategory: document.getElementById("dbg-category"),
+            dbgEmotion: document.getElementById("dbg-emotion"),
+            dbgPanic: document.getElementById("dbg-panic"),
+            dbgEvent: document.getElementById("dbg-event"),
+            dbgLatency: document.getElementById("dbg-latency")
+        };
+
+        // Initialize: Load tickets
+        async function loadTickets() {
+            try {
+                const resp = await fetch("/api/v2/tickets_list");
+                const data = await resp.json();
+                UI.ticketSelect.innerHTML = "";
+                if (data.tickets && data.tickets.length > 0) {
+                    data.tickets.forEach(t => {
+                        const opt = document.createElement("option");
+                        opt.value = t;
+                        opt.textContent = t;
+                        UI.ticketSelect.appendChild(opt);
+                    });
+                } else {
+                    UI.ticketSelect.innerHTML = "<option value=''>Билеты не найдены</option>";
+                }
+            } catch (err) {
+                console.error("Ошибка загрузки билетов:", err);
+                UI.ticketSelect.innerHTML = "<option value=''>Ошибка загрузки</option>";
+            }
+        }
+
+        function extractTicketId(filename) {
+            // bricks_ticket_123_sit_01.json -> 123
+            let match = filename.match(/bricks_ticket_(.+?)_sit/);
+            if (match) return match[1];
+            match = filename.match(/bricks_ticket_(.+?)\.json/);
+            if (match) return match[1];
+            return filename;
+        }
+
+        function addMessage(text, role) {
+            if (UI.chatLog.innerHTML.includes("Выберите билет")) {
+                UI.chatLog.innerHTML = "";
+            }
+            const div = document.createElement("div");
+            div.className = "msg " + role;
+            div.textContent = text;
+            UI.chatLog.appendChild(div);
+            UI.chatLog.scrollTop = UI.chatLog.scrollHeight;
+        }
+
+        function updateDebugPanel(data) {
+            UI.dbgIntent.textContent = data.intent || "-";
+            UI.dbgCategory.textContent = data.category || "-";
+            UI.dbgEmotion.textContent = data.emotion || "-";
+            UI.dbgPanic.textContent = data.panic_level !== undefined ? data.panic_level : "-";
+            UI.dbgEvent.textContent = data.event || data.semantic_event || "-";
+            UI.dbgLatency.textContent = data.latency_ms !== undefined ? data.latency_ms.toFixed(1) : "-";
+        }
+
+        function playTTS(text, turnStartMs = 0) {
+            if (!text) return;
+            const url = "/api/tts?text=" + encodeURIComponent(text) + "&speaker=aidar";
+            audioPlayer.src = url;
+            
+            if (turnStartMs > 0) {
+                audioPlayer.onplay = () => {
+                    const latency = Date.now() - turnStartMs;
+                    // Ищем последнее сообщение applicant и добавляем туда бэйджик
+                    const msgs = UI.chatLog.querySelectorAll('.msg.applicant');
+                    if (msgs.length > 0) {
+                        const lastMsg = msgs[msgs.length - 1];
+                        const badge = document.createElement('div');
+                        badge.style.fontSize = '0.75rem';
+                        badge.style.color = '#888';
+                        badge.style.marginTop = '4px';
+                        badge.innerText = `⏱ Задержка ответа: ${latency} мс`;
+                        lastMsg.appendChild(badge);
+                    }
+                    audioPlayer.onplay = null; // сбрасываем коллбек
+                };
+            } else {
+                audioPlayer.onplay = null;
+            }
+            
+            audioPlayer.play().catch(e => console.error("Audio play blocked", e));
+        }
+
+        // Event Listeners
+        UI.btnStart.addEventListener("click", async () => {
+            const selectedFile = UI.ticketSelect.value;
+            if (!selectedFile) return;
+            
+            const ticketId = extractTicketId(selectedFile);
+            currentSessionId = null; // will be set from server response
+            
+            UI.chatLog.innerHTML = "";
+            UI.msgInput.disabled = false;
+            UI.btnSend.disabled = false;
+            UI.btnStart.disabled = true;
+            UI.ticketSelect.disabled = true;
+            
+            try {
+                const resp = await fetch("/api/session/start", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                        ticket_id: ticketId,
+                        question_id: 1,
+                        session_id: currentSessionId
+                    })
+                });
+                const data = await resp.json();
+                
+                currentSessionId = data.session_id || currentSessionId;
+                
+                if (data.initial_message) {
+                    addMessage(data.initial_message, "applicant");
+                    playTTS(data.initial_message);
+                }
+                
+                updateDebugPanel(data);
+                
+            } catch (err) {
+                console.error(err);
+                addMessage("Ошибка старта сессии", "applicant");
+            }
+        });
+
+        UI.chatForm.addEventListener("submit", async (e) => {
+            e.preventDefault();
+            if (!currentSessionId) return;
+            
+            const msg = UI.msgInput.value.trim();
+            if (!msg) return;
+            
+            const turnStart = Date.now(); // Засекаем время
+            
+            addMessage(msg, "operator");
+            UI.msgInput.value = "";
+            
+            UI.msgInput.disabled = true;
+            UI.btnSend.disabled = true;
+            
+            try {
+                const resp = await fetch("/api/session/message", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                        session_id: currentSessionId,
+                        message: msg
+                    })
+                });
+                const data = await resp.json();
+                
+                if (data.reply) {
+                    addMessage(data.reply, "applicant");
+                    playTTS(data.reply, turnStart); // Передаем время старта
+                }
+                
+                updateDebugPanel(data);
+            } catch (err) {
+                console.error(err);
+                addMessage("Ошибка отправки", "applicant");
+            } finally {
+                UI.msgInput.disabled = false;
+                UI.btnSend.disabled = false;
+                UI.msgInput.focus();
+            }
+        });
+
+        UI.btnReset.addEventListener("click", () => {
+            currentSessionId = null;
+            UI.chatLog.innerHTML = '<div style="text-align: center; color: #888; font-style: italic; margin-top: auto; margin-bottom: auto;">Выберите билет и нажмите "Начать звонок"</div>';
+            UI.msgInput.disabled = true;
+            UI.btnSend.disabled = true;
+            UI.btnStart.disabled = false;
+            UI.ticketSelect.disabled = false;
+            audioPlayer.pause();
+            
+            UI.dbgIntent.textContent = "-";
+            UI.dbgCategory.textContent = "-";
+            UI.dbgEmotion.textContent = "-";
+            UI.dbgPanic.textContent = "-";
+            UI.dbgEvent.textContent = "-";
+            UI.dbgLatency.textContent = "-";
+        });
+
+        // Run
+        loadTickets();
+    </script>
+</body>
+</html>

@@ -1,0 +1,1336 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>АРМ ПОВ-112 города Москвы | Интерактивный тренажер оператора и ДДС</title>
+  <link rel="stylesheet" href="css/pov112.css">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🚨</text></svg>">
+</head>
+<body class="mode-filling">
+
+  <!-- ==================== ГЛОБАЛЬНАЯ ШАПКА ==================== -->
+  <header class="global-header">
+    <div class="brand-section">
+      <div class="brand-badge"><span>112</span> МСК</div>
+      <div class="brand-title">АРМ ПОВ-112</div>
+      <div class="brand-sub">ГБУ «Система 112» г. Москвы</div>
+    </div>
+
+    <div class="role-badge-operator" style="font-size: 13px; font-weight: 600; color: #93c5fd; display: flex; align-items: center; gap: 6px;"><span>🎧</span> Рабочее место: Оператор-112 (Обучающийся)</div>
+    <a href="index.html" class="btn-exit-portal" style="color: #cbd5e1; text-decoration: none; font-size: 13px; font-weight: 500; border: 1px solid rgba(255,255,255,0.25); padding: 6px 12px; border-radius: 4px; margin-left: 12px;">🚪 Выход на портал</a>
+
+    <div class="header-status-group">
+      <button type="button" id="btnStartTour" class="btn-tour" style="background-color: #1B365D; color: white; border: 1px solid rgba(255,255,255,0.3); padding: 8px 16px; border-radius: 4px; font-size: 14px; font-weight: bold; cursor: pointer; margin-right: 16px; transition: background 0.2s;" onmouseover="this.style.backgroundColor='#2a4b7c'" onmouseout="this.style.backgroundColor='#1B365D'" onclick="ARM_Tour.start()">
+        🎓 Режим обучения
+      </button>
+      <div class="ticket-quick-select">
+        <label for="ticketSelect">Вводная:</label>
+        <select id="ticketSelect" class="ticket-select">
+          <option value="1">Билет №1 — Возгорание мусора</option>
+        </select>
+      </div>
+
+      <button type="button" id="btnStartCall" class="btn-start-call">
+        <span>📞 Принять вызов</span>
+      </button>
+
+      <div class="operator-identity">
+        <span class="name">Иванов И.И.</span>
+        <span class="shift">Смена №4 / РМ-18</span>
+      </div>
+    </div>
+  </header>
+
+  <!-- ==========================================================
+       АРМ ОПЕРАТОРА-112 (ОСНОВНОЙ РАБОЧИЙ ЭКРАН ПОВ-112)
+       ========================================================== -->
+  <main id="armWorkspace">
+
+    <!-- Навигационные вкладки АРМ Оператора-112 -->
+    <nav class="arm-navigation-tabs" id="armNavTabs" aria-label="Вкладки рабочего места оператора">
+      <button type="button" class="tab-btn active" id="tabBtnCard" onclick="ARM.switchMainTab('card')">
+        📋 Карточка вызова
+      </button>
+      <button type="button" class="tab-btn" id="tabBtnServices" onclick="ARM.switchMainTab('services')">
+        🚨 Службы
+      </button>
+      <button type="button" class="tab-btn" id="tabBtnAudit" onclick="ARM.switchMainTab('audit')">
+        🛡️ История / Аудит
+      </button>
+      <button type="button" class="tab-btn" id="tabBtnMap" onclick="ARM.switchMainTab('map')">
+        🗺️ Карта
+      </button>
+    </nav>
+
+    <!-- Панель быстрого переключения эталонов (Скриншот 3 / Скриншот 4) -->
+    <div class="pov-mode-switcher-bar">
+      <span class="mode-bar-title">⚙️ Эталонный вид экрана ПОВ-112:</span>
+      <div class="mode-btn-group">
+        <button type="button" class="mode-toggle-btn active" id="modeBtnFilling" onclick="ARM.setMode('filling')">
+          📝 Скриншот 3: «Карточка происшествия в процессе заполнения»
+        </button>
+        <button type="button" class="mode-toggle-btn" id="modeBtnSaved" onclick="ARM.setMode('saved')">
+          💾 Скриншот 4: «Сохраненная карточка»
+        </button>
+        <button type="button" class="mode-toggle-btn" id="btnAssignCardStatus" onclick="ARM.openStatusPanel('Служба 101', this)">
+          ✏️ Назначить статус
+        </button>
+      </div>
+      <div class="mode-actions-cluster">
+        <button type="button" class="mini-tool-btn" id="btnExportCard" onclick="ARM.exportCard()" title="Экспорт карточки происшествия в CSV/JSON">📥 Экспорт</button>
+        <button type="button" class="mini-tool-btn" id="btnPrintCard" onclick="ARM.printCard()" title="Печать карточки">🖨️ Печать</button>
+        <button type="button" class="mini-tool-btn" id="btnConsultation" onclick="ARM.openConsultation()" title="Консультация дежурного врача / старшего оператора">🩺 Консультация</button>
+        <button type="button" class="mini-tool-btn" id="btnResetCard" onclick="ARM.resetCardForm()" title="Сбросить поля карточки">🔄 Сброс</button>
+      </div>
+    </div>
+
+    <!-- Вкладка 1: Карточка вызова -->
+    <section id="panelCallCard" class="arm-tab-panel active">
+
+    <!-- 1. ВЕРХНЯЯ ПАНЕЛЬ ТЕЛЕФОНИИ И СТАТУСОВ -->
+    <div class="pov-telephony-top-bar">
+      
+      <!-- Левый телефонный кластер: трубка, статус и две кнопки записей -->
+      <div class="line-status-block">
+        <div class="line-status-row">
+          <span class="tel-handset-icon" id="topHandsetIcon">⌢</span>
+          <span class="tel-status-text" id="topLineStatusText">не подключен</span>
+        </div>
+        <div class="line-sub-buttons">
+          <button type="button" class="mini-gray-btn" id="btnCallRecords">записи звонков</button>
+          <button type="button" class="mini-gray-btn" id="btnSmsList">список SMS</button>
+        </div>
+      </div>
+
+      <!-- 3 телефонных блока в ряд -->
+      <div class="tel-inputs-row">
+        
+        <!-- Блок 1: АОН -->
+        <div class="tel-box" id="telBoxAon">
+          <div class="tel-box-header">
+            <div class="tel-icon-badge">📞</div>
+            <span class="tel-box-title">АОН</span>
+            <div class="tel-box-icons">
+              <span class="icon-q" title="Справка">❓</span>
+              <span class="icon-lock" title="Блокировка">🔒</span>
+              <span class="icon-locator" title="Геолокация абонента">🌐</span>
+            </div>
+          </div>
+          <div class="tel-box-body">
+            <button type="button" class="tel-dots-btn" title="Дополнительные опции">...</button>
+            <input type="text" id="aonInput" class="tel-phone-input" value="+7 (916) 126-34-71" placeholder="+7 ( ) - -">
+          </div>
+        </div>
+
+        <!-- Блок 2: предоставленный -->
+        <div class="tel-box" id="telBoxProvided">
+          <div class="tel-box-header">
+            <div class="tel-icon-badge">📞</div>
+            <span class="tel-box-title">предоставленный</span>
+            <div class="tel-box-icons">
+              <span class="icon-locator" title="Поиск">🌐</span>
+            </div>
+          </div>
+          <div class="tel-box-body">
+            <button type="button" class="tel-dots-btn" title="Дополнительные опции">...</button>
+            <div class="input-with-action">
+              <input type="text" id="providedInput" class="tel-phone-input" value="+7 (916) 126-34-71" placeholder="+7 ( ) - -">
+              <button type="button" class="btn-copy-aon" id="btnCopyAonToProvided" title="Скопировать из АОН" onclick="ARM.copyAonToProvided()">АОН</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Блок 3: телефон на месте -->
+        <div class="tel-box" id="telBoxOnscene">
+          <div class="tel-box-header">
+            <div class="tel-icon-badge">📞</div>
+            <span class="tel-box-title">телефон на месте</span>
+            <div class="tel-box-icons">
+              <span class="icon-locator" title="Поиск">🌐</span>
+            </div>
+          </div>
+          <div class="tel-box-body">
+            <button type="button" class="tel-dots-btn" title="Дополнительные опции">...</button>
+            <div class="input-with-action">
+              <input type="text" id="onsceneInput" class="tel-phone-input" value="" placeholder="+7 ( ) - -">
+              <button type="button" class="btn-copy-aon" id="btnCopyAonToOnscene" title="Скопировать из АОН" onclick="ARM.copyAonToOnscene()">АОН</button>
+            </div>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- Правый угол: плашка происшествия -->
+      <div class="incident-meta-plate" id="incidentMetaPlate">
+        <div class="plate-title" id="incidentPlateNumber">Происшествие 913126</div>
+        <div class="plate-sub" id="incidentPlateSaved">Сохр. 19.12.2022 в 09:04:37</div>
+        <div class="plate-sub" id="incidentPlateOper">Опер. 1002, АРМ 7, Системны...</div>
+      </div>
+
+      <!-- Правый угол: Цифровой таймер (Режим заполнения / Скриншот 3) -->
+      <div class="digital-timer-container view-filling-only" id="digitalTimerContainer">
+        <div class="timer-digits-box">
+          <span id="callTimerDigits">00:16</span>
+        </div>
+        <div class="timer-sub-labels">
+          <span>минут</span>
+          <span>секунд</span>
+        </div>
+      </div>
+
+      <!-- Правый угол: Кнопки «просмотр» и «дополнение» (Режим сохраненной карточки / Скриншот 4) -->
+      <div class="saved-top-actions view-saved-only" id="savedTopActions">
+        <button type="button" class="btn-saved-top-view active" id="btnTopView" onclick="ARM.setMode('filling')">просмотр</button>
+        <button type="button" class="btn-saved-top-append" id="btnTopAppend" onclick="ARM.setMode('filling')">дополнение</button>
+      </div>
+
+    </div>
+
+    <!-- Интерактивный диалоговый тренажер (Стресс-модуль с заявителем) -->
+    <div id="applicantDialogBar" class="applicant-dialog-bar">
+      <div class="applicant-profile">
+        <div class="avatar-icon">🗣️</div>
+        <div class="applicant-meta">
+          <span id="applicantDialogName" class="name">Сидоров И.С. (Заявитель)</span>
+          <div class="panic-meter">
+            <div class="panic-bar-bg"><div id="panicBarFill" class="panic-bar-fill"></div></div>
+            <span id="panicStateLabel" class="state-tag">Паника: 65%</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="dialog-speech-box">
+        <span class="quote-icon">«</span>
+        <span id="applicantSpeechText" class="speech-text">Нажмите «Принять вызов» вверху, чтобы начать голосовой разговор с абонентом...</span>
+        <span class="quote-icon">»</span>
+      </div>
+
+      <div class="dialog-interaction-controls">
+        <button type="button" class="quick-phrase-btn directive" data-phrase="Служба 112, говорите спокойно, помощь уже выезжает! Слушайте меня.">🛡️ Деэскалация</button>
+        <button type="button" class="quick-phrase-btn" data-phrase="Назовите точный адрес происшествия: улица, номер дома?">📍 Адрес?</button>
+        <button type="button" class="quick-phrase-btn" data-phrase="Есть ли пострадавшие, люди без сознания, угроза жизни?">🚑 Пострадавшие?</button>
+        <button type="button" class="quick-phrase-btn" data-phrase="Что именно происходит: открытое пламя, задымление или взрыв?">🔥 Что горит?</button>
+
+        <div class="dialog-input-group">
+          <input type="text" id="operatorSpeechInput" placeholder="Ответить заявителю в микрофон...">
+          <button type="button" id="btnSendSpeech">Отправить</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 2. ПОДШАПКА (СТРОКА ЗАЯВИТЕЛЯ И ПЛАШКИ ПРИЗНАКОВ) -->
+    
+    <!-- Подшапка: Режим заполнения (Скриншот 3) -->
+    <div class="pov-applicant-subbar view-filling-only" id="subbarFilling">
+      
+      <!-- Левый блок: ФИО, статус и переводчик -->
+      <div class="applicant-input-cluster">
+        <input type="text" id="applicantNameInput" class="applicant-text-input" placeholder="Фамилия и имя заявителя" value="Иванов Иван Иванович">
+        
+        <select id="applicantStatusSelect" class="applicant-select-status">
+          <option value="">выберите статус</option>
+          <option value="witness" selected>очевидец</option>
+          <option value="victim">пострадавший</option>
+          <option value="relative">родственник</option>
+          <option value="other">иной</option>
+        </select>
+
+        <select class="applicant-select-empty" aria-label="Дополнительный статус">
+          <option value="">▾</option>
+        </select>
+
+        <button type="button" class="btn-translator-icon" title="Служба переводчиков">文A</button>
+      </div>
+
+      <!-- 3 широких серых кнопки/плашки -->
+      <div class="indicators-plate-group">
+        <button type="button" class="wide-gray-plate-btn" id="plateVictims" onclick="ARM.togglePlateVictims()">
+          Пострадавшие
+        </button>
+        <button type="button" class="wide-gray-plate-btn" id="plateRefused" onclick="this.classList.toggle('active')">
+          Нет на месте / Отказ от скорой
+        </button>
+        <button type="button" class="wide-gray-plate-btn" id="plateBlocked" onclick="this.classList.toggle('active')">
+          Нет доступа / Заблокированные
+        </button>
+      </div>
+
+      <!-- Две розово-красные кнопки справа -->
+      <div class="quick-call-actions-group">
+        <button type="button" class="rose-red-btn" id="btnNoContactAction" onclick="ARM.triggerCallEvent('no_contact')">
+          нет контакта
+        </button>
+        <button type="button" class="rose-red-btn" id="btnCallDropAction" onclick="ARM.triggerCallEvent('call_drop')">
+          срыв звонка
+        </button>
+      </div>
+
+    </div>
+
+    <!-- Подшапка: Режим сохраненной карточки (Скриншот 4) -->
+    <div class="pov-applicant-subbar view-saved-only" id="subbarSaved">
+      <div class="saved-applicant-identity">
+        <span class="saved-name">Иванов Иван Иванович</span>
+        <span class="saved-role">очевидец</span>
+      </div>
+
+      <div class="saved-indicators-inline">
+        <span class="saved-ind-item">Пострадавшие: <b>нет</b></span>
+        <span class="saved-ind-item">Отказ от скорой: <b>нет</b></span>
+        <span class="saved-ind-item">Заблокированные: <b>нет</b></span>
+      </div>
+
+      <div class="saved-badges-group">
+        <span class="badge-chs">ЧС ⚡</span>
+        <span class="badge-chp">ЧП ⚠️</span>
+        <button type="button" class="btn-icon-control" id="btnEditSavedCard" title="Редактировать карточку" onclick="ARM.setMode('filling')">✏️</button>
+        <button type="button" class="btn-icon-control" id="btnPrintSavedCard" title="Печать карточки" onclick="window.print()">🖨️</button>
+      </div>
+    </div>
+
+    <!-- ==========================================================
+         3 & 4. ОСНОВНАЯ РАБОЧАЯ СЕТКА (ЛЕВАЯ И ПРАВАЯ КОЛОНКИ)
+         ========================================================== -->
+    <div class="pov-card-columns-grid">
+
+      <!-- ================= ЛЕВАЯ КОЛОНКА (АДРЕС) ================= -->
+      <div class="pov-column-panel left-col">
+        
+        <!-- Режим заполнения: Полнофункциональный адресный блок (Скриншот 3) -->
+        <div class="view-filling-only" id="addressBlockFilling">
+          
+          <!-- Поле поиска: Адрес: 🗺️ Россия, Москва, Ясный проезд, 10 [✕] -->
+          <div class="address-search-line">
+            <span class="addr-label-map">Адрес: <span class="map-ico">🗺️</span></span>
+            <div class="addr-search-input-box">
+              <input type="text" id="fullAddressSearchInput" class="addr-search-input" value="Россия, Москва, Ясный проезд, 10">
+              <button type="button" class="addr-clear-cross-btn" id="btnClearSearchAddress" onclick="document.getElementById('fullAddressSearchInput').value=''" title="Очистить адрес">✕</button>
+            </div>
+          </div>
+
+          <!-- Сетка полей адреса -->
+          <div class="address-structured-grid">
+            
+            <!-- Ряд 1: Страна, Субъект, Населенный пункт -->
+            <div class="addr-field-cell col-2">
+              <div class="addr-field-title">Страна:</div>
+              <input type="text" id="addrCountry" class="addr-input" value="Россия" readonly>
+            </div>
+
+            <div class="addr-field-cell col-2">
+              <div class="addr-field-title">Субъект:</div>
+              <input type="text" id="addrSubject" class="addr-input" value="Москва" readonly>
+            </div>
+
+            <div class="addr-field-cell col-2">
+              <div class="addr-field-title">Населенный пункт:</div>
+              <input type="text" id="addrSettlement" class="addr-input" value="Москва">
+            </div>
+
+            <!-- Ряд 2: Объект, Округ, Район -->
+            <div class="addr-field-cell col-2">
+              <div class="addr-field-title">Объект:</div>
+              <input type="text" id="addrObject" class="addr-input" placeholder="">
+            </div>
+
+            <div class="addr-field-cell col-2">
+              <div class="addr-field-title">Округ:</div>
+              <select id="addrOkrugSelect" class="addr-select">
+                <option value="СВАО" selected>СВАО</option>
+                <option value="ЦАО">ЦАО</option>
+                <option value="САО">САО</option>
+                <option value="ВАО">ВАО</option>
+                <option value="ЮВАО">ЮВАО</option>
+                <option value="ЮАО">ЮАО</option>
+                <option value="ЮЗАО">ЮЗАО</option>
+                <option value="ЗАО">ЗАО</option>
+                <option value="СЗАО">СЗАО</option>
+                <option value="ЗелАО">ЗелАО</option>
+                <option value="ТиНАО">ТиНАО</option>
+              </select>
+            </div>
+
+            <div class="addr-field-cell col-2">
+              <div class="addr-field-title">Район:</div>
+              <select id="addrDistrictSelect" class="addr-select">
+                <option value="Южное Медведково" selected>Южное Медведково</option>
+                <option value="Северное Медведково">Северное Медведково</option>
+                <option value="Бабушкинский">Бабушкинский</option>
+                <option value="Бутырский">Бутырский</option>
+                <option value="Отрадное">Отрадное</option>
+                <option value="Тверской">Тверской</option>
+                <option value="Дорогомилово">Дорогомилово</option>
+                <option value="Печатники">Печатники</option>
+              </select>
+            </div>
+
+            <!-- Ряд 3: Улица, Дом/Вл., Корпус -->
+            <div class="addr-field-cell col-3">
+              <div class="addr-field-title">Улица:</div>
+              <input type="text" id="addrStreet" class="addr-input" value="Ясный проезд">
+            </div>
+
+            <div class="addr-field-cell col-2">
+              <div class="addr-field-title">Дом/Вл:</div>
+              <input type="text" id="addrHouse" class="addr-input" value="10">
+            </div>
+
+            <div class="addr-field-cell col-1">
+              <div class="addr-field-title">Корпус:</div>
+              <input type="text" id="addrBuildingCorp" class="addr-input" value="">
+            </div>
+
+            <!-- Ряд 4: Стр/соор, Квартира/офис, Подъезд, Этаж, Код -->
+            <div class="addr-field-cell col-1">
+              <div class="addr-field-title">Стр/соор:</div>
+              <input type="text" id="addrBuildingStr" class="addr-input" value="">
+            </div>
+
+            <div class="addr-field-cell col-2">
+              <div class="addr-field-title">Квартира/офис:</div>
+              <input type="text" id="addrFlat" class="addr-input" value="">
+            </div>
+
+            <div class="addr-field-cell col-1">
+              <div class="addr-field-title">Подъезд:</div>
+              <input type="text" id="addrEntrance" class="addr-input" value="">
+            </div>
+
+            <div class="addr-field-cell col-1">
+              <div class="addr-field-title">Этаж:</div>
+              <input type="text" id="addrFloor" class="addr-input" value="">
+            </div>
+
+            <div class="addr-field-cell col-1">
+              <div class="addr-field-title">Код:</div>
+              <input type="text" id="addrIntercomCode" class="addr-input" value="">
+            </div>
+
+            <!-- Ряд 5: Описательный адрес -->
+            <div class="addr-field-cell col-6">
+              <div class="addr-field-title">Описательный адрес:</div>
+              <input type="text" id="addrDescriptive" class="addr-input" placeholder="">
+            </div>
+
+          </div>
+
+          <!-- Кнопка очистить адрес справа -->
+          <div class="clear-address-action-row">
+            <button type="button" class="btn-clear-address" id="btnClearAddressAction" onclick="ARM.clearAddressFields()">
+              очистить адрес
+            </button>
+          </div>
+
+          <!-- Описание со слов заявителя со счетчиком 0 / 1999 -->
+          <div class="caller-description-section">
+            <div class="caller-desc-header">
+              <span class="desc-title">Описание со слов заявителя</span>
+            </div>
+            <textarea id="descriptionText" class="caller-desc-textarea" rows="3" placeholder="введите" oninput="ARM.updateDescriptionCounter()"></textarea>
+            <div class="caller-desc-counter" id="descCharCounter">0 / 1999</div>
+          </div>
+
+        </div>
+
+        <!-- Режим сохраненной карточки: Свернутый адрес (Скриншот 4) -->
+        <div class="view-saved-only" id="addressBlockSaved">
+          <div class="saved-address-container">
+            <div class="saved-address-line">
+              <span>Россия, Москва, (ЮВАО, Печатники), Шоссейная улица, 62, под. 1, код 1в100</span>
+              <span class="saved-map-icon">🗺️</span>
+            </div>
+            <div class="saved-address-descriptive">
+              чердак
+            </div>
+          </div>
+        </div>
+
+      </div>
+
+      <!-- ================= ПРАВАЯ КОЛОНКА (ОПРОСНАЯ КАРТА) ================= -->
+      <div class="pov-column-panel right-col">
+        
+        <!-- Режим заполнения: Иерархические ряды кнопок опросника (Скриншот 3) -->
+        <div class="view-filling-only" id="questionnaireFilling">
+          
+          <!-- Заголовок: + добавить тип происшествия -->
+          <div class="add-incident-header">
+            <button type="button" class="btn-add-type-link" id="btnAddIncidentType">
+              + добавить тип происшествия
+            </button>
+          </div>
+
+          <!-- Вкладка происшествия -->
+          <div class="incident-tab-strip">
+            <div class="incident-tab active">
+              Происшествие 101
+            </div>
+          </div>
+
+          <!-- Темная плашка происшествия -->
+          <div class="incident-dark-plate-header">
+            <span class="plate-title">Происшествие 101</span>
+            <button type="button" class="plate-close-cross" title="Закрыть происшествие">✕</button>
+          </div>
+
+          <!-- Иерархические ряды кнопок опросника -->
+          <div class="questionnaire-hierarchical-tree">
+            
+            <!-- Ряд 1: «Где»: Улица, Транспорт, Дом (активен), Здание/объект, Опасный объект -->
+            <div class="hierarchy-group">
+              <span class="hierarchy-label">Где</span>
+              <div class="hierarchy-buttons-row">
+                <button type="button" class="pov-chip-btn" onclick="ARM.toggleFeature(this, 'feature1', 'Улица')">Улица</button>
+                <button type="button" class="pov-chip-btn" onclick="ARM.toggleFeature(this, 'feature1', 'Транспорт')">Транспорт</button>
+                <button type="button" class="pov-chip-btn active" onclick="ARM.toggleFeature(this, 'feature1', 'Дом')">Дом</button>
+                <button type="button" class="pov-chip-btn" onclick="ARM.toggleFeature(this, 'feature1', 'Здание/объект')">Здание/объект</button>
+                <button type="button" class="pov-chip-btn" onclick="ARM.toggleFeature(this, 'feature1', 'Опасный объект')">Опасный объект</button>
+              </div>
+            </div>
+
+            <!-- Ряд 2: «Признак пожара (дом)»: Дым, Открытое пламя (активен), Запах гари, Сработала сигнализация -->
+            <div class="hierarchy-group">
+              <span class="hierarchy-label">Признак пожара (дом)</span>
+              <div class="hierarchy-buttons-row">
+                <button type="button" class="pov-chip-btn" onclick="ARM.toggleFeature(this, 'feature2', 'Дым')">Дым</button>
+                <button type="button" class="pov-chip-btn active" onclick="ARM.toggleFeature(this, 'feature2', 'Открытое пламя')">Открытое пламя</button>
+                <button type="button" class="pov-chip-btn" onclick="ARM.toggleFeature(this, 'feature2', 'Запах гари')">Запах гари</button>
+              </div>
+              <div class="hierarchy-buttons-subrow">
+                <button type="button" class="pov-chip-btn" onclick="ARM.toggleFeature(this, 'feature2', 'Сработала пожарная сигнализация')">Сработала пожарная сигнализация</button>
+              </div>
+            </div>
+
+            <!-- Ряд 3: «Доступ»: Нет доступа -->
+            <div class="hierarchy-group">
+              <span class="hierarchy-label">Доступ</span>
+              <div class="hierarchy-buttons-row">
+                <button type="button" class="pov-chip-btn" onclick="this.classList.toggle('active')">Нет доступа</button>
+              </div>
+            </div>
+
+            <!-- Ряд 4: «Дом (пламя)»: квартира, балкон (активен), газовая колонка, газовая плита, лифт, мусоропровод... -->
+            <div class="hierarchy-group">
+              <span class="hierarchy-label">Дом (пламя)</span>
+              <div class="hierarchy-buttons-flow">
+                <button type="button" class="pov-chip-btn" onclick="ARM.toggleFeature(this, 'feature3', 'квартира')">квартира</button>
+                <button type="button" class="pov-chip-btn active" onclick="ARM.toggleFeature(this, 'feature3', 'балкон')">балкон</button>
+                <button type="button" class="pov-chip-btn" onclick="ARM.toggleFeature(this, 'feature3', 'газовая колонка')">газовая колонка</button>
+                <button type="button" class="pov-chip-btn" onclick="ARM.toggleFeature(this, 'feature3', 'газовая плита')">газовая плита</button>
+                <button type="button" class="pov-chip-btn" onclick="ARM.toggleFeature(this, 'feature3', 'лифт')">лифт</button>
+                <button type="button" class="pov-chip-btn" onclick="ARM.toggleFeature(this, 'feature3', 'мусоропровод')">мусоропровод</button>
+                <button type="button" class="pov-chip-btn" onclick="ARM.toggleFeature(this, 'feature3', 'подъезд')">подъезд</button>
+                <button type="button" class="pov-chip-btn" onclick="ARM.toggleFeature(this, 'feature3', 'счетчик электричества')">счетчик электричества</button>
+                <button type="button" class="pov-chip-btn" onclick="ARM.toggleFeature(this, 'feature3', 'частный дом')">частный дом</button>
+                <button type="button" class="pov-chip-btn" onclick="ARM.toggleFeature(this, 'feature3', 'электрическая проводка')">электрическая проводка</button>
+                <button type="button" class="pov-chip-btn" onclick="ARM.toggleFeature(this, 'feature3', 'электрощит')">электрощит</button>
+                <button type="button" class="pov-chip-btn" onclick="ARM.toggleFeature(this, 'feature3', 'лестничная клетка')">лестничная клетка</button>
+                <button type="button" class="pov-chip-btn" onclick="ARM.toggleFeature(this, 'feature3', 'подвал')">подвал</button>
+                <button type="button" class="pov-chip-btn" onclick="ARM.toggleFeature(this, 'feature3', 'дача')">дача</button>
+                <button type="button" class="pov-chip-btn" onclick="ARM.toggleFeature(this, 'feature3', 'сарай/бытовка/хоз. постройка')">сарай/бытовка/хоз. постройка</button>
+                <button type="button" class="pov-chip-btn" onclick="ARM.toggleFeature(this, 'feature3', 'прочие внутридомовые объекты')">прочие внутридомовые объекты</button>
+              </div>
+            </div>
+
+          </div>
+
+        </div>
+
+        <!-- Режим сохраненной карточки: Свернутый текстовый опросник (Скриншот 4) -->
+        <div class="view-saved-only" id="questionnaireSaved">
+          
+          <div class="incident-dark-plate-header">
+            <span class="plate-title">Происшествие 102</span>
+          </div>
+
+          <div class="saved-incident-description-card">
+            <p class="saved-type-bold">Подозрительные / посторонние граждане. Подозрительные граждане.</p>
+            <p class="saved-type-note">на чердаке мужчина с большой сумкой, не сотрудник коммунальных служб .</p>
+          </div>
+
+          <div class="saved-classification-field">
+            <span class="field-label">Класс.:</span>
+            <span class="field-value">Подозрительные граждане;</span>
+          </div>
+
+          <div class="saved-classification-field">
+            <span class="field-label">[ВИС] Класс.:</span>
+            <span class="field-value empty"></span>
+          </div>
+
+        </div>
+
+      </div>
+
+    </div>
+
+    <!-- ==========================================================
+         РЕЖИМ СОХРАНЕННОЙ КАРТОЧКИ: ТАБЛИЦА СТРОК ОТРАБОТКИ ЗВОНКОВ
+         ========================================================== -->
+    <div class="call-dispatch-table-container view-saved-only" id="callDispatchTableBlock">
+      <table class="call-dispatch-table">
+        <thead>
+          <tr>
+            <th style="width: 50px;">Опер.</th>
+            <th style="width: 40px;">АРМ</th>
+            <th style="width: 140px;">Дата и время</th>
+            <th style="width: 140px;">Служба</th>
+            <th style="width: 110px;">Куда звонили</th>
+            <th style="width: 90px;">Телефон</th>
+            <th style="width: 130px;">ФИО</th>
+            <th>Суть сообщения</th>
+          </tr>
+        </thead>
+        <tbody id="dispatchTableBody">
+          <!-- Первая строка (зафиксированная отработка) -->
+          <tr class="dispatch-row-saved">
+            <td class="badge-cell-wine">1002</td>
+            <td class="badge-cell-wine">7</td>
+            <td class="badge-cell-wine">16.12.22 14:53</td>
+            <td class="badge-cell-white">14:53 Служба 102</td>
+            <td></td>
+            <td>102</td>
+            <td><span class="handset-mini">📞</span> Петрова</td>
+            <td>коммутация, принято</td>
+          </tr>
+
+          <!-- Вторая интерактивная строка для ввода новой отработки -->
+          <tr class="dispatch-row-interactive">
+            <td class="action-cell">
+              <button type="button" class="btn-row-clear" title="Сбросить">✕</button>
+            </td>
+            <td></td>
+            <td></td>
+            <td>
+              <select id="newDispatchServiceSelect" class="row-select">
+                <option value="">служба</option>
+                <option value="Служба 101">Служба 101</option>
+                <option value="Служба 102" selected>Служба 102</option>
+                <option value="Служба 103">Служба 103</option>
+                <option value="ОМВД">ОМВД</option>
+                <option value="ЦОДД">ЦОДД</option>
+              </select>
+            </td>
+            <td>
+              <input type="text" id="newDispatchWhere" class="row-input" placeholder="куда">
+            </td>
+            <td>
+              <input type="text" id="newDispatchPhone" class="row-input" placeholder="телефон">
+            </td>
+            <td>
+              <div class="row-input-with-handset">
+                <span class="handset-mini">📞</span>
+                <input type="text" id="newDispatchFio" class="row-input" placeholder="кто принял">
+              </div>
+            </td>
+            <td>
+              <div class="row-input-with-action">
+                <input type="text" id="newDispatchMessage" class="row-input" placeholder="суть сообщения">
+                <button type="button" class="btn-row-check" id="btnConfirmNewDispatchRow" title="Зафиксировать отработку" onclick="ARM.addDispatchRow()">✓</button>
+              </div>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+
+    <!-- ==========================================================
+         5. НИЖНЯЯ ПАНЕЛЬ СЛУЖБ
+         ========================================================== -->
+    
+    <!-- Нижняя оранжевая панель служб: Режим заполнения (Скриншот 3) -->
+    <footer class="pov-services-orange-bar view-filling-only" id="bottomBarFilling">
+      
+      <!-- Левая часть: плашки служб со значком трубки и крестиком -->
+      <div class="orange-services-cluster">
+        <span class="services-title-label">Службы:</span>
+        <div class="service-chips-list" id="servicesChipsFilling">
+          <div class="service-chip-plate">
+            <span class="svc-icon">📞</span>
+            <span class="svc-name">Служба 102</span>
+          </div>
+          <div class="service-chip-plate">
+            <span class="svc-icon">📞</span>
+            <span class="svc-name">Служба 101</span>
+          </div>
+          <div class="service-chip-plate">
+            <span class="svc-icon">📞</span>
+            <span class="svc-name">ОМВД</span>
+          </div>
+          <div class="service-chip-plate">
+            <span class="svc-icon">📞</span>
+            <span class="svc-name">ЦОДД</span>
+          </div>
+          <div class="service-chip-plate">
+            <span class="svc-icon">📞</span>
+            <span class="svc-name">Мос.Без.</span>
+          </div>
+          <div class="service-chip-plate">
+            <span class="svc-icon">📞</span>
+            <span class="svc-name">Упр. Южное М...</span>
+          </div>
+          <button type="button" class="btn-add-service-plus" title="Добавить службу" onclick="ARM.addManualService()">+</button>
+        </div>
+      </div>
+
+      <!-- Правая часть: кнопка «сохранить» и 5 сервисных иконок -->
+      <div class="orange-bar-actions">
+        <button type="button" class="btn-save-white-plate" id="btnSaveCardOrange" onclick="ARM.saveAndSwitchToSaved()">
+          сохранить
+        </button>
+
+        <div class="service-icon-buttons-group">
+          <button type="button" class="svc-tool-icon-btn" title="Связи">🔗</button>
+          <button type="button" class="svc-tool-icon-btn" title="Таймер">⏱️</button>
+          <button type="button" class="svc-tool-icon-btn" title="Оповещения">🔔</button>
+          <button type="button" class="svc-tool-icon-btn" title="Комментарии">💬</button>
+          <button type="button" class="svc-tool-icon-btn" title="Закрыть">✕</button>
+        </div>
+      </div>
+
+    </footer>
+
+    <!-- Панель проставления статуса реагирования на АРМ-112 (Скриншот 1) -->
+    <div class="status-assignment-panel hidden" id="operatorStatusPanel">
+      <select class="status-panel-select" id="operatorStatusSelect" title="Селектор статуса реагирования">
+        <option value="Принята" selected>Принята</option>
+        <option value="Не принята">Не принята</option>
+        <option value="Начало реагирования">Начало реагирования</option>
+        <option value="Прибытие">Прибытие</option>
+        <option value="Проведение работ">Проведение работ</option>
+        <option value="Завершение работ">Завершение работ</option>
+      </select>
+      <input type="text" class="status-panel-input status-order-input" id="operatorStatusOrderInput" placeholder="Номер наряда" value="Номер наряда" title="Номер наряда">
+      <input type="text" class="status-panel-input status-comment-input" id="operatorStatusCommentInput" placeholder="Направлены рабочие" value="Направлены рабочие" title="Комментарий / обоснование">
+      <button type="button" class="status-panel-btn status-btn-confirm" id="btnOperatorConfirmStatus" title="Подтвердить">✓</button>
+      <button type="button" class="status-panel-btn status-btn-cancel" id="btnOperatorCancelStatus" title="Отмена">✕</button>
+    </div>
+
+    <!-- Всплывающее синее окно (Pop-up) с историей статусов службы (Скриншот 2, 3) -->
+    <div class="dds-status-popup hidden" id="operatorStatusPopup">
+      <div class="popup-header">
+        <span class="popup-title" id="operatorPopupServiceTitle">Служба 102</span>
+        <button type="button" class="popup-close-btn" id="btnOperatorClosePopup" title="Закрыть историю">&times;</button>
+      </div>
+      <div class="popup-history-list" id="operatorPopupHistoryList">
+        <div class="popup-history-row">
+          <span class="pop-op">оп. 1002</span>
+          <span class="pop-arrow">&gt;</span>
+          <span class="pop-time">16.12.2022 14:53:10</span>
+          <span class="pop-status">Добавлена</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Нижняя панель служб: Режим сохраненной карточки (Скриншот 4) -->
+    <footer class="pov-services-saved-bar view-saved-only" id="bottomBarSaved">
+      
+      <!-- Левая часть: блоки оповещенных служб с датой/временем добавления -->
+      <div class="saved-services-cluster">
+        <span class="services-title-label">Службы:</span>
+        <div class="saved-service-blocks-row" id="savedServiceBlocksRow">
+          
+          <!-- Служба 102 -->
+          <div class="saved-service-status-card" id="savedCard102" data-service="Служба 102" onclick="ARM.toggleServicePopup('Служба 102', this)">
+            <div class="svc-card-head">
+              <span class="ico">📞</span>
+              <button type="button" class="btn-tab-arrow" title="История статусов">⌃</button>
+              <span class="title">Служба 102</span>
+              <button type="button" class="btn-tab-pencil" title="Изменить статус реагирования" onclick="event.stopPropagation(); ARM.openStatusPanel('Служба 102', this)">✏️</button>
+            </div>
+            <div class="svc-card-foot" id="cardFoot_102">14:53 Добавлена</div>
+          </div>
+
+          <!-- Служба 101 (Скриншот 2) -->
+          <div class="saved-service-status-card" id="savedCard101" data-service="Служба 101" onclick="ARM.toggleServicePopup('Служба 101', this)">
+            <div class="svc-card-head">
+              <span class="ico">📞</span>
+              <button type="button" class="btn-tab-arrow" title="История статусов">⌃</button>
+              <span class="title">Служба 101</span>
+              <button type="button" class="btn-tab-pencil" title="Изменить статус реагирования" onclick="event.stopPropagation(); ARM.openStatusPanel('Служба 101', this)">✏️</button>
+            </div>
+            <div class="svc-card-foot" id="cardFoot_101"><span class="status-time-badge-red tab-time-badge-rejected">09:02</span> Не принята</div>
+          </div>
+
+          <!-- ЦОДД (Скриншот 2) -->
+          <div class="saved-service-status-card" id="savedCardCODD" data-service="ЦОДД" onclick="ARM.toggleServicePopup('ЦОДД', this)">
+            <div class="svc-card-head">
+              <button type="button" class="btn-tab-arrow" title="История статусов">⌃</button>
+              <span class="title">ЦОДД</span>
+              <button type="button" class="btn-tab-pencil" title="Изменить статус реагирования" onclick="event.stopPropagation(); ARM.openStatusPanel('ЦОДД', this)">✏️</button>
+            </div>
+            <div class="svc-card-foot" id="cardFoot_CODD">08:57 Работы заве...</div>
+          </div>
+
+          <!-- Автодороги (Скриншот 2) -->
+          <div class="saved-service-status-card" id="savedCardRoads" data-service="Автодороги" onclick="ARM.toggleServicePopup('Автодороги', this)">
+            <div class="svc-card-head">
+              <button type="button" class="btn-tab-arrow" title="История статусов">⌃</button>
+              <span class="title">Автодороги</span>
+              <button type="button" class="btn-tab-pencil" title="Изменить статус реагирования" onclick="event.stopPropagation(); ARM.openStatusPanel('Автодороги', this)">✏️</button>
+            </div>
+            <div class="svc-card-foot" id="cardFoot_Roads">13:22 Работы заве...</div>
+          </div>
+
+          <!-- Россети МР (Скриншот 2) -->
+          <div class="saved-service-status-card" id="savedCardRosseti" data-service="Россети МР" onclick="ARM.toggleServicePopup('Россети МР', this)">
+            <div class="svc-card-head">
+              <button type="button" class="btn-tab-arrow" title="История статусов">⌃</button>
+              <span class="title">Россети МР</span>
+              <button type="button" class="btn-tab-pencil" title="Изменить статус реагирования" onclick="event.stopPropagation(); ARM.openStatusPanel('Россети МР', this)">✏️</button>
+            </div>
+            <div class="svc-card-foot" id="cardFoot_Rosseti"><span class="status-time-badge-red tab-time-badge-rejected">09:12</span> Не принята</div>
+          </div>
+
+          <!-- МОЭК (Скриншот 2, 3) -->
+          <div class="saved-service-status-card" id="savedCardMOEK" data-service="МОЭК" onclick="ARM.toggleServicePopup('МОЭК', this)">
+            <div class="svc-card-head">
+              <button type="button" class="btn-tab-arrow" title="История статусов">⌃</button>
+              <span class="title">МОЭК</span>
+              <button type="button" class="btn-tab-pencil" title="Изменить статус реагирования" onclick="event.stopPropagation(); ARM.openStatusPanel('МОЭК', this)">✏️</button>
+            </div>
+            <div class="svc-card-foot" id="cardFoot_MOEK"><span class="status-time-badge-red tab-time-badge-rejected">08:59</span> Не принята</div>
+          </div>
+
+          <!-- ЦЭМП (Скриншот 3) -->
+          <div class="saved-service-status-card" id="savedCardCEMP" data-service="ЦЭМП" onclick="ARM.toggleServicePopup('ЦЭМП', this)">
+            <div class="svc-card-head">
+              <button type="button" class="btn-tab-arrow" title="История статусов">⌃</button>
+              <span class="title">ЦЭМП</span>
+              <button type="button" class="btn-tab-pencil" title="Изменить статус реагирования" onclick="event.stopPropagation(); ARM.openStatusPanel('ЦЭМП', this)">✏️</button>
+            </div>
+            <div class="svc-card-foot" id="cardFoot_CEMP">19:27 Работы заве...</div>
+          </div>
+
+          <!-- ДДС ТиНАО (Скриншот 4) -->
+          <div class="saved-service-status-card" id="savedCardTinao" data-service="ДДС ТиНАО" onclick="ARM.toggleServicePopup('ДДС ТиНАО', this)">
+            <div class="svc-card-head">
+              <button type="button" class="btn-tab-arrow" title="История статусов">⌃</button>
+              <span class="title">ДДС ТиНАО</span>
+              <button type="button" class="btn-tab-pencil" title="Изменить статус реагирования" onclick="event.stopPropagation(); ARM.openStatusPanel('ДДС ТиНАО', this)">✏️</button>
+            </div>
+            <div class="svc-card-foot" id="cardFoot_Tinao">15:42 Принята</div>
+          </div>
+
+          <!-- Упр. Чертанов... (Скриншот 1) -->
+          <div class="saved-service-status-card" id="savedCardChertanovo" data-service="Упр. Чертанов..." onclick="ARM.toggleServicePopup('Упр. Чертанов...', this)">
+            <div class="svc-card-head">
+              <button type="button" class="btn-tab-arrow" title="История статусов">⌃</button>
+              <span class="title">Упр. Чертанов...</span>
+              <button type="button" class="btn-tab-pencil" title="Изменить статус реагирования" onclick="event.stopPropagation(); ARM.openStatusPanel('Упр. Чертанов...', this)">✏️</button>
+            </div>
+            <div class="svc-card-foot" id="cardFoot_Chertanovo">13:22 Получена слу...</div>
+          </div>
+
+          <!-- Преф. ЮАО (Скриншот 1) -->
+          <div class="saved-service-status-card" id="savedCardPref" data-service="Преф. ЮАО" onclick="ARM.toggleServicePopup('Преф. ЮАО', this)">
+            <div class="svc-card-head">
+              <button type="button" class="btn-tab-arrow" title="История статусов">⌃</button>
+              <span class="title">Преф. ЮАО</span>
+              <button type="button" class="btn-tab-pencil" title="Изменить статус реагирования" onclick="event.stopPropagation(); ARM.openStatusPanel('Преф. ЮАО', this)">✏️</button>
+            </div>
+            <div class="svc-card-foot" id="cardFoot_Pref">11:59 Добавлена</div>
+          </div>
+
+          <!-- Деп. природ. (Скриншот 1) -->
+          <div class="saved-service-status-card" id="savedCardDepNature" data-service="Деп. природ." onclick="ARM.toggleServicePopup('Деп. природ.', this)">
+            <div class="svc-card-head">
+              <button type="button" class="btn-tab-arrow" title="История статусов">⌃</button>
+              <span class="title">Деп. природ.</span>
+              <button type="button" class="btn-tab-pencil" title="Изменить статус реагирования" onclick="event.stopPropagation(); ARM.openStatusPanel('Деп. природ.', this)">✏️</button>
+            </div>
+            <div class="svc-card-foot" id="cardFoot_DepNature">11:59 Добавлена</div>
+          </div>
+
+          <!-- Служба 103 (Скорая помощь) -->
+          <div class="saved-service-status-card" id="savedCard103" data-service="Служба 103" onclick="ARM.toggleServicePopup('Служба 103', this)">
+            <div class="svc-card-head">
+              <span class="ico">📞</span>
+              <button type="button" class="btn-tab-arrow" title="История статусов">⌃</button>
+              <span class="title">Служба 103</span>
+              <button type="button" class="btn-tab-pencil" title="Изменить статус реагирования" onclick="event.stopPropagation(); ARM.openStatusPanel('Служба 103', this)">✏️</button>
+            </div>
+            <div class="svc-card-foot" id="cardFoot_103">14:50 Добавлена</div>
+          </div>
+
+        </div>
+      </div>
+
+      <!-- Правая часть: кнопка «отработана» и сервисные иконки -->
+      <div class="saved-bar-actions">
+        <button type="button" class="btn-dispatched-card" id="btnDispatchedAction" onclick="ARM.markDispatchedAndEvaluate()">
+          отработана
+        </button>
+
+        <div class="service-icon-buttons-group">
+          <button type="button" class="svc-tool-icon-btn" title="Связи">🔗</button>
+          <button type="button" class="svc-tool-icon-btn" title="Журнал">📋</button>
+          <button type="button" class="svc-tool-icon-btn" title="Таймер">⏱️</button>
+          <button type="button" class="svc-tool-icon-btn" title="Оповещения">🔔</button>
+          <button type="button" class="svc-tool-icon-btn" title="Комментарии">💬</button>
+          <button type="button" class="svc-tool-icon-btn" title="Закрыть">✕</button>
+        </div>
+      </div>
+
+    </footer>
+
+    </section>
+
+    <!-- Вкладка 2: Службы реагирования -->
+    <section id="panelServicesView" class="arm-tab-panel hidden">
+      <div class="section-header" style="padding: 14px 18px; border-bottom: 1px solid #334155; display: flex; justify-content: space-between; align-items: center;">
+        <span class="section-title" style="font-size: 16px; font-weight: 700; color: #93c5fd;">🚨 Матрица служб экстренного реагирования г. Москвы</span>
+        <button type="button" class="btn-bar-action btn-dispatch" onclick="ARM.addManualService()">+ Добавить службу</button>
+      </div>
+      <div class="services-dashboard-grid" id="servicesDashboardGrid">
+        <!-- Служба 101 -->
+        <div class="service-dashboard-card" id="dashCard_101">
+          <div class="svc-dash-head">
+            <span class="svc-dash-title">🔥 Служба 101 (МЧС / ПСЦ)</span>
+            <span class="svc-dash-status active" id="dashStatus_101">Добавлена</span>
+          </div>
+          <div style="font-size: 12px; color: #94a3b8;">Пожарно-спасательные части, тушение пожаров и АСР</div>
+          <div style="display: flex; gap: 8px;">
+            <button type="button" class="btn-open-svc-modal" id="btnOpenModal101" onclick="ARM.openServiceModal('101')">⚙️ Параметры службы 101</button>
+            <button type="button" class="btn-open-svc-modal" style="background: #ffffff; color: #ffffff;" onclick="ARM.openStatusPanel('Служба 101', this)">✏️ Изменить статус</button>
+          </div>
+        </div>
+
+        <!-- МОЭК -->
+        <div class="service-dashboard-card" id="dashCard_MOEK">
+          <div class="svc-dash-head">
+            <span class="svc-dash-title">⚡ МОЭК (Теплосети)</span>
+            <span class="svc-dash-status rejected" id="dashStatus_MOEK">08:59 Не принята</span>
+          </div>
+          <div style="font-size: 12px; color: #94a3b8;">Аварийная служба отопления и горячего водоснабжения</div>
+          <div style="display: flex; gap: 8px;">
+            <button type="button" class="btn-open-svc-modal" id="btnOpenModalMOEK" onclick="ARM.openServiceModal('MOEK')">⚙️ Параметры МОЭК</button>
+            <button type="button" class="btn-open-svc-modal" style="background: #ffffff; color: #ffffff;" onclick="ARM.openStatusPanel('МОЭК', this)">✏️ Изменить статус</button>
+          </div>
+        </div>
+
+        <!-- Служба 102 -->
+        <div class="service-dashboard-card" id="dashCard_102">
+          <div class="svc-dash-head">
+            <span class="svc-dash-title">🚓 Служба 102 (Полиция)</span>
+            <span class="svc-dash-status active" id="dashStatus_102">14:53 Добавлена</span>
+          </div>
+          <div style="font-size: 12px; color: #94a3b8;">Охрана общественного порядка и выезды нарядов ОМВД</div>
+          <div style="display: flex; gap: 8px;">
+            <button type="button" class="btn-open-svc-modal" id="btnOpenModal102" onclick="ARM.openServiceModal('102')">⚙️ Параметры службы 102</button>
+            <button type="button" class="btn-open-svc-modal" style="background: #ffffff; color: #ffffff;" onclick="ARM.openStatusPanel('Служба 102', this)">✏️ Изменить статус</button>
+          </div>
+        </div>
+
+        <!-- Служба 103 -->
+        <div class="service-dashboard-card" id="dashCard_103">
+          <div class="svc-dash-head">
+            <span class="svc-dash-title">🚑 Служба 103 (Скорая помощь)</span>
+            <span class="svc-dash-status active" id="dashStatus_103">14:50 Добавлена</span>
+          </div>
+          <div style="font-size: 12px; color: #94a3b8;">Станция скорой и неотложной помощи им. А.С. Пучкова</div>
+          <div style="display: flex; gap: 8px;">
+            <button type="button" class="btn-open-svc-modal" id="btnOpenModal103" onclick="ARM.openServiceModal('103')">⚙️ Параметры службы 103</button>
+            <button type="button" class="btn-open-svc-modal" style="background: #ffffff; color: #ffffff;" onclick="ARM.openStatusPanel('Служба 103', this)">✏️ Изменить статус</button>
+          </div>
+        </div>
+
+        <!-- ЦОДД -->
+        <div class="service-dashboard-card">
+          <div class="svc-dash-head">
+            <span class="svc-dash-title">🚦 ЦОДД</span>
+            <span class="svc-dash-status" id="dashStatus_CODD">08:57 Работы завершены</span>
+          </div>
+          <div style="font-size: 12px; color: #94a3b8;">Дорожный патруль, регулировка движения и светофоры</div>
+          <button type="button" class="btn-open-svc-modal" onclick="ARM.openStatusPanel('ЦОДД', this)">✏️ Изменить статус</button>
+        </div>
+
+        <!-- Россети МР -->
+        <div class="service-dashboard-card">
+          <div class="svc-dash-head">
+            <span class="svc-dash-title">💡 Россети Московский регион</span>
+            <span class="svc-dash-status rejected" id="dashStatus_Rosseti">09:12 Не принята</span>
+          </div>
+          <div style="font-size: 12px; color: #94a3b8;">Электроснабжение, ТП и кабельные линии</div>
+          <button type="button" class="btn-open-svc-modal" onclick="ARM.openStatusPanel('Россети МР', this)">✏️ Изменить статус</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- Вкладка 3: История и Аудит -->
+    <section id="panelAuditView" class="arm-tab-panel hidden">
+      <div class="section-header" style="padding: 14px 18px; border-bottom: 1px solid #334155; display: flex; justify-content: space-between; align-items: center;">
+        <span class="section-title" style="font-size: 16px; font-weight: 700; color: #93c5fd;">🛡️ Журнал аудита действий операторов и служб</span>
+        <button type="button" class="mini-tool-btn" onclick="ARM.refreshAuditLog()">🔄 Обновить журнал</button>
+      </div>
+      <div style="padding: 18px; overflow-x: auto;">
+        <table class="portal-table" style="width: 100%;">
+          <thead>
+            <tr>
+              <th>ID</th>
+              <th>Пользователь</th>
+              <th>Действие</th>
+              <th>Детали происшествия</th>
+              <th>Время события</th>
+            </tr>
+          </thead>
+          <tbody id="armAuditTableBody">
+            <tr>
+              <td>1</td>
+              <td>оп. 1002 (Петрова С.И.)</td>
+              <td>Создание карточки</td>
+              <td>Карточка №913126 зарегистрирована</td>
+              <td>19.12.2022 09:04:37</td>
+            </tr>
+            <tr>
+              <td>2</td>
+              <td>оп. 1002 (Петрова С.И.)</td>
+              <td>Оповещение служб</td>
+              <td>Служба 101, Служба 102 направлены</td>
+              <td>19.12.2022 09:04:40</td>
+            </tr>
+            <tr>
+              <td>3</td>
+              <td>оп. 9999 (ВИС)</td>
+              <td>Смена статуса</td>
+              <td>Служба 101: Получена службой</td>
+              <td>19.12.2022 09:04:45</td>
+            </tr>
+            <tr>
+              <td>4</td>
+              <td>оп. 9999 (ВИС)</td>
+              <td>Отказ службы</td>
+              <td>МОЭК: Не принята (08:59)</td>
+              <td>19.12.2022 09:05:00</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- Вкладка 4: Карта происшествия -->
+    <section id="panelMapView" class="arm-tab-panel hidden">
+      <div class="map-interactive-container">
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+          <div>
+            <strong style="color: #93c5fd; font-size: 15px;">📍 Геоинформационный комплекс: Ясный проезд, д. 10</strong>
+            <div style="font-size: 12px; color: #94a3b8;">Округ: СВАО | Район: Южное Медведково | Координаты: 55.862411, 37.643212</div>
+          </div>
+          <div style="display: flex; gap: 8px;">
+            <button type="button" class="mini-tool-btn active" id="btnMapLayerSat">Спутник</button>
+            <button type="button" class="mini-tool-btn" id="btnMapLayerScheme">Схема</button>
+            <button type="button" class="mini-tool-btn" id="btnMapHydrants">🚒 Гидранты (4)</button>
+          </div>
+        </div>
+
+        <div class="map-display-canvas" id="armMapDisplay">
+          <div class="map-grid-layer" style="position: absolute; inset:0; background: #f1f5f9;"></div>
+          <div style="position: absolute; top: 40%; left: 50%; transform: translate(-50%, -50%); text-align: center; z-index: 10;">
+            <div style="font-size: 38px; filter: drop-shadow(0 4px 8px rgba(0,0,0,0.8));">📍</div>
+            <div style="background: rgba(255, 255, 255, 0.9); border: 1px solid #3b82f6; border-radius: 4px; padding: 6px 12px; font-size: 12px; color: #fff; margin-top: 4px;">
+              <strong>Ясный проезд, д. 10</strong><br>
+              <span style="color: #fca5a5;">Возгорание на балконе, 4 этаж</span>
+            </div>
+          </div>
+          <div style="position: absolute; bottom: 12px; left: 12px; background: rgba(255, 255, 255, 0.9); padding: 6px 12px; border-radius: 4px; font-size: 11px; color: #94a3b8;">
+            Ближайшая часть: ПСЧ-23 (1.2 км, ~3 мин) | ПСЧ-69 (2.4 км, ~6 мин)
+          </div>
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- ==========================================================
+       ПУЛЬТ ДДС (ДИСПЕТЧЕРСКИЙ ЦЕНТР)
+       ========================================================== -->
+  <section id="ddsWorkspace" class="dds-container hidden">
+    <div class="dds-toolbar">
+      <div class="dds-title">
+        <span>📟</span> Пульт Диспетчера ДДС г. Москвы — Мониторинг приема карточек и норматив 30с
+      </div>
+      <div style="font-size:11px; color:var(--text-muted);">
+        Автообновление: каждые 3 сек. | Регламент подтверждения: ≤ 30 секунд
+      </div>
+    </div>
+
+    <div id="ddsCardsGrid" class="dds-cards-grid">
+      <!-- Заполняется через JS -->
+    </div>
+  </section>
+
+
+  <!-- ==========================================================
+       МОДАЛЬНОЕ ОКНО АТТЕСТАЦИИ И ОЦЕНКИ ОПЕРАТОРА
+       ========================================================== -->
+  <div id="evaluationModal" class="modal-overlay hidden">
+    <div class="modal-window">
+      <div class="modal-header">
+        <span class="modal-title">Результат аттестации оператора 112</span>
+        <button type="button" id="btnCloseEvalModal" class="modal-close-btn">&times;</button>
+      </div>
+
+      <div class="modal-body">
+        
+        <div class="eval-summary-card">
+          <div id="evalScoreCircle" class="eval-score-circle">85%</div>
+          <div class="eval-summary-info">
+            <span id="evalStatusTitle" class="eval-status-title">АТТЕСТАЦИЯ ПРОЙДЕНА</span>
+            <div style="font-size:11px; color:var(--text-muted);">
+              Комплексная оценка точности фиксации адреса, классификации происшествия, оповещения служб и соблюдения нормативов регламента.
+            </div>
+          </div>
+        </div>
+
+        <div class="eval-breakdown-grid">
+          <div class="eval-item">
+            <div class="eval-item-title"><span>Адресный блок (25%)</span></div>
+            <div id="evalAddrNotes" class="eval-item-notes">Оценка: 100% — Улица и номер дома указаны верно</div>
+          </div>
+
+          <div class="eval-item">
+            <div class="eval-item-title"><span>Классификатор (25%)</span></div>
+            <div id="evalClassNotes" class="eval-item-notes">Оценка: 100% — Признаки и тип определены эталонно</div>
+          </div>
+
+          <div class="eval-item">
+            <div class="eval-item-title"><span>Службы ДДС (20%)</span></div>
+            <div id="evalServicesNotes" class="eval-item-notes">Оценка: 100% — Перечень оповещения сформирован верно</div>
+          </div>
+
+          <div class="eval-item">
+            <div class="eval-item-title"><span>Время и SLA (15%)</span></div>
+            <div id="evalTimeNotes" class="eval-item-notes">Время: 48 с — Норматив 75 с соблюден</div>
+          </div>
+        </div>
+
+        <div class="eval-recommendations">
+          <div class="rec-title">💡 Рекомендации методического отдела:</div>
+          <ul id="evalRecList">
+            <li>Отличная слаженная работа, соблюдены стандарты общения экстренных служб.</li>
+          </ul>
+        </div>
+
+      </div>
+
+      <div class="modal-footer">
+        <button type="button" id="btnNextTicket" class="btn-bar-action btn-dispatch">Следующий билет</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================== МОДАЛЬНОЕ ОКНО: СЛУЖБА 101 ==================== -->
+  <div id="modalService101" class="modal-overlay service-modal hidden">
+    <div class="service-modal-card">
+      <div class="service-modal-header">
+        <h3>🔥 Служба 101 — Пожарно-спасательный гарнизон Москвы</h3>
+        <button type="button" class="btn-close-modal" id="btnCloseService_101" onclick="ARM.closeServiceModal('101')">&times;</button>
+      </div>
+      <div class="service-modal-body">
+        <div class="service-modal-row">
+          <label class="service-modal-label" for="serviceStatus_101">Статус реагирования службы</label>
+          <select id="serviceStatus_101" class="service-modal-select">
+            <option value="Добавлена" selected>Добавлена (оповещена)</option>
+            <option value="Получена службой">Получена службой</option>
+            <option value="Принята">Принята</option>
+            <option value="Направление бригады">Направление бригады</option>
+            <option value="Прибытие">Прибытие</option>
+            <option value="Ликвидация">Ликвидация</option>
+            <option value="Работы завершены">Работы завершены</option>
+            <option value="Не принята">Не принята</option>
+          </select>
+        </div>
+        <div class="service-modal-row">
+          <label class="service-modal-label" for="serviceOrder_101">Номер наряда / боевой расчет</label>
+          <input type="text" id="serviceOrder_101" class="service-modal-input" value="АЦ-40 (ПСЧ-23 / СВАО)" placeholder="например: АЦ-40 ПСЧ-23">
+        </div>
+        <div class="service-modal-row">
+          <label class="service-modal-label" for="servicePriority_101">Ранг пожара / категория вызова</label>
+          <select id="servicePriority_101" class="service-modal-select">
+            <option value="Ранг 1 (Штатный выезд)">Ранг 1 (Штатный выезд)</option>
+            <option value="Ранг 1-БИС (Подкрепление)">Ранг 1-БИС (Подкрепление)</option>
+            <option value="Ранг 2 (ЧС повышенной опасности)">Ранг 2 (ЧС повышенной опасности)</option>
+          </select>
+        </div>
+        <div class="service-modal-row">
+          <label class="service-modal-label" for="serviceNote_101">Примечание / оперативное указание</label>
+          <textarea id="serviceNote_101" class="service-modal-textarea" rows="2" placeholder="Особые отметки для расчета 101...">Открытое пламя на балконе 4-го этажа, угроза перехода огня в квартиру.</textarea>
+        </div>
+      </div>
+      <div class="service-modal-footer">
+        <button type="button" class="btn-modal-cancel-service" id="btnCancelService_101" onclick="ARM.closeServiceModal('101')">Отмена</button>
+        <button type="button" class="btn-modal-save-service" id="btnSaveService_101" onclick="ARM.saveServiceModal('101')">💾 Сохранить параметры 101</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================== МОДАЛЬНОЕ ОКНО: МОЭК ==================== -->
+  <div id="modalServiceMOEK" class="modal-overlay service-modal hidden">
+    <div class="service-modal-card">
+      <div class="service-modal-header">
+        <h3>⚡ МОЭК — Аварийно-диспетчерская служба теплосети</h3>
+        <button type="button" class="btn-close-modal" id="btnCloseService_MOEK" onclick="ARM.closeServiceModal('MOEK')">&times;</button>
+      </div>
+      <div class="service-modal-body">
+        <div class="service-modal-row">
+          <label class="service-modal-label" for="serviceStatus_MOEK">Статус реагирования службы</label>
+          <select id="serviceStatus_MOEK" class="service-modal-select">
+            <option value="Не принята" selected>Не принята</option>
+            <option value="Добавлена">Добавлена</option>
+            <option value="Принята">Принята</option>
+            <option value="Выезд АСП">Выезд АСП</option>
+            <option value="Локализация утечки">Локализация утечки</option>
+            <option value="Работы завершены">Работы завершены</option>
+          </select>
+        </div>
+        <div class="service-modal-row">
+          <label class="service-modal-label" for="serviceOrder_MOEK">Бригада АСП / филиал</label>
+          <input type="text" id="serviceOrder_MOEK" class="service-modal-input" value="АСП Филиала №3 (Северо-Восточный)" placeholder="Бригада АСП">
+        </div>
+        <div class="service-modal-row">
+          <label class="service-modal-label" for="serviceParam_MOEK">Характер повреждения теплосети</label>
+          <select id="serviceParam_MOEK" class="service-modal-select">
+            <option value="Парение из тепловой камеры / люка">Парение из тепловой камеры / люка</option>
+            <option value="Вытекание теплоносителя на поверхность">Вытекание теплоносителя на поверхность</option>
+            <option value="Отсутствие отопления / ГВС в МКД">Отсутствие отопления / ГВС в МКД</option>
+          </select>
+        </div>
+        <div class="service-modal-row">
+          <label class="service-modal-label" for="serviceNote_MOEK">Обоснование / примечание</label>
+          <textarea id="serviceNote_MOEK" class="service-modal-textarea" rows="2" placeholder="Обоснование...">Отказ службы: адрес вне зоны эксплуатационной ответственности МОЭК, сети ведомственные.</textarea>
+        </div>
+      </div>
+      <div class="service-modal-footer">
+        <button type="button" class="btn-modal-cancel-service" id="btnCancelService_MOEK" onclick="ARM.closeServiceModal('MOEK')">Отмена</button>
+        <button type="button" class="btn-modal-save-service" id="btnSaveService_MOEK" onclick="ARM.saveServiceModal('MOEK')">💾 Сохранить параметры МОЭК</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================== МОДАЛЬНОЕ ОКНО: СЛУЖБА 102 ==================== -->
+  <div id="modalService102" class="modal-overlay service-modal hidden">
+    <div class="service-modal-card">
+      <div class="service-modal-header">
+        <h3>🚓 Служба 102 — Дежурная часть ГУ МВД России по г. Москве</h3>
+        <button type="button" class="btn-close-modal" id="btnCloseService_102" onclick="ARM.closeServiceModal('102')">&times;</button>
+      </div>
+      <div class="service-modal-body">
+        <div class="service-modal-row">
+          <label class="service-modal-label" for="serviceStatus_102">Статус реагирования полиции</label>
+          <select id="serviceStatus_102" class="service-modal-select">
+            <option value="Добавлена" selected>Добавлена</option>
+            <option value="Получена службой">Получена службой</option>
+            <option value="Принята">Принята</option>
+            <option value="Направление автопатруля">Направление автопатруля</option>
+            <option value="Прибытие наряда">Прибытие наряда</option>
+            <option value="Отработана">Отработана</option>
+            <option value="Не принята">Не принята</option>
+          </select>
+        </div>
+        <div class="service-modal-row">
+          <label class="service-modal-label" for="serviceOrder_102">Номер экипажа / ОМВД</label>
+          <input type="text" id="serviceOrder_102" class="service-modal-input" value="Экипаж 314 ОМВД Южное Медведково" placeholder="Экипаж">
+        </div>
+        <div class="service-modal-row">
+          <label class="service-modal-label" for="serviceNote_102">Оперативная ориентировка</label>
+          <textarea id="serviceNote_102" class="service-modal-textarea" rows="2" placeholder="Ориентировка...">Оцепление зоны задымления, обеспечение беспрепятственного подъезда спецтехники МЧС.</textarea>
+        </div>
+      </div>
+      <div class="service-modal-footer">
+        <button type="button" class="btn-modal-cancel-service" id="btnCancelService_102" onclick="ARM.closeServiceModal('102')">Отмена</button>
+        <button type="button" class="btn-modal-save-service" id="btnSaveService_102" onclick="ARM.saveServiceModal('102')">💾 Сохранить параметры 102</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================== МОДАЛЬНОЕ ОКНО: СЛУЖБА 103 ==================== -->
+  <div id="modalService103" class="modal-overlay service-modal hidden">
+    <div class="service-modal-card">
+      <div class="service-modal-header">
+        <h3>🚑 Служба 103 — Станция скорой и неотложной помощи Пучкова</h3>
+        <button type="button" class="btn-close-modal" id="btnCloseService_103" onclick="ARM.closeServiceModal('103')">&times;</button>
+      </div>
+      <div class="service-modal-body">
+        <div class="service-modal-row">
+          <label class="service-modal-label" for="serviceStatus_103">Статус реагирования скорой помощи</label>
+          <select id="serviceStatus_103" class="service-modal-select">
+            <option value="Добавлена" selected>Добавлена</option>
+            <option value="Принята">Принята</option>
+            <option value="Бригада направлена">Бригада направлена</option>
+            <option value="Прибытие">Прибытие</option>
+            <option value="Госпитализация">Госпитализация</option>
+            <option value="Работы завершены: Завершение работ без бригады">Работы завершены: без бригады</option>
+          </select>
+        </div>
+        <div class="service-modal-row">
+          <label class="service-modal-label" for="serviceOrder_103">Бригада СМП / подстанция</label>
+          <input type="text" id="serviceOrder_103" class="service-modal-input" value="Бригада 47 (ПСТ-15)" placeholder="Бригада СМП">
+        </div>
+        <div class="service-modal-row">
+          <label class="service-modal-label" for="serviceProfile_103">Профиль бригады</label>
+          <select id="serviceProfile_103" class="service-modal-select">
+            <option value="Линейная фельдшерская">Линейная фельдшерская</option>
+            <option value="Врачебная общепрофильная">Врачебная общепрофильная</option>
+            <option value="Реанимационная (АРБ)">Реанимационная (АРБ)</option>
+            <option value="Педиатрическая">Педиатрическая</option>
+          </select>
+        </div>
+        <div class="service-modal-row">
+          <label class="service-modal-label" for="serviceNote_103">Сведения о пострадавших</label>
+          <textarea id="serviceNote_103" class="service-modal-textarea" rows="2" placeholder="Состояние...">Заявитель на месте, признаков отравления продуктами горения нет, дежурство на пожаре.</textarea>
+        </div>
+      </div>
+      <div class="service-modal-footer">
+        <button type="button" class="btn-modal-cancel-service" id="btnCancelService_103" onclick="ARM.closeServiceModal('103')">Отмена</button>
+        <button type="button" class="btn-modal-save-service" id="btnSaveService_103" onclick="ARM.saveServiceModal('103')">💾 Сохранить параметры 103</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================== МОДАЛЬНОЕ ОКНО: ПРИЗНАКИ ПРОИСШЕСТВИЯ ==================== -->
+  <div id="signsModal" class="modal-overlay service-modal hidden">
+    <div class="service-modal-card" style="width: 600px;">
+      <div class="service-modal-header">
+        <h3>🚨 Признаки происшествия (Категорирование ЕКП и ЧС)</h3>
+        <button type="button" class="btn-close-modal" id="btnCloseSignsModal" onclick="ARM.closeServiceModal('signs')">&times;</button>
+      </div>
+      <div class="service-modal-body">
+        <div style="font-size: 12px; color: #94a3b8; margin-bottom: 6px;">
+          Отметьте подтвержденные заявителем факторы риска и чрезвычайной опасности:
+        </div>
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+          <label style="display: flex; align-items: center; gap: 8px; font-size: 13px; cursor: pointer;">
+            <input type="checkbox" id="signChs" checked> ⚡ Чрезвычайная ситуация (ЧС)
+          </label>
+          <label style="display: flex; align-items: center; gap: 8px; font-size: 13px; cursor: pointer;">
+            <input type="checkbox" id="signChp" checked> ⚠️ Чрезвычайное происшествие (ЧП)
+          </label>
+          <label style="display: flex; align-items: center; gap: 8px; font-size: 13px; cursor: pointer;">
+            <input type="checkbox" id="signVictims"> 🚑 Наличие пострадавших
+          </label>
+          <label style="display: flex; align-items: center; gap: 8px; font-size: 13px; cursor: pointer;">
+            <input type="checkbox" id="signBlocked"> 🔒 Люди заблокированы
+          </label>
+          <label style="display: flex; align-items: center; gap: 8px; font-size: 13px; cursor: pointer;">
+            <input type="checkbox" id="signFire" checked> 🔥 Открытое горение / пламя
+          </label>
+          <label style="display: flex; align-items: center; gap: 8px; font-size: 13px; cursor: pointer;">
+            <input type="checkbox" id="signExplosion"> 💣 Угроза взрыва / обрушения
+          </label>
+        </div>
+      </div>
+      <div class="service-modal-footer">
+        <button type="button" class="btn-modal-cancel-service" id="btnCancelSignsModal" onclick="ARM.closeServiceModal('signs')">Отмена</button>
+        <button type="button" class="btn-modal-save-service" id="btnSaveSignsModal" onclick="ARM.saveServiceModal('signs')">💾 Применить признаки</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast Notification Container -->
+  <div class="toast-container" id="toastContainer"></div>
+
+  <script src="js/audio_dsp.js"></script>
+  <script src="js/arm112.js"></script>
+</body>
+</html>
