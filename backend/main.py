@@ -26,11 +26,15 @@ httpx.AsyncClient.__init__ = _patched_async_client_init
 from backend.api.router_assignments import assignments_router
 from backend.api.router_auth import auth_router
 from backend.api.router_call import router_call
+from backend.api.router_classifier import classifier_router
+from backend.api.router_dds import router_dds
 from backend.api.router_groups import groups_router
 from backend.api.router_scenario import router as scenario_router
+from backend.api.router_reports import reports_router
 from backend.api.router_scenarios import scenarios_router
 from backend.api.router_sessions import sessions_router
 from backend.api.router_users import users_router
+from backend.api.router_analytics import analytics_router
 
 
 # ─── Database lifespan ────────────────────────────────────────────────────────
@@ -43,6 +47,7 @@ async def lifespan(app: FastAPI):
     import backend.models.domain_03  # noqa: F401
     import backend.models.domain_04  # noqa: F401
     import backend.models.domain_05  # noqa: F401
+    import backend.models.domain_06  # noqa: F401
 
     from backend.database import engine
     from backend.models.base import Base
@@ -76,6 +81,11 @@ app.include_router(scenarios_router)
 app.include_router(assignments_router)
 app.include_router(sessions_router)
 app.include_router(router_call)
+app.include_router(router_dds)
+app.include_router(classifier_router)
+app.include_router(reports_router)
+app.include_router(analytics_router)
+
 
 
 @app.get("/health", tags=["System"])

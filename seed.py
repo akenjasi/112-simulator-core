@@ -39,6 +39,7 @@ async def seed():
     import backend.models.domain_03  # noqa
     import backend.models.domain_04  # noqa
     import backend.models.domain_05  # noqa
+    import backend.models.domain_06  # noqa
 
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
@@ -96,6 +97,53 @@ async def seed():
                 print("  ✅ Created student group 'Группа 112-А'")
         else:
             print("  ⏭  Group 'Группа 112-А' already exists, skipping")
+
+        # ─── Classifier (EKP) ────────────────────────────────────────────────
+        await seed_classifier(session)
+
+
+async def seed_classifier(session):
+    """Seed classifier records from data/classifier_ekp.json if table is empty."""
+    import json
+    from sqlalchemy import select, func
+    from backend.models.domain_06 import ClassifierRecord
+
+    count_res = await session.execute(select(func.count(ClassifierRecord.id)))
+    count = count_res.scalar_one()
+    if count > 0:
+        print(f"  ⏭  Classifier records already populated ({count} records), skipping")
+        return
+
+    json_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data", "classifier_ekp.json")
+    if not os.path.exists(json_path):
+        json_path = os.path.join(os.getcwd(), "data", "classifier_ekp.json")
+
+    if not os.path.exists(json_path):
+        print(f"  ⚠️  Classifier JSON not found at {json_path}")
+        return
+
+    with open(json_path, "r", encoding="utf-8") as f:
+        data = json.load(f)
+
+    raw_records = data.get("records", [])
+    records = [
+        ClassifierRecord(
+            id=r["id"],
+            category=r.get("category", ""),
+            group=r.get("group", ""),
+            feature1=r.get("feature1"),
+            feature2=r.get("feature2"),
+            feature3=r.get("feature3"),
+            final_type=r.get("final_type", ""),
+            base_services=r.get("base_services") or r.get("services") or [],
+        )
+        for r in raw_records
+    ]
+
+    session.add_all(records)
+    await session.commit()
+    print(f"  ✅ Seeded {len(records)} ClassifierRecords into database")
+
 
     print()
     print("╔══════════════════════════════════════════════════════╗")
