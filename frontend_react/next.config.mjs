@@ -7,20 +7,7 @@ const nextConfig = {
     unoptimized: true,
   },
   devIndicators: false,
-  async redirects() {
-    return [
-      {
-        source: '/dds',
-        destination: '/',
-        permanent: false,
-      },
-      {
-        source: '/dds/:path*',
-        destination: '/:path*',
-        permanent: false,
-      },
-    ]
-  },
+
   async rewrites() {
     return [
       {
