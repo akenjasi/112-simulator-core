@@ -43,3 +43,29 @@ class SubmitCardResponse(BaseModel):
     card_id: str
     session_status: str
 
+
+class CadetSessionStats(BaseModel):
+    cadet_id: str
+    cadet_name: str
+    status: str = "IN_PROGRESS"
+    current_ticket: Optional[str] = None
+    in_progress: int = 0
+    passed: int = 0
+    failed: int = 0
+    progress: int = 0
+    score: Optional[int] = None
+    last_activity: Optional[str] = None
+
+
+class SessionStatsResponse(BaseModel):
+    session_id: str
+    session_name: Optional[str] = "Занятие по сценариям вызовов"
+    group_name: Optional[str] = "Группа курсантов"
+    status: str = "active"
+    overall_progress: int = 0
+    total_cadets: int = 0
+    total_in_progress: int = 0
+    total_passed: int = 0
+    total_failed: int = 0
+    cadets: list[CadetSessionStats] = []
+

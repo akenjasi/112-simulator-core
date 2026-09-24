@@ -4,6 +4,7 @@ from typing import Optional
 from sqlalchemy import (
     String,
     Boolean,
+    Integer,
     DateTime,
     JSON,
     ForeignKey,
@@ -84,6 +85,8 @@ class EvaluationResult(Base):
     grammar: Mapped[dict] = mapped_column(JSON, default=dict)
     errors_list: Mapped[list] = mapped_column(JSON, default=list)
     expert_comment: Mapped[Optional[str]] = mapped_column(String, nullable=True)
+    teacher_comment: Mapped[Optional[str]] = mapped_column(String, nullable=True)
+    is_appealed: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     expert_modified_at: Mapped[Optional[datetime]] = mapped_column(
         DateTime(timezone=True),
         nullable=True,
@@ -110,6 +113,51 @@ class EvaluationResult(Base):
             kwargs["grammar"] = {}
         if "errors_list" not in kwargs:
             kwargs["errors_list"] = []
+        if "is_appealed" not in kwargs:
+            kwargs["is_appealed"] = False
+        super().__init__(**kwargs)
+
+
+class TicketResult(Base):
+    __tablename__ = "ticket_results"
+
+    result_id: Mapped[str] = mapped_column(
+        String,
+        primary_key=True,
+        default=lambda: str(uuid.uuid4()),
+    )
+    ticket_id: Mapped[Optional[str]] = mapped_column(String, nullable=True)
+    session_id: Mapped[Optional[str]] = mapped_column(
+        String,
+        ForeignKey("exam_sessions.session_id"),
+        nullable=True,
+    )
+    is_passed: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    errors_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    error_details: Mapped[dict] = mapped_column(JSON, default=dict)
+    is_appealed: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    teacher_comment: Mapped[Optional[str]] = mapped_column(String, nullable=True)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=lambda: datetime.now(timezone.utc),
+        server_default=func.now(),
+        nullable=False,
+    )
+    updated_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
+
+    def __init__(self, **kwargs):
+        kwargs.setdefault("result_id", str(uuid.uuid4()))
+        if "error_details" not in kwargs:
+            kwargs["error_details"] = {}
+        if "is_passed" not in kwargs:
+            kwargs["is_passed"] = False
+        if "errors_count" not in kwargs:
+            kwargs["errors_count"] = 0
+        if "is_appealed" not in kwargs:
+            kwargs["is_appealed"] = False
         super().__init__(**kwargs)
 
 

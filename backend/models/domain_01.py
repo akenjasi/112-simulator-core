@@ -1,5 +1,6 @@
 import uuid
 from datetime import datetime, timezone
+from enum import Enum
 from typing import Optional
 from sqlalchemy import (
     String,
@@ -9,10 +10,16 @@ from sqlalchemy import (
     JSON,
     ForeignKey,
     CheckConstraint,
+    Enum as SQLEnum,
     func,
 )
 from sqlalchemy.orm import Mapped, mapped_column
 from backend.models.base import Base
+
+
+class ProfileType(str, Enum):
+    OPERATOR_112 = "OPERATOR_112"
+    DISPATCHER_DDS = "DISPATCHER_DDS"
 
 
 # expire_on_commit=False is already configured on AsyncSessionLocal in database.py.
@@ -64,6 +71,11 @@ class StudentGroup(Base):
         default=lambda: str(uuid.uuid4()),
     )
     group_name: Mapped[str] = mapped_column(String, nullable=False)
+    profile: Mapped[ProfileType] = mapped_column(
+        SQLEnum(ProfileType, native_enum=False),
+        nullable=False,
+        default=ProfileType.OPERATOR_112,
+    )
     department: Mapped[Optional[str]] = mapped_column(String, nullable=True)
     teacher_id: Mapped[Optional[str]] = mapped_column(
         String,
@@ -81,9 +93,15 @@ class StudentGroup(Base):
 
     def __init__(self, **kwargs):
         kwargs.setdefault("group_id", str(uuid.uuid4()))
+        kwargs.setdefault("profile", ProfileType.OPERATOR_112)
+        if isinstance(kwargs.get("profile"), str):
+            kwargs["profile"] = ProfileType(kwargs["profile"])
         kwargs.setdefault("cadet_ids", [])
         kwargs.setdefault("is_active", True)
         super().__init__(**kwargs)
+
+
+Group = StudentGroup
 
 
 class UserActionLog(Base):

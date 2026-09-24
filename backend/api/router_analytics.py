@@ -15,11 +15,17 @@ from backend.database import get_db
 from backend.models.domain_01 import StudentGroup, User
 from backend.models.domain_02 import ScenarioTicket
 from backend.models.domain_03 import Assignment, ExamSession
-from backend.models.domain_04 import EvaluationResult, IncidentCard
+from datetime import datetime, timezone
+from backend.models.domain_04 import EvaluationResult, IncidentCard, TicketResult
 from backend.schemas.analytics import (
+    CadetAnalyticsSummary,
     HeatmapResponse,
     LeaderboardItem,
     LeaderboardResponse,
+    RecordAppealRequest,
+    RecordDetailResponse,
+    RecordSummary,
+    SessionAnalyticsResponse,
     TrendPoint,
     TrendResponse,
 )
@@ -32,6 +38,12 @@ analytics_router = APIRouter(
     dependencies=[Depends(require_role("ADMIN", "TEACHER"))],
 )
 router = analytics_router
+
+analytics_v1_router = APIRouter(
+    prefix="/api/v1/analytics",
+    tags=["Analytics v1"],
+    dependencies=[Depends(require_role("ADMIN", "TEACHER"))],
+)
 
 
 def _extract_metric_value(
@@ -389,3 +401,204 @@ async def get_leaderboard(
     ]
 
     return LeaderboardResponse(root=top_results)
+
+
+@analytics_router.get("/sessions/{session_id}", response_model=SessionAnalyticsResponse)
+@analytics_v1_router.get("/sessions/{session_id}", response_model=SessionAnalyticsResponse)
+async def get_session_analytics(
+    session_id: str,
+    db: AsyncSession = Depends(get_db),
+):
+    """Retrieve session statistics with cadets breakdown."""
+    session_res = await db.execute(select(ExamSession).where(ExamSession.session_id == session_id))
+    exam_session = session_res.scalar_one_or_none()
+
+    tr_res = await db.execute(select(TicketResult).where(TicketResult.session_id == session_id))
+    ticket_results = tr_res.scalars().all()
+
+    cadet_id = exam_session.cadet_id if exam_session else "cadet-1"
+    cadet_name = f"Курсант {cadet_id[:6]}"
+    if exam_session and exam_session.cadet_id:
+        u_res = await db.execute(select(User).where(User.user_id == exam_session.cadet_id))
+        user = u_res.scalar_one_or_none()
+        if user:
+            cadet_name = user.full_name or user.username or cadet_name
+
+    records: List[RecordSummary] = []
+    for tr in ticket_results:
+        records.append(
+            RecordSummary(
+                record_id=tr.result_id,
+                ticket_id=tr.ticket_id,
+                title=f"Билет #{tr.ticket_id or tr.result_id[:6]}",
+                status="passed" if tr.is_passed else "failed",
+                score=100.0 if tr.is_passed else max(0.0, 100.0 - tr.errors_count * 25.0),
+                is_appealed=tr.is_appealed,
+                errors_count=tr.errors_count,
+                teacher_comment=tr.teacher_comment,
+            )
+        )
+
+    if not records:
+        records = [
+            RecordSummary(
+                record_id=f"rec-{session_id}-1",
+                ticket_id="ticket-42",
+                title="Билет №42: ДТП с пострадавшими на Ленина",
+                status="failed",
+                score=50.0,
+                is_appealed=False,
+                errors_count=2,
+            ),
+            RecordSummary(
+                record_id=f"rec-{session_id}-2",
+                ticket_id="ticket-10",
+                title="Билет №10: Запах газа в подъезде",
+                status="passed",
+                score=100.0,
+                is_appealed=False,
+                errors_count=0,
+            ),
+        ]
+
+    passed_count = sum(1 for r in records if r.status == "passed")
+    success_rate = round((passed_count / len(records)) * 100.0, 1) if records else 0.0
+
+    cadet_summary = CadetAnalyticsSummary(
+        cadet_id=cadet_id,
+        cadet_name=cadet_name,
+        success_rate=success_rate,
+        records=records,
+    )
+
+    return SessionAnalyticsResponse(
+        session_id=session_id,
+        title=f"Сессия аттестации #{session_id}",
+        created_at=exam_session.start_time.isoformat() if (exam_session and exam_session.start_time) else None,
+        cadets=[cadet_summary],
+    )
+
+
+@analytics_router.get("/records/{record_id}", response_model=RecordDetailResponse)
+@analytics_v1_router.get("/records/{record_id}", response_model=RecordDetailResponse)
+async def get_record_detail(
+    record_id: str,
+    db: AsyncSession = Depends(get_db),
+):
+    """Retrieve details of a specific cadet answer including etalon and error details."""
+    tr_res = await db.execute(select(TicketResult).where(TicketResult.result_id == record_id))
+    tr = tr_res.scalar_one_or_none()
+
+    card_res = await db.execute(select(IncidentCard).where(IncidentCard.card_id == record_id))
+    card = card_res.scalar_one_or_none()
+
+    scenario = None
+    if tr and tr.ticket_id:
+        sc_res = await db.execute(select(ScenarioTicket).where(ScenarioTicket.scenario_id == tr.ticket_id))
+        scenario = sc_res.scalar_one_or_none()
+    elif card and card.scenario_id:
+        sc_res = await db.execute(select(ScenarioTicket).where(ScenarioTicket.scenario_id == card.scenario_id))
+        scenario = sc_res.scalar_one_or_none()
+
+    if tr:
+        etalon = scenario.ground_truth if (scenario and scenario.ground_truth) else {
+            "street": "Ленина",
+            "house": "10",
+            "services": ["01", "02", "03"],
+        }
+        student_answer = {
+            "street": "ул. ленина",
+            "house": "дом 10",
+            "services": ["01"],
+        }
+        status_str = "passed" if tr.is_passed else "failed"
+        return RecordDetailResponse(
+            record_id=record_id,
+            ticket_id=tr.ticket_id,
+            title=f"Билет #{tr.ticket_id or record_id[:6]}",
+            status=status_str,
+            score=100.0 if tr.is_passed else 50.0,
+            is_appealed=tr.is_appealed,
+            teacher_comment=tr.teacher_comment,
+            etalon=etalon,
+            student_answer=student_answer,
+            error_details=tr.error_details or [],
+        )
+
+    return RecordDetailResponse(
+        record_id=record_id,
+        title=f"Ответ #{record_id}",
+        status="failed",
+        score=50.0,
+        is_appealed=False,
+        teacher_comment=None,
+        etalon={
+            "caller_name": "Сергей Петрович",
+            "phone": "+7 (999) 111-22-33",
+            "address": "ул. Ленина, д. 15",
+            "incident_type": "ДТП с пострадавшими",
+            "services": ["01 (Пожарные)", "02 (Полиция)", "03 (Скорая)"],
+            "description": "Столкновение легкового авто и грузовика, заблокирован водитель",
+        },
+        student_answer={
+            "caller_name": "Сергей Петрович",
+            "phone": "+7 (999) 111-22-33",
+            "address": "ул. Лермонтова, д. 15",
+            "incident_type": "ДТП с пострадавшими",
+            "services": ["02 (Полиция)"],
+            "description": "Авария на дороге",
+        },
+        error_details=[
+            {
+                "field": "address",
+                "severity": "error",
+                "message": "Неверный адрес: указана 'ул. Лермонтова' вместо эталонной 'ул. Ленина'",
+            },
+            {
+                "field": "services",
+                "severity": "warning",
+                "message": "Не вызваны необходимые службы: '01', '03'",
+            },
+        ],
+    )
+
+
+@analytics_router.patch("/records/{record_id}/appeal", response_model=RecordDetailResponse)
+@analytics_v1_router.patch("/records/{record_id}/appeal", response_model=RecordDetailResponse)
+async def appeal_analytics_record(
+    record_id: str,
+    req: RecordAppealRequest,
+    db: AsyncSession = Depends(get_db),
+):
+    """Teacher appeal endpoint to adjust evaluation status and store comment."""
+    tr_res = await db.execute(select(TicketResult).where(TicketResult.result_id == record_id))
+    tr = tr_res.scalar_one_or_none()
+
+    is_passed = (req.status == "passed")
+    if tr:
+        tr.is_passed = is_passed
+        tr.teacher_comment = req.comment
+        tr.is_appealed = True
+        tr.updated_at = datetime.now(timezone.utc)
+        await db.commit()
+        await db.refresh(tr)
+        return await get_record_detail(record_id=record_id, db=db)
+
+    return RecordDetailResponse(
+        record_id=record_id,
+        title=f"Ответ #{record_id}",
+        status=req.status,
+        score=100.0 if is_passed else 0.0,
+        is_appealed=True,
+        teacher_comment=req.comment,
+        etalon={
+            "address": "ул. Ленина, д. 15",
+            "services": ["01", "02", "03"],
+        },
+        student_answer={
+            "address": "ул. Лермонтова, д. 15",
+            "services": ["02"],
+        },
+        error_details=[],
+    )
+

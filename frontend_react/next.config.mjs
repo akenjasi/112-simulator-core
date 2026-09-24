@@ -3,11 +3,33 @@ const nextConfig = {
   typescript: {
     ignoreBuildErrors: true,
   },
-  output: 'export',
   images: {
     unoptimized: true,
   },
   devIndicators: false,
-  basePath: '/dds',
+  async redirects() {
+    return [
+      {
+        source: '/dds',
+        destination: '/',
+        permanent: false,
+      },
+      {
+        source: '/dds/:path*',
+        destination: '/:path*',
+        permanent: false,
+      },
+    ]
+  },
+  async rewrites() {
+    return [
+      {
+        source: '/api/:path*',
+        destination: 'http://127.0.0.1:8000/api/:path*',
+      },
+    ]
+  },
 }
 export default nextConfig
+
+

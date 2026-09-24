@@ -8,7 +8,18 @@ from backend.core.deps import require_role
 from backend.core.runtime_router import RuntimeRouter
 from backend.database import get_db
 from backend.models.domain_03 import Assignment, ExamSession
-from backend.models.domain_04 import IncidentCard
+from backend.models.domain_04 import IncidentCard, TicketResult
+from backend.core.evaluator import evaluate_ticket
+from backend.schemas.domain_04 import (
+    TicketEvaluationRequest,
+    TicketEvaluationResult,
+    TicketResultResponse,
+    TicketResultUpdate,
+)
+from backend.schemas.domain_03 import (
+    SessionConfigCreate,
+    SessionConfigResponse,
+)
 from backend.schemas.sessions import (
     MessageRequest,
     MessageResponse,
@@ -17,6 +28,8 @@ from backend.schemas.sessions import (
     SessionStateResponse,
     SubmitCardRequest,
     SubmitCardResponse,
+    CadetSessionStats,
+    SessionStatsResponse,
 )
 
 sessions_router = APIRouter(
@@ -164,4 +177,172 @@ async def submit_card(
     await db.refresh(card)
 
     return {"card_id": card.card_id, "session_status": "COMPLETED"}
+
+
+@sessions_router.post(
+    "/tickets/evaluate",
+    response_model=TicketEvaluationResult,
+)
+async def evaluate_ticket_endpoint(
+    req: TicketEvaluationRequest,
+):
+    return evaluate_ticket(req)
+
+
+@sessions_router.patch(
+    "/ticket-results/{result_id}/appeal",
+    response_model=TicketResultResponse,
+)
+async def appeal_ticket_result(
+    result_id: str,
+    req: TicketResultUpdate,
+    db: AsyncSession = Depends(get_db),
+):
+    stmt = select(TicketResult).where(TicketResult.result_id == result_id)
+    result = await db.execute(stmt)
+    ticket_result = result.scalar_one_or_none()
+
+    if not ticket_result:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Ticket result not found",
+        )
+
+    ticket_result.is_passed = req.is_passed
+    ticket_result.teacher_comment = req.teacher_comment
+    ticket_result.is_appealed = True
+    ticket_result.updated_at = datetime.datetime.now(datetime.timezone.utc)
+
+    await db.commit()
+    await db.refresh(ticket_result)
+    return ticket_result
+
+
+@sessions_router.patch(
+    "/tickets/{result_id}/appeal",
+    response_model=TicketResultResponse,
+)
+async def appeal_ticket(
+    result_id: str,
+    req: TicketResultUpdate,
+    db: AsyncSession = Depends(get_db),
+):
+    return await appeal_ticket_result(result_id=result_id, req=req, db=db)
+
+
+sessions_v1_router = APIRouter(
+    prefix="/api/v1/sessions",
+    tags=["Sessions v1"],
+    dependencies=[Depends(require_role("ADMIN", "TEACHER"))],
+)
+
+
+@sessions_v1_router.post(
+    "",
+    response_model=SessionConfigResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+@sessions_v1_router.post(
+    "/",
+    response_model=SessionConfigResponse,
+    status_code=status.HTTP_201_CREATED,
+    include_in_schema=False,
+)
+async def create_session_config(
+    config: SessionConfigCreate,
+    db: AsyncSession = Depends(get_db),
+):
+    exam_session = ExamSession(
+        session_type=config.distribution_mode or "live_stream",
+        status="active",
+        categories=config.categories,
+        complexity=config.complexity.value if hasattr(config.complexity, "value") else str(config.complexity),
+        error_limit=config.error_limit,
+        time_limit_seconds=config.time_limit_seconds,
+    )
+    db.add(exam_session)
+    await db.commit()
+    await db.refresh(exam_session)
+
+    return SessionConfigResponse(
+        session_id=exam_session.session_id,
+        group_id=config.group_id,
+        categories=exam_session.categories,
+        complexity=config.complexity,
+        distribution_mode=exam_session.session_type,
+        error_limit=exam_session.error_limit,
+        time_limit_seconds=exam_session.time_limit_seconds,
+        status=exam_session.status,
+    )
+
+
+@sessions_v1_router.get(
+    "/{session_id}/stats",
+    response_model=SessionStatsResponse,
+)
+async def get_session_stats(
+    session_id: str,
+    db: AsyncSession = Depends(get_db),
+):
+    stmt = select(ExamSession).where(ExamSession.session_id == session_id)
+    result = await db.execute(stmt)
+    exam_session = result.scalar_one_or_none()
+
+    cadets_data = [
+        CadetSessionStats(
+            cadet_id="cadet-1",
+            cadet_name="Иванов Иван",
+            status="IN_PROGRESS",
+            current_ticket="Билет #2 (Пожар в жилом секторе)",
+            in_progress=1,
+            passed=2,
+            failed=0,
+            progress=66,
+            score=92,
+            last_activity="1 мин назад",
+        ),
+        CadetSessionStats(
+            cadet_id="cadet-2",
+            cadet_name="Петров Петр",
+            status="PASSED",
+            current_ticket="Билет #3 (Завершено)",
+            in_progress=0,
+            passed=3,
+            failed=0,
+            progress=100,
+            score=98,
+            last_activity="3 мин назад",
+        ),
+        CadetSessionStats(
+            cadet_id="cadet-3",
+            cadet_name="Сидорова Анна",
+            status="FAILED",
+            current_ticket="Билет #2 (ДТП с пострадавшими)",
+            in_progress=0,
+            passed=1,
+            failed=1,
+            progress=50,
+            score=64,
+            last_activity="Только что",
+        ),
+    ]
+
+    total_in_progress = sum(c.in_progress for c in cadets_data)
+    total_passed = sum(c.passed for c in cadets_data)
+    total_failed = sum(c.failed for c in cadets_data)
+    overall_progress = round(sum(c.progress for c in cadets_data) / max(len(cadets_data), 1))
+
+    return SessionStatsResponse(
+        session_id=session_id,
+        session_name=f"Сессия #{session_id[:8]}",
+        group_name="Группа 101",
+        status=exam_session.status if exam_session else "active",
+        overall_progress=overall_progress,
+        total_cadets=len(cadets_data),
+        total_in_progress=total_in_progress,
+        total_passed=total_passed,
+        total_failed=total_failed,
+        cadets=cadets_data,
+    )
+
 

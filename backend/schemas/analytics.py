@@ -107,3 +107,49 @@ class LeaderboardResponse(RootModel[List[LeaderboardItem]]):
 
     def __len__(self) -> int:
         return len(self.root)
+
+
+class RecordAppealRequest(BaseModel):
+    status: str = Field(default="passed", description="Новый статус оценки")
+    comment: Optional[str] = Field(default=None, description="Комментарий преподавателя")
+
+
+class RecordSummary(BaseModel):
+    record_id: str
+    ticket_id: Optional[str] = None
+    title: Optional[str] = None
+    status: str
+    score: Optional[float] = None
+    is_appealed: bool = False
+    errors_count: Optional[int] = 0
+    teacher_comment: Optional[str] = None
+
+
+class CadetAnalyticsSummary(BaseModel):
+    cadet_id: str
+    cadet_name: str
+    success_rate: float
+    records: List[RecordSummary] = Field(default_factory=list)
+
+
+class SessionAnalyticsResponse(BaseModel):
+    session_id: str
+    title: str
+    created_at: Optional[str] = None
+    cadets: List[CadetAnalyticsSummary] = Field(default_factory=list)
+
+
+class RecordDetailResponse(BaseModel):
+    record_id: str
+    cadet_id: Optional[str] = None
+    cadet_name: Optional[str] = None
+    ticket_id: Optional[str] = None
+    title: Optional[str] = None
+    status: str
+    score: Optional[float] = None
+    is_appealed: bool = False
+    teacher_comment: Optional[str] = None
+    etalon: Dict[str, Any] = Field(default_factory=dict)
+    student_answer: Dict[str, Any] = Field(default_factory=dict)
+    error_details: Any = Field(default_factory=list)
+

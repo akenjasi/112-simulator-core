@@ -126,6 +126,11 @@ class ExamSession(Base):
         nullable=True,
     )
 
+    categories: Mapped[list] = mapped_column(JSON, default=list)
+    complexity: Mapped[Optional[str]] = mapped_column(String, nullable=True)
+    error_limit: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    time_limit_seconds: Mapped[Optional[int]] = mapped_column(Integer, default=30, nullable=True)
+
     def __init__(self, **kwargs):
         kwargs.setdefault("session_id", str(uuid.uuid4()))
         if "browser_call" not in kwargs:
@@ -136,7 +141,14 @@ class ExamSession(Base):
             kwargs["dialogue_log"] = []
         if "offline_buffer" not in kwargs:
             kwargs["offline_buffer"] = []
+        if "categories" not in kwargs:
+            kwargs["categories"] = []
+        if "time_limit_seconds" not in kwargs:
+            kwargs["time_limit_seconds"] = 30
         super().__init__(**kwargs)
+
+
+TrainingSession = ExamSession
 
 
 class CardActionSession(Base):
@@ -215,3 +227,33 @@ class ReferenceMaterial(Base):
         if "is_active" not in kwargs:
             kwargs["is_active"] = True
         super().__init__(**kwargs)
+
+
+class KnowledgeFile(Base):
+    __tablename__ = "knowledge_files"
+
+    file_id: Mapped[str] = mapped_column(
+        String,
+        primary_key=True,
+        default=lambda: str(uuid.uuid4()),
+    )
+    name: Mapped[str] = mapped_column(String, nullable=False)
+    file_path: Mapped[str] = mapped_column(String, nullable=False)
+    size_bytes: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    content_type: Mapped[str] = mapped_column(String, default="application/octet-stream", nullable=False)
+    uploaded_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=lambda: datetime.now(timezone.utc),
+        server_default=func.now(),
+        nullable=False,
+    )
+    uploaded_by: Mapped[Optional[str]] = mapped_column(
+        String,
+        ForeignKey("users.user_id"),
+        nullable=True,
+    )
+
+    def __init__(self, **kwargs):
+        kwargs.setdefault("file_id", str(uuid.uuid4()))
+        super().__init__(**kwargs)
+

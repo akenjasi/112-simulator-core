@@ -30,14 +30,16 @@ from backend.api.router_auth import auth_router
 from backend.api.router_call import router_call
 from backend.api.router_classifier import classifier_router
 from backend.api.router_dds import router_dds
-from backend.api.router_groups import groups_router
+from backend.api.router_groups import groups_router, groups_v1_router
 from backend.api.router_scenario import router as scenario_router
 from backend.api.router_reports import reports_router
 from backend.api.router_scenarios import scenarios_router
-from backend.api.router_sessions import sessions_router
+from backend.api.router_sessions import sessions_router, sessions_v1_router
 from backend.api.router_users import users_router
-from backend.api.router_analytics import analytics_router
+from backend.api.router_analytics import analytics_router, analytics_v1_router
 from backend.api.router_admin import admin_router
+from backend.api.router_tickets import tickets_router
+from backend.api.router_knowledge import knowledge_router
 from backend.core.audit_middleware import AuditMiddleware
 
 
@@ -83,17 +85,22 @@ app.add_middleware(
 app.include_router(scenario_router)
 app.include_router(auth_router)
 app.include_router(groups_router)
+app.include_router(groups_v1_router)
 app.include_router(users_router)
 app.include_router(scenarios_router)
 app.include_router(assignments_router)
 app.include_router(sessions_router)
+app.include_router(sessions_v1_router)
 app.include_router(router_call)
 app.include_router(router_dds)
 app.include_router(classifier_router)
 app.include_router(reports_router)
 app.include_router(analytics_router)
+app.include_router(analytics_v1_router)
 app.include_router(audit_router)
 app.include_router(admin_router)
+app.include_router(tickets_router)
+app.include_router(knowledge_router)
 
 
 
@@ -105,6 +112,63 @@ async def health_check():
 @app.get("/api/health", tags=["System"])
 async def api_health_check():
     return {"status": "ok", "version": "v2"}
+
+
+# ─── Legacy compatibility endpoints for frontend/*.html ──────────────────────
+@app.get("/api/tickets", tags=["Legacy Compatibility"])
+async def get_legacy_tickets():
+    from backend.api.router_tickets import list_tickets
+    from backend.database import get_db
+    async for db in get_db():
+        return await list_tickets(limit=100, db=db)
+
+
+@app.get("/api/teacher/analytics", tags=["Legacy Compatibility"])
+async def get_legacy_teacher_analytics():
+    return {
+        "group_readiness_index": 84,
+        "group_status": "Готов к аттестации",
+        "total_evaluations": 142,
+        "radar": {"stress": 85, "speed": 82, "accuracy": 90, "sla": 88, "protocol": 80, "navigation": 79},
+        "heatmap": [
+            {"category": "Пожары", "errors": 3, "total": 45, "rate": 6.7},
+            {"category": "ДТП", "errors": 8, "total": 52, "rate": 15.4},
+            {"category": "ЖКХ", "errors": 2, "total": 30, "rate": 6.7},
+            {"category": "Медицина", "errors": 1, "total": 15, "rate": 6.7},
+        ],
+        "cadet_roster": [
+            {"username": "cadet1", "full_name": "Курсант Петров А.В.", "score": 88, "status": "Сдал"},
+            {"username": "cadet2", "full_name": "Курсант Сидорова М.К.", "score": 92, "status": "Сдал"},
+        ],
+    }
+
+
+@app.get("/api/admin/audit", tags=["Legacy Compatibility"])
+async def get_legacy_admin_audit(limit: int = 100, offset: int = 0):
+    from backend.api.router_audit import get_audit_logs
+    from backend.database import get_db
+    async for db in get_db():
+        logs = await get_audit_logs(limit=limit, offset=offset, db=db)
+        return {"logs": logs}
+
+
+@app.get("/api/admin/backups", tags=["Legacy Compatibility"])
+async def get_legacy_admin_backups():
+    return {"backups": []}
+
+
+@app.get("/api/admin/system_stats", tags=["Legacy Compatibility"])
+async def get_legacy_admin_system_stats():
+    from backend.api.router_admin import healthcheck
+    from backend.database import get_db
+    async for db in get_db():
+        hc = await healthcheck(db=db)
+        return {
+            "cpu_percent": hc.cpu_percent,
+            "ram_percent": hc.ram_percent,
+            "db_status": hc.db_status,
+        }
+
 
 
 # ─── React SPA frontend (DDS) ─────────────────────────────────────────────────

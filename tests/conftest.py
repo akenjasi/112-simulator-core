@@ -1,6 +1,9 @@
+import os
 import uuid
 import pytest
 from httpx import AsyncClient
+
+os.environ["TESTING"] = "true"
 
 from backend.main import app
 from backend.database import AsyncSessionLocal
