@@ -14,20 +14,6 @@ def compile_ticket(data: TicketData) -> BricksMatrix:
     # 1. Intro phrases
     bricks.append(
         Brick(
-            audio_id="brk_intro_01",
-            role="CORE",
-            category="fact",
-            intent=Intent.greeting,
-            text="Алло, слушайте...",
-            emotion=Emotion.neutral,
-            intensity=1,
-            duration_ms=2000,
-            speech_rate="normal",
-            subfolder="bricks",
-        )
-    )
-    bricks.append(
-        Brick(
             audio_id="brk_intro_02",
             role="CORE",
             category="fact",

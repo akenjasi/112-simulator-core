@@ -8,6 +8,8 @@ class GeneratedPerson(BaseModel):
     first_name: str
     last_name: str
     middle_name: str
+    gender: str = ""
+
 
 
 class GeneratedAddress(BaseModel):

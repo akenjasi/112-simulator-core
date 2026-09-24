@@ -30,15 +30,23 @@ from backend.api.router_auth import auth_router
 from backend.api.router_call import router_call
 from backend.api.router_classifier import classifier_router
 from backend.api.router_dds import router_dds
-from backend.api.router_groups import groups_router, groups_v1_router
 from backend.api.router_scenario import router as scenario_router
+from backend.api.router_groups import (
+    groups_router,
+    groups_v1_router,
+    api_groups_router,
+    students_router,
+    students_v1_router,
+)
+
+
 from backend.api.router_reports import reports_router
 from backend.api.router_scenarios import scenarios_router
 from backend.api.router_sessions import sessions_router, sessions_v1_router
-from backend.api.router_users import users_router
+from backend.api.router_users import users_router, api_users_router
 from backend.api.router_analytics import analytics_router, analytics_v1_router
 from backend.api.router_admin import admin_router
-from backend.api.router_tickets import tickets_router
+from backend.api.router_tickets import tickets_router, api_tickets_router
 from backend.api.router_knowledge import knowledge_router
 from backend.core.audit_middleware import AuditMiddleware
 
@@ -86,7 +94,11 @@ app.include_router(scenario_router)
 app.include_router(auth_router)
 app.include_router(groups_router)
 app.include_router(groups_v1_router)
+app.include_router(api_groups_router)
+app.include_router(students_router)
+app.include_router(students_v1_router)
 app.include_router(users_router)
+app.include_router(api_users_router)
 app.include_router(scenarios_router)
 app.include_router(assignments_router)
 app.include_router(sessions_router)
@@ -100,6 +112,7 @@ app.include_router(analytics_v1_router)
 app.include_router(audit_router)
 app.include_router(admin_router)
 app.include_router(tickets_router)
+app.include_router(api_tickets_router)
 app.include_router(knowledge_router)
 
 
@@ -115,12 +128,6 @@ async def api_health_check():
 
 
 # ─── Legacy compatibility endpoints for frontend/*.html ──────────────────────
-@app.get("/api/tickets", tags=["Legacy Compatibility"])
-async def get_legacy_tickets():
-    from backend.api.router_tickets import list_tickets
-    from backend.database import get_db
-    async for db in get_db():
-        return await list_tickets(limit=100, db=db)
 
 
 @app.get("/api/teacher/analytics", tags=["Legacy Compatibility"])

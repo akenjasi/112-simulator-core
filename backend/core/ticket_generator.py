@@ -56,7 +56,14 @@ def generate_tickets(classifier_row: ClassifierRow, count: int, faker: Any) -> L
 
         fio = " ".join(part for part in [last_name, first_name, middle_name] if part)
 
-        street = getattr(address, "street", "")
+        street_raw = getattr(address, "street", "")
+        # Strip leading type keyword that duplicates template abbreviations
+        # e.g. "улица Ленина" → "Ленина" so "ул. {street}" → "ул. Ленина"
+        import re as _re
+        street = _re.sub(
+            r'^(улица|проспект|переулок|шоссе|бульвар|набережная|проезд|тупик|аллея|площадь)\s+',
+            '', street_raw, flags=_re.IGNORECASE
+        ).strip() or street_raw
         house = getattr(address, "house", "")
 
         format_data = {
@@ -70,7 +77,11 @@ def generate_tickets(classifier_row: ClassifierRow, count: int, faker: Any) -> L
             "phone": phone,
         }
 
-        plot = template.format_map(_SafeFormatDict(format_data))
+        template_text = template.format_map(_SafeFormatDict(format_data)) if template else ""
+        plot = template_text
+
+        gender = getattr(person, "gender", "male")
+        speaker = "xenia" if gender == "female" else "aidar"
 
         ticket = TicketData(
             ticket_id=str(uuid.uuid4()),
@@ -83,6 +94,8 @@ def generate_tickets(classifier_row: ClassifierRow, count: int, faker: Any) -> L
                 "phone": phone,
                 "street": street,
                 "house": house,
+                "gender": gender,
+                "speaker": speaker,
             },
         )
         tickets.append(ticket)

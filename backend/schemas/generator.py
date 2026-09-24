@@ -3,6 +3,8 @@ from typing import Any, Dict, List
 from pydantic import BaseModel, Field
 
 from backend.schemas.bricks import TicketData as BaseTicketData
+from backend.schemas.faker import GeneratedPerson
+
 
 
 class ClassifierRow(BaseModel):

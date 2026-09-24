@@ -3,6 +3,8 @@ from datetime import datetime, timezone
 from enum import Enum
 from typing import Optional
 from sqlalchemy import (
+    Table,
+    Column,
     String,
     Integer,
     Boolean,
@@ -13,7 +15,7 @@ from sqlalchemy import (
     Enum as SQLEnum,
     func,
 )
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 from backend.models.base import Base
 
 
@@ -23,6 +25,13 @@ class ProfileType(str, Enum):
 
 
 # expire_on_commit=False is already configured on AsyncSessionLocal in database.py.
+
+student_group_link = Table(
+    "student_group_link",
+    Base.metadata,
+    Column("user_id", String, ForeignKey("users.user_id", ondelete="CASCADE"), primary_key=True),
+    Column("group_id", String, ForeignKey("student_groups.group_id", ondelete="CASCADE"), primary_key=True),
+)
 
 
 class User(Base):
@@ -54,7 +63,24 @@ class User(Base):
     )
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
 
+    groups: Mapped[list["StudentGroup"]] = relationship(
+        "StudentGroup",
+        secondary=student_group_link,
+        back_populates="students",
+        lazy="selectin",
+    )
+
+    @property
+    def id(self) -> str:
+        return self.user_id
+
+    @id.setter
+    def id(self, value: str):
+        self.user_id = value
+
     def __init__(self, **kwargs):
+        if "id" in kwargs and "user_id" not in kwargs:
+            kwargs["user_id"] = kwargs.pop("id")
         kwargs.setdefault("user_id", str(uuid.uuid4()))
         kwargs.setdefault("group_ids", [])
         kwargs.setdefault("failed_login_attempts", 0)
@@ -71,11 +97,6 @@ class StudentGroup(Base):
         default=lambda: str(uuid.uuid4()),
     )
     group_name: Mapped[str] = mapped_column(String, nullable=False)
-    profile: Mapped[ProfileType] = mapped_column(
-        SQLEnum(ProfileType, native_enum=False),
-        nullable=False,
-        default=ProfileType.OPERATOR_112,
-    )
     department: Mapped[Optional[str]] = mapped_column(String, nullable=True)
     teacher_id: Mapped[Optional[str]] = mapped_column(
         String,
@@ -91,11 +112,30 @@ class StudentGroup(Base):
     )
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
 
+    students: Mapped[list["User"]] = relationship(
+        "User",
+        secondary=student_group_link,
+        back_populates="groups",
+        lazy="selectin",
+    )
+
+    @property
+    def id(self) -> str:
+        return self.group_id
+
+    @id.setter
+    def id(self, value: str):
+        self.group_id = value
+
+    @property
+    def cadets(self) -> list["User"]:
+        return self.students
+
     def __init__(self, **kwargs):
+        if "id" in kwargs and "group_id" not in kwargs:
+            kwargs["group_id"] = kwargs.pop("id")
+        kwargs.pop("profile", None)
         kwargs.setdefault("group_id", str(uuid.uuid4()))
-        kwargs.setdefault("profile", ProfileType.OPERATOR_112)
-        if isinstance(kwargs.get("profile"), str):
-            kwargs["profile"] = ProfileType(kwargs["profile"])
         kwargs.setdefault("cadet_ids", [])
         kwargs.setdefault("is_active", True)
         super().__init__(**kwargs)

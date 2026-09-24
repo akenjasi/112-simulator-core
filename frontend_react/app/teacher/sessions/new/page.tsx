@@ -29,7 +29,7 @@ import {
 export interface StudentGroup {
   group_id: string
   group_name: string
-  profile: "OPERATOR_112" | "DISPATCHER_DDS"
+  profile?: "OPERATOR_112" | "DISPATCHER_DDS" | null
   department?: string | null
   cadet_ids?: string[]
 }
@@ -264,7 +264,7 @@ export default function SessionSetupPage() {
                 ) : (
                   groups.map((g) => (
                     <SelectItem key={g.group_id} value={g.group_id}>
-                      {g.group_name} ({g.profile === "OPERATOR_112" ? "Оператор 112" : "Диспетчер ДДС"})
+                      {g.group_name}{g.department ? ` (${g.department})` : ""}
                     </SelectItem>
                   ))
                 )}

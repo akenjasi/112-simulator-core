@@ -49,9 +49,30 @@ class SileroTTSV2:
         text = re.sub(r'(?i)\bд\.', 'дом', text)
         return text
 
+    @staticmethod
+    def sanitize_text(text: str) -> str:
+        if not text:
+            return ""
+        # Заменяем плюс словом, так как это часто телефон
+        text = text.replace('+', 'плюс ')
+        # Вычищаем всё, что не является русской буквой, цифрой или разрешенной пунктуацией
+        return re.sub(r'[^а-яА-ЯёЁ0-9\s.,!?-]', '', text)
+
     def synthesize(self, text: str, speaker: str = 'aidar') -> bytes:
+        if not text:
+            return bytes()
+
+        # Optional: Add SSML or clean up text
+        text_clean = self.normalize_text(text).replace('\n', ' ')
+
+        # Sanitize text
+        text_clean = self.sanitize_text(text_clean)
+
+        if text_clean.strip() == "":
+            return bytes()
+
         # Calculate MD5 cache key
-        cache_key = hashlib.md5((text + speaker).encode('utf-8')).hexdigest()
+        cache_key = hashlib.md5((text_clean + speaker).encode('utf-8')).hexdigest()
         cache_file = os.path.join(self.cache_dir, f"{cache_key}.wav")
 
         # Check cache
@@ -67,9 +88,6 @@ class SileroTTSV2:
         # Fall back to synthesis
         if self.model is None:
             self.load()
-
-        # Optional: Add SSML or clean up text
-        text_clean = self.normalize_text(text).replace('\n', ' ')
 
         # apply_tts generates a 1D tensor
         audio_tensor = self.model.apply_tts(
@@ -133,6 +151,8 @@ class SileroTTSV2:
             if not text_str:
                 continue
             wav_bytes = self.synthesize(text_str, speaker=speaker)
+            if not wav_bytes:
+                continue
             with io.BytesIO(wav_bytes) as f:
                 data, _ = sf.read(f, dtype='float32')
             if len(data) > 0:

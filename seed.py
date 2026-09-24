@@ -30,8 +30,9 @@ async def seed():
     # Import after env is set
     from backend.database import engine, AsyncSessionLocal
     from backend.models.base import Base
-    from backend.models.domain_01 import User, StudentGroup
+    from backend.models.domain_01 import User, StudentGroup, ProfileType
     from backend.core.security import hash_password
+
 
     # Ensure all tables exist
     import backend.models.domain_01  # noqa
@@ -50,10 +51,10 @@ async def seed():
 
         # ─── Users ────────────────────────────────────────────────────────────
         users_to_create = [
-            {"username": "admin",   "password": "admin123",   "role": "ADMIN",   "full_name": "Администратор"},
-            {"username": "teacher", "password": "teacher123", "role": "TEACHER", "full_name": "Преподаватель Иванов И.И."},
-            {"username": "cadet1",  "password": "cadet123",   "role": "CADET",   "full_name": "Курсант Петров А.В."},
-            {"username": "cadet2",  "password": "cadet123",   "role": "CADET",   "full_name": "Курсант Сидорова М.К."},
+            {"username": "admin",           "password": "admin123",   "role": "ADMIN",   "full_name": "Администратор"},
+            {"username": "teacher",         "password": "teacher123", "role": "TEACHER", "full_name": "Преподаватель"},
+            {"username": "petrov@student.ru", "password": "12345",    "role": "CADET",   "full_name": "Петров Александр Владимирович"},
+            {"username": "sidorov@student.ru", "password": "12345",   "role": "CADET",   "full_name": "Сидоров Иван Николаевич"},
         ]
 
         created_users = {}
@@ -77,26 +78,62 @@ async def seed():
 
         await session.commit()
 
-        # ─── Group ────────────────────────────────────────────────────────────
-        existing_group = await session.execute(
-            select(StudentGroup).where(StudentGroup.group_name == "Группа 112-А")
-        )
-        if not existing_group.scalar_one_or_none():
-            teacher = (await session.execute(
-                select(User).where(User.username == "teacher")
-            )).scalar_one_or_none()
+        # ─── Groups ───────────────────────────────────────────────────────────
+        from sqlalchemy.orm import selectinload
 
-            if teacher:
+        groups_to_seed = [
+            {
+                "group_name": "Смена 1",
+                "department": "Кафедра оперативной диспетчеризации",
+            },
+            {
+                "group_name": "Смена 2",
+                "department": "Кафедра дежурно-диспетчерских служб",
+            },
+        ]
+
+        teacher = (await session.execute(
+            select(User).where(User.username == "teacher")
+        )).scalar_one_or_none()
+
+        cadet1 = (await session.execute(
+            select(User).where(User.username == "petrov@student.ru")
+        )).scalar_one_or_none()
+        cadet2 = (await session.execute(
+            select(User).where(User.username == "sidorov@student.ru")
+        )).scalar_one_or_none()
+        cadets = [c for c in [cadet1, cadet2] if c is not None]
+
+        for g_data in groups_to_seed:
+            existing_group_res = await session.execute(
+                select(StudentGroup)
+                .options(selectinload(StudentGroup.students))
+                .where(StudentGroup.group_name == g_data["group_name"])
+            )
+            group = existing_group_res.scalar_one_or_none()
+            if not group:
                 group = StudentGroup(
-                    group_name="Группа 112-А",
-                    department="Кафедра оперативной диспетчеризации",
-                    teacher_id=teacher.user_id,
+                    group_name=g_data["group_name"],
+                    department=g_data["department"],
+                    teacher_id=teacher.user_id if teacher else None,
                 )
                 session.add(group)
-                await session.commit()
-                print("  ✅ Created student group 'Группа 112-А'")
-        else:
-            print("  ⏭  Group 'Группа 112-А' already exists, skipping")
+                print(f"  ✅ Created student group '{g_data['group_name']}'")
+            else:
+                print(f"  ⏭  Group '{g_data['group_name']}' already exists")
+
+
+            # Bind cadet1 and cadet2 via Many-to-Many relationship
+            for cadet in cadets:
+                if cadet not in group.students:
+                    group.students.append(cadet)
+                if cadet.user_id not in (group.cadet_ids or []):
+                    group.cadet_ids = list(group.cadet_ids or []) + [cadet.user_id]
+                if group.group_id not in (cadet.group_ids or []):
+                    cadet.group_ids = list(cadet.group_ids or []) + [group.group_id]
+
+        await session.commit()
+
 
         # ─── Classifier (EKP) ────────────────────────────────────────────────
         await seed_classifier(session)
@@ -149,10 +186,10 @@ async def seed_classifier(session):
     print("╔══════════════════════════════════════════════════════╗")
     print("║                Seed complete! Credentials:           ║")
     print("╠══════════════════════════════════════════════════════╣")
-    print("║  admin    / admin123    (роль: ADMIN)                ║")
-    print("║  teacher  / teacher123  (роль: TEACHER)              ║")
-    print("║  cadet1   / cadet123    (роль: CADET)                ║")
-    print("║  cadet2   / cadet123    (роль: CADET)                ║")
+    print("║  admin           / admin123    (роль: ADMIN)         ║")
+    print("║  teacher         / teacher123  (роль: TEACHER)       ║")
+    print("║  ivanov@test.com / 12345       (роль: CADET)         ║")
+    print("║  petrov@test.com / 12345       (роль: CADET)         ║")
     print("╚══════════════════════════════════════════════════════╝")
 
 

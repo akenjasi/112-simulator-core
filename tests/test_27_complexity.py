@@ -37,23 +37,19 @@ def test_profile_type_enum():
     assert ModelProfileType.DISPATCHER_DDS == SchemaProfileType.DISPATCHER_DDS
 
 
-def test_group_schema_profile_required():
-    from backend.schemas.domain_01 import Group as GroupSchema, ProfileType
-    from pydantic import ValidationError
+def test_group_schema_no_profile():
+    from backend.schemas.domain_01 import Group as GroupSchema
 
-    with pytest.raises(ValidationError):
-        # profile is required
-        GroupSchema(group_name="Test Group")  # type: ignore
-
-    group = GroupSchema(group_name="Test Group", profile=ProfileType.OPERATOR_112)
-    assert group.profile == ProfileType.OPERATOR_112
+    group = GroupSchema(group_name="Test Group")
     assert group.group_name == "Test Group"
+    assert not hasattr(group, "profile") or "profile" not in group.model_fields
 
 
-def test_group_model_profile():
-    from backend.models.domain_01 import Group as GroupModel, StudentGroup, ProfileType
+def test_group_model_no_profile():
+    from backend.models.domain_01 import Group as GroupModel, StudentGroup
 
     assert GroupModel is StudentGroup
-    group = GroupModel(group_name="Test Group", profile=ProfileType.DISPATCHER_DDS)
-    assert group.profile == ProfileType.DISPATCHER_DDS
+    group = GroupModel(group_name="Test Group")
+    assert group.group_name == "Test Group"
+    assert not hasattr(group, "profile")
 

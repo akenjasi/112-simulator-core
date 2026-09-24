@@ -37,13 +37,12 @@ async def test_v1_groups_and_csv_upload(auth_client):
     # Create via v1
     res = await auth_client.post("/api/v1/groups", json={
         "group_name": "Group 101",
-        "profile": "OPERATOR_112",
         "department": "Communication Dept"
     })
     assert res.status_code == 200
     group = res.json()
     group_id = group["group_id"]
-    assert group["profile"] == "OPERATOR_112"
+    assert "profile" not in group
 
     # Upload CSV
     csv_content = "first_name,last_name,email\nИван,Иванов,ivan@test.local\nПетр,Петров,petr@test.local"

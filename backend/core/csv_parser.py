@@ -2,7 +2,8 @@ from typing import IO
 import csv
 from backend.schemas.domain_01 import StudentCSVRow
 
-REQUIRED_COLUMNS = ["first_name", "last_name", "email"]
+REQUIRED_COLUMNS = ["last_name", "first_name", "email"]
+SUPPORTED_COLUMNS = ["last_name", "first_name", "middle_name", "email"]
 
 
 def parse_students_csv(file_obj: IO[str]) -> list[StudentCSVRow]:
@@ -25,11 +26,19 @@ def parse_students_csv(file_obj: IO[str]) -> list[StudentCSVRow]:
         if not any(v and v.strip() for v in row.values() if isinstance(v, str)):
             continue
 
+        middle_val = row.get("middle_name")
         row_data = {
-            k: (v.strip() if isinstance(v, str) else v)
-            for k, v in row.items()
-            if k in REQUIRED_COLUMNS
+            "last_name": (row.get("last_name") or "").strip(),
+            "first_name": (row.get("first_name") or "").strip(),
+            "middle_name": middle_val.strip() if middle_val and middle_val.strip() else None,
+            "email": (row.get("email") or "").strip(),
         }
         students.append(StudentCSVRow.model_validate(row_data))
 
     return students
+
+
+def generate_csv_template() -> str:
+    """Generate empty CSV template with header."""
+    return "last_name,first_name,middle_name,email\n"
+

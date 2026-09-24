@@ -182,7 +182,7 @@ export function SplitScreen({ record, onAppeal, onClose, className = "" }: Split
               </CardTitle>
             </div>
             <CardDescription className="mt-1 flex items-center gap-2 flex-wrap">
-              {record.cadet_name && <span>Курсант: <strong>{record.cadet_name}</strong></span>}
+              {record.cadet_name && <span><strong>{record.cadet_name}</strong></span>}
               <span>•</span>
               <span>Статус: </span>
               {record.status === "passed" ? (

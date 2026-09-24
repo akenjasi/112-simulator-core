@@ -170,6 +170,7 @@ class FakeDataGenerator:
             first_name=first_name,
             last_name=last_name,
             middle_name=middle_name,
+            gender=gender,
         )
 
     def generate_role(self) -> str:
