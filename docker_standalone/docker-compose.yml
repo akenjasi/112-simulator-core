@@ -7,12 +7,18 @@ services:
     container_name: 112-simulator
     restart: unless-stopped
     ports:
-      - "3000:3000"   # Next.js Web UI
-      - "8000:8000"   # FastAPI Backend & Swagger Docs (/docs)
+      - "${PORT_FRONTEND:-3000}:3000"   # Next.js Web UI
+      - "${PORT_BACKEND:-8000}:8000"   # FastAPI Backend & Swagger Docs (/docs)
     volumes:
       - ./data:/app/data
     env_file:
-      - .env
+      - path: .env
+        required: false
+    environment:
+      - DATABASE_URL=${DATABASE_URL:-sqlite+aiosqlite:////app/data/112_simulator.db}
+      - SECRET_KEY=${SECRET_KEY:-dev-secret-key-change-me-before-cloud-deploy}
+      - ACCESS_TOKEN_EXPIRE_MINUTES=${ACCESS_TOKEN_EXPIRE_MINUTES:-480}
+      - CORS_ORIGINS=${CORS_ORIGINS:-http://localhost:3000,http://127.0.0.1:3000}
     healthcheck:
       test: ["CMD", "curl", "-f", "http://127.0.0.1:8000/health"]
       interval: 10s
