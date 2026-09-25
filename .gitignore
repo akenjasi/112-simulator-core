@@ -6,4 +6,5 @@ __pycache__/
 data/*.db
 data/backups/
 data/llm_cache/
+data/tts_cache/
 .deps/

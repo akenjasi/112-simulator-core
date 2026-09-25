@@ -210,4 +210,8 @@ class FakeDataGenerator:
             full_address=str(item.get("full_address", "")),
             lat=float(item.get("lat", 0.0)),
             lon=float(item.get("lon", 0.0)),
+            apartment=str(self.random.randint(1, 300)) if self.random.random() > 0.3 else None,
+            floor=str(self.random.randint(1, 25)) if self.random.random() > 0.4 else None,
+            entrance=str(self.random.randint(1, 10)) if self.random.random() > 0.5 else None,
+            intercom=str(self.random.randint(1, 300)) if self.random.random() > 0.5 else None,
         )

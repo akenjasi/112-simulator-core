@@ -23,3 +23,7 @@ class GeneratedAddress(BaseModel):
     full_address: str
     lat: float
     lon: float
+    apartment: Optional[str] = None
+    floor: Optional[str] = None
+    entrance: Optional[str] = None
+    intercom: Optional[str] = None

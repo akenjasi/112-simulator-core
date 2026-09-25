@@ -101,3 +101,55 @@ async def calculate_services(
         is_blocked=request.is_blocked,
         is_fire=request.is_fire,
     )
+
+
+@router.get("/subcategories", response_model=List[str])
+async def get_subcategories(category: str, db: AsyncSession = Depends(get_db)):
+    stmt = select(ClassifierRecord.final_type).where(ClassifierRecord.category == category).distinct().order_by(ClassifierRecord.final_type)
+    res = await db.execute(stmt)
+    return [r for r in res.scalars().all() if r]
+
+
+@router.get("/services", response_model=List[str])
+async def get_services(db: AsyncSession = Depends(get_db)):
+    stmt = select(ClassifierRecord.base_services)
+    res = await db.execute(stmt)
+    all_services = set()
+    for row in res.scalars().all():
+        if row:
+            for s in row:
+                s_str = str(s).strip()
+                if not s_str: continue
+                lower_s = s_str.lower()
+                if "101" in lower_s: all_services.add("01 Пожарные")
+                elif "102" in lower_s: all_services.add("02 Полиция")
+                elif "103" in lower_s: all_services.add("03 Скорая")
+                elif "104" in lower_s: all_services.add("04 Газ")
+                else: all_services.add(s_str)
+    return sorted(list(all_services))
+
+from pydantic import BaseModel
+class ClassifierDetails(BaseModel):
+    services: List[str]
+
+@router.get("/details", response_model=ClassifierDetails)
+async def get_classifier_details(category: str, subcategory: str, db: AsyncSession = Depends(get_db)):
+    stmt = select(ClassifierRecord.base_services).where(
+        ClassifierRecord.category == category,
+        ClassifierRecord.final_type == subcategory
+    ).limit(1)
+    res = await db.execute(stmt)
+    services_raw = res.scalar() or []
+    
+    all_services = set()
+    for s in services_raw:
+        s_str = str(s).strip()
+        if not s_str: continue
+        lower_s = s_str.lower()
+        if "101" in lower_s: all_services.add("01 Пожарные")
+        elif "102" in lower_s: all_services.add("02 Полиция")
+        elif "103" in lower_s: all_services.add("03 Скорая")
+        elif "104" in lower_s: all_services.add("04 Газ")
+        else: all_services.add(s_str)
+        
+    return ClassifierDetails(services=sorted(list(all_services)))

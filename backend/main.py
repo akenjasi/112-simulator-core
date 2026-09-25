@@ -46,6 +46,7 @@ from backend.api.router_sessions import sessions_router, sessions_v1_router
 from backend.api.router_users import users_router, api_users_router
 from backend.api.router_analytics import analytics_router, analytics_v1_router
 from backend.api.router_admin import admin_router
+from backend.api.router_generator import router as generator_router
 from backend.api.router_tickets import tickets_router, api_tickets_router
 from backend.api.router_knowledge import knowledge_router
 from backend.core.audit_middleware import AuditMiddleware
@@ -111,6 +112,7 @@ app.include_router(analytics_router)
 app.include_router(analytics_v1_router)
 app.include_router(audit_router)
 app.include_router(admin_router)
+app.include_router(generator_router)
 app.include_router(tickets_router)
 app.include_router(api_tickets_router)
 app.include_router(knowledge_router)

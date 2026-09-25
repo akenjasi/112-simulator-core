@@ -17,6 +17,7 @@ from backend.core.tts_v2 import tts_engine_v2
 from backend.database import AsyncSessionLocal, get_db
 from backend.models.domain_02 import GeneratedTicket, ScenarioTicket
 from backend.schemas.domain_02 import (
+    TicketUpdate,
     TicketFilterParams,
     TicketGenerateAcceptedResponse,
     TicketGenerateRequest,
@@ -120,33 +121,28 @@ def get_templates_for_category(category: str, subcategory: Optional[str] = None)
     return DEFAULT_TEMPLATES
 
 
-def extract_service_codes(record: Dict[str, Any], category: str) -> List[str]:
-    raw_services = record.get("services") or record.get("all_services") or []
+def extract_service_codes(record: dict, category: str) -> list:
+    raw_services = record.get("base_services") or record.get("services") or []
     codes = set()
     for s in raw_services:
-        s_str = str(s).lower()
-        if "101" in s_str or "пожар" in s_str or "мчс" in s_str:
-            codes.add("01")
-        if "102" in s_str or "полиц" in s_str or "мвд" in s_str:
-            codes.add("02")
-        if "103" in s_str or "скорая" in s_str or "медицин" in s_str or "цэмп" in s_str:
-            codes.add("03")
-        if "104" in s_str or "газ" in s_str:
-            codes.add("04")
-    if not codes:
-        cat_lower = category.lower()
-        if "пожар" in cat_lower:
-            codes = {"01", "03"}
-        elif "дтп" in cat_lower:
-            codes = {"01", "02", "03"}
-        elif "газ" in cat_lower:
-            codes = {"04", "01"}
-        elif "медицин" in cat_lower:
-            codes = {"03"}
-        elif "правопоряд" in cat_lower:
-            codes = {"02"}
+        s_str = str(s).strip()
+        if not s_str:
+            continue
+        lower_s = s_str.lower()
+        if "101" in lower_s:
+            codes.add("01 Пожарные")
+        elif "102" in lower_s:
+            codes.add("02 Полиция")
+        elif "103" in lower_s:
+            codes.add("03 Скорая")
+        elif "104" in lower_s:
+            codes.add("04 Газ")
         else:
-            codes = {"01"}
+            codes.add(s_str)
+            
+    if not codes:
+        codes.update(["01 Пожарные", "02 Полиция", "03 Скорая"])
+        
     return sorted(list(codes))
 
 
@@ -249,10 +245,15 @@ async def generate_tickets_background_task(
 
         for _ in range(count):
             cur_cat = category
-            if not cur_cat or cur_cat.strip().lower() in ["случайная категория", "случайная", "random", "any"]:
+            if not cur_cat or cur_cat.strip().lower() in ["случайная категория", "случайная", "random", "any", "все категории"]:
                 cur_cat = random.choice(AVAILABLE_DEFAULT_CATEGORIES)
-            classifier_row = resolve_classifier_row(category=cur_cat, subcategory=subcategory)
-            ticket_sub = subcategory or classifier_row.incident_name
+            
+            cur_sub = subcategory
+            if not cur_sub or cur_sub.strip().lower() in ["случайная подкатегория", "случайная", "random", "any", "все подкатегории"]:
+                cur_sub = None
+                
+            classifier_row = resolve_classifier_row(category=cur_cat, subcategory=cur_sub)
+            ticket_sub = classifier_row.incident_name
             generated_list = generate_tickets(classifier_row=classifier_row, count=1, faker=faker)
             for t in generated_list:
                 tickets_with_sub.append((t, cur_cat, ticket_sub))
@@ -508,6 +509,80 @@ async def get_ticket_audio(
         logger.error("Error generating ticket audio for ticket %s: %s", ticket_id, e, exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
 
+
+
+@api_tickets_router.patch("/{ticket_id}", response_model=TicketResponse)
+@api_tickets_router.patch("/{ticket_id}/", response_model=TicketResponse, include_in_schema=False)
+@tickets_router.patch("/{ticket_id}", response_model=TicketResponse)
+@tickets_router.patch("/{ticket_id}/", response_model=TicketResponse, include_in_schema=False)
+async def update_ticket(
+    ticket_id: str,
+    ticket_in: TicketUpdate,
+    db: AsyncSession = Depends(get_db),
+) -> TicketResponse:
+    ticket = await db.get(GeneratedTicket, ticket_id)
+    scenario_ticket = await db.get(ScenarioTicket, ticket_id)
+    if not ticket and not scenario_ticket:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Билет не найден")
+    
+    update_data = ticket_in.model_dump(exclude_unset=True)
+    if ticket:
+        for field, value in update_data.items():
+            setattr(ticket, field, value)
+        await db.commit()
+        await db.refresh(ticket)
+        seq = ticket.sequence_number or 0
+        display_id = f"{make_abbr(ticket.category)}_{make_abbr(ticket.subcategory)}_{seq}"
+        res_cat = ticket.category
+        res_sub = ticket.subcategory
+        res_comp = ticket.complexity
+        res_plot = ticket.plot
+        res_facts = ticket.factoids
+        res_gt = ticket.ground_truth
+        res_serv = ticket.etalon_services
+        res_created = ticket.created_at
+    else:
+        # Fallback if only scenario_ticket exists
+        seq = (scenario_ticket.settings or {}).get("sequence_number", 0)
+        res_cat = update_data.get("category", (scenario_ticket.settings or {}).get("category", "Общее"))
+        res_sub = update_data.get("subcategory", (scenario_ticket.settings or {}).get("subcategory"))
+        display_id = f"{make_abbr(res_cat)}_{make_abbr(res_sub)}_{seq}"
+        res_comp = update_data.get("complexity", (scenario_ticket.settings or {}).get("complexity", 1))
+        res_plot = update_data.get("plot", (scenario_ticket.settings or {}).get("plot", ""))
+        res_facts = update_data.get("factoids", (scenario_ticket.ai_content or {}).get("factoids", {}))
+        res_gt = update_data.get("ground_truth", scenario_ticket.ground_truth or {})
+        res_serv = update_data.get("etalon_services", (scenario_ticket.settings or {}).get("etalon_services", []))
+        res_created = scenario_ticket.created_at
+
+    if scenario_ticket:
+        settings = dict(scenario_ticket.settings or {})
+        for field in ["category", "subcategory", "complexity", "plot", "etalon_services"]:
+            if field in update_data:
+                settings[field] = update_data[field]
+        scenario_ticket.settings = settings
+        if "ground_truth" in update_data:
+            scenario_ticket.ground_truth = update_data["ground_truth"]
+        if "plot" in update_data:
+            ai_content = dict(scenario_ticket.ai_content or {})
+            ai_content["plot"] = update_data["plot"]
+            scenario_ticket.ai_content = ai_content
+        await db.commit()
+    
+    return TicketResponse(
+        id=ticket_id,
+        ticket_id=ticket_id,
+        display_id=display_id,
+        sequence_number=seq,
+        category=res_cat,
+        subcategory=res_sub,
+        complexity=res_comp,
+        plot=res_plot,
+        factoids=res_facts,
+        ground_truth=res_gt,
+        etalon_services=res_serv,
+        status="active",
+        created_at=res_created,
+    )
 
 @api_tickets_router.delete("/{ticket_id}", status_code=status.HTTP_200_OK)
 @api_tickets_router.delete("/{ticket_id}/", status_code=status.HTTP_200_OK, include_in_schema=False)

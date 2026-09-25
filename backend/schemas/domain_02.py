@@ -52,3 +52,12 @@ class TicketGenerateAcceptedResponse(BaseModel):
 class TicketStatusResponse(BaseModel):
     is_generating: bool = False
     remaining_tickets: int = 0
+
+class TicketUpdate(BaseModel):
+    category: Optional[str] = None
+    subcategory: Optional[str] = None
+    complexity: Optional[int] = None
+    plot: Optional[str] = None
+    factoids: Optional[Dict[str, Any]] = None
+    ground_truth: Optional[Dict[str, Any]] = None
+    etalon_services: Optional[List[str]] = None
