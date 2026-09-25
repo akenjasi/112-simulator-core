@@ -1,0 +1,35 @@
+# 112 Simulator V2 — Python dependencies
+# Python 3.11 / 3.12 / 3.14
+
+# ─── Web & API ────────────────────────────────────────────────────────────────
+fastapi>=0.115.0
+uvicorn>=0.30.0
+pydantic>=2.9.0
+starlette>=0.38.0
+python-multipart>=0.0.9
+httpx>=0.27.0
+jinja2>=3.1.0
+
+# ─── Database ─────────────────────────────────────────────────────────────────
+sqlalchemy[asyncio]>=2.0.0
+greenlet>=3.0.0
+aiosqlite>=0.20.0          # SQLite async driver (local dev)
+asyncpg>=0.29.0            # PostgreSQL async driver (cloud)
+
+# ─── Authentication ───────────────────────────────────────────────────────────
+passlib[bcrypt]>=1.7.4     # password hashing
+python-jose[cryptography]>=3.3.0  # JWT
+
+# ─── System / Monitoring ──────────────────────────────────────────────────────
+psutil>=5.9.0
+
+# ─── Testing ──────────────────────────────────────────────────────────────────
+pytest>=8.0.0
+pytest-asyncio>=0.24.0
+anyio>=4.0.0
+
+# ─── Optional: ML / TTS ───────────────────────────────────────────────────────
+# Uncomment when enabling real LLM:
+# llama-cpp-python>=0.2.0
+# torch>=2.0.0
+# torchaudio>=2.0.0

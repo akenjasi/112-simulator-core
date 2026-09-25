@@ -1,0 +1,21 @@
+services:
+  simulator:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: 112-simulator:latest
+    container_name: 112-simulator
+    restart: unless-stopped
+    ports:
+      - "3000:3000"   # Next.js Web UI
+      - "8000:8000"   # FastAPI Backend & Swagger Docs (/docs)
+    volumes:
+      - ./data:/app/data
+    env_file:
+      - .env
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://127.0.0.1:8000/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 15s

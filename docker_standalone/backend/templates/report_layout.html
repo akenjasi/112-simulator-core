@@ -1,0 +1,420 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <title>Аналитический отчет аттестации — Система 112</title>
+    <style>
+        @page {
+            size: A4 portrait;
+            margin: 12mm 15mm 15mm 15mm;
+            @bottom-right {
+                content: "Страница " counter(page) " из " counter(pages);
+                font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Liberation Sans", sans-serif;
+                font-size: 8pt;
+                color: #64748b;
+            }
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Liberation Sans", Arial, sans-serif;
+            color: #1e293b;
+            background-color: #ffffff;
+            margin: 0;
+            padding: 0;
+            font-size: 10pt;
+            line-height: 1.45;
+        }
+
+        .header {
+            border-bottom: 2px solid #2563eb;
+            padding-bottom: 12px;
+            margin-bottom: 18px;
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-end;
+        }
+
+        .header-title {
+            font-size: 18pt;
+            font-weight: 700;
+            color: #0f172a;
+            margin: 0 0 4px 0;
+        }
+
+        .header-subtitle {
+            font-size: 10pt;
+            color: #475569;
+            margin: 0;
+        }
+
+        .header-meta {
+            text-align: right;
+            font-size: 8.5pt;
+            color: #64748b;
+        }
+
+        /* Stat cards */
+        .stats-grid {
+            display: flex;
+            gap: 12px;
+            margin-bottom: 20px;
+        }
+
+        .stat-card {
+            flex: 1;
+            background-color: #f8fafc;
+            border: 1px solid #e2e8f0;
+            border-radius: 6px;
+            padding: 10px 12px;
+            text-align: center;
+        }
+
+        .stat-val {
+            font-size: 16pt;
+            font-weight: 700;
+            color: #0f172a;
+            margin: 0;
+        }
+
+        .stat-label {
+            font-size: 8pt;
+            color: #64748b;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-top: 2px;
+        }
+
+        /* Tables */
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 22px;
+            page-break-inside: auto;
+        }
+
+        tr {
+            page-break-inside: avoid;
+            page-break-after: auto;
+        }
+
+        th {
+            background-color: #f1f5f9;
+            color: #334155;
+            font-weight: 600;
+            font-size: 9pt;
+            text-align: left;
+            padding: 8px 10px;
+            border-bottom: 2px solid #cbd5e1;
+        }
+
+        td {
+            padding: 8px 10px;
+            border-bottom: 1px solid #e2e8f0;
+            font-size: 9pt;
+            vertical-align: middle;
+        }
+
+        tbody tr:nth-child(even) {
+            background-color: #f8fafc;
+        }
+
+        /* Badges */
+        .badge {
+            display: inline-block;
+            padding: 2px 7px;
+            border-radius: 4px;
+            font-size: 8pt;
+            font-weight: 600;
+        }
+
+        .badge-success {
+            background-color: #dcfce7;
+            color: #15803d;
+        }
+
+        .badge-warning {
+            background-color: #fef3c7;
+            color: #b45309;
+        }
+
+        .badge-danger {
+            background-color: #fee2e2;
+            color: #b91c1c;
+        }
+
+        /* CRITICAL ERRORS RED BLOCK */
+        .critical-block {
+            background-color: #fef2f2;
+            border: 2px solid #ef4444;
+            border-radius: 8px;
+            padding: 14px 16px;
+            margin-bottom: 22px;
+            page-break-inside: avoid;
+        }
+
+        .critical-header {
+            display: flex;
+            align-items: center;
+            margin-bottom: 10px;
+            border-bottom: 1px solid #fecaca;
+            padding-bottom: 8px;
+        }
+
+        .critical-title {
+            color: #991b1b;
+            font-size: 12pt;
+            font-weight: 700;
+            margin: 0;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .critical-item {
+            margin-bottom: 10px;
+            padding: 8px 12px;
+            background-color: #ffffff;
+            border-left: 4px solid #dc2626;
+            border-radius: 4px;
+        }
+
+        .critical-item:last-child {
+            margin-bottom: 0;
+        }
+
+        .critical-cadet {
+            font-weight: 700;
+            color: #7f1d1d;
+            font-size: 9.5pt;
+        }
+
+        .critical-desc {
+            font-size: 9pt;
+            color: #374151;
+            margin-top: 3px;
+        }
+
+        .tag-pill {
+            display: inline-block;
+            background-color: #fee2e2;
+            color: #991b1b;
+            padding: 1px 6px;
+            border-radius: 3px;
+            font-size: 8pt;
+            font-weight: 600;
+            margin-right: 4px;
+            margin-top: 2px;
+        }
+
+        .no-errors-block {
+            background-color: #f0fdf4;
+            border: 1px solid #86efac;
+            border-radius: 6px;
+            padding: 10px 14px;
+            margin-bottom: 20px;
+            color: #166534;
+            font-weight: 500;
+        }
+
+        /* Section Headings */
+        .section-title {
+            font-size: 12pt;
+            font-weight: 700;
+            color: #1e293b;
+            margin: 18px 0 10px 0;
+            padding-bottom: 4px;
+            border-bottom: 1px solid #e2e8f0;
+        }
+
+        .details-card {
+            background-color: #ffffff;
+            border: 1px solid #e2e8f0;
+            border-radius: 6px;
+            padding: 12px;
+            margin-bottom: 12px;
+            page-break-inside: avoid;
+        }
+
+        .details-header {
+            font-weight: 700;
+            font-size: 10pt;
+            margin-bottom: 6px;
+            color: #0f172a;
+            display: flex;
+            justify-content: space-between;
+        }
+
+        .details-grid {
+            display: flex;
+            gap: 10px;
+            font-size: 8.5pt;
+            color: #475569;
+            margin-bottom: 6px;
+        }
+
+        .penalties-list-inline {
+            font-size: 8.5pt;
+            color: #b91c1c;
+            margin-top: 4px;
+        }
+    </style>
+</head>
+<body>
+
+    <!-- Header -->
+    <div class="header">
+        <div>
+            <h1 class="header-title">Система-112: Аналитический отчет</h1>
+            <p class="header-subtitle">Результаты аттестации и оценки действий операторов</p>
+        </div>
+        <div class="header-meta">
+            <div><strong>Дата отчета:</strong> {{ generated_at }}</div>
+            {% if group_id %}<div><strong>Группа:</strong> {{ group_id }}</div>{% endif %}
+            <div><strong>Всего курсантов:</strong> {{ cadets|length }}</div>
+        </div>
+    </div>
+
+    <!-- Summary KPI cards -->
+    <div class="stats-grid">
+        <div class="stat-card">
+            <div class="stat-val">{{ avg_final_score }}</div>
+            <div class="stat-label">Средний итоговый балл</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-val">{{ avg_comm_score }}</div>
+            <div class="stat-label">Коммуникация (среднее)</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-val">{{ avg_card_score }}</div>
+            <div class="stat-label">Заполнение карточки</div>
+        </div>
+        <div class="stat-card">
+            <div class="stat-val" style="color: {% if critical_errors_count > 0 %}#dc2626{% else %}#16a34a{% endif %};">
+                {{ critical_errors_count }}
+            </div>
+            <div class="stat-label">Критических ошибок</div>
+        </div>
+    </div>
+
+    <!-- CRITICAL ERRORS SECTION (MANDATORY RED BLOCK) -->
+    {% if critical_errors_count > 0 %}
+    <div class="critical-block">
+        <div class="critical-header">
+            <h2 class="critical-title">Внимание: Критические ошибки и нарушения</h2>
+        </div>
+
+        <!-- Over-dispatched services -->
+        {% if over_dispatch_items %}
+        <div style="margin-bottom: 12px;">
+            <strong style="color: #991b1b; font-size: 9.5pt;">⚠️ Гипер-диспетчеризация (отправка лишних служб):</strong>
+            <div style="font-size: 8.5pt; color: #7f1d1d; margin-bottom: 6px;">
+                Курсант необоснованно вызвал экстренные службы при отсутствии показаний в звонке:
+            </div>
+            {% for item in over_dispatch_items %}
+            <div class="critical-item">
+                <div class="critical-cadet">{{ item.cadet_name }} ({{ item.ticket_id }}):</div>
+                <div class="critical-desc">
+                    Ошибочно направленные службы:
+                    {% for svc in item.services %}
+                    <span class="tag-pill">{{ svc }}</span>
+                    {% endfor %}
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+        {% endif %}
+
+        <!-- Missed Critical Factoids -->
+        {% if missed_factoid_items %}
+        <div>
+            <strong style="color: #991b1b; font-size: 9.5pt;">⚠️ Потеря фактоидов (пропуск ключевых сведений):</strong>
+            <div style="font-size: 8.5pt; color: #7f1d1d; margin-bottom: 6px;">
+                Курсант не занес в карточку критически важные обстоятельства, сообщенные заявителем:
+            </div>
+            {% for item in missed_factoid_items %}
+            <div class="critical-item">
+                <div class="critical-cadet">{{ item.cadet_name }} ({{ item.ticket_id }}):</div>
+                <div class="critical-desc">
+                    Не внесенные фактоиды:
+                    {% for fact in item.factoids %}
+                    <span class="tag-pill">{{ fact }}</span>
+                    {% endfor %}
+                </div>
+            </div>
+            {% endfor %}
+        </div>
+        {% endif %}
+    </div>
+    {% else %}
+    <div class="no-errors-block">
+        ✓ Критических нарушений (гипер-диспетчеризация, потеря фактоидов) не обнаружено.
+    </div>
+    {% endif %}
+
+    <!-- Main Results Table -->
+    <h3 class="section-title">Сводная таблица оценок</h3>
+    <table>
+        <thead>
+            <tr>
+                <th style="width: 4%;">№</th>
+                <th style="width: 26%;">Имя курсанта</th>
+                <th style="width: 14%;">Билет</th>
+                <th style="width: 14%; text-align: center;">Балл за коммуникацию</th>
+                <th style="width: 14%; text-align: center;">Балл за карточку</th>
+                <th style="width: 12%; text-align: center;">SLA (диспетч.)</th>
+                <th style="width: 16%; text-align: center;">Итоговый балл</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for c in cadets %}
+            <tr>
+                <td>{{ loop.index }}</td>
+                <td><strong>{{ c.cadet_name }}</strong></td>
+                <td>{{ c.ticket_id }}</td>
+                <td style="text-align: center;">{{ c.comm_score }} / 100</td>
+                <td style="text-align: center;">{{ c.card_score }} / 100</td>
+                <td style="text-align: center;">
+                    {{ c.sla_score }}
+                    <span style="font-size: 8pt; color: #64748b;">({{ c.time_to_first_dispatch_sec }}с)</span>
+                </td>
+                <td style="text-align: center;">
+                    {% if c.final_score >= 80 %}
+                        <span class="badge badge-success">{{ c.final_score }} (Сдано)</span>
+                    {% elif c.final_score >= 60 %}
+                        <span class="badge badge-warning">{{ c.final_score }} (Удовл.)</span>
+                    {% else %}
+                        <span class="badge badge-danger">{{ c.final_score }} (Не сдано)</span>
+                    {% endif %}
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+
+    <!-- Detailed Breakdown per Cadet -->
+    <h3 class="section-title">Детализация по курсантам</h3>
+    {% for c in cadets %}
+    <div class="details-card">
+        <div class="details-header">
+            <span>{{ c.cadet_name }} &bull; {{ c.ticket_id }}</span>
+            <span>Итоговый балл: <strong>{{ c.final_score }} / 100</strong></span>
+        </div>
+        <div class="details-grid">
+            <div><strong>Коммуникация:</strong> {{ c.comm_score }}%</div>
+            <div><strong>Карточка:</strong> {{ c.card_score }}%</div>
+            <div><strong>SLA:</strong> {{ c.sla_score }}%</div>
+            <div><strong>Время до отправки:</strong> {{ c.time_to_first_dispatch_sec }} сек</div>
+        </div>
+        {% if c.penalties_list %}
+        <div class="penalties-list-inline">
+            <strong>Нарушения:</strong> {{ c.penalties_list|join(", ") }}
+        </div>
+        {% else %}
+        <div style="font-size: 8.5pt; color: #16a34a; margin-top: 4px;">
+            Нарушений регламента не зафиксировано.
+        </div>
+        {% endif %}
+    </div>
+    {% endfor %}
+
+</body>
+</html>
