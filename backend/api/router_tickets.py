@@ -259,9 +259,11 @@ async def generate_tickets_background_task(
                 tickets_with_sub.append((t, cur_cat, ticket_sub))
 
         # 1. Save to DB
+        from sqlalchemy import text
         async with AsyncSessionLocal() as session:
-            max_seq = await session.execute(select(func.max(GeneratedTicket.sequence_number)))
-            current_seq = max_seq.scalar() or 0
+            # Get persistent sequence
+            seq_res = await session.execute(text("SELECT last_val FROM sys_sequences WHERE name='generated_tickets'"))
+            current_seq = seq_res.scalar() or 0
 
             for t, cur_cat, cur_sub in tickets_with_sub:
                 current_seq += 1

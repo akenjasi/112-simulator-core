@@ -1568,31 +1568,6 @@ export default function TicketsPage() {
                 </p>
               </div>
               <div className="flex items-center gap-2">
-                {!isEditing ? (
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    onClick={() => setIsEditing(true)}
-                    className="text-xs font-medium"
-                    aria-label="Редактировать билет"
-                  >
-                    <Edit2 className="h-3.5 w-3.5 mr-1" />
-                    Редактировать
-                  </Button>
-                ) : (
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    onClick={handleCancelEdit}
-                    disabled={isSaving}
-                    className="text-xs"
-                    aria-label="Отмена редактирования"
-                  >
-                    Отмена
-                  </Button>
-                )}
                 <Button
                   variant="outline"
                   size="sm"

@@ -29,7 +29,7 @@ def generate_tickets(classifier_row: ClassifierRow, count: int, faker: Any) -> L
     templates = getattr(classifier_row, "templates", []) or []
     incident_name = getattr(classifier_row, "incident_name", "")
 
-    complexity = calculate_complexity(len(services), markers)
+    complexity = calculate_complexity(services, markers)
 
     # Кешируем faker.random перед циклом, чтобы продвигать состояние генератора случайных чисел
     rng = getattr(faker, "random", None)

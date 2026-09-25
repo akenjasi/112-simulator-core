@@ -1043,6 +1043,29 @@ describe('27.2 / ТЗ 30: База билетов и генерация', () => 
       expect(within(dialog).getByText(/ЦОДД/i)).toBeInTheDocument();
     });
   });
+
+  it('Modal details has only one "Редактировать" button in the footer and none in the header', async () => {
+    render(<TicketsPage />);
+
+    await waitFor(() => {
+      expect(screen.getByRole('table')).toHaveTextContent('ДТП');
+    });
+
+    const detailButtons = screen.getAllByRole('button', { name: /Детали/i });
+    fireEvent.click(detailButtons[0]);
+
+    await waitFor(() => {
+      expect(screen.getByRole('dialog')).toBeInTheDocument();
+    });
+
+    const dialog = screen.getByRole('dialog');
+    const editButtons = within(dialog).getAllByRole('button', { name: /Редактировать/i });
+    expect(editButtons).toHaveLength(1);
+
+    // Header close button exists
+    const closeBtn = within(dialog).getByTestId('modal-dismiss-btn');
+    expect(closeBtn).toBeInTheDocument();
+  });
 });
 
 

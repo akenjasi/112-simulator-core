@@ -3,28 +3,28 @@ from backend.core.complexity import calculate_complexity
 
 def test_complexity_level_1():
     # 1 служба, нет маркеров
-    assert calculate_complexity(services_count=1, markers=[]) == 1
+    assert calculate_complexity(services=["01"], markers=[]) == 1
 
 def test_complexity_level_2_multiple_services():
     # 2 службы, нет маркеров
-    assert calculate_complexity(services_count=2, markers=[]) == 2
+    assert calculate_complexity(services=["01", "02"], markers=[]) == 2
 
 def test_complexity_level_2_with_infrastructure_marker():
     # 1 служба, но есть маркер инфраструктуры (например, "перекрытие движения")
-    assert calculate_complexity(services_count=1, markers=["перекрытие движения"]) == 2
+    assert calculate_complexity(services=["01"], markers=["перекрытие движения"]) == 2
 
 def test_complexity_level_3_multiple_services():
     # 3 службы
-    assert calculate_complexity(services_count=3, markers=[]) == 3
+    assert calculate_complexity(services=["01", "02", "03"], markers=[]) == 3
 
 def test_complexity_level_3_with_threat_marker():
     # 1 служба, но есть маркер "угроза людям" или "пострадавшие"
-    assert calculate_complexity(services_count=1, markers=["угроза людям"]) == 3
-    assert calculate_complexity(services_count=2, markers=["пострадавшие"]) == 3
+    assert calculate_complexity(services=["01"], markers=["угроза людям"]) == 3
+    assert calculate_complexity(services=["01", "02"], markers=["пострадавшие"]) == 3
 
 def test_complexity_level_3_overrides_2():
     # 2 службы (уровень 2), но есть маркер угрозы (уровень 3)
-    assert calculate_complexity(services_count=2, markers=["перекрытие движения", "пострадавшие"]) == 3
+    assert calculate_complexity(services=["01", "02"], markers=["перекрытие движения", "пострадавшие"]) == 3
 
 
 def test_profile_type_enum():
