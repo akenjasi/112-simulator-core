@@ -7,12 +7,14 @@ class UserCreate(BaseModel):
     password: str
     role: str
     full_name: Optional[str] = None
+    student_id: Optional[str] = None
 
 
 class UserUpdate(BaseModel):
     full_name: Optional[str] = None
     role: Optional[str] = None
     password: Optional[str] = None
+    student_id: Optional[str] = None
 
 
 class UserResponse(BaseModel):
@@ -20,6 +22,7 @@ class UserResponse(BaseModel):
     username: str
     role: str
     full_name: Optional[str] = None
+    student_id: Optional[str] = None
     is_active: bool = True
 
     model_config = {"from_attributes": True}

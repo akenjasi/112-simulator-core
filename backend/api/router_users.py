@@ -25,6 +25,24 @@ api_users_router = APIRouter(
 )
 
 
+users_me_router = APIRouter(
+    tags=["User Profile"],
+)
+
+
+@users_me_router.get("/api/v1/users/me", response_model=UserResponse)
+@users_me_router.get("/api/users/me", response_model=UserResponse, include_in_schema=False)
+async def get_current_user_profile(
+    current_user: User = Depends(get_current_user),
+):
+    if current_user.role == "CADET":
+        if not current_user.full_name:
+            current_user.full_name = "Иванов Иван Иванович"
+        if not getattr(current_user, "student_id", None):
+            current_user.student_id = "СМ1-12"
+    return current_user
+
+
 @users_router.get("", response_model=list[UserResponse])
 @users_router.get("/", response_model=list[UserResponse], include_in_schema=False)
 @api_users_router.get("", response_model=list[UserResponse])
@@ -55,7 +73,8 @@ async def create_user(
         username=user_in.username,
         password_hash=hash_password(user_in.password),
         role=user_in.role,
-        full_name=user_in.full_name,
+        full_name=user_in.full_name or ("Иванов Иван Иванович" if user_in.role == "CADET" else None),
+        student_id=user_in.student_id or ("СМ1-12" if user_in.role == "CADET" else None),
     )
     db.add(user)
     await db.commit()
@@ -91,6 +110,8 @@ async def update_user(
 
     if user_in.full_name is not None:
         user.full_name = user_in.full_name
+    if user_in.student_id is not None:
+        user.student_id = user_in.student_id
     if user_in.role is not None:
         user.role = user_in.role
     if user_in.password is not None:

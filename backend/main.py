@@ -44,7 +44,7 @@ from backend.api.router_reports import reports_router
 from backend.api.router_scenarios import scenarios_router
 from backend.api.router_sessions import sessions_router, sessions_v1_router
 from backend.api.router_lessons import lessons_router
-from backend.api.router_users import users_router, api_users_router
+from backend.api.router_users import users_router, api_users_router, users_me_router
 from backend.api.router_analytics import analytics_router, analytics_v1_router
 from backend.api.router_admin import admin_router
 from backend.api.router_generator import router as generator_router
@@ -71,6 +71,16 @@ async def lifespan(app: FastAPI):
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
         from sqlalchemy import text
+        for alter_sql in [
+            "ALTER TABLE users ADD COLUMN student_id VARCHAR",
+            "ALTER TABLE generated_tickets ADD COLUMN status VARCHAR",
+            "ALTER TABLE ticket_results ADD COLUMN score_total FLOAT",
+            "ALTER TABLE ticket_results ADD COLUMN status VARCHAR",
+        ]:
+            try:
+                await conn.execute(text(alter_sql))
+            except Exception:
+                pass
         await conn.execute(
             text("INSERT OR IGNORE INTO sys_sequences (name, last_val) VALUES ('generated_tickets', 0)")
         )
@@ -105,6 +115,7 @@ app.include_router(students_router)
 app.include_router(students_v1_router)
 app.include_router(users_router)
 app.include_router(api_users_router)
+app.include_router(users_me_router)
 app.include_router(scenarios_router)
 app.include_router(assignments_router)
 app.include_router(sessions_router)

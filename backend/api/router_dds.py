@@ -17,7 +17,7 @@ from backend.schemas.dds import DDSActionRequest, DDSCardResponse
 router_dds = APIRouter(
     prefix="/api/dds",
     tags=["DDS"],
-    dependencies=[Depends(require_role("ADMIN", "TEACHER"))],
+    dependencies=[Depends(require_role("ADMIN", "TEACHER", "CADET"))],
 )
 router = router_dds
 

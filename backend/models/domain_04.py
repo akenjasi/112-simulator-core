@@ -5,6 +5,7 @@ from sqlalchemy import (
     String,
     Boolean,
     Integer,
+    Float,
     DateTime,
     JSON,
     ForeignKey,
@@ -133,6 +134,8 @@ class TicketResult(Base):
         nullable=True,
     )
     is_passed: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    score_total: Mapped[Optional[float]] = mapped_column(Float, nullable=True)
+    status: Mapped[Optional[str]] = mapped_column(String, nullable=True)
     errors_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
     error_details: Mapped[dict] = mapped_column(JSON, default=dict)
     is_appealed: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)

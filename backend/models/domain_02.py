@@ -35,12 +35,25 @@ class GeneratedTicket(Base):
         nullable=False,
     )
     sequence_number: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    status: Mapped[Optional[str]] = mapped_column(String, nullable=True, default="active")
+
+    @property
+    def ticket_id(self) -> str:
+        return self.id
+
+    @ticket_id.setter
+    def ticket_id(self, value: str):
+        self.id = value
 
     def __init__(self, **kwargs):
+        if "ticket_id" in kwargs and "id" not in kwargs:
+            kwargs["id"] = kwargs.pop("ticket_id")
         if "id" in kwargs and kwargs["id"] is not None:
             kwargs["id"] = str(kwargs["id"])
         else:
             kwargs.setdefault("id", str(uuid.uuid4()))
+        if "status" not in kwargs:
+            kwargs["status"] = "active"
         if "factoids" not in kwargs:
             kwargs["factoids"] = {}
         if "ground_truth" not in kwargs:

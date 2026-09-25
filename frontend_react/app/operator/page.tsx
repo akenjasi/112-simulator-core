@@ -1,6 +1,8 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, Suspense } from "react"
+import { useSearchParams } from "next/navigation"
+import Link from "next/link"
 import { OperatorTopBar } from "@/components/operator/top-bar"
 import { OperatorLeftPanel } from "@/components/operator/left-panel"
 import { OperatorRightPanel } from "@/components/operator/right-panel"
@@ -43,7 +45,11 @@ type ModalType =
   | "close"
   | null
 
-export default function OperatorPage() {
+function OperatorContent() {
+  const searchParams = useSearchParams()
+  const sessionId = searchParams ? searchParams.get("session_id") : null
+  const ticketId = searchParams ? searchParams.get("ticket_id") : null
+
   // 1. Elapsed timer starting from 16s (matching reference photo 00:16)
   const [elapsedSeconds, setElapsedSeconds] = useState(16)
   const [isCallActive, setIsCallActive] = useState(true)
@@ -199,6 +205,24 @@ export default function OperatorPage() {
 
   return (
     <div className="h-screen w-full flex flex-col overflow-hidden select-none font-sans" style={{ background: "#efefef" }}>
+      {/* Session Training Strip */}
+      {sessionId && (
+        <div className="bg-[#1f2b31] border-b border-blue-500/40 text-blue-200 px-4 py-1.5 text-xs flex items-center justify-between shrink-0 shadow-xs z-30">
+          <div className="flex items-center gap-2.5">
+            <span className="h-2 w-2 rounded-full bg-emerald-400 animate-pulse" />
+            <span className="font-bold text-white">Учебный режим: Оператор 112</span>
+            <span className="font-mono text-blue-300">Сессия #{sessionId.slice(0, 8)}</span>
+            {ticketId && <span className="font-mono text-blue-300">• Билет #{ticketId.slice(0, 8)}</span>}
+          </div>
+          <Link
+            href="/student/lobby"
+            className="text-xs bg-slate-800 hover:bg-slate-700 text-white px-2.5 py-1 rounded transition"
+          >
+            ← В Лобби
+          </Link>
+        </div>
+      )}
+
       {/* Toast Notification */}
       {toastMessage && (
         <div className="fixed top-14 left-1/2 -translate-x-1/2 z-50 bg-[#303335] text-white text-xs px-4 py-2 rounded shadow-lg border border-gray-600 animate-in fade-in slide-in-from-top-2 duration-200">
@@ -212,6 +236,8 @@ export default function OperatorPage() {
         aonPhone={aonPhone}
         providedPhone={providedPhone}
         onSitePhone={onSitePhone}
+        incidentNumber={ticketId ? `Билет #${ticketId.slice(0, 6)}` : "913126"}
+        operatorInfo={sessionId ? `АРМ-7 (Курсант ${sessionId.slice(0, 4)})` : "АРМ-7 (Оператор 112)"}
         onHangup={() => setActiveModal("hangup")}
         onCallRecords={() => setActiveModal("call_records")}
         onSmsList={() => setActiveModal("sms_list")}
@@ -739,5 +765,19 @@ export default function OperatorPage() {
         </div>
       )}
     </div>
+  )
+}
+
+export default function OperatorPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="flex h-screen w-full items-center justify-center bg-[#efefef] text-gray-700">
+          <span className="font-semibold text-sm animate-pulse">Загрузка АРМ Оператора 112...</span>
+        </div>
+      }
+    >
+      <OperatorContent />
+    </Suspense>
   )
 }

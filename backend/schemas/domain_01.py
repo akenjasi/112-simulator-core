@@ -61,6 +61,7 @@ class SingleStudentAddRequest(BaseModel):
     user_id: Optional[str] = None
     id: Optional[str] = None
     username: Optional[str] = None
+    student_id: Optional[str] = None
 
 
 class StudentResponse(BaseModel):
@@ -68,6 +69,7 @@ class StudentResponse(BaseModel):
 
     user_id: str
     id: Optional[str] = None
+    student_id: Optional[str] = None
     username: str
     email: Optional[str] = None
     full_name: Optional[str] = None

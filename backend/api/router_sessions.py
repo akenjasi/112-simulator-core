@@ -1,14 +1,17 @@
 import datetime
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy import select
+from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm.attributes import flag_modified
 
-from backend.core.deps import require_role
+from backend.core.deps import require_role, get_current_user
 from backend.core.runtime_router import RuntimeRouter
 from backend.database import get_db
+from backend.models.domain_01 import User
+from backend.models.domain_02 import GeneratedTicket
 from backend.models.domain_03 import Assignment, ExamSession
 from backend.models.domain_04 import IncidentCard, TicketResult
+from backend.schemas.students import DemoSessionRequest, DemoSessionResponse
 from backend.core.evaluator import evaluate_ticket
 from backend.schemas.domain_04 import (
     TicketEvaluationRequest,
@@ -233,19 +236,129 @@ async def appeal_ticket(
 sessions_v1_router = APIRouter(
     prefix="/api/v1/sessions",
     tags=["Sessions v1"],
-    dependencies=[Depends(require_role("ADMIN", "TEACHER"))],
 )
+
+
+from starlette.requests import Request
+
+
+@sessions_v1_router.post(
+    "/demo",
+    response_model=DemoSessionResponse,
+)
+@sessions_router.post(
+    "/sessions/demo",
+    response_model=DemoSessionResponse,
+    include_in_schema=False,
+)
+async def create_demo_session(
+    request: Request,
+    req: Optional[DemoSessionRequest] = None,
+    current_user: Optional[User] = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Create a demo training session with 1 random ticket."""
+    if req is None:
+        try:
+            raw_body = await request.body()
+            if raw_body:
+                import json
+                data = json.loads(raw_body)
+                req = DemoSessionRequest.model_validate(data)
+        except Exception:
+            pass
+
+    target_role = (req.target_role if req and req.target_role else "OPERATOR_112").upper()
+    if target_role not in ("OPERATOR_112", "DISPATCHER_DDS"):
+        target_role = "OPERATOR_112"
+
+    stmt = select(GeneratedTicket).order_by(func.random()).limit(1)
+    res = await db.execute(stmt)
+    ticket = res.scalar_one_or_none()
+
+    if not ticket:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Билеты не найдены. Пожалуйста, сначала сгенерируйте билеты.",
+        )
+
+    session_type = "CALL_SIMULATION" if target_role == "OPERATOR_112" else "CARD_ACTIONS"
+    cadet_id = current_user.user_id if current_user else None
+
+    assignment = Assignment(
+        session_type=session_type,
+        mode="TRAINING",
+        status="ACTIVE",
+        target_role=target_role,
+        cadet_id=cadet_id,
+        categories=[ticket.category] if ticket.category else [],
+        complexity=str(ticket.complexity or "1"),
+        teacher_notes="Демо-запуск",
+    )
+    db.add(assignment)
+    await db.flush()
+
+    exam_session = ExamSession(
+        assignment_id=assignment.assignment_id,
+        cadet_id=cadet_id,
+        session_type=session_type,
+        status="ACTIVE",
+        categories=[ticket.category] if ticket.category else [],
+        complexity=str(ticket.complexity or "1"),
+    )
+    db.add(exam_session)
+    await db.flush()
+
+    tr = TicketResult(
+        session_id=exam_session.session_id,
+        ticket_id=ticket.ticket_id,
+        status="active",
+        is_passed=False,
+    )
+    db.add(tr)
+
+    if target_role == "DISPATCHER_DDS":
+        card = IncidentCard(
+            session_id=exam_session.session_id,
+            operator_id=cadet_id,
+            card_origin="112_CALL",
+            status="open",
+            filled_data={
+                "category": ticket.category,
+                "subcategory": ticket.subcategory,
+                "plot": ticket.plot,
+                "factoids": ticket.factoids,
+            },
+            assigned_services={"services": ticket.etalon_services or []},
+        )
+        db.add(card)
+
+    await db.commit()
+    await db.refresh(exam_session)
+
+    ticket_key = ticket.ticket_id
+    base_url = "/operator" if target_role == "OPERATOR_112" else "/dds"
+    redirect_url = f"{base_url}?session_id={exam_session.session_id}&ticket_id={ticket_key}"
+
+    return DemoSessionResponse(
+        session_id=exam_session.session_id,
+        ticket_id=ticket_key,
+        role=target_role,
+        redirect_url=redirect_url,
+    )
 
 
 @sessions_v1_router.post(
     "",
     response_model=SessionConfigResponse,
     status_code=status.HTTP_201_CREATED,
+    dependencies=[Depends(require_role("ADMIN", "TEACHER"))],
 )
 @sessions_v1_router.post(
     "/",
     response_model=SessionConfigResponse,
     status_code=status.HTTP_201_CREATED,
+    dependencies=[Depends(require_role("ADMIN", "TEACHER"))],
     include_in_schema=False,
 )
 async def create_session_config(
@@ -279,6 +392,7 @@ async def create_session_config(
 @sessions_v1_router.get(
     "/{session_id}/stats",
     response_model=SessionStatsResponse,
+    dependencies=[Depends(require_role("ADMIN", "TEACHER"))],
 )
 async def get_session_stats(
     session_id: str,

@@ -13,20 +13,21 @@ import {
   Clock,
   CheckCircle2,
   AlertCircle,
-  Wifi,
-  Volume2,
-  Shield,
-  Sparkles,
   ArrowRight,
-  UserCheck,
+  User,
+  Sparkles,
+  Loader2,
+  AlertTriangle,
+  RotateCcw,
 } from "lucide-react"
 
 export default function StudentLobbyPage() {
   const router = useRouter()
   const [selectedRole, setSelectedRole] = useState<"OPERATOR_112" | "DISPATCHER_DDS">("OPERATOR_112")
-  const [isRedirecting, setIsRedirecting] = useState<boolean>(false)
+  const [isStartingDemo, setIsStartingDemo] = useState<boolean>(false)
+  const [errorMessage, setErrorMessage] = useState<string | null>(null)
 
-  // Try to read cadet role or preferences from localStorage if set
+  // Try to read cadet role from localStorage if set
   useEffect(() => {
     if (typeof window !== "undefined") {
       const storedRole = localStorage.getItem("cadet_role")
@@ -36,13 +37,49 @@ export default function StudentLobbyPage() {
     }
   }, [])
 
-  const handleEnterSimulation = () => {
-    setIsRedirecting(true)
-    const targetUrl = selectedRole === "DISPATCHER_DDS" ? "/dds" : "/operator"
+  // Call POST /api/v1/sessions/demo and redirect
+  const handleDemoLaunch = async () => {
+    setIsStartingDemo(true)
+    setErrorMessage(null)
+
     if (typeof window !== "undefined") {
       localStorage.setItem("cadet_role", selectedRole)
     }
-    router.push(targetUrl)
+
+    try {
+      const response = await fetch("/api/v1/sessions/demo", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          target_role: selectedRole,
+        }),
+      })
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}))
+        const detail = errorData.detail || "Не удалось инициализировать демо-сессию."
+        throw new Error(detail)
+      }
+
+      const data = await response.json()
+      const targetUrl =
+        data.redirect_url ||
+        (selectedRole === "DISPATCHER_DDS"
+          ? `/dds?session_id=${data.session_id}&ticket_id=${data.ticket_id}`
+          : `/operator?session_id=${data.session_id}&ticket_id=${data.ticket_id}`)
+
+      // Perform redirect
+      router.push(targetUrl)
+    } catch (err: any) {
+      console.error("Ошибка при демо-запуске:", err)
+      setErrorMessage(
+        err.message ||
+          "Не удалось запустить демо-сессию. Убедитесь, что сервер запущен и в базе присутствуют билеты."
+      )
+      setIsStartingDemo(false)
+    }
   }
 
   return (
@@ -64,9 +101,16 @@ export default function StudentLobbyPage() {
         </div>
 
         <div className="flex items-center gap-2">
+          <Link href="/student/profile">
+            <Button variant="outline" size="sm" className="gap-2 text-xs h-9">
+              <User className="h-3.5 w-3.5" />
+              <span>Личный кабинет</span>
+            </Button>
+          </Link>
+
           <Badge
             variant="outline"
-            className="gap-1.5 px-3 py-1 text-xs border-emerald-500/40 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 font-semibold"
+            className="gap-1.5 px-3 py-1.5 text-xs border-emerald-500/40 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 font-semibold hidden sm:flex"
           >
             <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
             <span>Сервер подключен</span>
@@ -96,21 +140,21 @@ export default function StudentLobbyPage() {
 
             <div className="space-y-1.5">
               <CardTitle className="text-2xl font-extrabold tracking-tight">
-                Ожидание начала урока преподавателем...
+                Ожидание старта. Преподаватель подготавливает занятие...
               </CardTitle>
               <CardDescription className="text-sm max-w-md mx-auto leading-relaxed">
-                Преподаватель настраивает сценарий и параметры занятия. Симуляция начнется автоматически, как только урок будет запущен.
+                Сценарий и параметры симуляции будут загружены автоматически. Либо воспользуйтесь режимом «Демо-запуск» для самостоятельной тренировки.
               </CardDescription>
             </div>
           </CardHeader>
 
           <CardContent className="space-y-6 pt-2 pb-6 px-6">
-            {/* Role switch toggle for testing */}
+            {/* Role switch toggle for testing / demo */}
             <div className="p-4 rounded-xl border bg-muted/40 space-y-3">
               <div className="flex items-center justify-between text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-                <span>Ваша учебная роль:</span>
+                <span>Целевая учебная роль:</span>
                 <span className="text-[11px] normal-case text-primary font-normal">
-                  (для тестирования)
+                  (для демо-запуска)
                 </span>
               </div>
 
@@ -118,7 +162,7 @@ export default function StudentLobbyPage() {
                 <button
                   type="button"
                   onClick={() => setSelectedRole("OPERATOR_112")}
-                  className={`flex items-center gap-2.5 p-3 rounded-lg border text-left transition-all ${
+                  className={`flex items-center gap-2.5 p-3 rounded-lg border text-left transition-all cursor-pointer ${
                     selectedRole === "OPERATOR_112"
                       ? "border-primary bg-primary/10 shadow-xs ring-1 ring-primary/40 font-bold"
                       : "border-border/70 hover:bg-muted/60 opacity-80"
@@ -134,7 +178,7 @@ export default function StudentLobbyPage() {
                 <button
                   type="button"
                   onClick={() => setSelectedRole("DISPATCHER_DDS")}
-                  className={`flex items-center gap-2.5 p-3 rounded-lg border text-left transition-all ${
+                  className={`flex items-center gap-2.5 p-3 rounded-lg border text-left transition-all cursor-pointer ${
                     selectedRole === "DISPATCHER_DDS"
                       ? "border-primary bg-primary/10 shadow-xs ring-1 ring-primary/40 font-bold"
                       : "border-border/70 hover:bg-muted/60 opacity-80"
@@ -148,6 +192,17 @@ export default function StudentLobbyPage() {
                 </button>
               </div>
             </div>
+
+            {/* Error Message Box */}
+            {errorMessage && (
+              <div className="p-3.5 rounded-lg border border-red-500/30 bg-red-500/10 text-red-700 dark:text-red-400 text-xs flex items-start gap-2.5">
+                <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" />
+                <div className="space-y-1">
+                  <div className="font-semibold">Ошибка демо-запуска</div>
+                  <div>{errorMessage}</div>
+                </div>
+              </div>
+            )}
 
             {/* Diagnostics checklist */}
             <div className="grid grid-cols-3 gap-2 text-center text-xs py-2 px-3 rounded-lg bg-muted/30 border">
@@ -165,29 +220,46 @@ export default function StudentLobbyPage() {
               </div>
             </div>
 
-            {/* MVP Testing Action Button */}
+            {/* Accent Demo Launch Action Button */}
             <div className="pt-2 space-y-2">
               <Button
                 size="lg"
-                onClick={handleEnterSimulation}
-                disabled={isRedirecting}
-                className="w-full py-6 text-base font-bold bg-primary hover:bg-primary/90 text-primary-foreground shadow-md hover:shadow-lg transition-all gap-2"
+                onClick={handleDemoLaunch}
+                disabled={isStartingDemo}
+                className="w-full py-6 text-base font-bold bg-primary hover:bg-primary/90 text-primary-foreground shadow-md hover:shadow-lg transition-all gap-2 cursor-pointer"
               >
-                <Play className="h-5 w-5 fill-current" />
-                <span>Войти в симуляцию (ТЕСТ)</span>
-                <ArrowRight className="h-4 w-4 ml-1" />
+                {isStartingDemo ? (
+                  <>
+                    <Loader2 className="h-5 w-5 animate-spin" />
+                    <span>Инициализация сессии...</span>
+                  </>
+                ) : (
+                  <>
+                    <Play className="h-5 w-5 fill-current" />
+                    <span>Демо-запуск ({selectedRole === "DISPATCHER_DDS" ? "ДДС" : "112"})</span>
+                    <ArrowRight className="h-4 w-4 ml-1" />
+                  </>
+                )}
               </Button>
               <p className="text-[11px] text-muted-foreground text-center">
-                Переход на экран: {selectedRole === "DISPATCHER_DDS" ? "dds/page.tsx" : "operator/page.tsx"}
+                Переход на рабочее место:{" "}
+                <span className="font-semibold text-foreground">
+                  {selectedRole === "DISPATCHER_DDS" ? "Диспетчер ДДС (/dds)" : "Оператор 112 (/operator)"}
+                </span>
               </p>
             </div>
           </CardContent>
 
           <CardFooter className="bg-muted/20 border-t py-3 px-6 flex justify-between items-center text-xs text-muted-foreground">
             <span>Идентификатор: cadet-terminal</span>
-            <Link href="/teacher" className="hover:text-primary transition-colors">
-              Перейти в кабинет преподавателя →
-            </Link>
+            <div className="flex items-center gap-4">
+              <Link href="/student/profile" className="hover:text-primary transition-colors font-medium">
+                Личный кабинет →
+              </Link>
+              <Link href="/teacher" className="hover:text-primary transition-colors">
+                Преподаватель →
+              </Link>
+            </div>
           </CardFooter>
         </Card>
       </main>
