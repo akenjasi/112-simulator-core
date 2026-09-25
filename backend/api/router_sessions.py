@@ -288,41 +288,58 @@ async def get_session_stats(
     result = await db.execute(stmt)
     exam_session = result.scalar_one_or_none()
 
+    session_status = exam_session.status if exam_session else "active"
+    group_name = "Группа 101"
+    if not exam_session:
+        stmt_assign = select(Assignment).where(Assignment.assignment_id == session_id)
+        res_assign = await db.execute(stmt_assign)
+        assignment = res_assign.scalar_one_or_none()
+        if assignment:
+            session_status = assignment.status
+            session_name_val = f"Урок #{session_id[:8]}"
+        else:
+            session_name_val = f"Сессия #{session_id[:8]}"
+    else:
+        session_name_val = f"Сессия #{session_id[:8]}"
+
+    is_completed = (session_status == "COMPLETED")
+    is_waiting = (session_status == "WAITING")
+
     cadets_data = [
         CadetSessionStats(
             cadet_id="cadet-1",
             cadet_name="Иванов Иван",
-            status="IN_PROGRESS",
-            current_ticket="Билет #2 (Пожар в жилом секторе)",
-            in_progress=1,
-            passed=2,
+            status="PASSED" if is_completed else ("IN_PROGRESS" if not is_waiting else "IDLE"),
+            current_ticket="Билет #2 (Завершено)" if is_completed else ("Билет #2 (Пожар в жилом секторе)" if not is_waiting else "Ожидание"),
+            in_progress=0 if (is_completed or is_waiting) else 1,
+            passed=2 if not is_waiting else 0,
             failed=0,
-            progress=66,
-            score=92,
+            progress=100 if is_completed else (66 if not is_waiting else 0),
+            score=92 if not is_waiting else 0,
             last_activity="1 мин назад",
         ),
         CadetSessionStats(
             cadet_id="cadet-2",
             cadet_name="Петров Петр",
-            status="PASSED",
-            current_ticket="Билет #3 (Завершено)",
+            status="PASSED" if not is_waiting else "IDLE",
+            current_ticket="Билет #3 (Завершено)" if not is_waiting else "Ожидание",
             in_progress=0,
-            passed=3,
+            passed=3 if not is_waiting else 0,
             failed=0,
-            progress=100,
-            score=98,
+            progress=100 if not is_waiting else 0,
+            score=98 if not is_waiting else 0,
             last_activity="3 мин назад",
         ),
         CadetSessionStats(
             cadet_id="cadet-3",
             cadet_name="Сидорова Анна",
-            status="FAILED",
-            current_ticket="Билет #2 (ДТП с пострадавшими)",
+            status="FAILED" if not is_waiting else "IDLE",
+            current_ticket="Билет #2 (ДТП с пострадавшими)" if not is_waiting else "Ожидание",
             in_progress=0,
-            passed=1,
-            failed=1,
-            progress=50,
-            score=64,
+            passed=1 if not is_waiting else 0,
+            failed=1 if not is_waiting else 0,
+            progress=100 if is_completed else (50 if not is_waiting else 0),
+            score=64 if not is_waiting else 0,
             last_activity="Только что",
         ),
     ]
@@ -334,9 +351,9 @@ async def get_session_stats(
 
     return SessionStatsResponse(
         session_id=session_id,
-        session_name=f"Сессия #{session_id[:8]}",
-        group_name="Группа 101",
-        status=exam_session.status if exam_session else "active",
+        session_name=session_name_val,
+        group_name=group_name,
+        status=session_status,
         overall_progress=overall_progress,
         total_cadets=len(cadets_data),
         total_in_progress=total_in_progress,

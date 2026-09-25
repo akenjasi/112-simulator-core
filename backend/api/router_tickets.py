@@ -261,6 +261,15 @@ async def generate_tickets_background_task(
         # 1. Save to DB
         from sqlalchemy import text
         async with AsyncSessionLocal() as session:
+            # Ensure sys_sequences exists and has default row
+            await session.execute(
+                text("CREATE TABLE IF NOT EXISTS sys_sequences (name VARCHAR PRIMARY KEY, last_val INTEGER NOT NULL DEFAULT 0)")
+            )
+            await session.execute(
+                text("INSERT OR IGNORE INTO sys_sequences (name, last_val) VALUES ('generated_tickets', 0)")
+            )
+            await session.commit()
+
             # Get persistent sequence
             seq_res = await session.execute(text("SELECT last_val FROM sys_sequences WHERE name='generated_tickets'"))
             current_seq = seq_res.scalar() or 0
@@ -299,6 +308,11 @@ async def generate_tickets_background_task(
                 )
                 session.add(scenario_ticket)
 
+            # Update persistent sequence
+            await session.execute(
+                text("UPDATE sys_sequences SET last_val = :val WHERE name = 'generated_tickets'"),
+                {"val": current_seq}
+            )
             await session.commit()
 
         # 2. Compile BricksMatrix and cache audio via TTS
@@ -336,6 +350,41 @@ async def get_tickets_status() -> TicketStatusResponse:
         is_generating=active_generations > 0,
         remaining_tickets=active_generations,
     )
+
+
+@api_tickets_router.get("/counts")
+@api_tickets_router.get("/counts/", include_in_schema=False)
+@tickets_router.get("/counts")
+@tickets_router.get("/counts/", include_in_schema=False)
+async def get_tickets_counts(
+    complexity: Optional[int] = Query(None, ge=1, le=3, description="Сложность (1-3)"),
+    db: AsyncSession = Depends(get_db),
+):
+    """Агрегация количества билетов по категориям и подкатегориям."""
+    stmt = select(
+        GeneratedTicket.category, 
+        GeneratedTicket.subcategory, 
+        func.count(GeneratedTicket.id).label("count")
+    )
+    if complexity is not None:
+        stmt = stmt.where(GeneratedTicket.complexity == complexity)
+
+    stmt = stmt.group_by(GeneratedTicket.category, GeneratedTicket.subcategory)
+    
+    result = await db.execute(stmt)
+    records = result.all()
+    
+    counts = {}
+    for cat, subcat, count in records:
+        cat_name = cat or "Общее"
+        if cat_name not in counts:
+            counts[cat_name] = {"category": cat_name, "total": 0, "subcategories": {}}
+        counts[cat_name]["total"] += count
+        
+        if subcat:
+            counts[cat_name]["subcategories"][subcat] = count
+            
+    return list(counts.values())
 
 
 @api_tickets_router.get("", response_model=List[TicketResponse])

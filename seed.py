@@ -78,6 +78,18 @@ async def seed():
 
         await session.commit()
 
+        # ─── Sequences ────────────────────────────────────────────────────────
+        from backend.models.domain_02 import SysSequence
+        existing_seq = await session.execute(
+            select(SysSequence).where(SysSequence.name == "generated_tickets")
+        )
+        if not existing_seq.scalar_one_or_none():
+            session.add(SysSequence(name="generated_tickets", last_val=0))
+            await session.commit()
+            print("  ✅ Created sys_sequence 'generated_tickets' (last_val=0)")
+        else:
+            print("  ⏭  sys_sequence 'generated_tickets' already exists")
+
         # ─── Groups ───────────────────────────────────────────────────────────
         from sqlalchemy.orm import selectinload
 

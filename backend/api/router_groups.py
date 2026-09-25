@@ -100,7 +100,7 @@ async def list_all_students(
 @api_groups_router.get("", response_model=list[GroupResponse])
 @api_groups_router.get("/", response_model=list[GroupResponse], include_in_schema=False)
 async def list_groups(db: AsyncSession = Depends(get_db)):
-    stmt = select(StudentGroup)
+    stmt = select(StudentGroup).options(selectinload(StudentGroup.students))
     result = await db.execute(stmt)
     return result.scalars().all()
 

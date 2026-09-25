@@ -6,9 +6,25 @@ from httpx import AsyncClient
 os.environ["TESTING"] = "true"
 
 from backend.main import app
-from backend.database import AsyncSessionLocal
+from backend.database import engine, AsyncSessionLocal
+from backend.models.base import Base
 from backend.models.domain_01 import User
 from backend.core.security import create_access_token, hash_password
+
+
+@pytest.fixture(autouse=True)
+async def init_db_tables():
+    """Ensure all database tables exist before each test."""
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
+    yield
+
+
+@pytest.fixture
+async def db_session():
+    """Yield an async SQLAlchemy session."""
+    async with AsyncSessionLocal() as session:
+        yield session
 
 
 async def create_user_and_token(role: str = 'ADMIN', username: str = None) -> tuple[User, str, dict]:
@@ -52,3 +68,9 @@ async def cadet_auth_client():
     user, token, headers = await create_user_and_token(role='CADET')
     async with AsyncClient(app=app, base_url='http://test', headers=headers) as ac:
         yield ac
+
+
+@pytest.fixture
+async def async_client(teacher_auth_client):
+    """Default async HTTP client (authenticated as TEACHER for lesson tests)."""
+    yield teacher_auth_client

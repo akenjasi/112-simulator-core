@@ -9,6 +9,7 @@ from sqlalchemy import (
     JSON,
     ForeignKey,
     CheckConstraint,
+    Text,
     func,
 )
 from sqlalchemy.orm import Mapped, mapped_column
@@ -39,6 +40,14 @@ class Assignment(Base):
             "mode IN ('TRAINING', 'EXAM')",
             name="assignment_mode_check",
         ),
+        CheckConstraint(
+            "status IN ('WAITING', 'ACTIVE', 'COMPLETED')",
+            name="assignment_status_check",
+        ),
+        CheckConstraint(
+            "target_role IN ('OPERATOR_112', 'DISPATCHER_DDS')",
+            name="assignment_target_role_check",
+        ),
     )
 
     assignment_id: Mapped[str] = mapped_column(
@@ -52,9 +61,11 @@ class Assignment(Base):
         nullable=True,
     )
     card_pool_ids: Mapped[list] = mapped_column(JSON, default=list)
-    session_type: Mapped[str] = mapped_column(String, nullable=False)
+    session_type: Mapped[str] = mapped_column(String, default="CALL_SIMULATION", nullable=False)
     card_pool_source: Mapped[Optional[str]] = mapped_column(String, nullable=True)
     mode: Mapped[str] = mapped_column(String, default="TRAINING", nullable=False)
+    status: Mapped[str] = mapped_column(String, default="WAITING", nullable=False)
+    target_role: Mapped[str] = mapped_column(String, default="OPERATOR_112", nullable=False)
     group_id: Mapped[Optional[str]] = mapped_column(
         String,
         ForeignKey("student_groups.group_id"),
@@ -80,7 +91,37 @@ class Assignment(Base):
     )
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
 
+    categories: Mapped[list] = mapped_column(JSON, default=list)
+    complexity: Mapped[Optional[str]] = mapped_column(String, nullable=True, default="adaptive")
+    error_limit: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    time_limit_seconds: Mapped[Optional[int]] = mapped_column(Integer, default=30, nullable=True)
+    teacher_notes: Mapped[Optional[str]] = mapped_column(Text, nullable=True, default="")
+    started_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
+    completed_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=lambda: datetime.now(timezone.utc),
+        server_default=func.now(),
+        nullable=False,
+    )
+
+    @property
+    def id(self) -> str:
+        return self.assignment_id
+
+    @id.setter
+    def id(self, value: str):
+        self.assignment_id = value
+
     def __init__(self, **kwargs):
+        if "id" in kwargs and "assignment_id" not in kwargs:
+            kwargs["assignment_id"] = kwargs.pop("id")
         kwargs.setdefault("assignment_id", str(uuid.uuid4()))
         if "card_pool_ids" not in kwargs:
             kwargs["card_pool_ids"] = []
@@ -88,7 +129,25 @@ class Assignment(Base):
             kwargs["mode"] = "TRAINING"
         if "is_active" not in kwargs:
             kwargs["is_active"] = True
+        if "status" not in kwargs:
+            kwargs["status"] = "WAITING"
+        if "target_role" not in kwargs:
+            kwargs["target_role"] = "OPERATOR_112"
+        if "session_type" not in kwargs:
+            if kwargs.get("target_role") == "DISPATCHER_DDS":
+                kwargs["session_type"] = "CARD_ACTIONS"
+            else:
+                kwargs["session_type"] = "CALL_SIMULATION"
+        if "categories" not in kwargs:
+            kwargs["categories"] = []
+        if "time_limit_seconds" not in kwargs:
+            kwargs["time_limit_seconds"] = 30
+        if "teacher_notes" not in kwargs:
+            kwargs["teacher_notes"] = ""
         super().__init__(**kwargs)
+
+
+Lesson = Assignment
 
 
 class ExamSession(Base):
@@ -131,7 +190,17 @@ class ExamSession(Base):
     error_limit: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     time_limit_seconds: Mapped[Optional[int]] = mapped_column(Integer, default=30, nullable=True)
 
+    @property
+    def lesson_id(self) -> Optional[str]:
+        return self.assignment_id
+
+    @lesson_id.setter
+    def lesson_id(self, value: Optional[str]):
+        self.assignment_id = value
+
     def __init__(self, **kwargs):
+        if "lesson_id" in kwargs and "assignment_id" not in kwargs:
+            kwargs["assignment_id"] = kwargs.pop("lesson_id")
         kwargs.setdefault("session_id", str(uuid.uuid4()))
         if "browser_call" not in kwargs:
             kwargs["browser_call"] = {}

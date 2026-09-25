@@ -98,3 +98,10 @@ class ScenarioTicket(Base):
         if "version_history" not in kwargs:
             kwargs["version_history"] = []
         super().__init__(**kwargs)
+
+
+class SysSequence(Base):
+    __tablename__ = "sys_sequences"
+
+    name: Mapped[str] = mapped_column(String, primary_key=True)
+    last_val: Mapped[int] = mapped_column(Integer, nullable=False, default=0)

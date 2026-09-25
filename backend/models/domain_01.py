@@ -131,6 +131,13 @@ class StudentGroup(Base):
     def cadets(self) -> list["User"]:
         return self.students
 
+    @property
+    def student_count(self) -> int:
+        uids = set(self.cadet_ids or [])
+        if "students" in self.__dict__ and self.students:
+            uids.update(u.user_id for u in self.students if getattr(u, "user_id", None))
+        return len(uids)
+
     def __init__(self, **kwargs):
         if "id" in kwargs and "group_id" not in kwargs:
             kwargs["group_id"] = kwargs.pop("id")
