@@ -16,6 +16,11 @@ if [ -d "$SCRIPT_DIR/.deps" ]; then
     export PYTHONPATH="$SCRIPT_DIR/.deps:${PYTHONPATH:-}"
 fi
 
+# ─── LD_LIBRARY_PATH: expose transcribe_cpp shared libs ──────────────────────
+if [ -d "$SCRIPT_DIR/backend/bin" ]; then
+    export LD_LIBRARY_PATH="$SCRIPT_DIR/backend/bin:${LD_LIBRARY_PATH:-}"
+fi
+
 # ─── Load .env if it exists ───────────────────────────────────────────────────
 if [ -f "$SCRIPT_DIR/.env" ]; then
     echo "📄 Loading .env..."

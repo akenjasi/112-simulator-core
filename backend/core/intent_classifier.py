@@ -1,58 +1,86 @@
-import inspect
-import httpx
+import sys
+import logging
+import torch
+import os
+
+# Оптимизация для CPU сервера (избегаем thread contention)
+os.environ["OMP_NUM_THREADS"] = "1"
+torch.set_num_threads(1)
+
+from typing import Dict, Any
 from backend.schemas.bricks import Intent
 
+logger = logging.getLogger(__name__)
+
+# Add path to the custom classifier
+CLASSIFIER_PATH = "/home/orborus/Desktop/A_vibecoding/models/classifier"
+if CLASSIFIER_PATH not in sys.path:
+    sys.path.append(CLASSIFIER_PATH)
+
+from inference import IntentClassifier
+
+# Singleton initialization
+try:
+    classifier = IntentClassifier(model_path=CLASSIFIER_PATH)
+    logger.info("Local Rubert-Tiny2 IntentClassifier loaded successfully.")
+except Exception as e:
+    logger.error(f"Failed to load IntentClassifier: {e}")
+    classifier = None
+
+# Mapping from label_id to Intent enum
+LABEL_TO_INTENT = {
+    0: Intent.greeting,
+    1: Intent.address,
+    2: Intent.address_details,
+    3: Intent.situation,
+    4: Intent.victims,
+    5: Intent.caller_id,
+    6: Intent.phone,
+    7: Intent.repeat,
+    8: Intent.bureaucracy,
+    9: Intent.outro
+}
 
 async def classify_intent(operator_text: str) -> Intent:
     """
-    Асинхронный классификатор намерений оператора 112 через LLM API.
+    Асинхронная обертка для синхронного классификатора Rubert-Tiny2.
     """
-    prompt = (
-        f"Классифицируй интент реплики оператора службы 112: '{operator_text}'.\n"
-        "Возможные интенты (выбери ровно один):\n"
-        "- intro\n"
-        "- caller_id\n"
-        "- address\n"
-        "- situation\n"
-        "- victims\n"
-        "- outro\n\n"
-        "Верни ТОЛЬКО ОДНО слово на английском языке из списка выше."
-    )
-    url = "http://localhost:11434/v1/chat/completions"
-    payload = {
-        "model": "qwen2.5:7b",
-        "messages": [
-            {"role": "user", "content": prompt}
-        ],
-    }
-
-    try:
-        async with httpx.AsyncClient() as client:
-            response = await client.post(url, json=payload, timeout=60.0)
-            data = response.json()
-            if inspect.isawaitable(data):
-                data = await data
-            raw_content = data["choices"][0]["message"]["content"].strip().lower()
-            for intent in Intent:
-                if intent.value == raw_content:
-                    return intent
-            for intent in Intent:
-                if intent.value in raw_content:
-                    return intent
-            return Intent.situation
-    except (httpx.RequestError, ConnectionRefusedError, OSError):
-        # Резервный поиск по ключевым словам, если сервис LLM недоступен (например, в офлайн-тестах)
-        text = (operator_text or "").strip().lower()
-        if "адрес" in text or "где вы" in text:
-            return Intent.address
-        if "пострадавш" in text or "ранен" in text or "жертв" in text:
-            return Intent.victims
-        if "кто говорит" in text or "ваше имя" in text or "зовут" in text or "представьтесь" in text:
-            return Intent.caller_id
-        if "здравствуйте" in text or "добрый день" in text:
-            return Intent.intro
-        if "выезжаем" in text or "выехали" in text or "до свидания" in text:
-            return Intent.outro
-        if "случилось" in text or "произошло" in text:
-            return Intent.situation
+    if not classifier or not operator_text.strip():
         return Intent.situation
+        
+    try:
+        result = classifier.predict(operator_text)
+        label_id = result.get("label_id", 3)
+        confidence = result.get("confidence", 0.0)
+        
+        # Fallback логика при низкой уверенности модели
+        if confidence < 0.35:
+            logger.warning(f"Low confidence ({confidence}) for text: '{operator_text}'. Fallback to bureaucracy (8).")
+            label_id = 8
+            
+        return LABEL_TO_INTENT.get(label_id, Intent.situation)
+    except Exception as e:
+        logger.error(f"Error during classification: {e}")
+        return Intent.situation
+
+def classify_intent_sync(operator_text: str) -> str:
+    """
+    Синхронная функция классификации.
+    Возвращает строку-категорию (от "0" до "9"), как ожидает RuntimeRouter.
+    """
+    if not classifier or not operator_text.strip():
+        return "3"
+        
+    try:
+        result = classifier.predict(operator_text)
+        label_id = result.get("label_id", 3)
+        confidence = result.get("confidence", 0.0)
+        
+        if confidence < 0.35:
+            logger.warning(f"Low confidence ({confidence}) for text: '{operator_text}'. Fallback to bureaucracy (8).")
+            label_id = 8
+            
+        return str(label_id)
+    except Exception as e:
+        logger.error(f"Error during classification: {e}")
+        return "3"

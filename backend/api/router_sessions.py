@@ -128,7 +128,8 @@ async def post_session_message(
 
     from backend.core.runtime_router import RuntimeRouter
     router_instance = RuntimeRouter(session_id=session_id)
-    ai_result = router_instance.process_message(message=req.text, session_id=session_id)
+    import asyncio
+    ai_result = await asyncio.to_thread(router_instance.process_message, message=req.text, session_id=session_id)
 
     log.append(
         {

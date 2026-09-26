@@ -1,50 +1,152 @@
 """API router for Classifier Engine (EKP)."""
 
-from typing import List
+import logging
+from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, Query, status
+from pydantic import BaseModel
 from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.core.classifier_rules import calculate_recommended_services
-from backend.core.deps import require_role
 from backend.database import get_db
 from backend.models.domain_06 import ClassifierRecord
 from backend.schemas.classifier import (
     CalculateRequest,
-    CalculateResponse,
     ClassifierRecordResponse,
 )
 
-router = APIRouter(
+logger = logging.getLogger(__name__)
+
+classifier_router = APIRouter(
     prefix="/api/classifier",
     tags=["Classifier"],
-    dependencies=[Depends(require_role("ADMIN", "TEACHER"))],
 )
-classifier_router = router
+classifier_v1_router = APIRouter(
+    prefix="/api/v1/classifier",
+    tags=["Classifier v1"],
+)
+router = classifier_router
+
+DEFAULT_CATEGORIES: List[str] = [
+    "101",
+    "102",
+    "103",
+    "104",
+    "Аварии и происшествия в городском хозяйстве",
+    "Аварии и происшествия на транспортных объектах",
+    "Аварии на гидротехнических сооружениях",
+    "Аварии на опасных и производственных объектах",
+    "Взрывы",
+    "ДТП",
+    "Запах газа",
+    "Нарушение правопорядка",
+    "Обрушения",
+    "Оказание медицинской скорой и неотложной помощи",
+    "Опасные геологические, гидрологические и метеорологические явления",
+    "Пожары и задымления",
+    "Проблемы на дороге",
+    "Происшествия с участием животных",
+    "Прочие происшествия",
+    "Ребенок в опасности",
+    "Смертельный исход человека",
+    "Социальная помощь",
+    "Угрозы взрывов и террористических актов",
+    "Угрозы выброса опасных веществ",
+    "Угрозы обрушений",
+    "Человек в опасности",
+    "Экологические происшествия",
+    "Отмена вызова",
+    "Тестовый вызов",
+    "Передача дежурства",
+    "Консультация",
+    "Вызов на иностранном языке",
+    "Ошибочно набран номер",
+    "Справка-101",
+    "Справка-102",
+    "Справка-103",
+]
 
 
-@router.get("/categories", response_model=List[str])
-@router.get("/categories/", response_model=List[str], include_in_schema=False)
-async def get_categories(db: AsyncSession = Depends(get_db)) -> List[str]:
-    """Return distinct categories from classifier_records."""
-    stmt = (
-        select(ClassifierRecord.category)
-        .distinct()
-        .where(ClassifierRecord.category.is_not(None))
-        .order_by(ClassifierRecord.category)
-    )
-    result = await db.execute(stmt)
-    return [c for c in result.scalars().all() if c]
+def _resolve_base_services(
+    final_type: Optional[str] = None,
+    category: Optional[str] = None,
+    tags: Optional[List[str]] = None,
+) -> List[str]:
+    name = f"{final_type or ''} {category or ''}".lower()
+    tags_str = " ".join(tags or []).lower()
+    full_text = f"{name} {tags_str}".strip()
+
+    services: List[str] = []
+    if any(k in full_text for k in ["101", "пожар", "задымлен", "пламя", "взрыв", "гари"]):
+        services.append("Служба 101")
+    if any(k in full_text for k in ["103", "скор", "медицин", "пострадав", "травм"]):
+        services.append("Служба 103")
+    if any(k in full_text for k in ["104", "газ"]):
+        services.append("Служба 104")
+    if any(k in full_text for k in ["дтп", "дорог", "цодд"]):
+        services.append("ЦОДД")
+    if any(k in full_text for k in ["мост", "гормост", "тоннель"]):
+        services.append("Гормост")
+    if any(k in full_text for k in ["транспорт", "автобус", "трамвай", "мосгортранс"]):
+        services.append("Мосгортранс")
+    if any(k in full_text for k in ["метро", "мцк"]):
+        services.append("Метро")
+        if "Служба 101" not in services:
+            services.append("Служба 101")
+    if any(k in full_text for k in ["вода", "водоканал", "канализац"]):
+        services.append("Мосводоканал")
+    if any(k in full_text for k in ["жкх", "деп. жкх"]):
+        services.append("Деп. ЖКХ")
+    if any(k in full_text for k in ["социальн", "цса", "бездомн"]):
+        services.append("ГКУ ЦСА")
+    if any(k in full_text for k in ["животн", "ветеринар", "собак"]):
+        services.append("Комитет ветеринарии")
+
+    non_emergency_keywords = [
+        "отмена вызова",
+        "тестовый вызов",
+        "передача дежурства",
+        "консультация",
+        "вызов на иностранном языке",
+        "ошибочно набран номер",
+        "справка-101",
+        "справка-102",
+        "справка-103",
+    ]
+    if any(ne in full_text for ne in non_emergency_keywords):
+        return []
+
+    if not services:
+        if "102" in full_text or "полици" in full_text or "краж" in full_text or "драка" in full_text:
+            services.append("Служба 102")
+        else:
+            services.append("Служба 101")
+
+    return list(dict.fromkeys(services))
 
 
-@router.get("/search", response_model=List[ClassifierRecordResponse])
-@router.get("/search/", response_model=List[ClassifierRecordResponse], include_in_schema=False)
-async def search_classifier(
+async def _handle_get_categories(db: AsyncSession = Depends(get_db)) -> List[str]:
+    try:
+        stmt = (
+            select(ClassifierRecord.category)
+            .distinct()
+            .where(ClassifierRecord.category.is_not(None))
+            .order_by(ClassifierRecord.category)
+        )
+        result = await db.execute(stmt)
+        cats = [c for c in result.scalars().all() if c]
+        if cats:
+            return cats
+    except Exception as e:
+        logger.warning(f"Could not load categories from DB: {e}")
+    return DEFAULT_CATEGORIES
+
+
+async def _handle_search_classifier(
     q: str = Query(default="", description="Search query"),
     limit: int = Query(default=20, ge=1, le=100, description="Limit results"),
     db: AsyncSession = Depends(get_db),
 ) -> List[ClassifierRecord]:
-    """Search classifier records with ILIKE %q% over final_type and group."""
     query_str = (q or "").strip()
     if not query_str:
         return []
@@ -54,102 +156,228 @@ async def search_classifier(
         ClassifierRecord.final_type.ilike(pattern),
         ClassifierRecord.group.ilike(pattern),
     ]
-
-    # In SQLite, standard ILIKE uses lower(col) LIKE lower(?) which is ASCII-only.
-    # Adding case variants ensures case-insensitive search for Cyrillic on SQLite.
     for variant in {query_str.lower(), query_str.capitalize(), query_str.upper()}:
         var_pat = f"%{variant}%"
         conditions.append(ClassifierRecord.final_type.like(var_pat))
         conditions.append(ClassifierRecord.group.like(var_pat))
 
-    stmt = select(ClassifierRecord).where(or_(*conditions)).limit(limit)
-    result = await db.execute(stmt)
-    return result.scalars().all()
+    try:
+        stmt = select(ClassifierRecord).where(or_(*conditions)).limit(limit)
+        result = await db.execute(stmt)
+        return result.scalars().all()
+    except Exception as e:
+        logger.warning(f"Classifier search failed: {e}")
+        return []
 
 
-@router.post("/calculate", response_model=List[str])
-@router.post("/calculate/", response_model=List[str], include_in_schema=False)
-async def calculate_services(
+async def _handle_calculate_services(
     request: CalculateRequest,
     db: AsyncSession = Depends(get_db),
 ) -> List[str]:
-    """Calculate recommended emergency services for an incident situation."""
     record_id = request.get_record_id()
     record = None
 
     if record_id is not None:
-        stmt = select(ClassifierRecord).where(ClassifierRecord.id == record_id)
-        result = await db.execute(stmt)
-        record = result.scalar_one_or_none()
-    elif getattr(request, "final_type", None):
-        stmt = select(ClassifierRecord).where(
-            ClassifierRecord.final_type.ilike(request.final_type.strip())
-        )
-        result = await db.execute(stmt)
-        record = result.scalars().first()
+        try:
+            stmt = select(ClassifierRecord).where(ClassifierRecord.id == record_id)
+            result = await db.execute(stmt)
+            record = result.scalar_one_or_none()
+        except Exception as e:
+            logger.warning(f"Error fetching record {record_id}: {e}")
 
-    if not record:
-        target = record_id if record_id is not None else getattr(request, "final_type", None)
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Classifier record '{target}' not found",
+    if not record and (getattr(request, "final_type", None) or getattr(request, "category", None)):
+        target_name = (request.final_type or request.category or "").strip()
+        try:
+            stmt = select(ClassifierRecord).where(
+                or_(
+                    ClassifierRecord.final_type.ilike(f"%{target_name}%"),
+                    ClassifierRecord.category.ilike(f"%{target_name}%"),
+                    ClassifierRecord.group.ilike(f"%{target_name}%"),
+                )
+            )
+            result = await db.execute(stmt)
+            record = result.scalars().first()
+        except Exception as e:
+            logger.warning(f"Error searching record by name '{target_name}': {e}")
+
+    base_services = []
+    if record and record.base_services:
+        base_services = list(record.base_services)
+    else:
+        base_services = _resolve_base_services(
+            final_type=request.final_type,
+            category=request.category,
+            tags=request.tags,
         )
+
+    # Check tags for victims, blocked, fire
+    tags = request.tags or []
+    has_victims = request.has_victims or any(
+        "пострадав" in t.lower() or "медицин" in t.lower() for t in tags
+    )
+    is_blocked = request.is_blocked or any(
+        "заблокир" in t.lower() or "придавил" in t.lower() or "нет доступа" in t.lower()
+        for t in tags
+    )
+    is_fire = request.is_fire or any(
+        "пламя" in t.lower() or "дым" in t.lower() or "гари" in t.lower() for t in tags
+    )
 
     return calculate_recommended_services(
-        base_services=record.base_services or [],
-        has_victims=request.has_victims,
-        is_blocked=request.is_blocked,
-        is_fire=request.is_fire,
+        base_services=base_services,
+        has_victims=has_victims,
+        is_blocked=is_blocked,
+        is_fire=is_fire,
     )
 
 
-@router.get("/subcategories", response_model=List[str])
-async def get_subcategories(category: str, db: AsyncSession = Depends(get_db)):
-    stmt = select(ClassifierRecord.final_type).where(ClassifierRecord.category == category).distinct().order_by(ClassifierRecord.final_type)
-    res = await db.execute(stmt)
-    return [r for r in res.scalars().all() if r]
+async def _handle_get_subcategories(
+    category: str,
+    db: AsyncSession = Depends(get_db),
+) -> List[str]:
+    try:
+        stmt = (
+            select(ClassifierRecord.final_type)
+            .where(ClassifierRecord.category == category)
+            .distinct()
+            .order_by(ClassifierRecord.final_type)
+        )
+        res = await db.execute(stmt)
+        return [r for r in res.scalars().all() if r]
+    except Exception as e:
+        logger.warning(f"Error fetching subcategories: {e}")
+        return []
 
 
-@router.get("/services", response_model=List[str])
-async def get_services(db: AsyncSession = Depends(get_db)):
-    stmt = select(ClassifierRecord.base_services)
-    res = await db.execute(stmt)
-    all_services = set()
-    for row in res.scalars().all():
-        if row:
-            for s in row:
-                s_str = str(s).strip()
-                if not s_str: continue
-                lower_s = s_str.lower()
-                if "101" in lower_s: all_services.add("01 Пожарные")
-                elif "102" in lower_s: all_services.add("02 Полиция")
-                elif "103" in lower_s: all_services.add("03 Скорая")
-                elif "104" in lower_s: all_services.add("04 Газ")
-                else: all_services.add(s_str)
-    return sorted(list(all_services))
+async def _handle_get_services(db: AsyncSession = Depends(get_db)) -> List[str]:
+    try:
+        stmt = select(ClassifierRecord.base_services)
+        res = await db.execute(stmt)
+        all_services = set()
+        for row in res.scalars().all():
+            if row:
+                for s in row:
+                    s_str = str(s).strip()
+                    if not s_str:
+                        continue
+                    lower_s = s_str.lower()
+                    if "101" in lower_s:
+                        all_services.add("01 Пожарные")
+                    elif "102" in lower_s:
+                        all_services.add("02 Полиция")
+                    elif "103" in lower_s:
+                        all_services.add("03 Скорая")
+                    elif "104" in lower_s:
+                        all_services.add("04 Газ")
+                    else:
+                        all_services.add(s_str)
+        return sorted(list(all_services))
+    except Exception as e:
+        logger.warning(f"Error fetching services: {e}")
+        return ["01 Пожарные", "02 Полиция", "03 Скорая", "04 Газ", "ЦОДД", "Гормост"]
 
-from pydantic import BaseModel
+
 class ClassifierDetails(BaseModel):
     services: List[str]
 
-@router.get("/details", response_model=ClassifierDetails)
-async def get_classifier_details(category: str, subcategory: str, db: AsyncSession = Depends(get_db)):
-    stmt = select(ClassifierRecord.base_services).where(
-        ClassifierRecord.category == category,
-        ClassifierRecord.final_type == subcategory
-    ).limit(1)
-    res = await db.execute(stmt)
-    services_raw = res.scalar() or []
-    
-    all_services = set()
-    for s in services_raw:
-        s_str = str(s).strip()
-        if not s_str: continue
-        lower_s = s_str.lower()
-        if "101" in lower_s: all_services.add("01 Пожарные")
-        elif "102" in lower_s: all_services.add("02 Полиция")
-        elif "103" in lower_s: all_services.add("03 Скорая")
-        elif "104" in lower_s: all_services.add("04 Газ")
-        else: all_services.add(s_str)
-        
-    return ClassifierDetails(services=sorted(list(all_services)))
+
+async def _handle_get_details(
+    category: str,
+    subcategory: str,
+    db: AsyncSession = Depends(get_db),
+) -> ClassifierDetails:
+    try:
+        stmt = (
+            select(ClassifierRecord.base_services)
+            .where(
+                ClassifierRecord.category == category,
+                ClassifierRecord.final_type == subcategory,
+            )
+            .limit(1)
+        )
+        res = await db.execute(stmt)
+        services_raw = res.scalar() or []
+        all_services = set()
+        for s in services_raw:
+            s_str = str(s).strip()
+            if not s_str:
+                continue
+            lower_s = s_str.lower()
+            if "101" in lower_s:
+                all_services.add("01 Пожарные")
+            elif "102" in lower_s:
+                all_services.add("02 Полиция")
+            elif "103" in lower_s:
+                all_services.add("03 Скорая")
+            elif "104" in lower_s:
+                all_services.add("04 Газ")
+            else:
+                all_services.add(s_str)
+        if all_services:
+            return ClassifierDetails(services=sorted(list(all_services)))
+    except Exception as e:
+        logger.warning(f"Error fetching details: {e}")
+
+    fallback_base = _resolve_base_services(final_type=subcategory, category=category)
+    return ClassifierDetails(services=fallback_base)
+
+
+# Register routes on both routers (/api/classifier and /api/v1/classifier)
+for r in [classifier_router, classifier_v1_router]:
+    r.add_api_route(
+        "/categories",
+        _handle_get_categories,
+        methods=["GET"],
+        response_model=List[str],
+    )
+    r.add_api_route(
+        "/categories/",
+        _handle_get_categories,
+        methods=["GET"],
+        response_model=List[str],
+        include_in_schema=False,
+    )
+    r.add_api_route(
+        "/search",
+        _handle_search_classifier,
+        methods=["GET"],
+        response_model=List[ClassifierRecordResponse],
+    )
+    r.add_api_route(
+        "/search/",
+        _handle_search_classifier,
+        methods=["GET"],
+        response_model=List[ClassifierRecordResponse],
+        include_in_schema=False,
+    )
+    r.add_api_route(
+        "/calculate",
+        _handle_calculate_services,
+        methods=["POST"],
+        response_model=List[str],
+    )
+    r.add_api_route(
+        "/calculate/",
+        _handle_calculate_services,
+        methods=["POST"],
+        response_model=List[str],
+        include_in_schema=False,
+    )
+    r.add_api_route(
+        "/subcategories",
+        _handle_get_subcategories,
+        methods=["GET"],
+        response_model=List[str],
+    )
+    r.add_api_route(
+        "/services",
+        _handle_get_services,
+        methods=["GET"],
+        response_model=List[str],
+    )
+    r.add_api_route(
+        "/details",
+        _handle_get_details,
+        methods=["GET"],
+        response_model=ClassifierDetails,
+    )

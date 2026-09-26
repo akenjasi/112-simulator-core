@@ -1,12 +1,15 @@
 "use client"
 
 import { useState, useEffect, Suspense } from "react"
-import { useSearchParams } from "next/navigation"
+import { useSearchParams, useRouter } from "next/navigation"
 import Link from "next/link"
 import { OperatorTopBar } from "@/components/operator/top-bar"
 import { OperatorLeftPanel } from "@/components/operator/left-panel"
 import { OperatorRightPanel } from "@/components/operator/right-panel"
 import { OperatorBottomBar, type OperatorService } from "@/components/operator/bottom-bar"
+import { AddServiceModal } from "@/components/operator/AddServiceModal"
+import { matchCanonicalService, getServiceShortName, DEFAULT_SERVICES_LIST } from "@/components/operator/services-data"
+import { useTelephony } from "@/hooks/useTelephony"
 import {
   CheckCircle2,
   X,
@@ -34,11 +37,8 @@ type ModalType =
   | "hangup"
   | "call_records"
   | "sms_list"
-  | "msg"
   | "translate"
-  | "add_incident"
   | "add_service"
-  | "links"
   | "timer"
   | "alerts"
   | "chat"
@@ -46,31 +46,54 @@ type ModalType =
   | null
 
 function OperatorContent() {
+  const router = useRouter()
   const searchParams = useSearchParams()
   const sessionId = searchParams ? searchParams.get("session_id") : null
   const ticketId = searchParams ? searchParams.get("ticket_id") : null
 
-  // 1. Elapsed timer starting from 16s (matching reference photo 00:16)
-  const [elapsedSeconds, setElapsedSeconds] = useState(16)
+  // ТЗ 59: Задача 1 — Защита страницы (Route Guard)
+  useEffect(() => {
+    if (!sessionId || !ticketId) {
+      router.push("/student/lobby")
+    }
+  }, [sessionId, ticketId, router])
+
+  // ТЗ 62: VoIP / SIP телефония (Asterisk mock + WebSocket)
+  const telephony = useTelephony({
+    sessionId,
+    ticketId,
+    operatorExt: "1002",
+  })
+
+  // 1. Elapsed timer starting from 0s (ТЗ 57: was 16)
+  // ТЗ 62: стартует только при переходе в ANSWERED!
+  // ТЗ 58: stops when "save" modal is opened or when submitted
+  const [elapsedSeconds, setElapsedSeconds] = useState(0)
   const [isCallActive, setIsCallActive] = useState(true)
+  const [isSubmitting, setIsSubmitting] = useState(false)
+  const [isSubmitted, setIsSubmitted] = useState(false)
+
+  // 8. Modals state & Toast feedback
+  const [activeModal, setActiveModal] = useState<ModalType>(null)
+  const [toastMessage, setToastMessage] = useState<string | null>(null)
 
   useEffect(() => {
-    if (!isCallActive) return
+    if (telephony.callStatus !== "ANSWERED" || !isCallActive || activeModal === "save" || isSubmitted) return
     const timer = setInterval(() => {
       setElapsedSeconds((prev) => prev + 1)
     }, 1000)
     return () => clearInterval(timer)
-  }, [isCallActive])
+  }, [telephony.callStatus, isCallActive, activeModal, isSubmitted])
 
   // 2. Phone numbers in top slots
   const [aonPhone, setAonPhone] = useState("+7 (903) 123-45-67")
   const [providedPhone, setProvidedPhone] = useState("+7 ( )  - -")
   const [onSitePhone, setOnSitePhone] = useState("+7 ( )  - -")
 
-  // 3. Caller & Address State (Pre-filled matching the reference photo)
+  // 3. Caller & Address State (ТЗ 58: пустые ФИО и адрес, приблизительная геолокация до района)
   const [callerName, setCallerName] = useState("")
   const [callerStatus, setCallerStatus] = useState("")
-  const [fullAddressString, setFullAddressString] = useState("Россия, Москва, Ясный проезд, 10")
+  const [fullAddressString, setFullAddressString] = useState("")
   const [address, setAddress] = useState({
     country: "Россия",
     subject: "Москва",
@@ -78,8 +101,8 @@ function OperatorContent() {
     objectName: "",
     okrug: "СВАО",
     district: "Южное Медведково",
-    street: "Ясный проезд",
-    house: "10",
+    street: "",
+    house: "",
     building: "",
     structure: "",
     apartment: "",
@@ -101,46 +124,141 @@ function OperatorContent() {
     call_dropped: false,
   })
   const toggleTopStatus = (id: string) => {
-    setTopStatuses((prev) => ({ ...prev, [id]: !prev[id] }))
+    setTopStatuses((prev) => {
+      const nextVal = !prev[id]
+      if (nextVal) {
+        if (id === "victims") handleAutoAddServices(["103"])
+        if (id === "blocked") handleAutoAddServices(["101"])
+      }
+      return { ...prev, [id]: nextVal }
+    })
   }
 
-  // 6. Questionnaire Pills (Pre-set matching the reference photo: Дом, Открытое пламя, балкон)
-  const [selectedPills, setSelectedPills] = useState<Record<string, boolean>>({
-    where_Дом: true,
-    "fire_Открытое пламя": true,
-    house_flame_балкон: true,
-  })
+  // 6. Questionnaire Pills (Initially empty)
+  const [selectedPills, setSelectedPills] = useState<Record<string, boolean>>({})
   const togglePill = (id: string) => {
     setSelectedPills((prev) => ({ ...prev, [id]: !prev[id] }))
   }
 
-  // 7. Assigned Services (Matching reference photo)
-  const [services, setServices] = useState<OperatorService[]>([
-    { id: "102", name: "Служба 102", isGray: true },
-    { id: "101", name: "Служба 101", isGray: false },
-    { id: "omvd", name: "ОМВД", isGray: true },
-    { id: "codd", name: "ЦОДД", isGray: false },
-    { id: "mosbez", name: "Мос.Без.", isGray: false },
-    { id: "uprava", name: "Упр. Южное М...", isGray: false },
-  ])
+  // 6.1 ЕКП Классификатор (Агрегированная строка)
+  const [classifierAggregatedText, setClassifierAggregatedText] = useState("")
+
+  // 7. Assigned Services (Initially empty per TZ 55)
+  const [services, setServices] = useState<OperatorService[]>([])
 
   const handleRemoveService = (id: string) => {
     setServices((prev) => prev.filter((s) => s.id !== id))
   }
 
-  // 8. Modals state & Toast feedback
-  const [activeModal, setActiveModal] = useState<ModalType>(null)
-  const [toastMessage, setToastMessage] = useState<string | null>(null)
-
   const showToast = (msg: string) => {
     setToastMessage(msg)
     setTimeout(() => {
       setToastMessage((current) => (current === msg ? null : current))
-    }, 3000)
+    }, 4000)
   }
 
-  // Incident title tab
-  const [activeIncidentTitle, setActiveIncidentTitle] = useState("Происшествие 101")
+  // Incident title / type (Initially null per TZ 55)
+  const [activeIncidentTitle, setActiveIncidentTitle] = useState<string | null>(null)
+
+  // LocalStorage persistence (ТЗ 57: сохранение состояния при F5)
+  const storageKey = `operator_state_${ticketId || "demo"}`
+  const [isRestored, setIsRestored] = useState(false)
+
+  // 1. Restore state from localStorage on mount
+  useEffect(() => {
+    if (typeof window === "undefined") return
+    try {
+      const saved = localStorage.getItem(storageKey)
+      if (saved) {
+        const parsed = JSON.parse(saved)
+        if (parsed.callerName !== undefined) setCallerName(parsed.callerName)
+        if (parsed.callerStatus !== undefined) setCallerStatus(parsed.callerStatus)
+        if (parsed.fullAddressString !== undefined) setFullAddressString(parsed.fullAddressString)
+        if (parsed.address) setAddress((prev) => ({ ...prev, ...parsed.address }))
+        if (parsed.incidentDescription !== undefined) setIncidentDescription(parsed.incidentDescription)
+        if (Array.isArray(parsed.services)) setServices(parsed.services)
+        if (parsed.activeIncidentTitle !== undefined) setActiveIncidentTitle(parsed.activeIncidentTitle)
+        if (parsed.classifierAggregatedText !== undefined) setClassifierAggregatedText(parsed.classifierAggregatedText)
+        if (parsed.topStatuses) setTopStatuses(parsed.topStatuses)
+        if (parsed.selectedPills) setSelectedPills(parsed.selectedPills)
+        if (parsed.providedPhone !== undefined) setProvidedPhone(parsed.providedPhone)
+        if (parsed.onSitePhone !== undefined) setOnSitePhone(parsed.onSitePhone)
+        if (parsed.aonPhone !== undefined) setAonPhone(parsed.aonPhone)
+        if (typeof parsed.elapsedSeconds === "number") setElapsedSeconds(parsed.elapsedSeconds)
+        if (parsed.callStatus) {
+          telephony.setCallStatus(parsed.callStatus)
+        } else if (parsed.activeIncidentTitle || parsed.callerStatus || parsed.elapsedSeconds) {
+          telephony.setCallStatus("ANSWERED")
+        }
+      }
+    } catch (e) {
+      console.error("Failed to restore operator state from localStorage", e)
+    } finally {
+      setIsRestored(true)
+    }
+  }, [storageKey])
+
+  // ТЗ 62: Авто-старт вызова при новом билете (переход RINGING -> ANSWERED)
+  useEffect(() => {
+    if (!isRestored) return
+    if (!sessionId && !ticketId) return
+    if (telephony.callStatus === "IDLE") {
+      telephony.startCall()
+    }
+  }, [isRestored, sessionId, ticketId, telephony])
+
+  // 2. Persist state to localStorage on changes
+  useEffect(() => {
+    if (!isRestored || typeof window === "undefined") return
+    const stateToSave = {
+      callerName,
+      callerStatus,
+      fullAddressString,
+      address,
+      incidentDescription,
+      services,
+      activeIncidentTitle,
+      classifierAggregatedText,
+      topStatuses,
+      selectedPills,
+      providedPhone,
+      onSitePhone,
+      aonPhone,
+      elapsedSeconds,
+      callStatus: telephony.callStatus,
+    }
+    try {
+      localStorage.setItem(storageKey, JSON.stringify(stateToSave))
+    } catch (e) {
+      console.error("Failed to save operator state to localStorage", e)
+    }
+  }, [
+    isRestored,
+    storageKey,
+    callerName,
+    callerStatus,
+    fullAddressString,
+    address,
+    incidentDescription,
+    services,
+    activeIncidentTitle,
+    classifierAggregatedText,
+    topStatuses,
+    selectedPills,
+    providedPhone,
+    onSitePhone,
+    aonPhone,
+    elapsedSeconds,
+  ])
+
+  // Incident type selection and reset handler (ТЗ 57: очистка служб при сбросе типа происшествия)
+  const handleSelectIncidentType = (type: string | null) => {
+    setActiveIncidentTitle(type)
+    if (!type) {
+      setServices([])
+      setClassifierAggregatedText("")
+    }
+  }
 
   // Copy AON helpers
   const handleCopyAonToProvided = () => {
@@ -177,30 +295,201 @@ function OperatorContent() {
     }
   }
 
-  // Catalog of available emergency services to add
-  const availableServicesList: Array<{ name: string; isGray: boolean; desc: string }> = [
-    { name: "Служба 103 (Скорая)", isGray: false, desc: "Скорая медицинская помощь г. Москвы" },
-    { name: "Служба 104 (Мосгаз)", isGray: false, desc: "Аварийно-спасательная газовая служба" },
-    { name: "ГБУ «Гормост»", isGray: false, desc: "Инженерные сооружения, мосты, тоннели" },
-    { name: "АО «Мосводоканал»", isGray: false, desc: "Аварии систем водоснабжения и канализации" },
-    { name: "КП «Мосгортранс»", isGray: false, desc: "Диспетчерская служба наземного транспорта" },
-    { name: "Управа Южное Медведково", isGray: false, desc: "Районный отдел ЖКХ и благоустройства" },
-    { name: "ПСО №204 Метрополитена", isGray: false, desc: "Пожарно-спасательный отряд ГКУ ПСЦ" },
-    { name: "Служба 101 (МЧС)", isGray: false, desc: "Пожарно-спасательный гарнизон" },
-    { name: "Служба 102 (МВД)", isGray: true, desc: "Дежурная часть ГУ МВД" },
-  ]
+  // Auto-calculation handler (ТЗ 56 / 57): Automatically adds recommended services to card
+  const handleAutoAddServices = (recommendedNames: string[]) => {
+    if (!recommendedNames || recommendedNames.length === 0) return
+    setServices((prev) => {
+      const existingKeys = new Set(
+        prev.flatMap((s) => [
+          s.name.toLowerCase().trim(),
+          (s.shortName || "").toLowerCase().trim(),
+          getServiceShortName(s.name).toLowerCase().trim(),
+        ])
+      )
+      const toAdd: OperatorService[] = []
+      for (const rawName of recommendedNames) {
+        const canonical = matchCanonicalService(rawName)
+        // Ensure only recognized services from DEFAULT_SERVICES_LIST can be added as a service!
+        if (!canonical || !DEFAULT_SERVICES_LIST.includes(canonical)) {
+          continue
+        }
+        const short = getServiceShortName(canonical)
+        if (
+          !existingKeys.has(canonical.toLowerCase().trim()) &&
+          !existingKeys.has(short.toLowerCase().trim()) &&
+          !existingKeys.has(rawName.toLowerCase().trim())
+        ) {
+          toAdd.push({
+            id: `svc_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+            name: canonical,
+            shortName: short,
+            isGray: canonical.includes("102") || canonical.toLowerCase().includes("мвд"),
+          })
+          existingKeys.add(canonical.toLowerCase().trim())
+          existingKeys.add(short.toLowerCase().trim())
+        }
+      }
+      if (toAdd.length === 0) return prev
+      showToast(
+        `Авто-расчет: добавлены службы (${toAdd.map((s) => s.shortName || s.name).join(", ")})`
+      )
+      return [...prev, ...toAdd]
+    })
+  }
 
-  const handleAddPredefinedService = (name: string, isGray: boolean) => {
-    if (services.some((s) => s.name === name)) {
-      showToast(`Служба «${name}» уже добавлена`)
+  // Modal save handler (ТЗ 56): Updates services list from AddServiceModal
+  const handleSaveServicesFromModal = (selectedNames: string[]) => {
+    setServices((prev) => {
+      const kept = prev.filter((s) => {
+        const canonical = matchCanonicalService(s.name) || s.name
+        return selectedNames.includes(canonical) || selectedNames.includes(s.name)
+      })
+      const keptCanonicalNames = new Set(
+        kept.map((s) => matchCanonicalService(s.name) || s.name)
+      )
+      const added: OperatorService[] = selectedNames
+        .filter((name) => !keptCanonicalNames.has(name))
+        .map((name) => ({
+          id: `svc_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`,
+          name,
+          shortName: getServiceShortName(name),
+          isGray: name.includes("102") || name.toLowerCase().includes("мвд"),
+        }))
+      return [...kept, ...added]
+    })
+    showToast("Службы успешно обновлены")
+    setActiveModal(null)
+  }
+
+  // ТЗ 59: Задача 2 — Валидация перед сохранением (Не даем сдать пустую карточку!)
+  const handleOpenSaveModal = () => {
+    // 1. Выбран ли тип происшествия (activeIncidentTitle / incidentType)
+    const hasIncidentType = Boolean(activeIncidentTitle && activeIncidentTitle.trim())
+
+    // 2. Указан ли Адрес (хотя бы Улица или Округ/Район)
+    const hasStreet = Boolean(address.street && address.street.trim())
+    const hasDistrictOrOkrug = Boolean(
+      (address.district && address.district.trim()) ||
+      (address.okrug && address.okrug.trim())
+    )
+    const hasFullAddress = Boolean(fullAddressString && fullAddressString.trim())
+    const hasAddress = hasFullAddress || hasStreet || hasDistrictOrOkrug
+
+    // 3. Указан ли статус заявителя (callerStatus)
+    const hasCallerStatus = Boolean(callerStatus && callerStatus.trim())
+
+    if (!hasIncidentType || !hasAddress || !hasCallerStatus) {
+      showToast("Ошибка: Заполните обязательные поля (Тип происшествия, Адрес, Статус заявителя)")
       return
     }
-    setServices((prev) => [
-      ...prev,
-      { id: `svc_${Date.now()}_${Math.random().toString(36).substr(2, 4)}`, name, isGray },
-    ])
-    showToast(`Служба «${name}» успешно добавлена в карточку`)
+
+    setActiveModal("save")
+  }
+
+  const handleSubmitEvaluation = async () => {
+    setIsSubmitting(true)
+    setIsCallActive(false)
+    setIsSubmitted(true)
+
+    const fullAddress =
+      fullAddressString.trim() ||
+      [
+        address.country,
+        address.subject,
+        address.city,
+        address.okrug,
+        address.district,
+        address.street,
+        address.house ? `д. ${address.house}` : "",
+        address.building ? `к. ${address.building}` : "",
+        address.apartment ? `кв. ${address.apartment}` : "",
+      ]
+        .filter(Boolean)
+        .join(", ")
+
+    const assignedServiceNames = services.map((s) => {
+      const short = s.shortName || s.name
+      if (short.includes("101")) return "101"
+      if (short.includes("102")) return "102"
+      if (short.includes("103")) return "103"
+      if (short.includes("104")) return "104"
+      return short
+    })
+
+    const payload = {
+      ticket_id: ticketId || "demo-ticket",
+      caller_name: callerName || "Аноним",
+      caller_status: callerStatus || "очевидец",
+      address: fullAddress,
+      address_string: fullAddress,
+      incident_description: classifierAggregatedText || incidentDescription || "Описание не заполнено",
+      time_taken_seconds: elapsedSeconds,
+      assigned_services: assignedServiceNames,
+      is_refusal_03: topStatuses.refusal || false,
+    }
+
+    try {
+      let evalData: any = null
+
+      if (sessionId) {
+        let res = await fetch(`/api/v2/sessions/${sessionId}/evaluate`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        })
+
+        if (!res.ok) {
+          res = await fetch(`/api/v1/sessions/${sessionId}/evaluate`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload),
+          })
+        }
+
+        if (res.ok) {
+          evalData = await res.json()
+        }
+      }
+
+      // Cleanup local draft
+      try {
+        localStorage.removeItem(storageKey)
+      } catch (e) {
+        // ignore
+      }
+
+      const totalScore = evalData?.scores?.total ?? 100
+      const errorsList = evalData?.errors_list || []
+      const resultMessage = `Оценка: ${totalScore}/100 баллов! ${
+        errorsList.length > 0
+          ? `Замечания: ${errorsList.join("; ")}`
+          : "Все нормативы выполнены верно!"
+      }`
+
+      showToast(resultMessage)
+      setActiveModal(null)
+
+      setTimeout(() => {
+        router.push(sessionId ? "/student/lobby" : "/operator/journal")
+      }, 2000)
+    } catch (err) {
+      console.error("Evaluation error:", err)
+      showToast("Ошибка при отправке на сервер. Перенаправление...")
+      setActiveModal(null)
+      setTimeout(() => {
+        router.push(sessionId ? "/student/lobby" : "/operator/journal")
+      }, 2000)
+    } finally {
+      setIsSubmitting(false)
+    }
+  }
+
+  // ТЗ 62: Завершение вызова (POST /api/v2/telephony/hangup)
+  const handleHangup = async () => {
+    setIsCallActive(false)
     setActiveModal(null)
+    await telephony.hangupCall()
+    showToast("Вызов завершен оператором")
   }
 
   return (
@@ -244,9 +533,16 @@ function OperatorContent() {
         </div>
       )}
 
-      {/* Toast Notification */}
+      {/* Toast Notification (ТЗ 58: внизу экрана, чтобы не перекрывать АОН) */}
       {toastMessage && (
-        <div className="fixed top-14 left-1/2 -translate-x-1/2 z-50 bg-[#303335] text-white text-xs px-4 py-2 rounded shadow-lg border border-gray-600 animate-in fade-in slide-in-from-top-2 duration-200">
+        <div
+          role="alert"
+          className={`fixed bottom-20 right-8 z-50 text-white text-xs px-4 py-2.5 rounded shadow-2xl animate-in fade-in slide-in-from-bottom-2 duration-200 max-w-md ${
+            toastMessage.startsWith("Ошибка")
+              ? "bg-red-800 border border-red-500 font-medium"
+              : "bg-[#303335] border border-gray-600"
+          }`}
+        >
           {toastMessage}
         </div>
       )}
@@ -254,15 +550,15 @@ function OperatorContent() {
       {/* Top Bar (Telephony, Numbers, Incident Info, Timer) */}
       <OperatorTopBar
         elapsedSeconds={elapsedSeconds}
+        callStatus={telephony.callStatus}
         aonPhone={aonPhone}
         providedPhone={providedPhone}
         onSitePhone={onSitePhone}
         incidentNumber={ticketId ? `Билет #${ticketId.slice(0, 6)}` : "913126"}
         operatorInfo={sessionId ? `АРМ-7 (Курсант ${sessionId.slice(0, 4)})` : "АРМ-7 (Оператор 112)"}
-        onHangup={() => setActiveModal("hangup")}
+        onHangup={handleHangup}
         onCallRecords={() => setActiveModal("call_records")}
         onSmsList={() => setActiveModal("sms_list")}
-        onOpenMsg={() => setActiveModal("msg")}
         onAonInfo={() => showToast("АОН: Определитель номера сотового оператора (ПАО «МТС», Москва)")}
         onMapInfo={() => showToast("Геолокация БС: Москва, СВАО, Ясный проезд, вышка #4182")}
         onProviderInfo={() => showToast("Оператор связи: ПАО «МТС», коммутатор г. Москвы, СОРМ-3")}
@@ -271,7 +567,7 @@ function OperatorContent() {
       />
 
       {/* Main Two-Column Workstation Grid (50 / 50 Desktop Split) */}
-      <div className="flex-1 grid grid-cols-2 overflow-hidden" style={{ background: "#efefef" }}>
+      <div className="flex-1 min-h-0 grid grid-cols-2 overflow-hidden" style={{ background: "#efefef" }}>
         {/* Left Column: Caller Information & Structured Address */}
         <div className="h-full overflow-hidden" style={{ borderRight: "1px solid #c9ced1" }}>
           <OperatorLeftPanel
@@ -298,9 +594,11 @@ function OperatorContent() {
             toggleTopStatus={toggleTopStatus}
             onNoContact={handleNoContact}
             onCallDropped={handleCallDropped}
-            onAddIncidentType={() => setActiveModal("add_incident")}
-            onCloseIncident={() => setActiveModal("close")}
             activeIncidentTitle={activeIncidentTitle}
+            incidentType={activeIncidentTitle}
+            onSelectType={handleSelectIncidentType}
+            onAggregatedUpdate={(text) => setClassifierAggregatedText(text)}
+            onRecommendedServices={handleAutoAddServices}
           />
         </div>
       </div>
@@ -310,12 +608,9 @@ function OperatorContent() {
         services={services}
         onRemoveService={handleRemoveService}
         onAddService={() => setActiveModal("add_service")}
-        onSave={() => setActiveModal("save")}
-        onOpenLinks={() => setActiveModal("links")}
+        onSave={handleOpenSaveModal}
         onOpenTimer={() => setActiveModal("timer")}
         onOpenAlerts={() => setActiveModal("alerts")}
-        onOpenChat={() => setActiveModal("chat")}
-        onCloseCard={() => setActiveModal("close")}
       />
 
       {/* ==================== INTERACTIVE MODALS ==================== */}
@@ -328,12 +623,15 @@ function OperatorContent() {
               <div className="flex items-center gap-3">
                 <CheckCircle2 className="h-7 w-7 text-emerald-600 shrink-0" />
                 <div>
-                  <h3 className="text-base font-bold text-gray-900">Карточка происшествия #913126</h3>
+                  <h3 className="text-base font-bold text-gray-900">
+                    Карточка происшествия #{ticketId ? ticketId.slice(0, 6) : "913126"}
+                  </h3>
                   <p className="text-xs text-gray-500">Готова к сохранению и передаче в ДДС экстренных служб</p>
                 </div>
               </div>
               <button
                 type="button"
+                disabled={isSubmitting}
                 onClick={() => setActiveModal(null)}
                 className="text-gray-400 hover:text-gray-700 cursor-pointer p-1"
               >
@@ -342,30 +640,29 @@ function OperatorContent() {
             </div>
 
             <div className="text-xs text-gray-800 bg-gray-50 p-3.5 rounded border border-gray-200 flex flex-col gap-2">
-              <div><b>Адрес происшествия:</b> {fullAddressString || "Не указан"}</div>
+              <div><b>Адрес происшествия:</b> {fullAddressString || [address.country, address.subject, address.city, address.okrug, address.district, address.street, address.house ? `д. ${address.house}` : ""].filter(Boolean).join(", ") || "Не указан"}</div>
               <div><b>Заявитель:</b> {callerName || "Аноним"} ({callerStatus || "статус не выбран"})</div>
-              <div><b>Назначено служб ({services.length}):</b> {services.map((s) => s.name).join(", ")}</div>
-              <div><b>Выбранные признаки:</b> {Object.keys(selectedPills).filter((k) => selectedPills[k]).map((k) => k.replace(/^[a-z]+_/, "")).join(", ") || "не выбраны"}</div>
+              <div><b>Назначено служб ({services.length}):</b> {services.map((s) => s.shortName || s.name).join(", ") || "не назначены"}</div>
+              <div><b>Выбранные признаки:</b> {classifierAggregatedText || Object.keys(selectedPills).filter((k) => selectedPills[k]).map((k) => k.replace(/^[a-z]+_/, "")).join(", ") || "не выбраны"}</div>
               <div><b>Хронометраж приёма:</b> {Math.floor(elapsedSeconds / 60)} мин {elapsedSeconds % 60} сек (Норматив ≤ 90 сек: {elapsedSeconds <= 90 ? "✅ Соблюден" : "⚠️ Превышен"})</div>
             </div>
 
             <div className="flex items-center justify-end gap-2 pt-2">
               <button
                 type="button"
+                disabled={isSubmitting}
                 onClick={() => setActiveModal(null)}
-                className="px-4 py-2 border border-gray-300 text-gray-700 rounded text-xs font-semibold hover:bg-gray-100 cursor-pointer transition"
+                className="px-4 py-2 border border-gray-300 text-gray-700 rounded text-xs font-semibold hover:bg-gray-100 cursor-pointer transition disabled:opacity-50"
               >
                 Вернуться к редактированию
               </button>
               <button
                 type="button"
-                onClick={() => {
-                  setActiveModal(null)
-                  showToast("Карточка #913126 успешно передана в дежурные службы!")
-                }}
-                className="px-5 py-2 bg-[#d64e23] text-white rounded text-xs font-bold hover:brightness-110 cursor-pointer shadow transition"
+                disabled={isSubmitting}
+                onClick={handleSubmitEvaluation}
+                className="px-5 py-2 bg-[#d64e23] text-white rounded text-xs font-bold hover:brightness-110 cursor-pointer shadow transition disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1.5"
               >
-                Передать в службы
+                {isSubmitting ? "Отправка..." : "Передать в службы"}
               </button>
             </div>
           </div>
@@ -393,11 +690,7 @@ function OperatorContent() {
               </button>
               <button
                 type="button"
-                onClick={() => {
-                  setIsCallActive(false)
-                  setActiveModal(null)
-                  showToast("Вызов завершен оператором")
-                }}
+                onClick={handleHangup}
                 className="px-4 py-1.5 bg-red-600 text-white rounded text-xs font-bold hover:bg-red-700 cursor-pointer"
               >
                 Положить трубку
@@ -467,53 +760,7 @@ function OperatorContent() {
         </div>
       )}
 
-      {/* 5. Modal: Send Service SMS / Message */}
-      {activeModal === "msg" && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
-          <div className="bg-white rounded shadow-2xl p-6 max-w-md w-full flex flex-col gap-4 border border-gray-300">
-            <div className="flex items-center justify-between border-b pb-2">
-              <h3 className="text-sm font-bold text-gray-900">Служебное SMS заявителю</h3>
-              <button type="button" onClick={() => setActiveModal(null)} className="text-gray-400 hover:text-gray-700 p-1">
-                <X size={18} />
-              </button>
-            </div>
-            <div className="flex flex-col gap-2 text-xs">
-              <label className="text-gray-600">Номер абонента:</label>
-              <input
-                type="text"
-                value={aonPhone}
-                readOnly
-                className="p-2 bg-gray-100 border rounded font-mono text-gray-800"
-              />
-              <label className="text-gray-600 mt-1">Текст сообщения:</label>
-              <textarea
-                defaultValue="Служба-112 Москвы приняла ваш вызов. Экстренные службы направлены на Ясный проезд, 10. Оставайтесь в безопасном месте."
-                rows={3}
-                className="p-2 border rounded text-xs outline-none focus:border-blue-500"
-              />
-            </div>
-            <div className="flex justify-end gap-2 pt-1">
-              <button
-                type="button"
-                onClick={() => setActiveModal(null)}
-                className="px-3 py-1.5 border text-gray-700 rounded text-xs hover:bg-gray-50 cursor-pointer"
-              >
-                Отмена
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setActiveModal(null)
-                  showToast("SMS успешно отправлено абоненту")
-                }}
-                className="px-4 py-1.5 bg-[#157dbd] text-white rounded text-xs font-bold hover:bg-[#126fa8] cursor-pointer"
-              >
-                Отправить SMS
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
+
 
       {/* 6. Modal: Inter-language & Sign Translation Service */}
       {activeModal === "translate" && (
@@ -552,102 +799,16 @@ function OperatorContent() {
         </div>
       )}
 
-      {/* 7. Modal: Add Incident Type Classifier (ЕКП) */}
-      {activeModal === "add_incident" && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
-          <div className="bg-white rounded shadow-2xl p-6 max-w-md w-full flex flex-col gap-4 border border-gray-300">
-            <div className="flex items-center justify-between border-b pb-2">
-              <h3 className="text-sm font-bold text-gray-900">Добавить категорию происшествия (ЕКП)</h3>
-              <button type="button" onClick={() => setActiveModal(null)} className="text-gray-400 hover:text-gray-700 p-1">
-                <X size={18} />
-              </button>
-            </div>
-            <div className="flex flex-col gap-2 text-xs max-h-72 overflow-y-auto">
-              {[
-                { title: "Происшествие 101", desc: "Пожары, задымления, возгорания, ЧС", icon: Flame },
-                { title: "Происшествие 102", desc: "Охрана правопорядка, драка, кража, ДТП", icon: Shield },
-                { title: "Происшествие 103", desc: "Угроза жизни, травмы, скорая помощь", icon: Stethoscope },
-                { title: "Происшествие 104", desc: "Запах газа, утечка, аварии на сетях Мосгаз", icon: Wrench },
-                { title: "Происшествие ЦОДД", desc: "Светофоры, заторы, падение деревьев на ПЧ", icon: Truck },
-              ].map((item) => (
-                <button
-                  key={item.title}
-                  type="button"
-                  onClick={() => {
-                    setActiveIncidentTitle(item.title)
-                    setActiveModal(null)
-                    showToast(`Выбрана категория: ${item.title}`)
-                  }}
-                  className="flex items-center gap-3 p-3 border rounded hover:border-blue-500 hover:bg-blue-50 transition cursor-pointer text-left"
-                >
-                  <item.icon size={22} className="text-blue-600 shrink-0" />
-                  <div>
-                    <div className="font-bold text-gray-900">{item.title}</div>
-                    <div className="text-gray-500 text-[11px]">{item.desc}</div>
-                  </div>
-                </button>
-              ))}
-            </div>
-          </div>
-        </div>
-      )}
 
-      {/* 8. Modal: Add Emergency Service */}
-      {activeModal === "add_service" && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
-          <div className="bg-white rounded shadow-2xl p-6 max-w-lg w-full flex flex-col gap-4 border border-gray-300">
-            <div className="flex items-center justify-between border-b pb-2">
-              <div className="flex items-center gap-2">
-                <Plus size={18} className="text-[#ec653b]" />
-                <h3 className="text-sm font-bold text-gray-900">Назначить службу экстренного реагирования</h3>
-              </div>
-              <button type="button" onClick={() => setActiveModal(null)} className="text-gray-400 hover:text-gray-700 p-1">
-                <X size={18} />
-              </button>
-            </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-2 max-h-72 overflow-y-auto text-xs">
-              {availableServicesList.map((svc) => (
-                <button
-                  key={svc.name}
-                  type="button"
-                  onClick={() => handleAddPredefinedService(svc.name, svc.isGray)}
-                  className="p-2.5 border rounded text-left hover:border-[#ec653b] hover:bg-orange-50 transition cursor-pointer flex flex-col justify-between gap-1"
-                >
-                  <div className="font-bold text-gray-900">{svc.name}</div>
-                  <div className="text-[11px] text-gray-500">{svc.desc}</div>
-                </button>
-              ))}
-            </div>
-          </div>
-        </div>
-      )}
+      {/* 8. Modal: Add Emergency Service (ТЗ 56) */}
+      <AddServiceModal
+        isOpen={activeModal === "add_service"}
+        onClose={() => setActiveModal(null)}
+        currentServices={services}
+        onSave={handleSaveServicesFromModal}
+      />
 
-      {/* 9. Modal: Links and Incident Duplicates */}
-      {activeModal === "links" && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
-          <div className="bg-white rounded shadow-2xl p-6 max-w-md w-full flex flex-col gap-4 border border-gray-300">
-            <div className="flex items-center justify-between border-b pb-2">
-              <div className="flex items-center gap-2">
-                <Link2 size={18} className="text-blue-600" />
-                <h3 className="text-sm font-bold text-gray-900">Связанные карточки и дубли</h3>
-              </div>
-              <button type="button" onClick={() => setActiveModal(null)} className="text-gray-400 hover:text-gray-700 p-1">
-                <X size={18} />
-              </button>
-            </div>
-            <div className="text-xs text-gray-700 space-y-2">
-              <div className="p-3 bg-blue-50 border border-blue-200 rounded">
-                <div className="font-bold text-blue-950">Дубликат найден: Карточка #913120</div>
-                <div className="text-blue-800 text-[11px] mt-0.5">09:01:14 — Звонок от жильца с 5 этажа (Ясный пр. 10)</div>
-                <div className="text-blue-700 text-[11px] mt-1 font-medium">Статус в ДДС 101: «В пути (АЦ-3.2)»</div>
-              </div>
-              <p className="text-[11px] text-gray-500">
-                Карточка автоматически связана с основным инцидентом для предотвращения повторной высылки избыточных сил.
-              </p>
-            </div>
-          </div>
-        </div>
-      )}
+
 
       {/* 10. Modal: Call Timeline (Хронометраж) */}
       {activeModal === "timer" && (

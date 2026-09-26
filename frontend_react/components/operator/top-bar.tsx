@@ -13,15 +13,15 @@ function PhoneGlyph() {
   )
 }
 
-function MsgBox({ onClick }: { onClick?: () => void }) {
+function MsgBox() {
   return (
     <button
       type="button"
-      onClick={onClick}
-      className="flex items-center justify-center transition-colors hover:bg-gray-100 cursor-pointer active:scale-95"
+      disabled
+      className="flex items-center justify-center cursor-not-allowed opacity-50"
       style={{ width: 26, height: 22, border: `1px solid ${border}`, background: "#fbfdfe" }}
       aria-label="Сообщение"
-      title="Отправить служебное сообщение / SMS"
+      title="Недоступно в тренажере. Функция служит для отправки SMS заявителю"
     >
       <MessageSquare size={13} color={slate} />
     </button>
@@ -44,6 +44,7 @@ function AonBox({ onClick }: { onClick?: () => void }) {
 
 type Props = {
   elapsedSeconds: number
+  callStatus?: "IDLE" | "RINGING" | "ANSWERED" | "HANGUP"
   aonPhone?: string
   providedPhone?: string
   onSitePhone?: string
@@ -61,7 +62,8 @@ type Props = {
 }
 
 export function OperatorTopBar({
-  elapsedSeconds = 16,
+  elapsedSeconds = 0,
+  callStatus = "ANSWERED",
   aonPhone = "+7 ( )  - -",
   providedPhone = "+7 ( )  - -",
   onSitePhone = "+7 ( )  - -",
@@ -83,27 +85,44 @@ export function OperatorTopBar({
 
   return (
     <div className="flex items-stretch select-none shrink-0" style={{ background: "#fbfdfe", borderBottom: `1px solid ${border}`, height: 56 }}>
-      {/* 1. Hang up / Телефонная трубка отбоя */}
+      {/* 1. Hang up / Красная кнопка отбоя (Положить трубку) */}
       <div className="flex items-center justify-center px-4" style={{ minWidth: 64 }}>
         <button
           type="button"
           aria-label="Положить трубку"
-          className="hover:opacity-75 transition-opacity cursor-pointer p-1 rounded active:scale-95"
+          className="hover:opacity-85 transition-all cursor-pointer p-1.5 rounded active:scale-95 text-red-600 hover:bg-red-50"
           onClick={onHangup}
-          title="Завершить вызов"
+          title="Положить трубку"
         >
-          <PhoneOff size={28} color={slate} strokeWidth={1.5} />
+          <PhoneOff size={28} className="text-red-600" strokeWidth={1.8} />
         </button>
       </div>
 
-      {/* 2. Не подключен + системные кнопки */}
+      {/* 2. Статус соединения / АТС + системные кнопки */}
       <div
         className="flex flex-col justify-center gap-1 px-3 py-1.5"
         style={{ borderLeft: `1px solid ${border}`, minWidth: 230 }}
       >
-        <span className="text-[12px] leading-tight font-medium" style={{ color: slate }}>
-          не подключен
-        </span>
+        {callStatus === "RINGING" ? (
+          <span className="text-[12px] leading-tight font-bold text-amber-600 animate-pulse flex items-center gap-1.5">
+            <span className="h-2 w-2 rounded-full bg-amber-500 animate-ping" />
+            Входящий звонок (гудки...)
+          </span>
+        ) : callStatus === "ANSWERED" ? (
+          <span className="text-[12px] leading-tight font-medium text-emerald-700 flex items-center gap-1.5">
+            <span className="h-2 w-2 rounded-full bg-emerald-500" />
+            В эфире (линия занята)
+          </span>
+        ) : callStatus === "HANGUP" ? (
+          <span className="text-[12px] leading-tight font-medium text-gray-500 flex items-center gap-1.5">
+            <span className="h-2 w-2 rounded-full bg-gray-400" />
+            Вызов завершён
+          </span>
+        ) : (
+          <span className="text-[12px] leading-tight font-medium" style={{ color: slate }}>
+            не подключен
+          </span>
+        )}
         <div className="flex items-center gap-2">
           <button
             type="button"

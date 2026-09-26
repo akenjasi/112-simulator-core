@@ -28,7 +28,7 @@ from backend.api.router_assignments import assignments_router
 from backend.api.router_audit import audit_router
 from backend.api.router_auth import auth_router
 from backend.api.router_call import router_call
-from backend.api.router_classifier import classifier_router
+from backend.api.router_classifier import classifier_router, classifier_v1_router
 from backend.api.router_dds import router_dds
 from backend.api.router_scenario import router as scenario_router
 from backend.api.router_groups import (
@@ -50,6 +50,8 @@ from backend.api.router_admin import admin_router
 from backend.api.router_generator import router as generator_router
 from backend.api.router_tickets import tickets_router, api_tickets_router
 from backend.api.router_knowledge import knowledge_router
+from backend.api.router_asr import router_asr
+from backend.api.router_telephony import router_telephony
 from backend.core.audit_middleware import AuditMiddleware
 
 
@@ -129,6 +131,7 @@ app.include_router(lessons_router)
 app.include_router(router_call)
 app.include_router(router_dds)
 app.include_router(classifier_router)
+app.include_router(classifier_v1_router)
 app.include_router(reports_router)
 app.include_router(analytics_router)
 app.include_router(analytics_v1_router)
@@ -138,6 +141,8 @@ app.include_router(generator_router)
 app.include_router(tickets_router)
 app.include_router(api_tickets_router)
 app.include_router(knowledge_router)
+app.include_router(router_asr)
+app.include_router(router_telephony)
 
 
 

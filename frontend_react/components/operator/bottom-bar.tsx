@@ -7,6 +7,7 @@ const orange = "#ec653b"
 export type OperatorService = {
   id: string
   name: string
+  shortName?: string
   isGray?: boolean
 }
 
@@ -60,7 +61,7 @@ function ServiceTab({
         </button>
       </div>
       <span className="text-[12px] 2xl:text-[13px] font-semibold text-white truncate leading-snug mt-0.5">
-        {service.name}
+        {service.shortName || service.name}
       </span>
     </div>
   )
@@ -161,21 +162,42 @@ export function OperatorBottomBar({
 
       {/* 5. Системные иконки */}
       <div className="flex items-center gap-1.5 shrink-0">
-        <ActionIconBtn title="Связи и дубли происшествия" onClick={onOpenLinks}>
+        <button
+          type="button"
+          disabled
+          className="flex items-center justify-center text-white cursor-not-allowed opacity-50 rounded-[1px] shrink-0"
+          style={{ width: 40, height: 40, border: "1px solid rgba(255,255,255,0.75)" }}
+          title="Недоступно в тренажере. Функция служит для поиска и связывания дубликатов карточек"
+          aria-label="Связи и дубли происшествия"
+        >
           <Link2 size={17} />
-        </ActionIconBtn>
+        </button>
         <ActionIconBtn title="Хронометраж и таймер этапов вызова" onClick={onOpenTimer}>
           <Timer size={17} />
         </ActionIconBtn>
         <ActionIconBtn title="Оперативные оповещения дежурного" onClick={onOpenAlerts}>
           <Bell size={17} />
         </ActionIconBtn>
-        <ActionIconBtn title="Служебный чат смены" onClick={onOpenChat}>
+        <button
+          type="button"
+          disabled
+          className="flex items-center justify-center text-white cursor-not-allowed opacity-50 rounded-[1px] shrink-0"
+          style={{ width: 40, height: 40, border: "1px solid rgba(255,255,255,0.75)" }}
+          title="Недоступно в тренажере. В реальности используется для связи со старшим смены."
+          aria-label="Служебный чат смены"
+        >
           <MessageSquare size={17} />
-        </ActionIconBtn>
-        <ActionIconBtn title="Закрыть карточку происшествия" onClick={onCloseCard}>
+        </button>
+        <button
+          type="button"
+          disabled
+          className="flex items-center justify-center text-white cursor-not-allowed opacity-50 rounded-[1px] shrink-0"
+          style={{ width: 40, height: 40, border: "1px solid rgba(255,255,255,0.75)" }}
+          title="В учебном режиме вызов должен быть отработан до конца. Воспользуйтесь кнопкой 'Сохранить'"
+          aria-label="Закрыть карточку вызова"
+        >
           <X size={17} />
-        </ActionIconBtn>
+        </button>
       </div>
     </div>
   )

@@ -1,6 +1,6 @@
 from datetime import datetime
 from typing import Any, Dict, List, Optional
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 
 class TicketEvaluationRequest(BaseModel):
@@ -48,10 +48,20 @@ class IncidentCardSubmit(BaseModel):
     time_taken_seconds: int
     caller_name: str
     caller_status: str
-    address_string: str
+    address_string: Optional[str] = ""
+    address: Optional[str] = None
     incident_description: str
     assigned_services: List[str]
     is_refusal_03: bool = False
+
+    @model_validator(mode="before")
+    @classmethod
+    def reconcile_address(cls, data: Any) -> Any:
+        if isinstance(data, dict):
+            addr = data.get("address_string") or data.get("address") or ""
+            data["address_string"] = addr
+            data["address"] = addr
+        return data
 
 
 class EvaluationResultResponse(BaseModel):

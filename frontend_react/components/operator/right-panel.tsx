@@ -1,6 +1,7 @@
 "use client"
 
 import { X } from "lucide-react"
+import { IncidentClassifier } from "./IncidentClassifier"
 
 const border = "#c9ced1"
 const slate = "#49555d"
@@ -51,15 +52,19 @@ function QuestionnaireRow({ label, children }: { label: string; children: React.
 }
 
 type Props = {
-  selectedPills: Record<string, boolean>
-  togglePill: (id: string) => void
+  selectedPills?: Record<string, boolean>
+  togglePill?: (id: string) => void
   topStatuses: Record<string, boolean>
   toggleTopStatus: (id: string) => void
   onNoContact?: () => void
   onCallDropped?: () => void
   onAddIncidentType?: () => void
   onCloseIncident?: () => void
-  activeIncidentTitle?: string
+  activeIncidentTitle?: string | null
+  incidentType?: string | null
+  onSelectType?: (type: string | null) => void
+  onAggregatedUpdate?: (text: string) => void
+  onRecommendedServices?: (services: string[]) => void
 }
 
 export function OperatorRightPanel({
@@ -71,8 +76,14 @@ export function OperatorRightPanel({
   onCallDropped,
   onAddIncidentType,
   onCloseIncident,
-  activeIncidentTitle = "Происшествие 101",
+  activeIncidentTitle = null,
+  incidentType = null,
+  onSelectType,
+  onAggregatedUpdate,
+  onRecommendedServices,
 }: Props) {
+  const currentIncidentType = incidentType ?? activeIncidentTitle ?? null
+
   return (
     <div className="flex flex-col gap-2.5 p-3 overflow-y-auto h-full" style={{ background: "#fff" }}>
       {/* 1. Верхние кнопки быстрого реагирования */}
@@ -135,142 +146,14 @@ export function OperatorRightPanel({
         </div>
       </div>
 
-      {/* 2. Полоса «добавить тип происшествия» */}
-      <button
-        type="button"
-        onClick={onAddIncidentType}
-        className="px-3 py-2 text-[15px] font-normal text-left transition-colors hover:bg-[#e4e7e9] active:bg-[#d8dcde] cursor-pointer rounded-[1px]"
-        style={{ background: "#efefef", color: muted, border: `1px dashed ${border}` }}
-        title="Добавить категорию происшествия из ЕКП"
-      >
-        + добавить тип происшествия
-      </button>
-
-      {/* 3. Вкладка классификатора происшествия */}
-      <div>
-        <button
-          type="button"
-          className="text-[13px] font-semibold rounded-t-[1px]"
-          style={{ padding: "6px 16px", border: `1px solid ${border}`, borderBottom: "none", background: "#fbfdfe", color: slate }}
-        >
-          {activeIncidentTitle}
-        </button>
-      </div>
-
-      {/* 4. Карточка опросника происшествия 101 */}
-      <div style={{ border: `1px solid ${border}` }} className="flex-1 flex flex-col min-h-0">
-        <div
-          className="flex items-center justify-between px-3.5 py-1.5 select-none"
-          style={{ background: "#303335" }}
-        >
-          <span className="text-[14px] font-bold text-white underline decoration-white/60 underline-offset-4">
-            {activeIncidentTitle}
-          </span>
-          <button
-            type="button"
-            onClick={onCloseIncident}
-            className="text-white/80 hover:text-white transition-colors cursor-pointer p-0.5 rounded hover:bg-white/10"
-            title="Закрыть блок"
-            aria-label="Закрыть блок"
-          >
-            <X size={18} />
-          </button>
-        </div>
-
-        <div className="px-3.5 divide-y overflow-y-auto flex-1" style={{ borderColor: border }}>
-          {/* Группа «Где» */}
-          <QuestionnaireRow label="Где">
-            {["Улица", "Транспорт", "Дом", "Здание/объект", "Опасный объект"].map((item) => (
-              <Pill
-                key={item}
-                active={selectedPills[`where_${item}`]}
-                onClick={() => togglePill(`where_${item}`)}
-              >
-                {item}
-              </Pill>
-            ))}
-          </QuestionnaireRow>
-
-          {/* Группа «Признак пожара (дом)» */}
-          <QuestionnaireRow label="Признак пожара (дом)">
-            {["Дым", "Открытое пламя", "Запах гари"].map((item) => (
-              <Pill
-                key={item}
-                active={selectedPills[`fire_${item}`]}
-                onClick={() => togglePill(`fire_${item}`)}
-              >
-                {item}
-              </Pill>
-            ))}
-            <div className="w-full h-0" />
-            <Pill
-              active={selectedPills["fire_alarm"]}
-              onClick={() => togglePill("fire_alarm")}
-            >
-              Сработала пожарная сигнализация
-            </Pill>
-          </QuestionnaireRow>
-
-          {/* Группа «Доступ» */}
-          <QuestionnaireRow label="Доступ">
-            <Pill
-              active={selectedPills["access_no"]}
-              onClick={() => togglePill("access_no")}
-            >
-              Нет доступа
-            </Pill>
-          </QuestionnaireRow>
-
-          {/* Группа «Дом (пламя)» */}
-          <QuestionnaireRow label="Дом (пламя)">
-            {["квартира", "балкон", "газовая колонка", "газовая плита", "лифт"].map((item) => (
-              <Pill
-                key={item}
-                active={selectedPills[`house_flame_${item}`]}
-                onClick={() => togglePill(`house_flame_${item}`)}
-              >
-                {item}
-              </Pill>
-            ))}
-            <div className="w-full h-0" />
-            {["мусоропровод", "подъезд", "счетчик электричества", "частный дом"].map((item) => (
-              <Pill
-                key={item}
-                active={selectedPills[`house_flame_${item}`]}
-                onClick={() => togglePill(`house_flame_${item}`)}
-              >
-                {item}
-              </Pill>
-            ))}
-            <div className="w-full h-0" />
-            {["электрическая проводка", "электрощит", "лестничная клетка"].map((item) => (
-              <Pill
-                key={item}
-                active={selectedPills[`house_flame_${item}`]}
-                onClick={() => togglePill(`house_flame_${item}`)}
-              >
-                {item}
-              </Pill>
-            ))}
-            <div className="w-full h-0" />
-            {["подвал", "дача", "сарай/бытовка/хоз. постройка"].map((item) => (
-              <Pill
-                key={item}
-                active={selectedPills[`house_flame_${item}`]}
-                onClick={() => togglePill(`house_flame_${item}`)}
-              >
-                {item}
-              </Pill>
-            ))}
-            <div className="w-full h-0" />
-            <Pill
-              active={selectedPills["house_flame_other"]}
-              onClick={() => togglePill("house_flame_other")}
-            >
-              прочие внутридомовые объекты
-            </Pill>
-          </QuestionnaireRow>
-        </div>
+      {/* 2. Карточка классификатора происшествия (Inline выбор и опросник) */}
+      <div style={{ border: `1px solid ${border}` }} className="flex-1 flex flex-col min-h-0 p-3 bg-white overflow-y-auto">
+        <IncidentClassifier
+          incidentType={currentIncidentType}
+          onSelectType={onSelectType}
+          onAggregatedUpdate={onAggregatedUpdate || (() => {})}
+          onRecommendedServices={onRecommendedServices}
+        />
       </div>
     </div>
   )

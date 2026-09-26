@@ -4,56 +4,17 @@ import json
 import time
 import logging
 from typing import Dict, Any, List, Optional, Tuple, Set
+from backend.core.intent_classifier import classify_intent_sync
 
 logger = logging.getLogger(__name__)
 
-try:
-    from llama_cpp import Llama
-except ImportError:
-    class Llama:  # type: ignore
-        def __init__(self, *args, **kwargs):
-            raise RuntimeError("llama_cpp is not installed")
 
 
-class MockLlamaFallback:
-    """Fallback mock when Llama model initialization fails."""
-    def create_completion(self, prompt: str = "", max_tokens: int = 1, temperature: float = 0.0, **kwargs) -> Dict[str, Any]:
-        return {"choices": [{"text": "7"}]}
 
 
-SYSTEM_PROMPT = """<|im_start|>system
-Ты — классификатор намерений (intent classifier). Классифицируй реплику оператора 112 строго одной цифрой от 0 до 9.
-0 - Установление контакта (да, это 112, слушаю, говорите)
-1 - Запрос улицы, дома, города
-2 - Запрос квартиры, подъезда, этажа
-3 - Запрос о том, что случилось (детали ситуации)
-4 - Запрос о пострадавших (есть ли раненые)
-5 - Запрос ФИО заявителя (как вас зовут)
-6 - Запрос телефона заявителя (ваш номер)
-7 - Переспрашивание, плохая связь (повторите, не слышу)
-8 - Бюрократия (лишние вопросы)
-9 - Завершение (службы выехали, до свидания)
-<|im_end|>
-<|im_start|>user
-да, это 112, что случилось?<|im_end|>
-<|im_start|>assistant
-<think>\n</think>\n0<|im_end|>
-<|im_start|>user
-это оператор 112<|im_end|>
-<|im_start|>assistant
-<think>\n</think>\n0<|im_end|>
-<|im_start|>user
-Где вы находитесь? Назовите адрес.<|im_end|>
-<|im_start|>assistant
-<think>\n</think>\n1<|im_end|>
-<|im_start|>user
-Что именно у вас произошло?<|im_end|>
-<|im_start|>assistant
-<think>\n</think>\n3<|im_end|>
-<|im_start|>user
-{operator_message}<|im_end|>
-<|im_start|>assistant
-<think>\n</think>\n"""
+# SYSTEM_PROMPT removed — intent classification is now handled by the local
+# fine-tuned rubert-tiny2 ML classifier via classify_intent_sync().
+
 
 INTENT_KEYS = {
     "0": "greeting",
@@ -103,20 +64,6 @@ class V2ApplicantSession:
         self.bricks_data: Dict[str, Any] = self._load_bricks_data()
         self._enrich_from_bricks_metadata()
 
-        # Initialize Llama model
-        try:
-            base_dir = os.path.dirname(os.path.abspath(__file__))
-            model_path = os.environ.get("LLM_MODEL_PATH", "models/Qwen3.5-0.8B-Q8_0.gguf")
-            full_model_path = os.path.join(base_dir, "..", "..", model_path)
-            full_model_path = os.path.normpath(full_model_path)
-            self.llm = Llama(
-                model_path=full_model_path,
-                n_ctx=2048,
-                verbose=False,
-            )
-        except Exception as e:
-            logger.warning(f"Llama initialization failed ({e}), using graceful mock returning '7'")
-            self.llm = MockLlamaFallback()
 
     def _load_bricks_data(self) -> Dict[str, Any]:
         """Locates and loads bricks JSON matrix for the current ticket."""
@@ -225,24 +172,8 @@ class V2ApplicantSession:
         ]
 
     def _classify_intent(self, operator_message: str) -> str:
-        prompt = SYSTEM_PROMPT.replace("{operator_message}", operator_message)
-        try:
-            resp = self.llm.create_completion(prompt=prompt, max_tokens=1, temperature=0.0)
-            raw_text = ""
-            if isinstance(resp, dict) and "choices" in resp and len(resp["choices"]) > 0:
-                choice = resp["choices"][0]
-                if isinstance(choice, dict):
-                    raw_text = str(choice.get("text", "")).strip()
-
-            if raw_text in "0123456789" and len(raw_text) == 1:
-                return raw_text
-            elif len(raw_text) > 0 and raw_text[0] in "0123456789":
-                return raw_text[0]
-            else:
-                return "7"
-        except Exception as err:
-            logger.warning(f"Error during intent classification: {err}")
-            return "7"
+        """Classifies operator message using fine-tuned rubert-tiny2 ML classifier."""
+        return classify_intent_sync(operator_message)
 
     def _get_irritation_text(self) -> str:
         # Search bricks for IRRITATION_MARKER
