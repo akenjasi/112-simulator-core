@@ -14,6 +14,7 @@ from sqlalchemy import (
 )
 from sqlalchemy.orm import Mapped, mapped_column
 from backend.models.base import Base
+from backend.models.domain_02 import ScenarioTicket
 
 
 class SessionStateModel(Base):
@@ -162,6 +163,11 @@ class ExamSession(Base):
     assignment_id: Mapped[Optional[str]] = mapped_column(
         String,
         ForeignKey("assignments.assignment_id"),
+        nullable=True,
+    )
+    ticket_id: Mapped[Optional[str]] = mapped_column(
+        String,
+        ForeignKey("scenario_tickets.scenario_id"),
         nullable=True,
     )
     cadet_id: Mapped[Optional[str]] = mapped_column(

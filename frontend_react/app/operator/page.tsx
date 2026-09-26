@@ -206,7 +206,7 @@ function OperatorContent() {
   return (
     <div className="h-screen w-full flex flex-col overflow-hidden select-none font-sans" style={{ background: "#efefef" }}>
       {/* Session Training Strip */}
-      {sessionId && (
+      {sessionId ? (
         <div className="bg-[#1f2b31] border-b border-blue-500/40 text-blue-200 px-4 py-1.5 text-xs flex items-center justify-between shrink-0 shadow-xs z-30">
           <div className="flex items-center gap-2.5">
             <span className="h-2 w-2 rounded-full bg-emerald-400 animate-pulse" />
@@ -214,11 +214,32 @@ function OperatorContent() {
             <span className="font-mono text-blue-300">Сессия #{sessionId.slice(0, 8)}</span>
             {ticketId && <span className="font-mono text-blue-300">• Билет #{ticketId.slice(0, 8)}</span>}
           </div>
+          <div className="flex items-center gap-2">
+            <Link
+              href="/operator/journal"
+              className="text-xs bg-slate-700 hover:bg-slate-600 text-white px-2.5 py-1 rounded transition"
+            >
+              Журнал
+            </Link>
+            <Link
+              href="/student/lobby"
+              className="text-xs bg-slate-800 hover:bg-slate-700 text-white px-2.5 py-1 rounded transition"
+            >
+              ← В Лобби
+            </Link>
+          </div>
+        </div>
+      ) : (
+        <div className="bg-[#1f2b31] border-b border-slate-700 text-slate-300 px-4 py-1 text-xs flex items-center justify-between shrink-0 z-30">
+          <div className="flex items-center gap-2">
+            <span className="font-bold text-white">АРМ Оператора 112</span>
+            <span className="text-slate-400">• Карточка вызова</span>
+          </div>
           <Link
-            href="/student/lobby"
-            className="text-xs bg-slate-800 hover:bg-slate-700 text-white px-2.5 py-1 rounded transition"
+            href="/operator/journal"
+            className="text-xs bg-slate-700 hover:bg-slate-600 text-white px-2.5 py-0.5 rounded transition flex items-center gap-1"
           >
-            ← В Лобби
+            ← В Журнал происшествий
           </Link>
         </div>
       )}

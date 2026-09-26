@@ -83,6 +83,10 @@ class ScenarioTicket(Base):
         primary_key=True,
         default=lambda: str(uuid.uuid4()),
     )
+    title: Mapped[Optional[str]] = mapped_column(String, nullable=True)
+    category: Mapped[Optional[str]] = mapped_column(String, nullable=True)
+    complexity: Mapped[Optional[int]] = mapped_column(Integer, nullable=True, default=1)
+    content: Mapped[dict] = mapped_column(JSON, default=dict)
     workflow_state: Mapped[dict] = mapped_column(JSON, default=dict)
     settings: Mapped[dict] = mapped_column(JSON, default=dict)
     ground_truth: Mapped[dict] = mapped_column(JSON, default=dict)
@@ -98,6 +102,8 @@ class ScenarioTicket(Base):
 
     def __init__(self, **kwargs):
         kwargs.setdefault("scenario_id", str(uuid.uuid4()))
+        if "content" not in kwargs:
+            kwargs["content"] = {}
         if "workflow_state" not in kwargs:
             kwargs["workflow_state"] = {}
         if "settings" not in kwargs:

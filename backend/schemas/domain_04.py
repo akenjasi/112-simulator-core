@@ -41,3 +41,24 @@ class TicketResultResponse(BaseModel):
     teacher_comment: Optional[str] = None
     created_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
+
+
+class IncidentCardSubmit(BaseModel):
+    ticket_id: str
+    time_taken_seconds: int
+    caller_name: str
+    caller_status: str
+    address_string: str
+    incident_description: str
+    assigned_services: List[str]
+    is_refusal_03: bool = False
+
+
+class EvaluationResultResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    evaluation_id: str
+    scores: dict
+    metrics: dict
+    errors_list: List[str]
+

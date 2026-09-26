@@ -1,4 +1,5 @@
 import datetime
+from typing import Optional, List, Dict, Any
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -8,9 +9,9 @@ from backend.core.deps import require_role, get_current_user
 from backend.core.runtime_router import RuntimeRouter
 from backend.database import get_db
 from backend.models.domain_01 import User
-from backend.models.domain_02 import GeneratedTicket
+from backend.models.domain_02 import GeneratedTicket, ScenarioTicket
 from backend.models.domain_03 import Assignment, ExamSession
-from backend.models.domain_04 import IncidentCard, TicketResult
+from backend.models.domain_04 import IncidentCard, TicketResult, EvaluationResult
 from backend.schemas.students import DemoSessionRequest, DemoSessionResponse
 from backend.core.evaluator import evaluate_ticket
 from backend.schemas.domain_04 import (
@@ -18,6 +19,8 @@ from backend.schemas.domain_04 import (
     TicketEvaluationResult,
     TicketResultResponse,
     TicketResultUpdate,
+    IncidentCardSubmit,
+    EvaluationResultResponse,
 )
 from backend.schemas.domain_03 import (
     SessionConfigCreate,
@@ -475,5 +478,125 @@ async def get_session_stats(
         total_failed=total_failed,
         cadets=cadets_data,
     )
+
+
+@sessions_v1_router.post(
+    "/{session_id}/evaluate",
+    response_model=EvaluationResultResponse,
+)
+@sessions_router.post(
+    "/sessions/{session_id}/evaluate",
+    response_model=EvaluationResultResponse,
+    include_in_schema=False,
+)
+async def evaluate_session_card(
+    session_id: str,
+    req: IncidentCardSubmit,
+    db: AsyncSession = Depends(get_db),
+):
+    stmt = select(ExamSession).where(ExamSession.session_id == session_id)
+    result = await db.execute(stmt)
+    exam_session = result.scalar_one_or_none()
+
+    if not exam_session:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Session not found",
+        )
+
+    ticket_id = req.ticket_id or getattr(exam_session, "ticket_id", None)
+    ticket = None
+    if ticket_id:
+        stmt_ticket = select(ScenarioTicket).where(ScenarioTicket.scenario_id == ticket_id)
+        res_ticket = await db.execute(stmt_ticket)
+        ticket = res_ticket.scalar_one_or_none()
+
+    if not ticket and getattr(exam_session, "ticket_id", None):
+        stmt_ticket = select(ScenarioTicket).where(ScenarioTicket.scenario_id == exam_session.ticket_id)
+        res_ticket = await db.execute(stmt_ticket)
+        ticket = res_ticket.scalar_one_or_none()
+
+    etalon_services: list[str] = []
+    if ticket:
+        if hasattr(ticket, "content") and isinstance(ticket.content, dict) and "etalon_services" in ticket.content:
+            etalon_services = list(ticket.content.get("etalon_services") or [])
+        elif hasattr(ticket, "ground_truth") and isinstance(ticket.ground_truth, dict) and "etalon_services" in ticket.ground_truth:
+            etalon_services = list(ticket.ground_truth.get("etalon_services") or [])
+    elif ticket_id:
+        stmt_gen = select(GeneratedTicket).where(GeneratedTicket.id == ticket_id)
+        res_gen = await db.execute(stmt_gen)
+        gen_ticket = res_gen.scalar_one_or_none()
+        if gen_ticket:
+            etalon_services = list(gen_ticket.etalon_services or [])
+
+    # Save IncidentCard
+    card = IncidentCard(
+        card_origin="CALL_SIMULATION",
+        session_id=exam_session.session_id,
+        scenario_id=ticket.scenario_id if ticket else ticket_id,
+        operator_id=exam_session.cadet_id,
+        filled_data=req.model_dump(),
+        assigned_services=req.assigned_services,
+        status="closed",
+    )
+    db.add(card)
+    await db.flush()
+
+    # Evaluation / Scores calculation
+    total = 100
+    errors_list: list[str] = []
+    time_taken_seconds = req.time_taken_seconds
+
+    # Timing: norm is 90 seconds. If time_taken_seconds > 90, 10 penalty points for each full 10 seconds over.
+    if time_taken_seconds > 90:
+        overtime = time_taken_seconds - 90
+        intervals = overtime // 10
+        time_penalty = intervals * 10
+        total -= time_penalty
+        errors_list.append(f"Превышено время обработки вызова на {overtime} секунд")
+
+    # Services:
+    assigned_set = set(req.assigned_services)
+    etalon_set = set(etalon_services)
+
+    missing_services = sorted(list(etalon_set - assigned_set))
+    if missing_services:
+        missing_penalty = len(missing_services) * 30
+        total -= missing_penalty
+        errors_list.append(f"Не вызваны службы: {missing_services}")
+
+    extra_services = sorted(list(assigned_set - etalon_set))
+    if extra_services:
+        extra_penalty = len(extra_services) * 5
+        total -= extra_penalty
+        errors_list.append(f"Вызваны лишние службы: {extra_services}")
+
+    total = max(0, total)
+    scores = {"total": total}
+    metrics = {"time_taken_seconds": time_taken_seconds}
+
+    # Save EvaluationResult and update session status
+    eval_result = EvaluationResult(
+        card_id=card.card_id,
+        session_id=exam_session.session_id,
+        scores=scores,
+        metrics=metrics,
+        errors_list=errors_list,
+    )
+    db.add(eval_result)
+
+    exam_session.status = "COMPLETED"
+    exam_session.end_time = datetime.datetime.now(datetime.timezone.utc)
+
+    await db.commit()
+    await db.refresh(eval_result)
+
+    return EvaluationResultResponse(
+        evaluation_id=eval_result.evaluation_id,
+        scores=eval_result.scores,
+        metrics=eval_result.metrics,
+        errors_list=eval_result.errors_list,
+    )
+
 
 

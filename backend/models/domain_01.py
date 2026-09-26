@@ -37,7 +37,7 @@ student_group_link = Table(
 class User(Base):
     __tablename__ = "users"
     __table_args__ = (
-        CheckConstraint("role IN ('ADMIN', 'TEACHER', 'CADET')", name="role_check"),
+        CheckConstraint("role IN ('ADMIN', 'TEACHER', 'CADET', 'STUDENT')", name="role_check"),
     )
 
     user_id: Mapped[str] = mapped_column(
