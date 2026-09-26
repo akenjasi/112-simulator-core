@@ -156,7 +156,13 @@ export default function StudentLobbyPage() {
     recordedChunksRef.current = []
 
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
+      const stream = await navigator.mediaDevices.getUserMedia({ 
+        audio: {
+          noiseSuppression: true,
+          echoCancellation: true,
+          autoGainControl: true,
+        } 
+      })
       mediaStreamRef.current = stream
 
       const AudioCtx = window.AudioContext || (window as any).webkitAudioContext
@@ -392,8 +398,8 @@ export default function StudentLobbyPage() {
       const targetUrl =
         data.redirect_url ||
         (selectedRole === "DISPATCHER_DDS"
-          ? `/dds?session_id=${data.session_id}&ticket_id=${data.ticket_id}`
-          : `/operator?session_id=${data.session_id}&ticket_id=${data.ticket_id}`)
+          ? `/dds/journal?session_id=${data.session_id}&ticket_id=${data.ticket_id}&incoming_call=true`
+          : `/operator/journal?session_id=${data.session_id}&ticket_id=${data.ticket_id}&incoming_call=true`)
 
       // Perform redirect
       router.push(targetUrl)

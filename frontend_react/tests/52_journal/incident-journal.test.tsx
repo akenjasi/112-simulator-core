@@ -2,6 +2,14 @@ import { describe, it, expect, vi } from "vitest"
 import { render, screen, fireEvent } from "@testing-library/react"
 import OperatorJournalPage from "@/app/operator/journal/page"
 
+const pushMock = vi.fn()
+vi.mock("next/navigation", () => ({
+  useRouter: () => ({
+    push: pushMock,
+  }),
+  useSearchParams: () => new URLSearchParams(),
+}))
+
 describe("ТЗ 52: Frontend — Главный экран (Журнал/Грид Карточек ПОВ-112 по последнему скриншоту)", () => {
   it("1. Отображает верхний блок поиска с заголовком, строкой ввода, ссылкой расширенного поиска и кнопкой сброса", () => {
     render(<OperatorJournalPage />)

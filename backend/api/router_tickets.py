@@ -1,5 +1,6 @@
 """API router for Ticket generation and management."""
 
+import asyncio
 import json
 import logging
 import os
@@ -12,6 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.core.bricks_compiler import compile_ticket
 from backend.core.faker import FakeDataGenerator
+from backend.core.text_normalization import expand_address_for_tts, format_phone_for_tts, expand_address
 from backend.core.ticket_generator import generate_tickets
 from backend.core.tts_v2 import tts_engine_v2
 from backend.database import AsyncSessionLocal, get_db
@@ -203,28 +205,7 @@ def resolve_classifier_row(category: str, subcategory: Optional[str] = None) -> 
     )
 
 
-def expand_address_for_tts(text: str) -> str:
-    """Разворачивание сокращений адресов для TTS."""
-    if not text:
-        return ""
-    text = re.sub(r'\bул\.\s*', 'улица ', text)
-    text = re.sub(r'\bд\.\s*', 'дом ', text)
-    text = re.sub(r'\bк\.\s*', 'корпус ', text)
-    text = re.sub(r'\bкв\.\s*', 'квартира ', text)
-    text = re.sub(r'\bпр-кт\.\s*', 'проспект ', text)
-    text = re.sub(r'\bпр-кт\s+', 'проспект ', text)
-    return text.strip()
 
-
-expand_address = expand_address_for_tts
-
-
-def format_phone_for_tts(phone: str) -> str:
-    """Извлечение только цифр и вставка пробелов для поцифровой озвучки номера."""
-    if not phone:
-        return ""
-    digits = re.sub(r'\D', '', str(phone))
-    return " ".join(digits)
 
 
 active_generations: int = 0
@@ -331,6 +312,8 @@ async def generate_tickets_background_task(
                 processed += 1
                 active_generations = max(0, active_generations - 1)
 
+    except asyncio.CancelledError:
+        logger.warning("generate_tickets_background_task was cancelled")
     except Exception as e:
         logger.error("Error in generate_tickets_background_task: %s", e, exc_info=True)
     finally:
@@ -538,23 +521,63 @@ async def get_ticket_audio(
         speaker = gt.get("speaker", "aidar")
         texts: List[str] = []
         if plot:
-            texts.append(expand_address_for_tts(str(plot)))
+            texts.append(str(plot))
         if gt.get("fio"):
             texts.append(str(gt["fio"]))
         if gt.get("phone"):
             texts.append("номер " + format_phone_for_tts(str(gt["phone"])))
 
         address_parts = []
-        if gt.get("street"):
-            address_parts.append(str(gt["street"]))
-        if gt.get("house"):
-            address_parts.append(str(gt["house"]))
+        
+        def clean_val(k):
+            v = gt.get(k)
+            if v is None or str(v).lower().strip() in ['none', 'null', '0', '-', '']:
+                return ""
+            return str(v).strip()
+
+        street = clean_val("street")
+        if street:
+            if not any(m in street.lower() for m in ['ул.', 'улица', 'ш.', 'шоссе', 'пр-кт', 'проспект', 'пер.', 'переулок', 'бульвар', 'б-р']):
+                address_parts.append(f"ул. {street}")
+            else:
+                address_parts.append(street)
+                
+        house = clean_val("house")
+        if house:
+            if not any(m in house.lower() for m in ['д.', 'дом', 'стр', 'строение', 'корп', 'корпус', 'влад']):
+                address_parts.append(f"д. {house}")
+            else:
+                address_parts.append(house)
+                
+        entrance = clean_val("entrance")
+        if entrance:
+            address_parts.append(f"под. {entrance}")
+            
+        floor = clean_val("floor")
+        if floor:
+            address_parts.append(f"эт. {floor}")
+            
+        apartment = clean_val("apartment")
+        if apartment:
+            if not any(m in apartment.lower() for m in ['кв', 'квартира', 'комн']):
+                address_parts.append(f"кв. {apartment}")
+            else:
+                address_parts.append(apartment)
+                
+        intercom = clean_val("intercom")
+        if intercom:
+            address_parts.append(f"домофон {intercom}")
+            
         if address_parts:
-            texts.append(expand_address_for_tts(" ".join(address_parts)))
+            # expand_address_for_tts will expand 'ул.', 'д.', 'под.', 'эт.', 'кв.' to words and normalize numbers
+            texts.append(expand_address_for_tts(", ".join(address_parts)))
 
         audio_bytes = tts_engine_v2.concatenate_tts(texts, speaker=speaker)
         return Response(content=audio_bytes, media_type="audio/wav")
     except HTTPException:
+        raise
+    except asyncio.CancelledError:
+        logger.warning("Ticket audio generation cancelled by client for ticket %s", ticket_id)
         raise
     except Exception as e:
         logger.error("Error generating ticket audio for ticket %s: %s", ticket_id, e, exc_info=True)

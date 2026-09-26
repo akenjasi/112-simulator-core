@@ -31,3 +31,4 @@ anyio>=4.0.0
 # llama-cpp-python>=0.2.0
 # torch>=2.0.0
 # torchaudio>=2.0.0
+num2words==0.5.13

@@ -341,8 +341,8 @@ async def create_demo_session(
     await db.refresh(exam_session)
 
     ticket_key = ticket.ticket_id
-    base_url = "/operator" if target_role == "OPERATOR_112" else "/dds"
-    redirect_url = f"{base_url}?session_id={exam_session.session_id}&ticket_id={ticket_key}"
+    base_url = "/operator/journal" if target_role == "OPERATOR_112" else "/dds/journal"
+    redirect_url = f"{base_url}?session_id={exam_session.session_id}&ticket_id={ticket_key}&incoming_call=true"
 
     return DemoSessionResponse(
         session_id=exam_session.session_id,

@@ -39,6 +39,41 @@ function DdsSimulator() {
   const [summary, setSummary] = useState("")
   const [showEndShiftModal, setShowEndShiftModal] = useState(false)
 
+  // Load real ticket data for DDS
+  useEffect(() => {
+    if (ticketId) {
+      fetch(`/api/v1/tickets`)
+        .then(res => res.json())
+        .then(tickets => {
+          const ticket = Array.isArray(tickets) ? tickets.find(t => t.id === ticketId) : null;
+          if (ticket && ticket.ground_truth) {
+            const gt = ticket.ground_truth;
+            setData(prev => ({
+              ...prev,
+              caller: {
+                ...prev.caller,
+                name: gt.fio || prev.caller.name,
+                role: gt.caller_status || prev.caller.role,
+                address: gt.street ? `${gt.street} ${gt.house || ""}`.trim() : prev.caller.address,
+              },
+              phones: {
+                aon: gt.phone || prev.phones.aon,
+                provided: gt.phone || prev.phones.provided,
+                onSite: gt.phone || prev.phones.onSite,
+              },
+              description: gt.plot || prev.description,
+              classification: {
+                ...prev.classification,
+                title: ticket.category || prev.classification.title,
+                section: ticket.subcategory || prev.classification.section
+              }
+            }));
+          }
+        })
+        .catch(err => console.error("Failed to load real ticket data for DDS:", err));
+    }
+  }, [ticketId]);
+
   // Play beep sound when timer expires
   const playTimeoutBeep = () => {
     try {

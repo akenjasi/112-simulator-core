@@ -376,47 +376,11 @@ const renderFormattedTime = (timeStr: string) => {
   return <span>{timeStr}</span>
 }
 
-function JournalContent() {
+function DdsJournalContent() {
   const searchParams = useSearchParams()
   const router = useRouter()
-  const [showIncomingCall, setShowIncomingCall] = useState(false)
-  
-  const incomingCallParam = searchParams?.get("incoming_call")
   const sessionId = searchParams?.get("session_id")
   const ticketId = searchParams?.get("ticket_id")
-
-  useEffect(() => {
-    if (incomingCallParam === "true") {
-      const timer = setTimeout(() => {
-        setShowIncomingCall(true)
-      }, 1500)
-      return () => clearTimeout(timer)
-    }
-  }, [incomingCallParam])
-
-  const acceptCall = () => {
-    if (sessionId && ticketId) {
-      router.push(`/operator?session_id=${sessionId}&ticket_id=${ticketId}`)
-    } else {
-      router.push("/operator")
-    }
-  }
-
-  const [callerPhone, setCallerPhone] = useState("+7 (499) 550-34-56");
-
-  useEffect(() => {
-    if (ticketId) {
-      fetch(`/api/v1/tickets`)
-        .then(res => res.json())
-        .then(data => {
-          const ticket = Array.isArray(data) ? data.find(t => t.id === ticketId) : null;
-          if (ticket && ticket.ground_truth && ticket.ground_truth.phone) {
-            setCallerPhone(ticket.ground_truth.phone);
-          }
-        })
-        .catch(err => console.error("Failed to load real ticket data for popup:", err));
-    }
-  }, [ticketId]);
 
   // Search State
   const [searchQuery, setSearchQuery] = useState("")
@@ -545,29 +509,6 @@ function JournalContent() {
       className="min-h-screen w-full flex flex-col font-sans select-none text-[13px] text-gray-100"
       style={{ backgroundColor: "#838f97" }}
     >
-      {/* INCOMING CALL POPUP */}
-      {showIncomingCall && (
-        <div className="fixed top-0 left-0 w-full z-[100] flex justify-center items-start pt-10 px-4 pointer-events-none">
-          <div className="bg-[#1272bc] text-white w-full max-w-4xl rounded-sm shadow-2xl overflow-hidden relative pointer-events-auto border border-blue-700 animate-in slide-in-from-top-4 duration-300">
-            <button 
-              onClick={() => setShowIncomingCall(false)}
-              className="absolute top-2 right-3 text-white hover:text-gray-200 transition-colors"
-            >
-              &times;
-            </button>
-            <div className="flex flex-col items-center justify-center py-6 px-4">
-              <h2 className="text-2xl font-bold mb-2">Входящий звонок</h2>
-              <p className="text-lg mb-6">с номера {callerPhone}</p>
-              <button 
-                onClick={acceptCall}
-                className="border-2 border-white text-white px-8 py-2 font-medium hover:bg-white hover:text-[#1272bc] transition-colors cursor-pointer"
-              >
-                Принять
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* Toast Notification */}
       {toastMessage && (
@@ -767,24 +708,30 @@ function JournalContent() {
             </div>
           </div>
 
-          {/* Far Right: Big Orange Action Button SPANNING FULL HEIGHT OF THE PANEL */}
-          <Link
-            href="/operator"
-            aria-label="создать новую карточку"
-            className="w-[125px] xl:w-[135px] bg-[#ec653b] hover:bg-[#de5b33] text-white flex items-center justify-center text-center p-1.5 transition-colors shrink-0 shadow-inner group h-full"
-            title="Перейти к созданию карточки происшествия"
+          {/* Far Right: Big Blue Action Button SPANNING FULL HEIGHT OF THE PANEL */}
+          <button
+            onClick={() => {
+              if (sessionId && ticketId) {
+                router.push(`/dds?session_id=${sessionId}&ticket_id=${ticketId}`)
+              } else {
+                router.push("/dds")
+              }
+            }}
+            aria-label="Взять карточку в обработку"
+            className="w-[125px] xl:w-[135px] bg-[#0077be] hover:bg-[#006bb0] text-white flex items-center justify-center text-center p-1.5 transition-colors shrink-0 shadow-inner group h-full cursor-pointer"
+            title="Взять карточку в обработку"
           >
             <div className="w-full h-full border border-white/90 flex flex-col items-center justify-center p-1 leading-tight font-bold text-[12px] xl:text-[13px] lowercase tracking-wide">
-              <span>создать</span>
-              <span>новую</span>
+              <span>взять</span>
               <span>карточку</span>
+              <span>в обработку</span>
             </div>
-          </Link>
+          </button>
         </div>
       </div>
 
       {/* ============================================================== */}
-      {/* SECTION 2: SUBHEADER & CONTROLS (Список происшествий & Switches) */}
+      {/* SECTION 2: SUBHEADER & CONTROLS (Список происшествий (Диспетчер ДДС) & Switches) */}
       {/* ============================================================== */}
       <div className="px-4 py-2 flex flex-wrap items-center justify-between text-white border-b border-[#2f353a]/60">
         {/* Left: Incident List Title with Collapse Icon */}
@@ -792,12 +739,13 @@ function JournalContent() {
           onClick={() => setListCollapsed(!listCollapsed)}
           className="flex items-center gap-1.5 cursor-pointer font-bold text-[14.5px] hover:text-gray-200"
         >
-          <span>Список происшествий</span>
+          <span>Список происшествий (Диспетчер ДДС)</span>
           {listCollapsed ? <ChevronDown size={17} /> : <ChevronUp size={17} />}
         </div>
 
         {/* Right: Switches & Selectors */}
         <div className="flex items-center gap-4 text-xs font-normal">
+
           {/* Notifications */}
           <div
             onClick={() => showToast("Уведомления смены активны")}
@@ -1242,10 +1190,10 @@ function JournalContent() {
   )
 }
 
-export default function OperatorJournalPage() {
+export default function DdsJournalPage() {
   return (
-    <Suspense fallback={<div className="flex h-screen items-center justify-center">Загрузка журнала...</div>}>
-      <JournalContent />
+    <Suspense fallback={<div className="flex h-screen items-center justify-center">Загрузка журнала ДДС...</div>}>
+      <DdsJournalContent />
     </Suspense>
   )
 }

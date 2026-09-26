@@ -10,3 +10,5 @@ data/llm_cache/
 data/tts_cache/
 .deps/
 *.tsbuildinfo
+*.gguf
+backend/core/qwen_tts/models/

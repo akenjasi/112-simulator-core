@@ -65,6 +65,58 @@ function OperatorContent() {
     operatorExt: "1002",
   })
 
+
+
+  // Load real ticket data and play real audio from backend
+  useEffect(() => {
+    if (ticketId) {
+      fetch(`/api/v1/tickets`)
+        .then(res => res.json())
+        .then(data => {
+          const ticket = Array.isArray(data) ? data.find(t => t.id === ticketId) : null;
+          if (ticket && ticket.ground_truth) {
+            const gt = ticket.ground_truth;
+            if (gt.fio) setCallerName(gt.fio);
+            if (gt.phone) {
+              setAonPhone(gt.phone);
+              setProvidedPhone(gt.phone);
+              setOnSitePhone(gt.phone);
+            }
+            if (gt.caller_status) setCallerStatus(gt.caller_status);
+            // Also can set address here if needed
+            if (gt.street) {
+              setAddress(prev => ({...prev, street: gt.street, house: gt.house || ""}));
+              setFullAddressString(`${gt.street} ${gt.house || ""}`.trim());
+            }
+          }
+        })
+        .catch(err => console.error("Failed to load real ticket data:", err));
+    }
+  }, [ticketId]);
+
+  useEffect(() => {
+    let audio: HTMLAudioElement | null = null;
+    
+    if (telephony.callStatus === "ANSWERED" && ticketId) {
+      // Play real audio from the database
+      try {
+        const p = audio.play();
+        if (p && typeof p.catch === "function") {
+          p.catch(e => console.warn("Audio autoplay blocked:", e));
+        }
+      } catch (e) {
+        console.warn("Audio autoplay error:", e);
+      }
+    }
+    
+    return () => {
+      if (audio) {
+        audio.pause();
+        audio.src = "";
+      }
+    }
+  }, [telephony.callStatus, ticketId]);
+
   // 1. Elapsed timer starting from 0s (ТЗ 57: was 16)
   // ТЗ 62: стартует только при переходе в ANSWERED!
   // ТЗ 58: stops when "save" modal is opened or when submitted

@@ -6,6 +6,8 @@ import json
 import uuid
 import tempfile
 import asyncio
+import queue
+import time
 import subprocess
 import logging
 from typing import Optional
@@ -76,14 +78,14 @@ def convert_to_pcm16k(input_data: bytes) -> np.ndarray:
 class ASRService:
     """Singleton service managing in-memory GigaAM-v3 CTC model session."""
 
-    def __init__(self, model_path: Optional[str] = None):
+    def __init__(self, model_path: Optional[str] = None, pool_size: int = 6):
         self.model_path = model_path or os.getenv(
             "GIGAAM_MODEL_PATH",
             "/home/orborus/Desktop/A_vibecoding/models/gigaam-v3-ctc-Q8_0.gguf",
         )
         self.model = None
-        self.session = None
-        self.lock = asyncio.Lock()
+        self.session_pool = asyncio.Queue()
+        self.pool_size = pool_size
         self.init_error = None
         self._init_model()
 
@@ -93,9 +95,11 @@ class ASRService:
 
             if os.path.exists(self.model_path):
                 self.model = transcribe_cpp.Model(self.model_path)
-                self.session = self.model.session()
+                # Create a pool of sessions (lightweight inference contexts)
+                for _ in range(self.pool_size):
+                    self.session_pool.put_nowait(self.model.session())
                 self.init_error = None
-                logger.info(f"GigaAM v3 CTC model loaded from {self.model_path}")
+                logger.info(f"GigaAM v3 CTC model loaded from {self.model_path} with {self.pool_size} sessions")
             else:
                 self.init_error = f"Model file not found: {self.model_path}"
                 logger.warning(self.init_error)
@@ -104,7 +108,7 @@ class ASRService:
             logger.error(f"Failed to initialize transcribe_cpp: {e}", exc_info=True)
 
     def is_ready(self) -> bool:
-        return self.session is not None
+        return self.model is not None
 
     async def transcribe_pcm(self, pcm: np.ndarray) -> str:
         """Transcribes 16kHz mono float32 PCM numpy array."""
@@ -114,12 +118,16 @@ class ASRService:
         if not self.is_ready():
             return await self._transcribe_cli_pcm(pcm)
 
-        async with self.lock:
+        # Acquire a session from the pool
+        session = await self.session_pool.get()
+        try:
             def _infer():
-                res = self.session.run(pcm)
+                res = session.run(pcm)
                 return res.text.strip()
 
             return await asyncio.to_thread(_infer)
+        finally:
+            self.session_pool.put_nowait(session)
 
     async def _transcribe_cli_pcm(self, pcm: np.ndarray) -> str:
         """Fallback via transcribe-cli command line binary."""
@@ -214,6 +222,7 @@ async def websocket_asr_stream(websocket: WebSocket):
     pcm_buffer = np.array([], dtype=np.float32)
     committed_text = ""
     last_transcript = ""
+    last_transcribe_time = 0.0
 
     try:
         while True:
@@ -235,17 +244,40 @@ async def websocket_asr_stream(websocket: WebSocket):
                 if len(chunk_pcm) > 0:
                     pcm_buffer = np.concatenate([pcm_buffer, chunk_pcm]) if len(pcm_buffer) > 0 else chunk_pcm
 
-                    # Bounded sliding window: GigaAM CTC supports up to 25s
-                    # If exceeding 20s, commit text and keep last 3s as context
-                    max_window = 20 * 16000
+                    # --- Simple Energy-Based VAD (Voice Activity Detection) ---
+                    # If we have at least 1.5 seconds of audio and the last 0.4s is silent, commit!
+                    if len(pcm_buffer) > int(1.5 * 16000):
+                        tail_audio = pcm_buffer[-int(0.4 * 16000):]
+                        energy = np.mean(np.abs(tail_audio))
+                        if energy < 0.003:  # Threshold for silence
+                            # Transcribe the tail immediately before committing
+                            final_tail = await asr_service.transcribe_pcm(pcm_buffer)
+                            committed_text = f"{committed_text} {final_tail}".strip()
+                            pcm_buffer = np.array([], dtype=np.float32)
+                            last_transcript = ""
+                            last_transcribe_time = time.time()
+                            
+                            # Push the update right away
+                            await websocket.send_json({
+                                "type": "transcript",
+                                "text": committed_text,
+                                "is_final": False,
+                                "duration": 0.0,
+                            })
+
+                    # Bounded sliding window fallback (max 10s to prevent huge slowdowns)
+                    max_window = 10 * 16000
                     if len(pcm_buffer) > max_window:
                         committed_text = f"{committed_text} {last_transcript}".strip()
-                        pcm_buffer = pcm_buffer[-int(3 * 16000):]
+                        pcm_buffer = pcm_buffer[-int(1 * 16000):]
+                        last_transcript = ""
 
-                    # Transcribe once we have at least 0.35s of audio
-                    if len(pcm_buffer) >= int(0.35 * 16000):
+                    # Throttled Transcription
+                    current_time = time.time()
+                    if len(pcm_buffer) >= int(0.35 * 16000) and (current_time - last_transcribe_time >= 0.5):
                         current_text = await asr_service.transcribe_pcm(pcm_buffer)
                         last_transcript = current_text
+                        last_transcribe_time = time.time()  # Set AFTER inference to guarantee idle time!
                         full_text = f"{committed_text} {current_text}".strip()
 
                         await websocket.send_json({
