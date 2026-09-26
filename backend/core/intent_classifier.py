@@ -12,10 +12,20 @@ from backend.schemas.bricks import Intent
 
 logger = logging.getLogger(__name__)
 
-# Add path to the custom classifier
-CLASSIFIER_PATH = "/home/orborus/Desktop/A_vibecoding/models/classifier"
+# Resolve path to the classifier model (project-relative first, fallback to external)
+PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+PROJECT_CLASSIFIER_PATH = os.path.join(PROJECT_ROOT, "models", "classifier")
+FALLBACK_CLASSIFIER_PATH = "/home/orborus/Desktop/A_vibecoding/models/classifier"
+
+if os.path.exists(PROJECT_CLASSIFIER_PATH):
+    CLASSIFIER_PATH = PROJECT_CLASSIFIER_PATH
+elif os.path.exists(FALLBACK_CLASSIFIER_PATH):
+    CLASSIFIER_PATH = FALLBACK_CLASSIFIER_PATH
+else:
+    CLASSIFIER_PATH = os.getenv("CLASSIFIER_PATH", PROJECT_CLASSIFIER_PATH)
+
 if CLASSIFIER_PATH not in sys.path:
-    sys.path.append(CLASSIFIER_PATH)
+    sys.path.insert(0, CLASSIFIER_PATH)
 
 from inference import IntentClassifier
 
