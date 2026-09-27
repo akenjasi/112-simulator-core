@@ -1,0 +1,45 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# 112 Simulator V2 — Frontend Dockerfile (Next.js 16 → Nginx)
+# Stage 1 (builder): npm ci + DOCKER_BUILD=true next build (static export)
+# Stage 2 (runner):  Nginx 1.27-alpine serves the /out directory
+# ─────────────────────────────────────────────────────────────────────────────
+
+# ─── Stage 1: Build ───────────────────────────────────────────────────────────
+FROM node:20-slim AS builder
+
+WORKDIR /app
+
+# Copy lock files and package.json first for better layer caching.
+# Project has package-lock.json (npm), NOT pnpm-lock.yaml.
+# We use npm ci for reproducible, fast installs.
+COPY frontend_react/package.json frontend_react/package-lock.json ./
+
+# Install deps using npm (lock file is package-lock.json)
+RUN npm ci --ignore-scripts
+
+# Copy full frontend source (node_modules excluded via .dockerignore)
+COPY frontend_react/ ./
+
+# Build Next.js static export.
+# DOCKER_BUILD=true → next.config.mjs skips rewrite rules (unsupported in static export mode)
+ENV DOCKER_BUILD=true \
+    NEXT_TELEMETRY_DISABLED=1
+
+RUN npm run build
+# Output: /app/out  (static HTML + JS + CSS)
+
+# ─── Stage 2: Nginx static server ─────────────────────────────────────────────
+FROM nginx:1.27-alpine AS runner
+
+# Remove default Nginx site
+RUN rm /etc/nginx/conf.d/default.conf
+
+# Custom Nginx config: /api/* → backend:8000, SPA fallback, security headers
+COPY docker/nginx.conf /etc/nginx/conf.d/default.conf
+
+# Copy built static output from builder stage
+COPY --from=builder /app/out /usr/share/nginx/html
+
+EXPOSE 3000
+
+CMD ["nginx", "-g", "daemon off;"]

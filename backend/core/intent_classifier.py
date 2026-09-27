@@ -1,11 +1,19 @@
 import sys
 import logging
-import torch
 import os
 
 # Оптимизация для CPU сервера (избегаем thread contention)
 os.environ["OMP_NUM_THREADS"] = "1"
-torch.set_num_threads(1)
+
+# torch опционален: в Docker-окружении без ML-зависимостей классификатор
+# работает в fallback-режиме (возвращает дефолтный intent без ML).
+try:
+    import torch
+    torch.set_num_threads(1)
+    _TORCH_AVAILABLE = True
+except ImportError:
+    torch = None  # type: ignore[assignment]
+    _TORCH_AVAILABLE = False
 
 from typing import Dict, Any
 from backend.schemas.bricks import Intent
@@ -27,15 +35,22 @@ else:
 if CLASSIFIER_PATH not in sys.path:
     sys.path.insert(0, CLASSIFIER_PATH)
 
-from inference import IntentClassifier
-
-# Singleton initialization
 try:
-    classifier = IntentClassifier(model_path=CLASSIFIER_PATH)
-    logger.info("Local Rubert-Tiny2 IntentClassifier loaded successfully.")
-except Exception as e:
-    logger.error(f"Failed to load IntentClassifier: {e}")
+    from inference import IntentClassifier
+    # Singleton initialization
+    try:
+        classifier = IntentClassifier(model_path=CLASSIFIER_PATH)
+        logger.info("Local Rubert-Tiny2 IntentClassifier loaded successfully.")
+    except Exception as e:
+        logger.warning(f"Failed to load IntentClassifier: {e}. Using rule-based fallback.")
+        classifier = None
+except ImportError:
+    logger.warning(
+        "IntentClassifier module not found (models/classifier/ missing). "
+        "Using rule-based fallback — classify_intent will return default intent."
+    )
     classifier = None
+
 
 # Mapping from label_id to Intent enum
 LABEL_TO_INTENT = {

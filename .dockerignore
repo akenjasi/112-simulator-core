@@ -1,0 +1,66 @@
+# ─────────────────────────────────────────────────────────────────────────────
+# 112 Simulator V2 — .dockerignore
+# Excludes files that should NOT be sent to the Docker build context.
+# This speeds up builds and prevents secrets / large binaries from leaking.
+# ─────────────────────────────────────────────────────────────────────────────
+
+# ─── Git ──────────────────────────────────────────────────────────────────────
+.git
+.gitignore
+
+# ─── Python artifacts ─────────────────────────────────────────────────────────
+**/__pycache__
+**/*.pyc
+**/*.pyo
+**/*.pyd
+.pytest_cache
+.mypy_cache
+*.egg-info
+dist/
+build/
+.deps/
+
+# ─── Virtual environments ─────────────────────────────────────────────────────
+venv/
+.venv/
+env/
+.env.local
+.env.*.local
+
+# ─── Node / Frontend ──────────────────────────────────────────────────────────
+frontend_react/node_modules
+frontend_react/.next
+# Keep 'out/' — backend mounts it as /dds static. But it's built fresh in CI.
+# frontend_react/out
+
+# ─── Local databases (use Docker volume for persistence) ──────────────────────
+*.db
+data/112_simulator.db
+data/backups/
+data/tts_cache/
+data/uploads/
+
+# ─── GGUF model weights (downloaded at container startup via init.sh) ─────────
+# These are large binary files; use named Docker volume instead.
+*.gguf
+backend/core/qwen_tts/models/
+
+# ─── IDE / OS artifacts ───────────────────────────────────────────────────────
+.vscode/
+.idea/
+*.DS_Store
+Thumbs.db
+*.swp
+*.swo
+
+# ─── Logs & temp files ────────────────────────────────────────────────────────
+*.log
+*.tmp
+worktrees/
+reports/
+
+# ─── Docker files (avoid recursive context issues) ───────────────────────────
+docker_standalone/
+
+# ─── TypeScript build cache ───────────────────────────────────────────────────
+*.tsbuildinfo
