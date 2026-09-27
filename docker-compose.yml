@@ -75,6 +75,9 @@ services:
     restart: unless-stopped
     ports:
       - "3000:3000"
+      - "443:443"
+    volumes:
+      - ./certs:/etc/nginx/ssl:ro
     # Frontend стартует сразу; Nginx proxies /api/* → backend.
     # При недоступном backend Nginx вернёт 502 на API запросы.
     depends_on:
