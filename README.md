@@ -75,3 +75,9 @@
 - `SPO112_ENDPOINT` - URL to SPO-112 system (default: http://localhost:8080/api/export)
 - `SPO112_USERNAME` - Authentication username
 - `SPO112_PASSWORD` - Authentication password
+
+### LDAP (Active Directory / FreeIPA) Integration
+- `LDAP_ENABLED` - Enable LDAP authentication (default: False)
+- `LDAP_SERVER` - URL of the LDAP server (e.g., `ldap://192.168.1.100`)
+- `LDAP_DOMAIN` - Domain to append for bind (e.g., `corp.local`)
+- `LDAP_BASE_DN` - Base DN to build the uid for bind (e.g., `dc=corp,dc=local`)

@@ -8,6 +8,9 @@ from backend.core.deps import get_current_user
 from backend.core.security import create_access_token, verify_password
 from backend.database import get_db
 from backend.models.domain_01 import User
+from backend.core.ldap_adapter import authenticate_ldap
+from backend.core.security import hash_password
+import os
 from backend.schemas.auth import (
     Login2FARequest,
     LoginRequest,
@@ -118,26 +121,51 @@ async def login(
                 detail=f"No active user found in demo mode",
             )
     else:
-        if normalized_role:
-            stmt = select(User).where(
-                User.username == username,
-                User.role == normalized_role,
-                User.is_active == True,  # noqa: E712
-            )
-        else:
-            stmt = select(User).where(
-                User.username == username,
-                User.is_active == True,  # noqa: E712
-            )
-        result = await db.execute(stmt)
-        user = result.scalar_one_or_none()
+        ldap_success = False
+        ldap_enabled = os.getenv("LDAP_ENABLED", "False").lower() in ("true", "1", "yes")
+        if ldap_enabled:
+            ldap_success = authenticate_ldap(username, password)
 
-        if not user or not verify_password(password, user.password_hash):
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Invalid credentials",
-                headers={"WWW-Authenticate": "Bearer"},
-            )
+        if ldap_success:
+            stmt = select(User).where(User.username == username)
+            result = await db.execute(stmt)
+            user = result.scalar_one_or_none()
+
+            if not user:
+                # JIT Provisioning
+                default_role = "CADET"
+                if normalized_role:
+                    default_role = normalized_role
+                user = User(
+                    username=username,
+                    password_hash=hash_password("ldap_provisioned_no_password"),
+                    role=default_role,
+                    is_active=True
+                )
+                db.add(user)
+                await db.commit()
+                await db.refresh(user)
+        else:
+            if normalized_role:
+                stmt = select(User).where(
+                    User.username == username,
+                    User.role == normalized_role,
+                    User.is_active == True,  # noqa: E712
+                )
+            else:
+                stmt = select(User).where(
+                    User.username == username,
+                    User.is_active == True,  # noqa: E712
+                )
+            result = await db.execute(stmt)
+            user = result.scalar_one_or_none()
+    
+            if not user or not verify_password(password, user.password_hash):
+                raise HTTPException(
+                    status_code=status.HTTP_401_UNAUTHORIZED,
+                    detail="Invalid credentials",
+                    headers={"WWW-Authenticate": "Bearer"},
+                )
 
     # If 2FA is enabled, require TOTP verification
     if user.is_2fa_enabled:
