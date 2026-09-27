@@ -1011,3 +1011,83 @@ async def delete_ticket(
     await db.commit()
     return {"status": "ok", "message": f"Билет {ticket_id} успешно удален", "id": ticket_id}
 
+
+class TicketRefineRequest(BaseModel):
+    correction_comment: str
+
+@api_tickets_router.post("/{ticket_id}/refine", response_model=TicketResponse)
+@api_tickets_router.post("/{ticket_id}/refine/", response_model=TicketResponse, include_in_schema=False)
+@tickets_router.post("/{ticket_id}/refine", response_model=TicketResponse)
+@tickets_router.post("/{ticket_id}/refine/", response_model=TicketResponse, include_in_schema=False)
+async def refine_ticket(
+    ticket_id: str,
+    req: TicketRefineRequest,
+    db: AsyncSession = Depends(get_db),
+) -> TicketResponse:
+    """Перегенерация сюжета билета на основе комментария (заглушка)."""
+    gen_ticket = await db.get(GeneratedTicket, ticket_id)
+    scenario_ticket = await db.get(ScenarioTicket, ticket_id)
+
+    if not gen_ticket and not scenario_ticket:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Билет не найден")
+    
+    # Имитация вызова LLM
+    await asyncio.sleep(2)
+    
+    plot_addition = f"\n[ИИ-коррекция с учетом: {req.correction_comment}]"
+    
+    if gen_ticket:
+        gen_ticket.plot = (gen_ticket.plot or "") + plot_addition
+        seq = gen_ticket.sequence_number or 0
+        display_id = f"{make_abbr(gen_ticket.category)}_{make_abbr(gen_ticket.subcategory)}_{seq}"
+        res_cat = gen_ticket.category
+        res_sub = gen_ticket.subcategory
+        res_comp = gen_ticket.complexity
+        res_plot = gen_ticket.plot
+        res_facts = gen_ticket.factoids or {}
+        res_gt = gen_ticket.ground_truth or {}
+        res_serv = gen_ticket.etalon_services or []
+        res_created = gen_ticket.created_at
+
+    if scenario_ticket:
+        settings = dict(scenario_ticket.settings or {})
+        ai_content = dict(scenario_ticket.ai_content or {})
+        
+        current_plot = settings.get("plot") or ai_content.get("plot", "")
+        new_plot = current_plot + plot_addition
+        
+        settings["plot"] = new_plot
+        ai_content["plot"] = new_plot
+        
+        scenario_ticket.settings = settings
+        scenario_ticket.ai_content = ai_content
+
+        if not gen_ticket:
+            seq = settings.get("sequence_number", 0)
+            res_cat = settings.get("category", "Общее")
+            res_sub = settings.get("subcategory")
+            display_id = f"{make_abbr(res_cat)}_{make_abbr(res_sub)}_{seq}"
+            res_comp = settings.get("complexity", 1)
+            res_plot = new_plot
+            res_facts = ai_content.get("factoids", {})
+            res_gt = scenario_ticket.ground_truth or {}
+            res_serv = settings.get("etalon_services", [])
+            res_created = scenario_ticket.created_at
+
+    await db.commit()
+    
+    return TicketResponse(
+        id=ticket_id,
+        ticket_id=ticket_id,
+        display_id=display_id,
+        sequence_number=seq,
+        category=res_cat,
+        subcategory=res_sub,
+        complexity=res_comp,
+        plot=res_plot,
+        factoids=res_facts,
+        ground_truth=res_gt,
+        etalon_services=res_serv,
+        status="active",
+        created_at=res_created,
+    )
