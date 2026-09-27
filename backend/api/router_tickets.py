@@ -1,15 +1,20 @@
 """API router for Ticket generation and management."""
 
 import asyncio
+import io
 import json
 import logging
 import os
 import re
+import uuid
 from typing import Any, Dict, List, Optional
-from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, Response, status
+from fastapi import APIRouter, BackgroundTasks, Depends, File, HTTPException, Query, Response, UploadFile, status
 from pydantic import BaseModel
-from sqlalchemy import desc, func, select
+from sqlalchemy import desc, func, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
+import openpyxl
+from openpyxl.styles import Alignment, Font, PatternFill
+from openpyxl.utils import get_column_letter
 
 from backend.core.bricks_compiler import compile_ticket
 from backend.core.faker import FakeDataGenerator
@@ -488,6 +493,316 @@ async def generate_ticket_endpoint(
         count=req.count,
     )
     return TicketGenerateAcceptedResponse(message="Генерация начата")
+
+
+def generate_tickets_import_template_excel() -> bytes:
+    """Генерация Excel-шаблона для импорта билетов."""
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = "Шаблон билетов"
+
+    headers = [
+        "Название",
+        "Описание",
+        "Номер звонящего",
+        "Текст абонента",
+        "Целевая служба (01, 02)",
+        "Обязательные фактоиды (через запятую)",
+    ]
+    ws.append(headers)
+
+    header_fill = PatternFill(start_color="1E3A8A", end_color="1E3A8A", fill_type="solid")
+    header_font = Font(name="Calibri", size=11, bold=True, color="FFFFFF")
+    header_alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
+
+    for col_idx in range(1, len(headers) + 1):
+        cell = ws.cell(row=1, column=col_idx)
+        cell.fill = header_fill
+        cell.font = header_font
+        cell.alignment = header_alignment
+
+    # Демонстрационные примеры строк
+    sample_rows = [
+        [
+            "Пожар в жилом доме",
+            "Возгорание на кухне на 3 этаже, сильный дым",
+            "+79161234567",
+            "Здравствуйте! Горит квартира на 3 этаже, сильный дым в подъезде по ул. Ленина, д. 5! Срочно пожарных!",
+            "01",
+            "адрес, этаж, задымление, пострадавшие",
+        ],
+        [
+            "ДТП на перекрестке",
+            "Лобовое столкновение двух автомобилей, есть пострадавшие",
+            "+79257654321",
+            "Авария на перекрестке ул. Мира и Советской! Машины разбиты, водителю плохо!",
+            "01, 02, 03",
+            "адрес, автомобили, пострадавшие, скорая помощь",
+        ],
+    ]
+    for row in sample_rows:
+        ws.append(row)
+
+    col_widths = {1: 28, 2: 36, 3: 20, 4: 55, 5: 26, 6: 40}
+    for col_idx, width in col_widths.items():
+        ws.column_dimensions[get_column_letter(col_idx)].width = width
+    ws.row_dimensions[1].height = 26
+
+    stream = io.BytesIO()
+    wb.save(stream)
+    return stream.getvalue()
+
+
+@api_tickets_router.get("/import/template")
+@api_tickets_router.get("/import/template/", include_in_schema=False)
+@tickets_router.get("/import/template")
+@tickets_router.get("/import/template/", include_in_schema=False)
+async def download_tickets_import_template() -> Response:
+    """Эндпоинт для скачивания Excel-шаблона импорта билетов."""
+    file_bytes = generate_tickets_import_template_excel()
+    return Response(
+        content=file_bytes,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={
+            "Content-Disposition": 'attachment; filename="tickets_template.xlsx"',
+            "Access-Control-Expose-Headers": "Content-Disposition",
+        },
+    )
+
+
+@api_tickets_router.post("/import/upload")
+@api_tickets_router.post("/import/upload/", include_in_schema=False)
+@tickets_router.post("/import/upload")
+@tickets_router.post("/import/upload/", include_in_schema=False)
+async def upload_tickets_import(
+    file: UploadFile = File(...),
+    db: AsyncSession = Depends(get_db),
+) -> Dict[str, Any]:
+    """Эндпоинт для загрузки и пакетного импорта билетов из Excel."""
+    filename = (file.filename or "").lower()
+    if not (filename.endswith(".xlsx") or filename.endswith(".xls")):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Неподдерживаемый формат файла. Требуется файл .xlsx или .xls",
+        )
+
+    file_bytes = await file.read()
+    if not file_bytes:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Файл пуст",
+        )
+
+    try:
+        wb = openpyxl.load_workbook(io.BytesIO(file_bytes), data_only=True)
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Не удалось распарсить Excel файл: {str(e)}",
+        )
+
+    ws = wb.active
+    if ws is None:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="В файле не найден активный лист",
+        )
+
+    # Определяем строку заголовков и маппинг колонок
+    header_row_idx = 1
+    for r_idx, row in enumerate(ws.iter_rows(min_row=1, max_row=5, values_only=True), start=1):
+        row_strs = [str(c or "").strip().lower() for c in row if c is not None]
+        if any("целев" in s or "служб" in s or "назван" in s or "текст" in s for s in row_strs):
+            header_row_idx = r_idx
+            break
+
+    header_cells = list(ws.iter_rows(min_row=header_row_idx, max_row=header_row_idx, values_only=True))[0]
+    col_map: Dict[str, int] = {}
+    for idx, cell_val in enumerate(header_cells):
+        val_str = str(cell_val or "").strip().lower()
+        if "назван" in val_str or "заголовок" in val_str or "тема" in val_str:
+            col_map["title"] = idx
+        elif "описан" in val_str:
+            col_map["desc"] = idx
+        elif "номер" in val_str or "телефон" in val_str or "звонящ" in val_str:
+            col_map["phone"] = idx
+        elif "текст" in val_str or "абонент" in val_str or "сообщен" in val_str:
+            col_map["caller_text"] = idx
+        elif "целев" in val_str or "служб" in val_str:
+            col_map["services"] = idx
+        elif "фактоид" in val_str:
+            col_map["factoids"] = idx
+
+    # Позиционный фоллбэк
+    if "title" not in col_map and len(header_cells) > 0:
+        col_map["title"] = 0
+    if "desc" not in col_map and len(header_cells) > 1:
+        col_map["desc"] = 1
+    if "phone" not in col_map and len(header_cells) > 2:
+        col_map["phone"] = 2
+    if "caller_text" not in col_map and len(header_cells) > 3:
+        col_map["caller_text"] = 3
+    if "services" not in col_map and len(header_cells) > 4:
+        col_map["services"] = 4
+    if "factoids" not in col_map and len(header_cells) > 5:
+        col_map["factoids"] = 5
+
+    def get_cell_str(row_data: tuple, key: str) -> str:
+        idx = col_map.get(key)
+        if idx is not None and idx < len(row_data) and row_data[idx] is not None:
+            return str(row_data[idx]).strip()
+        return ""
+
+    errors: List[str] = []
+    success_count = 0
+
+    # Ensure sys_sequences table exists
+    await db.execute(
+        text("CREATE TABLE IF NOT EXISTS sys_sequences (name VARCHAR PRIMARY KEY, last_val INTEGER NOT NULL DEFAULT 0)")
+    )
+    await db.execute(
+        text("INSERT OR IGNORE INTO sys_sequences (name, last_val) VALUES ('generated_tickets', 0)")
+    )
+    seq_res = await db.execute(text("SELECT last_val FROM sys_sequences WHERE name='generated_tickets'"))
+    current_seq = seq_res.scalar() or 0
+
+    for row_idx, row in enumerate(
+        ws.iter_rows(min_row=header_row_idx + 1, values_only=True),
+        start=header_row_idx + 1,
+    ):
+        title = get_cell_str(row, "title")
+        desc_text = get_cell_str(row, "desc")
+        phone = get_cell_str(row, "phone")
+        caller_text = get_cell_str(row, "caller_text")
+        services_str = get_cell_str(row, "services")
+        factoids_str = get_cell_str(row, "factoids")
+
+        # Пропускаем полностью пустые строки
+        if not any([title, desc_text, phone, caller_text, services_str, factoids_str]):
+            continue
+
+        # Валидация: целевая служба обязательна
+        if not services_str:
+            errors.append(f"строка {row_idx} пустая целевая служба")
+            continue
+
+        # Валидация: хотя бы название или текст абонента
+        if not title and not caller_text:
+            errors.append(f"строка {row_idx} пустое название или текст абонента")
+            continue
+
+        if not title:
+            title = (caller_text[:47] + "...") if len(caller_text) > 50 else caller_text
+        if not caller_text:
+            caller_text = desc_text or title
+        if not desc_text:
+            desc_text = caller_text
+
+        # Извлечение служб
+        extracted_services: List[str] = []
+        lower_s = services_str.lower()
+        has_01 = bool(re.search(r"\b(01|101)\b", lower_s) or "пожар" in lower_s)
+        has_02 = bool(re.search(r"\b(02|102)\b", lower_s) or "полиц" in lower_s or "мвд" in lower_s or "дпс" in lower_s)
+        has_03 = bool(re.search(r"\b(03|103)\b", lower_s) or "скор" in lower_s or "медиц" in lower_s or "врач" in lower_s)
+        has_04 = bool(re.search(r"\b(04|104)\b", lower_s) or "газ" in lower_s)
+
+        if has_01:
+            extracted_services.append("01 Пожарные")
+        if has_02:
+            extracted_services.append("02 Полиция")
+        if has_03:
+            extracted_services.append("03 Скорая")
+        if has_04:
+            extracted_services.append("04 Газ")
+
+        if not extracted_services:
+            for part in re.split(r"[,;]+", services_str):
+                p = part.strip()
+                if p:
+                    extracted_services.append(p)
+
+        # Разбор фактоидов
+        factoids_list = [f.strip() for f in re.split(r"[,;\n]+", factoids_str) if f.strip()]
+        factoids_dict: Dict[str, Any] = {f"factoid_{i+1}": f for i, f in enumerate(factoids_list)}
+        if caller_text:
+            factoids_dict["situation_1"] = caller_text
+
+        # Определение категории
+        combined_text = f"{title} {desc_text} {caller_text}".lower()
+        if "01 Пожарные" in extracted_services or "пожар" in combined_text or "дым" in combined_text:
+            category = "Пожары и задымления"
+        elif "04 Газ" in extracted_services or "газ" in combined_text:
+            category = "Запах газа"
+        elif "02 Полиция" in extracted_services or "дтп" in combined_text or "авари" in combined_text or "столкнов" in combined_text:
+            category = "ДТП" if ("дтп" in combined_text or "авари" in combined_text or "столкнов" in combined_text) else "Нарушение правопорядка"
+        elif "03 Скорая" in extracted_services or "медиц" in combined_text or "сердц" in combined_text or "ранен" in combined_text:
+            category = "Оказание медицинской скорой и неотложной помощи"
+        else:
+            category = "Общее"
+
+        current_seq += 1
+        ticket_id = f"import-{uuid.uuid4().hex[:12]}"
+        plot = caller_text
+        ground_truth: Dict[str, Any] = {"phone": phone} if phone else {}
+
+        # Создаем GeneratedTicket (для таблицы билетов)
+        gen_ticket = GeneratedTicket(
+            id=ticket_id,
+            category=category,
+            subcategory=title,
+            complexity=1,
+            plot=plot,
+            factoids=factoids_dict,
+            ground_truth=ground_truth,
+            etalon_services=extracted_services,
+            sequence_number=current_seq,
+            status="active",
+        )
+        db.add(gen_ticket)
+
+        # Создаем ScenarioTicket (требование ТЗ)
+        scenario_ticket = ScenarioTicket(
+            scenario_id=ticket_id,
+            title=title,
+            category=category,
+            complexity=1,
+            content={
+                "title": title,
+                "description": desc_text,
+                "caller_text": caller_text,
+            },
+            settings={
+                "complexity": 1,
+                "etalon_services": extracted_services,
+                "plot": plot,
+                "category": category,
+                "subcategory": title,
+                "sequence_number": current_seq,
+            },
+            ground_truth=ground_truth,
+            ai_content={
+                "factoids": factoids_dict,
+                "plot": plot,
+            },
+            workflow_state={"status": "active"},
+        )
+        db.add(scenario_ticket)
+        success_count += 1
+
+    if success_count > 0:
+        await db.execute(
+            text("UPDATE sys_sequences SET last_val = :val WHERE name = 'generated_tickets'"),
+            {"val": current_seq},
+        )
+        await db.commit()
+
+    return {
+        "success": len(errors) == 0 or success_count > 0,
+        "success_count": success_count,
+        "error_count": len(errors),
+        "errors": errors,
+        "total_rows": success_count + len(errors),
+    }
 
 
 @api_tickets_router.get("/{ticket_id}/audio")

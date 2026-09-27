@@ -13,13 +13,18 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from backend.core.analytics_engine import build_error_heatmap, calculate_trends
 from backend.core.deps import get_current_user, require_role
 from backend.database import get_db
-from backend.models.domain_01 import StudentGroup, User, UserActionLog
+from backend.models.domain_01 import StudentGroup, User, UserActionLog, student_group_link
 from backend.models.domain_02 import ScenarioTicket
 from backend.models.domain_03 import Assignment, ExamSession
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from backend.models.domain_04 import EvaluationResult, IncidentCard, TicketResult
 from backend.schemas.analytics import (
     CadetAnalyticsSummary,
+    DailyDynamicsPoint,
+    EntityErrorInfo,
+    ErrorHeatmapResponse,
+    ErrorTypeInfo,
+    GroupComparisonItem,
     HeatmapResponse,
     LeaderboardItem,
     LeaderboardResponse,
@@ -627,4 +632,445 @@ async def appeal_analytics_record(
         },
         error_details=[],
     )
+
+
+# ─── New Analytics Endpoints for Dashboards & Dummy Data (Task 75) ─────────────
+
+TAXONOMY_ERRORS: Dict[str, Dict[str, str]] = {
+    "comm_rude_tone": {"label": "Грубый тон", "category": "communication", "severity": "high"},
+    "comm_interruption": {"label": "Перебивание заявителя", "category": "communication", "severity": "medium"},
+    "comm_clarification_missed": {"label": "Пропуск уточнения", "category": "communication", "severity": "medium"},
+    "comm_unprofessional": {"label": "Нерегламентированная лексика", "category": "communication", "severity": "low"},
+    "card_wrong_address": {"label": "Ошибка в адресе", "category": "card", "severity": "critical"},
+    "card_wrong_services": {"label": "Неверные службы", "category": "card", "severity": "critical"},
+    "card_missing_caller": {"label": "Данные заявителя пропущены", "category": "card", "severity": "medium"},
+    "card_incorrect_priority": {"label": "Неверный приоритет", "category": "card", "severity": "medium"},
+    "card_incomplete_description": {"label": "Неполное описание", "category": "card", "severity": "low"},
+    "sla_dispatch_delay": {"label": "Задержка ДДС (>60 сек)", "category": "sla", "severity": "high"},
+    "sla_call_duration_exceeded": {"label": "Время звонка (>120 сек)", "category": "sla", "severity": "medium"},
+    "sla_response_time_breach": {"label": "Задержка ответа на вызов", "category": "sla", "severity": "medium"},
+}
+
+
+@analytics_router.get("/dynamics", response_model=List[DailyDynamicsPoint])
+@analytics_router.get("/dynamics/", response_model=List[DailyDynamicsPoint], include_in_schema=False)
+@analytics_v1_router.get("/dynamics", response_model=List[DailyDynamicsPoint])
+@analytics_v1_router.get("/dynamics/", response_model=List[DailyDynamicsPoint], include_in_schema=False)
+async def get_daily_dynamics(
+    group_id: Optional[str] = Query(default=None, description="Фильтр по учебной группе"),
+    cadet_id: Optional[str] = Query(default=None, description="Фильтр по курсанту"),
+    days: int = Query(default=30, ge=1, le=180, description="Глубина в днях"),
+    db: AsyncSession = Depends(get_db),
+):
+    """Retrieve daily average scores, session volumes, and pass rate over time."""
+    group_cadets: List[str] = []
+    group_assignments: List[str] = []
+    if group_id and group_id != "ALL":
+        g_res = await db.execute(select(StudentGroup).where(StudentGroup.group_id == group_id))
+        group = g_res.scalar_one_or_none()
+        if group and group.cadet_ids:
+            group_cadets = list(group.cadet_ids)
+        link_res = await db.execute(
+            select(student_group_link.c.user_id).where(student_group_link.c.group_id == group_id)
+        )
+        group_cadets.extend([r[0] for r in link_res.all()])
+
+        as_res = await db.execute(
+            select(Assignment.assignment_id).where(Assignment.group_id == group_id)
+        )
+        group_assignments = [r[0] for r in as_res.all()]
+
+    stmt = (
+        select(
+            ExamSession.session_id,
+            ExamSession.cadet_id,
+            ExamSession.assignment_id,
+            ExamSession.start_time,
+            TicketResult.score_total,
+            TicketResult.is_passed,
+            TicketResult.created_at,
+            EvaluationResult.scores,
+            EvaluationResult.evaluated_at,
+        )
+        .select_from(ExamSession)
+        .outerjoin(TicketResult, TicketResult.session_id == ExamSession.session_id)
+        .outerjoin(EvaluationResult, EvaluationResult.session_id == ExamSession.session_id)
+    )
+
+    conds = []
+    if group_cadets:
+        conds.append(ExamSession.cadet_id.in_(group_cadets))
+    if group_assignments:
+        conds.append(ExamSession.assignment_id.in_(group_assignments))
+    if group_id and group_id != "ALL" and not conds:
+        conds.append(ExamSession.assignment_id == group_id)
+
+    if cadet_id:
+        stmt = stmt.where(ExamSession.cadet_id == cadet_id)
+    elif conds:
+        stmt = stmt.where(or_(*conds))
+
+    res = await db.execute(stmt)
+    rows = res.all()
+
+    now = datetime.now(timezone.utc)
+    cutoff = now - timedelta(days=days)
+
+    buckets: Dict[str, Dict[str, Any]] = {}
+    for (
+        session_id,
+        cid,
+        as_id,
+        start_time,
+        score_total,
+        is_passed,
+        created_at,
+        eval_scores,
+        evaluated_at,
+    ) in rows:
+        dt = created_at or start_time or evaluated_at
+        if not dt:
+            continue
+        # Make timezone aware if needed
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+        if dt < cutoff:
+            continue
+
+        date_str = dt.strftime("%Y-%m-%d")
+        score = (
+            score_total
+            if score_total is not None
+            else _extract_metric_value("final_score", eval_scores, {})
+        )
+        if score is None:
+            score = 100.0 if is_passed else 50.0
+
+        passed_val = is_passed if is_passed is not None else (score >= 75.0)
+
+        if date_str not in buckets:
+            buckets[date_str] = {
+                "scores": [],
+                "passed": 0,
+                "failed": 0,
+            }
+        buckets[date_str]["scores"].append(float(score))
+        if passed_val:
+            buckets[date_str]["passed"] += 1
+        else:
+            buckets[date_str]["failed"] += 1
+
+    result_points: List[DailyDynamicsPoint] = []
+    for d_str in sorted(buckets.keys()):
+        b = buckets[d_str]
+        total = b["passed"] + b["failed"]
+        avg_score = round(sum(b["scores"]) / len(b["scores"]), 1) if b["scores"] else 0.0
+        pass_rate = round((b["passed"] / total) * 100.0, 1) if total > 0 else 0.0
+
+        result_points.append(
+            DailyDynamicsPoint(
+                date=d_str,
+                avg_score=avg_score,
+                total_sessions=total,
+                passed_count=b["passed"],
+                failed_count=b["failed"],
+                pass_rate=pass_rate,
+            )
+        )
+
+    return result_points
+
+
+@analytics_router.get("/groups-comparison", response_model=List[GroupComparisonItem])
+@analytics_router.get("/groups-comparison/", response_model=List[GroupComparisonItem], include_in_schema=False)
+@analytics_v1_router.get("/groups-comparison", response_model=List[GroupComparisonItem])
+@analytics_v1_router.get("/groups-comparison/", response_model=List[GroupComparisonItem], include_in_schema=False)
+async def get_groups_comparison(
+    db: AsyncSession = Depends(get_db),
+):
+    """Compare average scores, pass rate, and session volume across all student groups."""
+    groups_res = await db.execute(select(StudentGroup).order_by(StudentGroup.group_name))
+    groups = groups_res.scalars().all()
+
+    items: List[GroupComparisonItem] = []
+    for grp in groups:
+        uids = set(grp.cadet_ids or [])
+        link_res = await db.execute(
+            select(student_group_link.c.user_id).where(student_group_link.c.group_id == grp.group_id)
+        )
+        uids.update([r[0] for r in link_res.all()])
+
+        as_res = await db.execute(
+            select(Assignment.assignment_id).where(Assignment.group_id == grp.group_id)
+        )
+        as_ids = [r[0] for r in as_res.all()]
+
+        filter_conds = []
+        if uids:
+            filter_conds.append(ExamSession.cadet_id.in_(list(uids)))
+        if as_ids:
+            filter_conds.append(ExamSession.assignment_id.in_(as_ids))
+
+        sessions_data = []
+        if filter_conds:
+            stmt = (
+                select(
+                    TicketResult.score_total,
+                    TicketResult.is_passed,
+                    TicketResult.errors_count,
+                    EvaluationResult.scores,
+                )
+                .select_from(ExamSession)
+                .outerjoin(TicketResult, TicketResult.session_id == ExamSession.session_id)
+                .outerjoin(EvaluationResult, EvaluationResult.session_id == ExamSession.session_id)
+                .where(or_(*filter_conds))
+            )
+            res = await db.execute(stmt)
+            sessions_data = res.all()
+
+        scores = []
+        passed_count = 0
+        total_errors = 0
+        for score_total, is_passed, errors_count, eval_scores in sessions_data:
+            s_val = (
+                score_total
+                if score_total is not None
+                else _extract_metric_value("final_score", eval_scores, {})
+            )
+            if s_val is not None:
+                scores.append(float(s_val))
+            passed = is_passed if is_passed is not None else (s_val is not None and s_val >= 75.0)
+            if passed:
+                passed_count += 1
+            if errors_count:
+                total_errors += int(errors_count)
+
+        total_sessions = len(sessions_data)
+        avg_score = round(sum(scores) / len(scores), 1) if scores else 0.0
+        pass_rate = round((passed_count / total_sessions) * 100.0, 1) if total_sessions > 0 else 0.0
+
+        items.append(
+            GroupComparisonItem(
+                group_id=grp.group_id,
+                group_name=grp.group_name or f"Группа {grp.group_id[:6]}",
+                student_count=len(uids),
+                avg_score=avg_score,
+                pass_rate=pass_rate,
+                total_sessions=total_sessions,
+                total_errors=total_errors,
+            )
+        )
+
+    return items
+
+
+@analytics_router.get("/errors-heatmap", response_model=ErrorHeatmapResponse)
+@analytics_router.get("/errors-heatmap/", response_model=ErrorHeatmapResponse, include_in_schema=False)
+@analytics_v1_router.get("/errors-heatmap", response_model=ErrorHeatmapResponse)
+@analytics_v1_router.get("/errors-heatmap/", response_model=ErrorHeatmapResponse, include_in_schema=False)
+async def get_errors_heatmap(
+    group_id: Optional[str] = Query(default=None, description="Фильтр по группе"),
+    entity_type: str = Query(default="students", description="'students' или 'groups'"),
+    category: Optional[str] = Query(default=None, description="Категория ошибки: communication, card, sla"),
+    db: AsyncSession = Depends(get_db),
+):
+    """Retrieve 2D frequency matrix of error types per student or group."""
+    group_cadets: List[str] = []
+    group_assignments: List[str] = []
+    if group_id and group_id != "ALL":
+        g_res = await db.execute(select(StudentGroup).where(StudentGroup.group_id == group_id))
+        group = g_res.scalar_one_or_none()
+        if group and group.cadet_ids:
+            group_cadets = list(group.cadet_ids)
+        link_res = await db.execute(
+            select(student_group_link.c.user_id).where(student_group_link.c.group_id == group_id)
+        )
+        group_cadets.extend([r[0] for r in link_res.all()])
+
+        as_res = await db.execute(
+            select(Assignment.assignment_id).where(Assignment.group_id == group_id)
+        )
+        group_assignments = [r[0] for r in as_res.all()]
+
+    # Fetch groups mapping
+    groups_res = await db.execute(select(StudentGroup))
+    all_groups = groups_res.scalars().all()
+    cadet_group_map: Dict[str, str] = {}
+    group_name_map: Dict[str, str] = {g.group_id: g.group_name for g in all_groups}
+    for g in all_groups:
+        for cid in (g.cadet_ids or []):
+            cadet_group_map[cid] = g.group_name
+
+    link_rows = await db.execute(
+        select(student_group_link.c.user_id, student_group_link.c.group_id)
+    )
+    for uid, gid in link_rows.all():
+        if gid in group_name_map:
+            cadet_group_map[uid] = group_name_map[gid]
+
+    u_rows = await db.execute(select(User.user_id, User.group_ids))
+    for uid, gids in u_rows.all():
+        if gids and isinstance(gids, list) and len(gids) > 0:
+            gid = gids[0]
+            if gid in group_name_map:
+                cadet_group_map[uid] = group_name_map[gid]
+
+    assign_rows = await db.execute(select(Assignment.assignment_id, Assignment.group_id))
+    assign_group_map = {aid: gid for aid, gid in assign_rows.all() if gid}
+
+    stmt = (
+        select(
+            ExamSession.cadet_id,
+            ExamSession.assignment_id,
+            User.full_name,
+            User.username,
+            TicketResult.error_details,
+            EvaluationResult.errors_list,
+        )
+        .select_from(ExamSession)
+        .outerjoin(User, User.user_id == ExamSession.cadet_id)
+        .outerjoin(TicketResult, TicketResult.session_id == ExamSession.session_id)
+        .outerjoin(EvaluationResult, EvaluationResult.session_id == ExamSession.session_id)
+    )
+
+    conds = []
+    if group_cadets:
+        conds.append(ExamSession.cadet_id.in_(group_cadets))
+    if group_assignments:
+        conds.append(ExamSession.assignment_id.in_(group_assignments))
+    if group_id and group_id != "ALL" and not conds:
+        conds.append(ExamSession.assignment_id == group_id)
+
+    if conds:
+        stmt = stmt.where(or_(*conds))
+
+    res = await db.execute(stmt)
+    rows = res.all()
+
+    # Data structures for accumulation
+    entity_counts: Dict[str, Dict[str, int]] = {}
+    entity_names: Dict[str, str] = {}
+    entity_group_names: Dict[str, str] = {}
+    totals_by_error: Dict[str, int] = {}
+    active_error_keys: Set[str] = set()
+
+    if entity_type == "groups":
+        for g in all_groups:
+            if group_id and group_id != "ALL" and g.group_id != group_id:
+                continue
+            gname = g.group_name or f"Группа {g.group_id[:6]}"
+            entity_counts[gname] = {}
+            entity_names[gname] = gname
+
+    for cadet_id, as_id, full_name, username, error_details, errors_list in rows:
+        cadet_id_str = cadet_id or "unknown"
+        student_name = full_name or username or f"Курсант {cadet_id_str[:6]}"
+        grp_name = (
+            cadet_group_map.get(cadet_id_str)
+            or (group_name_map.get(assign_group_map.get(as_id, "")) if as_id else None)
+            or "Общая группа"
+        )
+
+        if entity_type == "groups":
+            ent_id = grp_name
+            ent_name = grp_name
+            ent_grp = None
+        else:
+            ent_id = cadet_id_str
+            ent_name = student_name
+            ent_grp = grp_name
+
+        if ent_id not in entity_counts:
+            entity_counts[ent_id] = {}
+            entity_names[ent_id] = ent_name
+            if ent_grp:
+                entity_group_names[ent_id] = ent_grp
+
+        # Extract all errors
+        raw_errors: List[Any] = []
+        if isinstance(error_details, list):
+            raw_errors.extend(error_details)
+        elif isinstance(error_details, dict):
+            raw_errors.extend(error_details.values())
+
+        if isinstance(errors_list, list):
+            raw_errors.extend(errors_list)
+
+        for err in raw_errors:
+            if isinstance(err, dict):
+                err_key = err.get("penalty_type") or err.get("error_type") or err.get("key") or str(err)
+                err_cat = err.get("category")
+            else:
+                err_key = str(err)
+                err_cat = None
+
+            if not err_key:
+                continue
+
+            tax_info = TAXONOMY_ERRORS.get(err_key)
+            if not err_cat:
+                if tax_info:
+                    err_cat = tax_info["category"]
+                elif err_key.startswith("comm_"):
+                    err_cat = "communication"
+                elif err_key.startswith("card_"):
+                    err_cat = "card"
+                elif err_key.startswith("sla_"):
+                    err_cat = "sla"
+                else:
+                    err_cat = "other"
+
+            # Apply category filter if provided
+            if category and category.lower() != err_cat.lower():
+                continue
+
+            active_error_keys.add(err_key)
+            entity_counts[ent_id][err_key] = entity_counts[ent_id].get(err_key, 0) + 1
+            totals_by_error[err_key] = totals_by_error.get(err_key, 0) + 1
+
+    # Ensure all taxonomy errors in target category are listed for complete grid view
+    displayed_keys: List[str] = []
+    for k, info in TAXONOMY_ERRORS.items():
+        if category and category.lower() != info["category"].lower():
+            continue
+        displayed_keys.append(k)
+
+    for k in active_error_keys:
+        if k not in displayed_keys:
+            displayed_keys.append(k)
+
+    error_types: List[ErrorTypeInfo] = []
+    for k in displayed_keys:
+        info = TAXONOMY_ERRORS.get(k, {"label": k, "category": "other", "severity": "medium"})
+        error_types.append(
+            ErrorTypeInfo(
+                key=k,
+                label=info["label"],
+                category=info["category"],
+                severity=info.get("severity", "medium"),
+            )
+        )
+
+    entities: List[EntityErrorInfo] = []
+    for ent_id, counts in entity_counts.items():
+        total_errs = sum(counts.values())
+        entities.append(
+            EntityErrorInfo(
+                id=ent_id,
+                name=entity_names.get(ent_id, ent_id),
+                group_name=entity_group_names.get(ent_id),
+                error_counts=counts,
+                total_errors=total_errs,
+            )
+        )
+
+    # Sort entities by total errors descending
+    entities.sort(key=lambda e: e.total_errors, reverse=True)
+
+    return ErrorHeatmapResponse(
+        error_types=error_types,
+        entities=entities,
+        totals_by_error=totals_by_error,
+    )
+
 

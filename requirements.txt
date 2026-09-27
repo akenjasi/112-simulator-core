@@ -19,6 +19,7 @@ asyncpg>=0.29.0            # PostgreSQL async driver (cloud)
 # ─── Authentication ───────────────────────────────────────────────────────────
 passlib[bcrypt]>=1.7.4     # password hashing
 python-jose[cryptography]>=3.3.0  # JWT
+pyotp>=2.9.0               # TOTP two-factor authentication
 
 # ─── System / Monitoring ──────────────────────────────────────────────────────
 psutil>=5.9.0

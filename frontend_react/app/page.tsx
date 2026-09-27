@@ -1,5 +1,5 @@
 import Link from "next/link"
-import { GraduationCap, Headphones, ArrowRight, ShieldCheck, Activity, Shield } from "lucide-react"
+import { GraduationCap, Headphones, ArrowRight, ShieldCheck, Activity, Shield, KeyRound } from "lucide-react"
 
 export default function LandingPage() {
   return (
@@ -20,9 +20,18 @@ export default function LandingPage() {
           </div>
         </div>
 
-        <div className="flex items-center gap-2 text-xs text-muted-foreground bg-muted/60 px-3 py-1.5 rounded-full border border-border/60">
-          <Activity className="h-3.5 w-3.5 text-emerald-500 animate-pulse" />
-          <span>Система активна</span>
+        <div className="flex items-center gap-3">
+          <Link
+            href="/login"
+            className="flex items-center gap-1.5 text-xs font-semibold text-foreground hover:text-primary transition-colors px-3 py-1.5 rounded-lg border border-border bg-card/60 hover:bg-muted shadow-xs"
+          >
+            <KeyRound className="h-3.5 w-3.5" />
+            <span>Вход (2FA)</span>
+          </Link>
+          <div className="flex items-center gap-2 text-xs text-muted-foreground bg-muted/60 px-3 py-1.5 rounded-full border border-border/60">
+            <Activity className="h-3.5 w-3.5 text-emerald-500 animate-pulse" />
+            <span>Система активна</span>
+          </div>
         </div>
       </header>
 

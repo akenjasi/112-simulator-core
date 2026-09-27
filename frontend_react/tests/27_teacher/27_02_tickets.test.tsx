@@ -1,5 +1,5 @@
 import React from 'react';
-import { render, screen, waitFor, fireEvent, within } from '@testing-library/react';
+import { render, screen, waitFor, fireEvent, createEvent, within } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import TicketsPage from '@/app/teacher/tickets/page';
 
@@ -232,6 +232,28 @@ describe('27.2 / ТЗ 30: База билетов и генерация', () => 
             lat: 55.75,
             lon: 37.61,
             full_address: 'Москва, Лесная улица, 15к2',
+          }),
+        });
+      }
+
+      if (urlStr.includes('/api/tickets/import/template')) {
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          blob: async () => new Blob(['fake-xlsx-bytes'], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }),
+        });
+      }
+
+      if (urlStr.includes('/api/tickets/import/upload') && init?.method === 'POST') {
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          json: async () => ({
+            success: true,
+            success_count: 15,
+            error_count: 2,
+            errors: ['строка 4 пустая целевая служба', 'строка 7 пустое название или текст абонента'],
+            total_rows: 17,
           }),
         });
       }
@@ -1065,6 +1087,71 @@ describe('27.2 / ТЗ 30: База билетов и генерация', () => 
     // Header close button exists
     const closeBtn = within(dialog).getByTestId('modal-dismiss-btn');
     expect(closeBtn).toBeInTheDocument();
+  });
+
+  it('ТЗ 77: should open Excel import modal with template download and upload drag-and-drop zone', async () => {
+    render(<TicketsPage />);
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: /Импорт из Excel/i })).toBeInTheDocument();
+    });
+
+    const importBtn = screen.getByRole('button', { name: /Импорт из Excel/i });
+    fireEvent.click(importBtn);
+
+    await waitFor(() => {
+      expect(screen.getByRole('dialog', { name: /Импорт из Excel/i })).toBeInTheDocument();
+    });
+
+    const dialog = screen.getByRole('dialog', { name: /Импорт из Excel/i });
+    expect(within(dialog).getByRole('button', { name: /1\. Скачать шаблон/i })).toBeInTheDocument();
+    expect(within(dialog).getByText(/2\. Загрузить заполненный файл/i)).toBeInTheDocument();
+
+    // Trigger download
+    const downloadBtn = within(dialog).getByRole('button', { name: /1\. Скачать шаблон/i });
+    fireEvent.click(downloadBtn);
+
+    await waitFor(() => {
+      expect(global.fetch).toHaveBeenCalledWith('/api/tickets/import/template');
+    });
+  });
+
+  it('ТЗ 77: should upload excel file and display parsing results (успешно: 15, ошибки: 2)', async () => {
+    render(<TicketsPage />);
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: /Импорт из Excel/i })).toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByRole('button', { name: /Импорт из Excel/i }));
+
+    const dialog = await screen.findByRole('dialog', { name: /Импорт из Excel/i });
+
+    const dropzone = within(dialog).getByTestId('dropzone');
+    expect(dropzone).toBeInTheDocument();
+
+    const file = new File(['fake content'], 'test_tickets.xlsx', {
+      type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    });
+
+    fireEvent.dragOver(dropzone);
+    fireEvent.drop(dropzone, {
+      dataTransfer: {
+        files: [file],
+      },
+    });
+
+    await waitFor(() => {
+      expect(within(dialog).getAllByText(/test_tickets\.xlsx/i).length).toBeGreaterThan(0);
+    });
+
+    const uploadBtn = within(dialog).getByRole('button', { name: /Импортировать билеты/i });
+    fireEvent.click(uploadBtn);
+
+    await waitFor(() => {
+      expect(within(dialog).getAllByText(/Результаты парсинга: успешно: 15, ошибки: 2/i).length).toBeGreaterThan(0);
+      expect(within(dialog).getAllByText(/строка 4 пустая целевая служба/i).length).toBeGreaterThan(0);
+    });
   });
 });
 

@@ -153,3 +153,49 @@ class RecordDetailResponse(BaseModel):
     student_answer: Dict[str, Any] = Field(default_factory=dict)
     error_details: Any = Field(default_factory=list)
 
+
+class DailyDynamicsPoint(BaseModel):
+    """Daily aggregated score point for dynamics chart."""
+    date: str = Field(..., description="Дата (YYYY-MM-DD)")
+    avg_score: float = Field(..., description="Средний балл за день")
+    total_sessions: int = Field(default=0, description="Всего сессий за день")
+    passed_count: int = Field(default=0, description="Успешно пройденных сессий")
+    failed_count: int = Field(default=0, description="Не пройденных сессий")
+    pass_rate: float = Field(default=0.0, description="Процент успешных с первой попытки (%)")
+
+
+class GroupComparisonItem(BaseModel):
+    """Summary of group performance for bar chart comparison."""
+    group_id: str
+    group_name: str
+    student_count: int = 0
+    avg_score: float = 0.0
+    pass_rate: float = 0.0
+    total_sessions: int = 0
+    total_errors: int = 0
+
+
+class ErrorTypeInfo(BaseModel):
+    """Metadata describing an error type."""
+    key: str
+    label: str
+    category: str  # "communication", "card", "sla", etc.
+    severity: Optional[str] = "medium"
+
+
+class EntityErrorInfo(BaseModel):
+    """Frequency counts of errors for a student or group."""
+    id: str
+    name: str
+    group_name: Optional[str] = None
+    error_counts: Dict[str, int] = Field(default_factory=dict)
+    total_errors: int = 0
+
+
+class ErrorHeatmapResponse(BaseModel):
+    """Structured response for 2D error frequency matrix / heatmap."""
+    error_types: List[ErrorTypeInfo] = Field(default_factory=list)
+    entities: List[EntityErrorInfo] = Field(default_factory=list)
+    totals_by_error: Dict[str, int] = Field(default_factory=dict)
+
+

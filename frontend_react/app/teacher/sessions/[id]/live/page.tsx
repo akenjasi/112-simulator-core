@@ -826,9 +826,9 @@ export default function LiveDashboardPage(props: LiveDashboardProps = {}) {
         </div>
       ) : (
         /* Table View */
-        <Card className="shadow-xs border">
-          <CardContent className="p-0">
-            <Table>
+        <Card className="shadow-xs border overflow-hidden">
+          <CardContent className="p-0 overflow-x-auto w-full">
+            <Table className="min-w-[700px]">
               <TableHeader>
                 <TableRow>
                   <TableHead>Курсант</TableHead>

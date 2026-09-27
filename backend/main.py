@@ -52,6 +52,7 @@ from backend.api.router_tickets import tickets_router, api_tickets_router
 from backend.api.router_knowledge import knowledge_router
 from backend.api.router_asr import router_asr
 from backend.api.router_telephony import router_telephony
+from backend.api.router_ai_analytics import router as ai_analytics_router
 from backend.core.audit_middleware import AuditMiddleware
 
 
@@ -75,6 +76,8 @@ async def lifespan(app: FastAPI):
         from sqlalchemy import text
         for alter_sql in [
             "ALTER TABLE users ADD COLUMN student_id VARCHAR",
+            "ALTER TABLE users ADD COLUMN totp_secret VARCHAR",
+            "ALTER TABLE users ADD COLUMN is_2fa_enabled BOOLEAN DEFAULT 0",
             "ALTER TABLE generated_tickets ADD COLUMN status VARCHAR",
             "ALTER TABLE ticket_results ADD COLUMN score_total FLOAT",
             "ALTER TABLE ticket_results ADD COLUMN status VARCHAR",
@@ -144,6 +147,7 @@ app.include_router(api_tickets_router)
 app.include_router(knowledge_router)
 app.include_router(router_asr)
 app.include_router(router_telephony)
+app.include_router(ai_analytics_router)
 
 
 

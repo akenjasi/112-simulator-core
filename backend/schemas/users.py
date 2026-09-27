@@ -25,6 +25,7 @@ class UserResponse(BaseModel):
     full_name: Optional[str] = None
     student_id: Optional[str] = None
     is_active: bool = True
+    is_2fa_enabled: bool = False
 
     model_config = {"from_attributes": True}
 

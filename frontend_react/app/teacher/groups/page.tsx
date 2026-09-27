@@ -901,8 +901,8 @@ export default function GroupsPage() {
                             В этой группе пока нет учеников. Загрузите CSV или добавьте ученика через форму выше.
                           </div>
                         ) : (
-                          <div className="border rounded-lg bg-background overflow-hidden">
-                            <Table>
+                          <div className="border rounded-lg bg-background overflow-x-auto w-full">
+                            <Table className="min-w-[600px]">
                               <TableHeader>
                                 <TableRow>
                                   <TableHead>Фамилия</TableHead>
@@ -1082,8 +1082,8 @@ export default function GroupsPage() {
                 Ученики не найдены
               </div>
             ) : (
-              <div className="border rounded-lg overflow-hidden">
-                <Table>
+              <div className="border rounded-lg overflow-x-auto w-full">
+                <Table className="min-w-[650px]">
                   <TableHeader>
                     <TableRow>
                       <TableHead className="w-12 text-center">
@@ -1584,8 +1584,8 @@ export default function GroupsPage() {
             </div>
 
             {/* Table */}
-            <div className="max-h-96 overflow-y-auto border rounded-lg">
-              <Table>
+            <div className="max-h-96 overflow-y-auto overflow-x-auto border rounded-lg w-full">
+              <Table className="min-w-[500px]">
                 <TableHeader>
                   <TableRow>
                     <TableHead className="w-12 text-center">№</TableHead>

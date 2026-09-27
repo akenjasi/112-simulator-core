@@ -41,7 +41,19 @@ import {
   BookOpen,
   Target,
   Zap,
+  Sparkles,
+  Bot,
 } from "lucide-react"
+
+export interface AIAdviceItem {
+  id: string
+  advice_id: string
+  cadet_id?: string
+  analysis_text: string
+  date: string
+  is_read: boolean
+  model_used: string
+}
 
 export interface CompetenceItem {
   category: string
@@ -153,13 +165,17 @@ const DEFAULT_CATEGORIES: CompetenceItem[] = [
 
 export default function StudentProfilePage() {
   const [role, setRole] = useState<"OPERATOR_112" | "DISPATCHER_DDS">("OPERATOR_112")
-  const [activeTab, setActiveTab] = useState<"lessons" | "docs">("lessons")
+  const [activeTab, setActiveTab] = useState<"lessons" | "docs" | "ai_advice">("lessons")
   const [userProfile, setUserProfile] = useState<UserProfile>({
     username: "cadet@system112.ru",
     full_name: "Иванов Иван Иванович",
     student_id: "СМ1-12",
     role: "CADET",
   })
+
+  const [aiAdvices, setAiAdvices] = useState<AIAdviceItem[]>([])
+  const [isLoadingAi, setIsLoadingAi] = useState<boolean>(false)
+  const [isTriggeringAi, setIsTriggeringAi] = useState<boolean>(false)
 
   const [stats, setStats] = useState<StudentStats>({
     average_score: 84.5,
@@ -201,6 +217,59 @@ export default function StudentProfilePage() {
   const [expandedLessonId, setExpandedLessonId] = useState<string | null>(null)
   const [isLoading, setIsLoading] = useState<boolean>(true)
 
+  // Fetch AI advice for cadet
+  const loadAiAdvice = useCallback(async (cadetId?: string) => {
+    const idToUse = cadetId || userProfile.user_id
+    if (!idToUse) return
+    setIsLoadingAi(true)
+    try {
+      const res = await fetch(`/api/ai-analytics/student/${idToUse}`)
+      if (res.ok) {
+        const data = await res.json()
+        setAiAdvices(Array.isArray(data) ? data : [])
+      }
+    } catch (err) {
+      console.warn("Could not load AI advice:", err)
+    } finally {
+      setIsLoadingAi(false)
+    }
+  }, [userProfile.user_id])
+
+  const handleTriggerAiAnalysis = async () => {
+    const idToUse = userProfile.user_id
+    if (!idToUse) return
+    setIsTriggeringAi(true)
+    try {
+      const res = await fetch(`/api/ai-analytics/trigger?cadet_id=${idToUse}&background=false`, {
+        method: "POST",
+      })
+      if (res.ok) {
+        await loadAiAdvice(idToUse)
+      }
+    } catch (err) {
+      console.warn("Failed to trigger AI analysis:", err)
+    } finally {
+      setIsTriggeringAi(false)
+    }
+  }
+
+  const handleMarkAdviceRead = async (adviceId: string) => {
+    try {
+      const res = await fetch(`/api/ai-analytics/student/advice/${adviceId}/read`, {
+        method: "PATCH",
+      })
+      if (res.ok) {
+        setAiAdvices((prev) =>
+          prev.map((item) =>
+            item.advice_id === adviceId ? { ...item, is_read: true } : item
+          )
+        )
+      }
+    } catch (err) {
+      console.warn("Failed to mark advice as read:", err)
+    }
+  }
+
   // Fetch student profile & current user info
   const loadProfile = useCallback(async () => {
     try {
@@ -215,11 +284,14 @@ export default function StudentProfilePage() {
           full_name: data.full_name || prev.full_name,
           role: data.role || prev.role,
         }))
+        if (data.user_id) {
+          loadAiAdvice(data.user_id)
+        }
       }
     } catch {
       // Fallback defaults remain
     }
-  }, [])
+  }, [loadAiAdvice])
 
   // Fetch statistics based on active role
   const loadStats = useCallback(async (currentRole: string) => {
@@ -745,12 +817,33 @@ export default function StudentProfilePage() {
                     {REFERENCE_DOCS.length}
                   </Badge>
                 </button>
+
+                <button
+                  type="button"
+                  onClick={() => setActiveTab("ai_advice")}
+                  className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-bold transition-colors cursor-pointer ${
+                    activeTab === "ai_advice"
+                      ? "bg-background text-primary shadow-xs ring-1 ring-border"
+                      : "text-muted-foreground hover:text-foreground"
+                  }`}
+                >
+                  <Sparkles className="h-3.5 w-3.5 text-amber-500" />
+                  <span>Советы ИИ</span>
+                  <Badge variant="secondary" className="text-[10px] px-1.5 py-0 bg-amber-500/10 text-amber-700 dark:text-amber-400">
+                    Qwen 9B
+                  </Badge>
+                  {aiAdvices.filter((a) => !a.is_read).length > 0 && (
+                    <span className="h-2 w-2 rounded-full bg-red-500" />
+                  )}
+                </button>
               </div>
 
               <span className="text-[11px] text-muted-foreground hidden sm:inline">
                 {activeTab === "lessons"
                   ? "Протоколы завершенных занятий и оценки"
-                  : "Методические инструкции и регламенты"}
+                  : activeTab === "docs"
+                  ? "Методические инструкции и регламенты"
+                  : "Интеллектуальный разбор диалогов и методические указания нейросети"}
               </span>
             </div>
           </CardHeader>
@@ -976,6 +1069,124 @@ export default function StudentProfilePage() {
                     </Button>
                   </div>
                 ))}
+              </div>
+            )}
+
+            {/* Tab 3: AI Advice (Qwen 3.5 9B / Qwen 2.5 9B) */}
+            {activeTab === "ai_advice" && (
+              <div className="space-y-4">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3.5 rounded-xl border bg-gradient-to-r from-amber-500/10 via-primary/5 to-transparent">
+                  <div className="flex items-center gap-3">
+                    <div className="h-10 w-10 rounded-xl bg-amber-500/20 text-amber-600 dark:text-amber-400 flex items-center justify-center shrink-0">
+                      <Sparkles className="h-5 w-5" />
+                    </div>
+                    <div>
+                      <h4 className="font-bold text-sm text-foreground flex items-center gap-2">
+                        Глубокий анализ сессий
+                        <Badge variant="outline" className="border-amber-500/40 text-amber-600 dark:text-amber-400 text-[10px]">
+                          Qwen 3.5 9B
+                        </Badge>
+                      </h4>
+                      <p className="text-xs text-muted-foreground">
+                        Автономный разбор речевых логов, выявление ошибок адресации и советы по стрессоустойчивости
+                      </p>
+                    </div>
+                  </div>
+
+                  <Button
+                    size="sm"
+                    onClick={handleTriggerAiAnalysis}
+                    disabled={isTriggeringAi}
+                    className="shrink-0 gap-2 text-xs font-semibold cursor-pointer bg-primary hover:bg-primary/90"
+                  >
+                    {isTriggeringAi ? (
+                      <>
+                        <RefreshCw className="h-3.5 w-3.5 animate-spin" />
+                        <span>Анализ сессий...</span>
+                      </>
+                    ) : (
+                      <>
+                        <Bot className="h-3.5 w-3.5" />
+                        <span>Запросить анализ ИИ</span>
+                      </>
+                    )}
+                  </Button>
+                </div>
+
+                {isLoadingAi ? (
+                  <div className="text-center py-10">
+                    <RefreshCw className="h-6 w-6 animate-spin mx-auto text-primary mb-2" />
+                    <p className="text-xs text-muted-foreground">Загрузка рекомендаций нейросети...</p>
+                  </div>
+                ) : aiAdvices.length === 0 ? (
+                  <div className="text-center py-10 border-2 border-dashed rounded-xl bg-muted/20 space-y-2">
+                    <Bot className="h-10 w-10 mx-auto text-muted-foreground/40 mb-1" />
+                    <p className="text-sm font-semibold text-foreground">Пока нет рекомендаций от ИИ</p>
+                    <p className="text-xs text-muted-foreground max-w-md mx-auto">
+                      Пройдите несколько тренировочных сессий или нажмите кнопку «Запросить анализ ИИ» выше для формирования первичного методического отчета.
+                    </p>
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {aiAdvices.map((adv) => (
+                      <div
+                        key={adv.advice_id}
+                        className={`p-4 rounded-xl border transition-all shadow-2xs ${
+                          adv.is_read
+                            ? "bg-card border-border/70"
+                            : "bg-amber-500/5 border-amber-500/30 ring-1 ring-amber-500/20"
+                        }`}
+                      >
+                        <div className="flex items-center justify-between gap-2 border-b pb-2 mb-3">
+                          <div className="flex items-center gap-2">
+                            <Bot className="h-4 w-4 text-amber-500" />
+                            <span className="font-semibold text-xs text-foreground">
+                              Методический отчет ИИ
+                            </span>
+                            <Badge variant="outline" className="text-[10px] py-0 font-mono">
+                              {adv.model_used || "Qwen 3.5 9B"}
+                            </Badge>
+                            {!adv.is_read ? (
+                              <Badge className="bg-amber-500 text-white text-[10px] py-0">
+                                Новое
+                              </Badge>
+                            ) : (
+                              <Badge variant="secondary" className="text-[10px] py-0 text-muted-foreground">
+                                Прочитано
+                              </Badge>
+                            )}
+                          </div>
+
+                          <div className="flex items-center gap-2">
+                            <span className="text-[11px] text-muted-foreground">
+                              {new Date(adv.date).toLocaleString("ru-RU", {
+                                day: "numeric",
+                                month: "short",
+                                hour: "2-digit",
+                                minute: "2-digit",
+                              })}
+                            </span>
+                            {!adv.is_read && (
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => handleMarkAdviceRead(adv.advice_id)}
+                                className="h-7 px-2 text-[11px] text-muted-foreground hover:text-foreground cursor-pointer"
+                              >
+                                <CheckCircle2 className="h-3.5 w-3.5 mr-1 text-emerald-500" />
+                                <span>Прочитано</span>
+                              </Button>
+                            )}
+                          </div>
+                        </div>
+
+                        <div className="text-xs sm:text-sm text-foreground/90 whitespace-pre-wrap leading-relaxed font-sans">
+                          {adv.analysis_text}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             )}
           </CardContent>

@@ -63,6 +63,8 @@ class User(Base):
         nullable=False,
     )
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    totp_secret: Mapped[Optional[str]] = mapped_column(String, nullable=True, default=None)
+    is_2fa_enabled: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
 
     groups: Mapped[list["StudentGroup"]] = relationship(
         "StudentGroup",
@@ -86,6 +88,8 @@ class User(Base):
         kwargs.setdefault("group_ids", [])
         kwargs.setdefault("failed_login_attempts", 0)
         kwargs.setdefault("is_active", True)
+        kwargs.setdefault("totp_secret", None)
+        kwargs.setdefault("is_2fa_enabled", False)
         if kwargs.get("role") == "CADET":
             kwargs.setdefault("full_name", "Иванов Иван Иванович")
             kwargs.setdefault("student_id", "СМ1-12")
@@ -132,6 +136,14 @@ class StudentGroup(Base):
         self.group_id = value
 
     @property
+    def name(self) -> str:
+        return self.group_name
+
+    @name.setter
+    def name(self, value: str):
+        self.group_name = value
+
+    @property
     def cadets(self) -> list["User"]:
         return self.students
 
@@ -145,7 +157,10 @@ class StudentGroup(Base):
     def __init__(self, **kwargs):
         if "id" in kwargs and "group_id" not in kwargs:
             kwargs["group_id"] = kwargs.pop("id")
+        if "name" in kwargs and "group_name" not in kwargs:
+            kwargs["group_name"] = kwargs.pop("name")
         kwargs.pop("profile", None)
+        kwargs.pop("specialization", None)
         kwargs.setdefault("group_id", str(uuid.uuid4()))
         kwargs.setdefault("cadet_ids", [])
         kwargs.setdefault("is_active", True)
@@ -188,3 +203,11 @@ class UserActionLog(Base):
             kwargs["action"] = kwargs.pop("action_type")
         kwargs.setdefault("log_id", str(uuid.uuid4()))
         super().__init__(**kwargs)
+
+
+# Re-exports
+def __getattr__(name):
+    if name in ("AIStudentAdvice", "AIGroupAdvice"):
+        from backend.models.domain_03 import AIStudentAdvice, AIGroupAdvice
+        return globals().setdefault(name, locals()[name])
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

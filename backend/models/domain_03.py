@@ -332,3 +332,93 @@ class KnowledgeFile(Base):
         kwargs.setdefault("file_id", str(uuid.uuid4()))
         super().__init__(**kwargs)
 
+
+class AIStudentAdvice(Base):
+    __tablename__ = "ai_student_advice"
+
+    advice_id: Mapped[str] = mapped_column(
+        String,
+        primary_key=True,
+        default=lambda: str(uuid.uuid4()),
+    )
+    cadet_id: Mapped[str] = mapped_column(
+        String,
+        ForeignKey("users.user_id"),
+        nullable=False,
+        index=True,
+    )
+    analysis_text: Mapped[str] = mapped_column(Text, nullable=False)
+    date: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=lambda: datetime.now(timezone.utc),
+        server_default=func.now(),
+        nullable=False,
+    )
+    is_read: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    model_used: Mapped[str] = mapped_column(String, default="Qwen 3.5 9B", nullable=False)
+
+    @property
+    def id(self) -> str:
+        return self.advice_id
+
+    @id.setter
+    def id(self, value: str):
+        self.advice_id = value
+
+    def __init__(self, **kwargs):
+        if "id" in kwargs and "advice_id" not in kwargs:
+            kwargs["advice_id"] = kwargs.pop("id")
+        kwargs.setdefault("advice_id", str(uuid.uuid4()))
+        if "is_read" not in kwargs:
+            kwargs["is_read"] = False
+        if "model_used" not in kwargs:
+            kwargs["model_used"] = "Qwen 3.5 9B"
+        if "date" not in kwargs:
+            kwargs["date"] = datetime.now(timezone.utc)
+        super().__init__(**kwargs)
+
+
+class AIGroupAdvice(Base):
+    __tablename__ = "ai_group_advice"
+
+    advice_id: Mapped[str] = mapped_column(
+        String,
+        primary_key=True,
+        default=lambda: str(uuid.uuid4()),
+    )
+    group_id: Mapped[str] = mapped_column(
+        String,
+        ForeignKey("student_groups.group_id"),
+        nullable=False,
+        index=True,
+    )
+    analysis_text: Mapped[str] = mapped_column(Text, nullable=False)
+    date: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=lambda: datetime.now(timezone.utc),
+        server_default=func.now(),
+        nullable=False,
+    )
+    is_read: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    model_used: Mapped[str] = mapped_column(String, default="Qwen 3.5 9B", nullable=False)
+
+    @property
+    def id(self) -> str:
+        return self.advice_id
+
+    @id.setter
+    def id(self, value: str):
+        self.advice_id = value
+
+    def __init__(self, **kwargs):
+        if "id" in kwargs and "advice_id" not in kwargs:
+            kwargs["advice_id"] = kwargs.pop("id")
+        kwargs.setdefault("advice_id", str(uuid.uuid4()))
+        if "is_read" not in kwargs:
+            kwargs["is_read"] = False
+        if "model_used" not in kwargs:
+            kwargs["model_used"] = "Qwen 3.5 9B"
+        if "date" not in kwargs:
+            kwargs["date"] = datetime.now(timezone.utc)
+        super().__init__(**kwargs)
+

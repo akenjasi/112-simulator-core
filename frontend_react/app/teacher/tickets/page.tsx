@@ -16,6 +16,7 @@ import { Label } from "@/components/ui/label"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Select, SelectItem } from "@/components/ui/select"
+import { Dropzone } from "@/components/ui/dropzone"
 import {
   Sparkles,
   Ticket,
@@ -44,6 +45,9 @@ import {
   Check,
   Plus,
   Dices,
+  FileSpreadsheet,
+  Download,
+  UploadCloud,
 } from "lucide-react"
 
 export interface GroundTruth {
@@ -157,6 +161,21 @@ export default function TicketsPage() {
   // Real-time generation & polling state
   const [isGenerating, setIsGenerating] = useState<boolean>(false)
   const [generationState, setGenerationState] = useState<GenerationState | null>(null)
+
+  // Excel Import state (ТЗ 77)
+  const [isImportModalOpen, setIsImportModalOpen] = useState<boolean>(false)
+  const [importFile, setImportFile] = useState<File | null>(null)
+  const [isImportUploading, setIsImportUploading] = useState<boolean>(false)
+  const [isDragOver, setIsDragOver] = useState<boolean>(false)
+  const [importError, setImportError] = useState<string | null>(null)
+  const [importResult, setImportResult] = useState<{
+    success: boolean
+    success_count: number
+    error_count: number
+    errors: string[]
+    total_rows: number
+  } | null>(null)
+  const fileInputRef = useRef<HTMLInputElement | null>(null)
 
   // Load categories and services from classifier API
   useEffect(() => {
@@ -419,6 +438,90 @@ export default function TicketsPage() {
 
   // UX-сценарий "Умная генерация":
   // Если преподаватель выбрал фильтры (например, "Взрывы") и хочет сгенерировать,
+  // Excel Import handlers (ТЗ 77)
+  const handleOpenImportModal = () => {
+    setIsImportModalOpen(true)
+    setImportFile(null)
+    setImportError(null)
+    setImportResult(null)
+    setIsDragOver(false)
+  }
+
+  const handleDownloadTemplate = async () => {
+    try {
+      const res = await fetch("/api/tickets/import/template")
+      if (!res.ok) {
+        throw new Error(`Ошибка при скачивании шаблона (${res.status})`)
+      }
+      const blob = await res.blob()
+      const url = window.URL.createObjectURL(blob)
+      const a = document.createElement("a")
+      a.href = url
+      a.download = "tickets_template.xlsx"
+      document.body.appendChild(a)
+      a.click()
+      window.URL.revokeObjectURL(url)
+      document.body.removeChild(a)
+    } catch (err: any) {
+      setImportError(err.message || "Не удалось скачать шаблон Excel")
+    }
+  }
+
+  const handleSelectImportFile = (file: File) => {
+    const name = (file?.name || "").toLowerCase()
+    if (!name.endsWith(".xlsx") && !name.endsWith(".xls")) {
+      setImportError("Поддерживаются только файлы Excel (.xlsx, .xls)")
+      return
+    }
+    setImportError(null)
+    setImportResult(null)
+    setImportFile(file)
+  }
+
+  const handleDropImportFile = (e: React.DragEvent<HTMLDivElement>) => {
+    e.preventDefault()
+    setIsDragOver(false)
+    if (e.dataTransfer?.files && e.dataTransfer.files.length > 0) {
+      handleSelectImportFile(e.dataTransfer.files[0])
+    }
+  }
+
+  const handleUploadImportFile = async () => {
+    if (!importFile) {
+      setImportError("Пожалуйста, выберите файл для загрузки")
+      return
+    }
+    try {
+      setIsImportUploading(true)
+      setImportError(null)
+      setImportResult(null)
+
+      const formData = new FormData()
+      formData.append("file", importFile)
+
+      const res = await fetch("/api/tickets/import/upload", {
+        method: "POST",
+        body: formData,
+      })
+
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => null)
+        throw new Error(errorData?.detail || `Ошибка сервера (${res.status})`)
+      }
+
+      const data = await res.json()
+      setImportResult(data)
+
+      if (data.success_count > 0) {
+        await loadTickets(filterCategory, filterSubcategory, filterComplexity, true)
+      }
+    } catch (err: any) {
+      setImportError(err.message || "Не удалось выполнить импорт билетов")
+    } finally {
+      setIsImportUploading(false)
+    }
+  }
+
   // модальное окно автоматически подхватывает выбранные фильтры.
   const handleOpenSmartGenerateModal = () => {
     setModalCategory(filterCategory || "")
@@ -941,6 +1044,16 @@ export default function TicketsPage() {
           </Button>
 
           <Button
+            variant="outline"
+            size="default"
+            onClick={handleOpenImportModal}
+            className="text-sm font-medium border-emerald-600/30 hover:border-emerald-600/50 hover:bg-emerald-50 dark:hover:bg-emerald-950/30 text-emerald-800 dark:text-emerald-300"
+          >
+            <FileSpreadsheet className="h-4 w-4 mr-2 text-emerald-600" />
+            Импорт из Excel
+          </Button>
+
+          <Button
             variant="default"
             size="lg"
             onClick={handleOpenSmartGenerateModal}
@@ -1355,6 +1468,189 @@ export default function TicketsPage() {
           )}
         </CardContent>
       </Card>
+
+      {/* Модальное окно импорта из Excel (ТЗ 77) */}
+      {isImportModalOpen && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="import-modal-title"
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-xs p-4"
+          onClick={() => setIsImportModalOpen(false)}
+        >
+          <div
+            className="bg-background border rounded-xl shadow-2xl max-w-xl w-full max-h-[90vh] overflow-y-auto p-6 space-y-6"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Modal Header */}
+            <div className="flex items-start justify-between border-b pb-4">
+              <div className="flex items-center gap-2.5">
+                <div className="p-2 bg-emerald-500/10 rounded-lg text-emerald-600 dark:text-emerald-400">
+                  <FileSpreadsheet className="h-5 w-5" />
+                </div>
+                <div>
+                  <h2 id="import-modal-title" className="text-xl font-bold text-foreground">
+                    Импорт из Excel
+                  </h2>
+                  <p className="text-xs sm:text-sm text-muted-foreground mt-0.5">
+                    Пакетная загрузка билетов и сценариев из Excel-шаблона
+                  </p>
+                </div>
+              </div>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setIsImportModalOpen(false)}
+                aria-label="Закрыть"
+                className="rounded-full w-8 h-8 p-0"
+              >
+                <X className="h-4 w-4" />
+              </Button>
+            </div>
+
+            {/* Modal Errors */}
+            {importError && (
+              <div
+                role="alert"
+                className="flex items-center gap-2 rounded-lg border border-destructive/50 bg-destructive/10 p-3 text-destructive text-sm font-medium"
+              >
+                <AlertCircle className="h-4 w-4 shrink-0" />
+                <span>{importError}</span>
+              </div>
+            )}
+
+            {/* Step 1: Кнопка "1. Скачать шаблон" */}
+            <div className="rounded-lg border bg-muted/20 p-4 space-y-2">
+              <div className="text-sm font-semibold text-foreground flex items-center gap-2">
+                <span className="flex items-center justify-center w-5 h-5 rounded-full bg-primary/10 text-primary text-xs font-bold">
+                  1
+                </span>
+                Скачать шаблон
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Шаблон содержит колонки: Название, Описание, Номер звонящего, Текст абонента, Целевая служба (01, 02), Обязательные фактоиды.
+              </p>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={handleDownloadTemplate}
+                className="font-medium"
+              >
+                <Download className="h-4 w-4 mr-2" />
+                1. Скачать шаблон
+              </Button>
+            </div>
+
+            {/* Step 2: Drag & Drop зона "2. Загрузить заполненный файл" */}
+            <div className="space-y-3">
+              <div className="text-sm font-semibold text-foreground flex items-center gap-2">
+                <span className="flex items-center justify-center w-5 h-5 rounded-full bg-primary/10 text-primary text-xs font-bold">
+                  2
+                </span>
+                Загрузить заполненный файл
+              </div>
+
+              <Dropzone
+                onFileSelect={(file) => {
+                  setImportError(null)
+                  setImportResult(null)
+                  setImportFile(file)
+                }}
+                selectedFile={importFile}
+                accept=".xlsx,.xls,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel"
+                disabled={isImportUploading}
+                title="2. Загрузить заполненный файл"
+                description="Перетащите сюда Excel-файл (.xlsx) или нажмите для выбора"
+              />
+
+              {importFile && (
+                <div className="flex items-center justify-between gap-3 pt-1">
+                  <span className="text-xs text-muted-foreground truncate max-w-[280px]">
+                    Выбран: <strong>{importFile.name}</strong>
+                  </span>
+                  <Button
+                    type="button"
+                    variant="default"
+                    size="sm"
+                    onClick={handleUploadImportFile}
+                    disabled={isImportUploading}
+                    className="font-semibold shadow-xs"
+                  >
+                    {isImportUploading ? (
+                      <>
+                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                        Загрузка...
+                      </>
+                    ) : (
+                      <>
+                        <Check className="h-4 w-4 mr-2" />
+                        Импортировать билеты
+                      </>
+                    )}
+                  </Button>
+                </div>
+              )}
+            </div>
+
+            {/* Вывод результатов парсинга (успешно: 15, ошибки: 2 (строка 4 пустая целевая служба)) */}
+            {importResult && (
+              <div
+                role="status"
+                aria-live="polite"
+                className={`rounded-xl border p-4 space-y-3 ${
+                  importResult.error_count === 0
+                    ? "border-emerald-500/40 bg-emerald-50/90 dark:bg-emerald-950/40 text-emerald-950 dark:text-emerald-100"
+                    : "border-amber-500/40 bg-amber-50/90 dark:bg-amber-950/40 text-amber-950 dark:text-amber-100"
+                }`}
+              >
+                <div className="flex items-center gap-2">
+                  {importResult.error_count === 0 ? (
+                    <CheckCircle2 className="h-5 w-5 text-emerald-600 shrink-0" />
+                  ) : (
+                    <AlertCircle className="h-5 w-5 text-amber-600 shrink-0" />
+                  )}
+                  <div className="text-base font-bold">
+                    Результаты парсинга: успешно: {importResult.success_count}, ошибки: {importResult.error_count}
+                    {importResult.errors.length > 0 && ` (${importResult.errors.join(", ")})`}
+                  </div>
+                </div>
+
+                {importResult.success_count > 0 && (
+                  <p className="text-sm font-medium text-emerald-800 dark:text-emerald-300">
+                    Успешно импортировано билетов: {importResult.success_count}. Они добавлены в базу данных и отображаются в списке.
+                  </p>
+                )}
+
+                {importResult.errors && importResult.errors.length > 0 && (
+                  <div className="space-y-1.5 pt-1">
+                    <div className="text-xs font-bold uppercase tracking-wider text-amber-900 dark:text-amber-200">
+                      Список ошибок ({importResult.errors.length}):
+                    </div>
+                    <ul className="text-xs sm:text-sm list-disc list-inside space-y-1 text-amber-950 dark:text-amber-100">
+                      {importResult.errors.map((err, idx) => (
+                        <li key={idx} className="font-mono">{err}</li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Modal Footer */}
+            <div className="flex justify-end pt-2 border-t">
+              <Button
+                type="button"
+                variant="outline"
+                size="default"
+                onClick={() => setIsImportModalOpen(false)}
+              >
+                Закрыть
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* 2. Модальное окно Генерации */}
       {isModalOpen && (

@@ -174,7 +174,7 @@ export default function AdminDashboardPage() {
           </p>
         </div>
 
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-3">
           <Button
             variant="outline"
             onClick={loadData}
@@ -305,7 +305,7 @@ export default function AdminDashboardPage() {
       {/* Charts Section */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Load History Chart (AreaChart) */}
-        <Card className="lg:col-span-2 bg-white border-slate-200 shadow-sm">
+        <Card className="lg:col-span-2 bg-white border-slate-200 shadow-sm min-w-0 overflow-hidden">
           <CardHeader>
             <CardTitle className="text-base font-bold text-slate-900">
               График нагрузки сервера (CPU и RAM)
@@ -314,8 +314,8 @@ export default function AdminDashboardPage() {
               Динамика использования ресурсов в реальном времени (%)
             </CardDescription>
           </CardHeader>
-          <CardContent>
-            <div className="h-64 w-full">
+          <CardContent className="min-w-0">
+            <div className="h-64 w-full min-w-0">
               <ResponsiveContainer width="100%" height="100%">
                 <AreaChart
                   data={loadHistory}
@@ -377,7 +377,7 @@ export default function AdminDashboardPage() {
         </Card>
 
         {/* Roles Distribution Bar Chart */}
-        <Card className="bg-white border-slate-200 shadow-sm flex flex-col justify-between">
+        <Card className="bg-white border-slate-200 shadow-sm flex flex-col justify-between min-w-0 overflow-hidden">
           <CardHeader>
             <CardTitle className="text-base font-bold text-slate-900">
               Распределение пользователей
@@ -386,8 +386,8 @@ export default function AdminDashboardPage() {
               Структура учетных записей по ролям
             </CardDescription>
           </CardHeader>
-          <CardContent className="flex-1 flex flex-col justify-center">
-            <div className="h-48 w-full">
+          <CardContent className="flex-1 flex flex-col justify-center min-w-0">
+            <div className="h-48 w-full min-w-0">
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={roleDistributionData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
                   <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />

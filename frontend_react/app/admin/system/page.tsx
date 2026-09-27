@@ -254,11 +254,11 @@ export default function AdminSystemPage() {
                 <Clock className="w-4 h-4 text-slate-500" />
                 <span>Созданные дампы в текущей сессии</span>
               </h4>
-              <div className="border border-slate-200 rounded-xl overflow-hidden divide-y divide-slate-200">
+              <div className="border border-slate-200 rounded-xl overflow-x-auto divide-y divide-slate-200">
                 {backupHistory.map((item, idx) => (
                   <div
                     key={idx}
-                    className="p-3 bg-white flex items-center justify-between gap-4 text-xs"
+                    className="p-3 bg-white flex items-center justify-between gap-4 text-xs min-w-[500px]"
                   >
                     <div className="flex items-center gap-2 overflow-hidden">
                       <FileCheck className="w-4 h-4 text-emerald-600 shrink-0" />

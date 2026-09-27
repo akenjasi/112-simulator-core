@@ -44,7 +44,77 @@ import {
   Loader2,
   Ticket,
   FileSpreadsheet,
+  Bot,
+  TrendingUp,
+  AlertTriangle,
+  Flame,
 } from "lucide-react"
+
+import {
+  ResponsiveContainer,
+  LineChart,
+  Line,
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip as RechartsTooltip,
+  Legend as RechartsLegend,
+} from "recharts"
+
+export interface DailyDynamicsPoint {
+  date: string
+  avg_score: number
+  total_sessions: number
+  passed_count: number
+  failed_count: number
+  pass_rate: number
+}
+
+export interface GroupComparisonItem {
+  group_id: string
+  group_name: string
+  student_count: number
+  avg_score: number
+  pass_rate: number
+  total_sessions: number
+  total_errors: number
+}
+
+export interface ErrorTypeInfo {
+  key: string
+  label: string
+  category: string
+  severity?: string
+}
+
+export interface EntityErrorInfo {
+  id: string
+  name: string
+  group_name?: string | null
+  error_counts: Record<string, number>
+  total_errors: number
+}
+
+export interface ErrorHeatmapData {
+  error_types: ErrorTypeInfo[]
+  entities: EntityErrorInfo[]
+  totals_by_error: Record<string, number>
+}
+
+function getHeatmapColor(count: number, maxCount: number): string {
+  if (!count || count === 0) return "bg-muted/15 text-muted-foreground/40 border border-transparent"
+  const ratio = maxCount > 0 ? count / maxCount : 0
+  if (ratio < 0.3) {
+    return "bg-amber-500/20 text-amber-800 dark:text-amber-200 border border-amber-500/35 font-medium"
+  } else if (ratio < 0.7) {
+    return "bg-orange-500/35 text-orange-950 dark:text-orange-100 border border-orange-500/50 font-semibold"
+  } else {
+    return "bg-red-500/50 text-red-950 dark:text-red-100 border border-red-500/70 font-bold shadow-xs"
+  }
+}
+
 
 export interface CadetRecordSummary {
   record_id: string
@@ -351,12 +421,82 @@ const DEFAULT_LESSONS_HISTORY: LessonHistoryItem[] = [
   },
 ]
 
+const DEFAULT_DYNAMICS_DATA: DailyDynamicsPoint[] = [
+  { date: "2026-09-01", avg_score: 74.2, total_sessions: 24, passed_count: 17, failed_count: 7, pass_rate: 70.8 },
+  { date: "2026-09-05", avg_score: 77.0, total_sessions: 28, passed_count: 22, failed_count: 6, pass_rate: 78.6 },
+  { date: "2026-09-10", avg_score: 80.5, total_sessions: 32, passed_count: 26, failed_count: 6, pass_rate: 81.3 },
+  { date: "2026-09-15", avg_score: 82.8, total_sessions: 35, passed_count: 30, failed_count: 5, pass_rate: 85.7 },
+  { date: "2026-09-20", avg_score: 85.1, total_sessions: 31, passed_count: 28, failed_count: 3, pass_rate: 90.3 },
+  { date: "2026-09-24", avg_score: 87.4, total_sessions: 33, passed_count: 30, failed_count: 3, pass_rate: 90.9 },
+  { date: "2026-09-27", avg_score: 89.0, total_sessions: 26, passed_count: 24, failed_count: 2, pass_rate: 92.3 },
+]
+
+const DEFAULT_GROUPS_COMPARISON: GroupComparisonItem[] = [
+  { group_id: "grp-1", group_name: "Группа 101-П", student_count: 14, avg_score: 87.5, pass_rate: 89.2, total_sessions: 210, total_errors: 42 },
+  { group_id: "grp-2", group_name: "Группа 102-П", student_count: 14, avg_score: 82.1, pass_rate: 81.5, total_sessions: 195, total_errors: 68 },
+  { group_id: "grp-3", group_name: "Группа 201-С", student_count: 14, avg_score: 85.0, pass_rate: 86.0, total_sessions: 205, total_errors: 51 },
+  { group_id: "grp-4", group_name: "Группа 202-С", student_count: 13, avg_score: 79.8, pass_rate: 78.4, total_sessions: 180, total_errors: 79 },
+]
+
+const DEFAULT_HEATMAP_DATA: ErrorHeatmapData = {
+  error_types: [
+    { key: "comm_rude_tone", label: "Грубый тон", category: "communication", severity: "high" },
+    { key: "comm_interruption", label: "Перебивание", category: "communication", severity: "medium" },
+    { key: "comm_clarification_missed", label: "Пропуск уточнения", category: "communication", severity: "medium" },
+    { key: "card_wrong_address", label: "Ошибка адреса", category: "card", severity: "critical" },
+    { key: "card_wrong_services", label: "Неверные службы", category: "card", severity: "critical" },
+    { key: "card_missing_caller", label: "Данные заявителя", category: "card", severity: "medium" },
+    { key: "sla_dispatch_delay", label: "Задержка ДДС", category: "sla", severity: "high" },
+    { key: "sla_call_duration_exceeded", label: "Время звонка", category: "sla", severity: "medium" },
+  ],
+  entities: [
+    {
+      id: "cadet-101",
+      name: "Денисов Д. А.",
+      group_name: "Группа 101-П",
+      error_counts: { comm_rude_tone: 1, card_wrong_address: 3, sla_dispatch_delay: 2 },
+      total_errors: 6,
+    },
+    {
+      id: "cadet-102",
+      name: "Соколов А. В.",
+      group_name: "Группа 101-П",
+      error_counts: { card_wrong_services: 1, comm_interruption: 1 },
+      total_errors: 2,
+    },
+    {
+      id: "cadet-103",
+      name: "Волков М. С.",
+      group_name: "Группа 102-П",
+      error_counts: { sla_dispatch_delay: 4, sla_call_duration_exceeded: 3, card_wrong_address: 2 },
+      total_errors: 9,
+    },
+    {
+      id: "cadet-104",
+      name: "Кузнецова Е. Д.",
+      group_name: "Группа 201-С",
+      error_counts: { comm_clarification_missed: 2, card_missing_caller: 1 },
+      total_errors: 3,
+    },
+  ],
+  totals_by_error: {
+    comm_rude_tone: 18,
+    comm_interruption: 24,
+    comm_clarification_missed: 15,
+    card_wrong_address: 34,
+    card_wrong_services: 22,
+    card_missing_caller: 19,
+    sla_dispatch_delay: 29,
+    sla_call_duration_exceeded: 27,
+  },
+}
+
 export interface AnalyticsPageProps {
-  initialTab?: "history" | "split" | "all"
+  initialTab?: "history" | "split" | "all" | "ai_report" | "charts"
 }
 
 export default function AnalyticsPage({ initialTab = "all" }: AnalyticsPageProps = {}) {
-  const [activeTab, setActiveTab] = useState<"history" | "split" | "all">(initialTab)
+  const [activeTab, setActiveTab] = useState<"history" | "split" | "all" | "ai_report" | "charts">(initialTab)
   const [sessionId, setSessionId] = useState<string>("session-1")
   const [sessionData, setSessionData] = useState<SessionData>(DEFAULT_SESSION_DATA)
   const [selectedRecord, setSelectedRecord] = useState<RecordDetail | null>(
@@ -366,6 +506,12 @@ export default function AnalyticsPage({ initialTab = "all" }: AnalyticsPageProps
   const [isLoadingRecord, setIsLoadingRecord] = useState<boolean>(false)
   const [searchQuery, setSearchQuery] = useState<string>("")
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
+
+  // Group AI reports state
+  const [groupAiReports, setGroupAiReports] = useState<any[]>([])
+  const [selectedAiGroup, setSelectedAiGroup] = useState<string>("")
+  const [isLoadingAiReport, setIsLoadingAiReport] = useState<boolean>(false)
+  const [isTriggeringGroupAi, setIsTriggeringGroupAi] = useState<boolean>(false)
 
   // Lesson history state
   const [lessonsList, setLessonsList] = useState<LessonHistoryItem[]>(DEFAULT_LESSONS_HISTORY)
@@ -378,6 +524,107 @@ export default function AnalyticsPage({ initialTab = "all" }: AnalyticsPageProps
   const [editingNotesId, setEditingNotesId] = useState<string | null>(null)
   const [editingNotesText, setEditingNotesText] = useState<string>("")
   const [isSavingNotes, setIsSavingNotes] = useState<boolean>(false)
+
+  // Charts & Dashboards state (ТЗ 75)
+  const [isMounted, setIsMounted] = useState<boolean>(false)
+  const [dynamicsDays, setDynamicsDays] = useState<number>(30)
+  const [dynamicsGroupId, setDynamicsGroupId] = useState<string>("ALL")
+  const [dynamicsData, setDynamicsData] = useState<DailyDynamicsPoint[]>(DEFAULT_DYNAMICS_DATA)
+  const [groupComparisonData, setGroupComparisonData] = useState<GroupComparisonItem[]>(DEFAULT_GROUPS_COMPARISON)
+  const [heatmapData, setHeatmapData] = useState<ErrorHeatmapData>(DEFAULT_HEATMAP_DATA)
+  const [heatmapEntityType, setHeatmapEntityType] = useState<"students" | "groups">("students")
+  const [heatmapCategory, setHeatmapCategory] = useState<string>("ALL")
+  const [heatmapSearch, setHeatmapSearch] = useState<string>("")
+  const [isLoadingCharts, setIsLoadingCharts] = useState<boolean>(false)
+
+  const fetchChartsData = useCallback(async () => {
+    try {
+      setIsLoadingCharts(true)
+      const dynGroupParam = dynamicsGroupId !== "ALL" ? `&group_id=${encodeURIComponent(dynamicsGroupId)}` : ""
+      const dynRes = await fetch(`/api/analytics/dynamics?days=${dynamicsDays}${dynGroupParam}`)
+      if (dynRes.ok) {
+        const dJson = await dynRes.json()
+        if (Array.isArray(dJson) && dJson.length > 0) {
+          setDynamicsData(dJson)
+        }
+      }
+
+      const compRes = await fetch("/api/analytics/groups-comparison")
+      if (compRes.ok) {
+        const cJson = await compRes.json()
+        if (Array.isArray(cJson) && cJson.length > 0) {
+          setGroupComparisonData(cJson)
+        }
+      }
+
+      const hmCatParam = heatmapCategory !== "ALL" ? `&category=${encodeURIComponent(heatmapCategory)}` : ""
+      const hmGroupParam = dynamicsGroupId !== "ALL" ? `&group_id=${encodeURIComponent(dynamicsGroupId)}` : ""
+      const hmRes = await fetch(
+        `/api/analytics/errors-heatmap?entity_type=${heatmapEntityType}${hmCatParam}${hmGroupParam}`
+      )
+      if (hmRes.ok) {
+        const hJson = await hmRes.json()
+        if (hJson && Array.isArray(hJson.entities) && hJson.entities.length > 0) {
+          setHeatmapData(hJson)
+        }
+      }
+    } catch (err) {
+      console.warn("Could not load charts data from API:", err)
+    } finally {
+      setIsLoadingCharts(false)
+    }
+  }, [dynamicsDays, dynamicsGroupId, heatmapEntityType, heatmapCategory])
+
+  useEffect(() => {
+    setIsMounted(true)
+    fetchChartsData()
+  }, [fetchChartsData])
+
+  const filteredHeatmapEntities = React.useMemo(() => {
+    if (!heatmapData || !Array.isArray(heatmapData.entities)) return []
+    let list = heatmapData.entities
+    if (heatmapSearch.trim()) {
+      const q = heatmapSearch.toLowerCase()
+      list = list.filter(
+        (e) => e.name.toLowerCase().includes(q) || (e.group_name && e.group_name.toLowerCase().includes(q))
+      )
+    }
+    return list
+  }, [heatmapData, heatmapSearch])
+
+
+  const fetchGroupAiReports = useCallback(async (grpId: string) => {
+    if (!grpId || grpId === "ALL") return
+    setIsLoadingAiReport(true)
+    try {
+      const res = await fetch(`/api/ai-analytics/group/${grpId}`)
+      if (res.ok) {
+        const data = await res.json()
+        setGroupAiReports(Array.isArray(data) ? data : [])
+      }
+    } catch (err) {
+      console.warn("Failed to load group AI reports:", err)
+    } finally {
+      setIsLoadingAiReport(false)
+    }
+  }, [])
+
+  const handleTriggerGroupAi = async () => {
+    if (!selectedAiGroup || selectedAiGroup === "ALL") return
+    setIsTriggeringGroupAi(true)
+    try {
+      const res = await fetch(`/api/ai-analytics/trigger?group_id=${selectedAiGroup}&background=false`, {
+        method: "POST",
+      })
+      if (res.ok) {
+        await fetchGroupAiReports(selectedAiGroup)
+      }
+    } catch (err) {
+      console.warn("Failed to trigger group AI analysis:", err)
+    } finally {
+      setIsTriggeringGroupAi(false)
+    }
+  }
 
   // Fetch session analytics
   const fetchSessionAnalytics = useCallback(async (sid: string) => {
@@ -809,9 +1056,527 @@ export default function AnalyticsPage({ initialTab = "all" }: AnalyticsPageProps
             <BarChart3 className="h-4 w-4 text-primary" />
             <span>Журнал разбора (Сплит-скрин)</span>
           </button>
+
+          <button
+            type="button"
+            onClick={() => setActiveTab("charts")}
+            className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-semibold transition-all cursor-pointer ${
+              activeTab === "charts"
+                ? "bg-white dark:bg-card text-foreground shadow-xs font-bold"
+                : "text-muted-foreground hover:text-foreground"
+            }`}
+            data-testid="tab-charts"
+          >
+            <TrendingUp className="h-4 w-4 text-emerald-600" />
+            <span>Графика и дашборды</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setActiveTab("ai_report")}
+            className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-semibold transition-all cursor-pointer ${
+              activeTab === "ai_report"
+                ? "bg-white dark:bg-card text-foreground shadow-xs font-bold"
+                : "text-muted-foreground hover:text-foreground"
+            }`}
+          >
+            <Sparkles className="h-4 w-4 text-amber-500" />
+            <span>Отчет ИИ по группе</span>
+            <Badge variant="secondary" className="ml-1 px-1.5 py-0 text-[10px] bg-amber-500/10 text-amber-700 dark:text-amber-400">
+              Qwen 9B
+            </Badge>
+          </button>
         </div>
       </div>
     </div>
+
+      {/* ────────────────── SECTION 0: ДАШБОРДЫ И ГРАФИКИ (ТЗ 75) ────────────────── */}
+      {(activeTab === "all" || activeTab === "charts") && (
+        <div className="space-y-8 mb-10" data-testid="analytics-dashboards">
+          {/* Section Header */}
+          <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 bg-card/60 backdrop-blur-xs p-5 rounded-2xl border">
+            <div>
+              <div className="flex items-center gap-2">
+                <div className="p-2 rounded-xl bg-emerald-500/10 text-emerald-600 dark:text-emerald-400">
+                  <TrendingUp className="h-5 w-5" />
+                </div>
+                <h2 className="text-xl font-bold tracking-tight">Дашборды успеваемости и статистика</h2>
+                <Badge variant="outline" className="bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border-emerald-500/30 text-xs">
+                  50+ курсантов
+                </Badge>
+              </div>
+              <p className="text-sm text-muted-foreground mt-1">
+                Мониторинг динамики баллов, сравнительный анализ учебных подразделений и карта нарушений регламентов вызова 112
+              </p>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-3">
+              {/* Group Filter */}
+              <div className="flex items-center gap-2 text-xs">
+                <Filter className="h-3.5 w-3.5 text-muted-foreground" />
+                <select
+                  value={dynamicsGroupId}
+                  onChange={(e) => setDynamicsGroupId(e.target.value)}
+                  className="h-8 px-2.5 rounded-lg border text-xs bg-background font-medium focus:ring-1 focus:ring-primary"
+                  data-testid="filter-charts-group"
+                >
+                  <option value="ALL">Все группы</option>
+                  {availableGroups.map((g) => (
+                    <option key={g.id} value={g.id}>
+                      {g.name}
+                    </option>
+                  ))}
+                  {availableGroups.length === 0 && (
+                    <>
+                      <option value="grp-1">Группа 101-П</option>
+                      <option value="grp-2">Группа 102-П</option>
+                      <option value="grp-3">Группа 201-С</option>
+                      <option value="grp-4">Группа 202-С</option>
+                    </>
+                  )}
+                </select>
+              </div>
+
+              {/* Refresh button */}
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => fetchChartsData()}
+                disabled={isLoadingCharts}
+                className="h-8 gap-1.5 text-xs"
+              >
+                <RefreshCw className={`h-3.5 w-3.5 ${isLoadingCharts ? "animate-spin" : ""}`} />
+                <span>Обновить</span>
+              </Button>
+            </div>
+          </div>
+
+          {/* Quick Metrics Bar */}
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <Card className="p-4 bg-card/60 backdrop-blur-xs">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-medium text-muted-foreground">Средний балл</span>
+                <Award className="h-4 w-4 text-emerald-600" />
+              </div>
+              <div className="mt-2 flex items-baseline gap-2">
+                <span className="text-2xl font-black text-foreground">
+                  {dynamicsData.length > 0
+                    ? (dynamicsData.reduce((acc, d) => acc + d.avg_score, 0) / dynamicsData.length).toFixed(1)
+                    : "84.5"}
+                </span>
+                <span className="text-xs text-muted-foreground">/ 100</span>
+              </div>
+              <p className="text-[11px] text-emerald-600 dark:text-emerald-400 mt-1 font-medium">
+                Положительная динамика
+              </p>
+            </Card>
+
+            <Card className="p-4 bg-card/60 backdrop-blur-xs">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-medium text-muted-foreground">Всего сессий</span>
+                <History className="h-4 w-4 text-blue-600" />
+              </div>
+              <div className="mt-2 flex items-baseline gap-2">
+                <span className="text-2xl font-black text-foreground">
+                  {dynamicsData.reduce((acc, d) => acc + d.total_sessions, 0) || 821}
+                </span>
+                <span className="text-xs text-muted-foreground">билетов</span>
+              </div>
+              <p className="text-[11px] text-muted-foreground mt-1">За выбранный период</p>
+            </Card>
+
+            <Card className="p-4 bg-card/60 backdrop-blur-xs">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-medium text-muted-foreground">Успешная сдача</span>
+                <CheckCircle2 className="h-4 w-4 text-emerald-600" />
+              </div>
+              <div className="mt-2 flex items-baseline gap-2">
+                <span className="text-2xl font-black text-foreground">
+                  {dynamicsData.length > 0
+                    ? (dynamicsData.reduce((acc, d) => acc + d.pass_rate, 0) / dynamicsData.length).toFixed(1)
+                    : "86.2"}%
+                </span>
+                <span className="text-xs text-muted-foreground">с 1-й попытки</span>
+              </div>
+              <p className="text-[11px] text-emerald-600 dark:text-emerald-400 mt-1 font-medium">Норматив соблюден</p>
+            </Card>
+
+            <Card className="p-4 bg-card/60 backdrop-blur-xs">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-medium text-muted-foreground">Зафиксировано ошибок</span>
+                <AlertTriangle className="h-4 w-4 text-amber-600" />
+              </div>
+              <div className="mt-2 flex items-baseline gap-2">
+                <span className="text-2xl font-black text-foreground">
+                  {Object.values(heatmapData.totals_by_error).reduce((a, b) => a + b, 0) || 565}
+                </span>
+                <span className="text-xs text-muted-foreground">инцидентов</span>
+              </div>
+              <p className="text-[11px] text-amber-600 dark:text-amber-400 mt-1 font-medium">Требуют разбора</p>
+            </Card>
+          </div>
+
+          {/* Grid of Chart 1 (Line) & Chart 2 (Bar) */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            {/* 1. LINE CHART: Динамика среднего балла */}
+            <Card className="p-5 flex flex-col justify-between">
+              <div>
+                <div className="flex items-center justify-between mb-4">
+                  <div>
+                    <CardTitle className="text-base font-bold flex items-center gap-2">
+                      <TrendingUp className="h-4 w-4 text-emerald-600" />
+                      Динамика среднего балла
+                    </CardTitle>
+                    <CardDescription className="text-xs mt-0.5">
+                      Изменение успеваемости по дням (за неделю или месяц)
+                    </CardDescription>
+                  </div>
+                  {/* Period switcher */}
+                  <div className="flex items-center bg-muted/60 p-0.5 rounded-lg border text-xs">
+                    <button
+                      type="button"
+                      onClick={() => setDynamicsDays(7)}
+                      className={`px-2.5 py-1 rounded-md font-semibold transition-all ${
+                        dynamicsDays === 7 ? "bg-white dark:bg-card text-foreground shadow-xs font-bold" : "text-muted-foreground hover:text-foreground"
+                      }`}
+                    >
+                      7 дней
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setDynamicsDays(30)}
+                      className={`px-2.5 py-1 rounded-md font-semibold transition-all ${
+                        dynamicsDays === 30 ? "bg-white dark:bg-card text-foreground shadow-xs font-bold" : "text-muted-foreground hover:text-foreground"
+                      }`}
+                    >
+                      30 дней
+                    </button>
+                  </div>
+                </div>
+
+                <div className="h-[290px] w-full mt-2" data-testid="line-chart-container">
+                  {isMounted ? (
+                    <ResponsiveContainer width="100%" height="100%">
+                      <LineChart data={dynamicsData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsl(var(--muted-foreground)/0.15)" />
+                        <XAxis
+                          dataKey="date"
+                          tickFormatter={(val) => {
+                            if (!val) return ""
+                            const parts = val.split("-")
+                            return parts.length === 3 ? `${parts[2]}.${parts[1]}` : val
+                          }}
+                          tick={{ fontSize: 11 }}
+                          stroke="hsl(var(--muted-foreground)/0.5)"
+                        />
+                        <YAxis domain={[40, 100]} tick={{ fontSize: 11 }} stroke="hsl(var(--muted-foreground)/0.5)" />
+                        <RechartsTooltip
+                          contentStyle={{
+                            backgroundColor: "hsl(var(--card))",
+                            borderColor: "hsl(var(--border))",
+                            borderRadius: "0.75rem",
+                            fontSize: "12px",
+                            boxShadow: "0 10px 15px -3px rgba(0, 0, 0, 0.1)",
+                          }}
+                          formatter={(value: any, name: any) => [
+                            `${value} баллов`,
+                            name === "avg_score" ? "Средний балл" : name,
+                          ]}
+                          labelFormatter={(label) => `Дата: ${label}`}
+                        />
+                        <Line
+                          type="monotone"
+                          dataKey="avg_score"
+                          name="Средний балл"
+                          stroke="#10b981"
+                          strokeWidth={3}
+                          dot={{ r: 3, fill: "#10b981" }}
+                          activeDot={{ r: 6 }}
+                        />
+                      </LineChart>
+                    </ResponsiveContainer>
+                  ) : (
+                    <div className="h-full flex items-center justify-center text-muted-foreground">
+                      <Loader2 className="h-6 w-6 animate-spin" />
+                    </div>
+                  )}
+                </div>
+              </div>
+              <div className="text-[11px] text-muted-foreground mt-3 pt-3 border-t flex items-center justify-between">
+                <span>🟢 Зеленая линия: динамика среднего балла за тест</span>
+                <span>Целевой показатель: ≥ 80 б.</span>
+              </div>
+            </Card>
+
+            {/* 2. BAR CHART: Сравнение успеваемости между группами */}
+            <Card className="p-5 flex flex-col justify-between">
+              <div>
+                <div className="flex items-center justify-between mb-4">
+                  <div>
+                    <CardTitle className="text-base font-bold flex items-center gap-2">
+                      <BarChart3 className="h-4 w-4 text-blue-600" />
+                      Сравнение успеваемости групп
+                    </CardTitle>
+                    <CardDescription className="text-xs mt-0.5">
+                      Средний балл и процент успешности по учебным группам
+                    </CardDescription>
+                  </div>
+                  <Badge variant="outline" className="text-xs font-mono">
+                    {groupComparisonData.length} группы
+                  </Badge>
+                </div>
+
+                <div className="h-[290px] w-full mt-2" data-testid="bar-chart-container">
+                  {isMounted ? (
+                    <ResponsiveContainer width="100%" height="100%">
+                      <BarChart data={groupComparisonData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsl(var(--muted-foreground)/0.15)" />
+                        <XAxis
+                          dataKey="group_name"
+                          tick={{ fontSize: 11 }}
+                          stroke="hsl(var(--muted-foreground)/0.5)"
+                        />
+                        <YAxis domain={[0, 100]} tick={{ fontSize: 11 }} stroke="hsl(var(--muted-foreground)/0.5)" />
+                        <RechartsTooltip
+                          contentStyle={{
+                            backgroundColor: "hsl(var(--card))",
+                            borderColor: "hsl(var(--border))",
+                            borderRadius: "0.75rem",
+                            fontSize: "12px",
+                            boxShadow: "0 10px 15px -3px rgba(0, 0, 0, 0.1)",
+                          }}
+                          formatter={(value: any, name: any) => [
+                            `${value}${name === "pass_rate" ? "%" : " б."}`,
+                            name === "avg_score" ? "Средний балл" : "Успешность (с 1 попытки)",
+                          ]}
+                        />
+                        <RechartsLegend
+                          wrapperStyle={{ fontSize: "11px", paddingTop: "8px" }}
+                          formatter={(value) => (value === "avg_score" ? "Средний балл" : "Успешность (%)")}
+                        />
+                        <Bar dataKey="avg_score" name="avg_score" fill="#3b82f6" radius={[4, 4, 0, 0]} />
+                        <Bar dataKey="pass_rate" name="pass_rate" fill="#10b981" radius={[4, 4, 0, 0]} />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  ) : (
+                    <div className="h-full flex items-center justify-center text-muted-foreground">
+                      <Loader2 className="h-6 w-6 animate-spin" />
+                    </div>
+                  )}
+                </div>
+              </div>
+              <div className="text-[11px] text-muted-foreground mt-3 pt-3 border-t flex items-center justify-between">
+                <span>🔵 Синий: средний балл &bull; 🟢 Зеленый: % успешных прохождений</span>
+                <span>3–5 учебных групп</span>
+              </div>
+            </Card>
+          </div>
+
+          {/* 3. HEATMAP: Тепловая матрица частоты ошибок */}
+          <Card className="p-5" data-testid="heatmap-card">
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-5 pb-4 border-b">
+              <div>
+                <CardTitle className="text-base font-bold flex items-center gap-2">
+                  <Flame className="h-4 w-4 text-orange-600" />
+                  Тепловая карта девиаций и ошибок
+                </CardTitle>
+                <CardDescription className="text-xs mt-0.5">
+                  Частота конкретных ошибок у конкретных учеников или групп с цветовой индикацией интенсивности
+                </CardDescription>
+              </div>
+
+              <div className="flex flex-wrap items-center gap-2">
+                {/* Search */}
+                <div className="relative w-44">
+                  <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+                  <Input
+                    placeholder="Поиск..."
+                    value={heatmapSearch}
+                    onChange={(e) => setHeatmapSearch(e.target.value)}
+                    className="h-8 pl-8 text-xs"
+                  />
+                </div>
+
+                {/* Entity switch: Students vs Groups */}
+                <div className="flex items-center bg-muted/60 p-0.5 rounded-lg border text-xs">
+                  <button
+                    type="button"
+                    onClick={() => setHeatmapEntityType("students")}
+                    className={`px-2.5 py-1 rounded-md font-semibold transition-all ${
+                      heatmapEntityType === "students"
+                        ? "bg-white dark:bg-card text-foreground shadow-xs font-bold"
+                        : "text-muted-foreground hover:text-foreground"
+                    }`}
+                  >
+                    По курсантам
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setHeatmapEntityType("groups")}
+                    className={`px-2.5 py-1 rounded-md font-semibold transition-all ${
+                      heatmapEntityType === "groups"
+                        ? "bg-white dark:bg-card text-foreground shadow-xs font-bold"
+                        : "text-muted-foreground hover:text-foreground"
+                    }`}
+                  >
+                    По группам
+                  </button>
+                </div>
+
+                {/* Category Filter Pills */}
+                <div className="flex items-center bg-muted/60 p-0.5 rounded-lg border text-xs">
+                  {[
+                    { id: "ALL", label: "Все" },
+                    { id: "communication", label: "Коммуникация" },
+                    { id: "card", label: "Карточка" },
+                    { id: "sla", label: "SLA" },
+                  ].map((c) => (
+                    <button
+                      key={c.id}
+                      type="button"
+                      onClick={() => setHeatmapCategory(c.id)}
+                      className={`px-2 py-1 rounded-md font-medium text-[11px] transition-all ${
+                        heatmapCategory === c.id
+                          ? "bg-white dark:bg-card text-foreground shadow-xs font-bold"
+                          : "text-muted-foreground hover:text-foreground"
+                      }`}
+                    >
+                      {c.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            {/* Heatmap Legend */}
+            <div className="flex items-center justify-between text-xs text-muted-foreground mb-3 px-1">
+              <span className="text-[11px]">
+                Отображено: {filteredHeatmapEntities.length} {heatmapEntityType === "students" ? "курсантов" : "групп"}
+              </span>
+              <div className="flex items-center gap-2 text-[11px]">
+                <span className="text-muted-foreground">Интенсивность:</span>
+                <span className="flex items-center gap-1">
+                  <span className="inline-block w-3 h-3 rounded-xs bg-muted/30 border border-muted" /> 0
+                </span>
+                <span className="flex items-center gap-1">
+                  <span className="inline-block w-3 h-3 rounded-xs bg-amber-500/20 border border-amber-500/40" /> 1–2
+                </span>
+                <span className="flex items-center gap-1">
+                  <span className="inline-block w-3 h-3 rounded-xs bg-orange-500/35 border border-orange-500/50" /> 3–5
+                </span>
+                <span className="flex items-center gap-1">
+                  <span className="inline-block w-3 h-3 rounded-xs bg-red-500/50 border border-red-500/70" /> 6+
+                </span>
+              </div>
+            </div>
+
+            {/* Heatmap Table Matrix */}
+            <div className="overflow-x-auto rounded-xl border bg-card">
+              <Table>
+                <TableHeader>
+                  <TableRow className="bg-muted/40 hover:bg-muted/40">
+                    <TableHead className="w-56 font-bold text-xs sticky left-0 bg-muted/90 backdrop-blur-xs z-10">
+                      {heatmapEntityType === "students" ? "Курсант / Группа" : "Учебная группа"}
+                    </TableHead>
+                    {heatmapData.error_types.map((et) => (
+                      <TableHead key={et.key} className="text-center text-xs px-2 py-3 min-w-[110px]">
+                        <div className="flex flex-col items-center gap-1">
+                          <span className="font-semibold text-foreground leading-tight text-[11px]">
+                            {et.label}
+                          </span>
+                          <Badge
+                            variant="secondary"
+                            className={`text-[9px] px-1 py-0 ${
+                              et.category === "communication"
+                                ? "bg-blue-500/10 text-blue-700 dark:text-blue-300"
+                                : et.category === "card"
+                                ? "bg-purple-500/10 text-purple-700 dark:text-purple-300"
+                                : "bg-amber-500/10 text-amber-700 dark:text-amber-300"
+                            }`}
+                          >
+                            {et.category === "communication" ? "комм" : et.category === "card" ? "карта" : "sla"}
+                          </Badge>
+                        </div>
+                      </TableHead>
+                    ))}
+                    <TableHead className="text-center font-bold text-xs w-20 bg-muted/60">
+                      Итого
+                    </TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {filteredHeatmapEntities.slice(0, 15).map((entity) => {
+                    const maxVal = Math.max(
+                      ...heatmapData.error_types.map((et) => entity.error_counts[et.key] || 0),
+                      1
+                    )
+                    return (
+                      <TableRow key={entity.id} className="hover:bg-muted/30 transition-colors">
+                        <TableCell className="font-medium text-xs sticky left-0 bg-card/95 backdrop-blur-xs z-10 border-r">
+                          <div className="font-bold text-foreground truncate max-w-[200px]" title={entity.name}>
+                            {entity.name}
+                          </div>
+                          {entity.group_name && (
+                            <div className="text-[10px] text-muted-foreground truncate max-w-[200px]">
+                              {entity.group_name}
+                            </div>
+                          )}
+                        </TableCell>
+                        {heatmapData.error_types.map((et) => {
+                          const count = entity.error_counts[et.key] || 0
+                          return (
+                            <TableCell key={et.key} className="p-1.5 text-center">
+                              <div
+                                className={`h-8 rounded-lg flex items-center justify-center text-xs transition-all ${getHeatmapColor(
+                                  count,
+                                  maxVal
+                                )}`}
+                                title={`${entity.name}: ${et.label} — ${count} раз`}
+                              >
+                                {count > 0 ? count : <span className="opacity-30">—</span>}
+                              </div>
+                            </TableCell>
+                          )
+                        })}
+                        <TableCell className="text-center font-bold text-xs bg-muted/20 border-l">
+                          <Badge
+                            variant={entity.total_errors > 5 ? "destructive" : "secondary"}
+                            className="font-mono text-[11px]"
+                          >
+                            {entity.total_errors}
+                          </Badge>
+                        </TableCell>
+                      </TableRow>
+                    )
+                  })}
+                  {/* Summary Totals Row */}
+                  <TableRow className="bg-muted/50 font-bold border-t-2">
+                    <TableCell className="sticky left-0 bg-muted/90 backdrop-blur-xs z-10 text-xs font-bold border-r">
+                      Всего по ошибкам
+                    </TableCell>
+                    {heatmapData.error_types.map((et) => {
+                      const colTotal = heatmapData.totals_by_error[et.key] || 0
+                      return (
+                        <TableCell key={et.key} className="text-center text-xs font-bold p-2 text-foreground font-mono">
+                          {colTotal}
+                        </TableCell>
+                      )
+                    })}
+                    <TableCell className="text-center font-black text-xs bg-muted/80 text-foreground border-l font-mono">
+                      {Object.values(heatmapData.totals_by_error).reduce((a, b) => a + b, 0)}
+                    </TableCell>
+                  </TableRow>
+                </TableBody>
+              </Table>
+            </div>
+            {filteredHeatmapEntities.length > 15 && (
+              <p className="text-[11px] text-muted-foreground text-center mt-3">
+                Показаны первые 15 записей из {filteredHeatmapEntities.length}. Используйте поиск для точной фильтрации.
+              </p>
+            )}
+          </Card>
+        </div>
+      )}
 
       {/* ────────────────── SECTION 1: ИСТОРИЯ УРОКОВ (ACCORDION) ────────────────── */}
       {(activeTab === "all" || activeTab === "history") && (
@@ -1089,8 +1854,8 @@ export default function AnalyticsPage({ initialTab = "all" }: AnalyticsPageProps
                             </Link>
                           </div>
 
-                          <div className="rounded-xl border bg-background overflow-hidden">
-                            <Table>
+                          <div className="rounded-xl border bg-background overflow-x-auto w-full">
+                            <Table className="min-w-[650px]">
                               <TableHeader>
                                 <TableRow>
                                   <TableHead>Курсант</TableHead>
@@ -1484,6 +2249,122 @@ export default function AnalyticsPage({ initialTab = "all" }: AnalyticsPageProps
             </div>
           </div>
         </div>
+      )}
+
+      {/* ────────────────── SECTION 3: ОТЧЕТ ИИ ПО ГРУППЕ (QWEN 3.5 9B) ────────────────── */}
+      {(activeTab === "all" || activeTab === "ai_report") && (
+        <Card className="border shadow-md">
+          <CardHeader className="bg-muted/15 border-b p-5">
+            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+              <div className="flex items-center gap-3">
+                <div className="h-10 w-10 rounded-xl bg-amber-500/20 text-amber-600 dark:text-amber-400 flex items-center justify-center shrink-0">
+                  <Sparkles className="h-5 w-5" />
+                </div>
+                <div>
+                  <CardTitle className="text-lg font-bold flex items-center gap-2">
+                    Отчет ИИ по группе
+                    <Badge variant="outline" className="border-amber-500/40 text-amber-600 dark:text-amber-400 text-xs">
+                      Qwen 3.5 9B
+                    </Badge>
+                  </CardTitle>
+                  <CardDescription className="text-xs mt-0.5">
+                    Фоновый анализ системных ошибок, динамики освоения регламентов и рекомендации для преподавателя
+                  </CardDescription>
+                </div>
+              </div>
+
+              {/* Group Selector and Action Button */}
+              <div className="flex items-center gap-3">
+                <select
+                  value={selectedAiGroup}
+                  onChange={(e) => {
+                    setSelectedAiGroup(e.target.value)
+                    fetchGroupAiReports(e.target.value)
+                  }}
+                  className="h-9 px-3 rounded-lg border bg-background text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-primary/40 cursor-pointer"
+                >
+                  <option value="" disabled>Выберите группу</option>
+                  {availableGroups.map((g) => (
+                    <option key={g.id} value={g.id}>
+                      {g.name}
+                    </option>
+                  ))}
+                </select>
+
+                <Button
+                  size="sm"
+                  onClick={handleTriggerGroupAi}
+                  disabled={isTriggeringGroupAi || !selectedAiGroup}
+                  className="gap-2 text-xs font-semibold bg-primary hover:bg-primary/90 cursor-pointer"
+                >
+                  {isTriggeringGroupAi ? (
+                    <>
+                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                      <span>Анализ группы...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Bot className="h-3.5 w-3.5" />
+                      <span>Сформировать отчет ИИ</span>
+                    </>
+                  )}
+                </Button>
+              </div>
+            </div>
+          </CardHeader>
+
+          <CardContent className="p-5">
+            {isLoadingAiReport ? (
+              <div className="text-center py-12">
+                <Loader2 className="h-6 w-6 animate-spin mx-auto text-primary mb-2" />
+                <p className="text-xs text-muted-foreground">Загрузка аналитических отчетов ИИ...</p>
+              </div>
+            ) : groupAiReports.length === 0 ? (
+              <div className="text-center py-12 border-2 border-dashed rounded-xl bg-muted/20 space-y-2">
+                <Bot className="h-10 w-10 mx-auto text-muted-foreground/40 mb-1" />
+                <p className="text-sm font-semibold text-foreground">Отчеты ИИ по выбранной группе отсутствуют</p>
+                <p className="text-xs text-muted-foreground max-w-md mx-auto">
+                  Выберите группу и нажмите «Сформировать отчет ИИ», чтобы запустить фоновый синтез глубокого методического разбора (Qwen 3.5 9B).
+                </p>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {groupAiReports.map((report) => (
+                  <div
+                    key={report.advice_id}
+                    className="p-5 rounded-xl border bg-card hover:border-primary/40 transition-all shadow-xs space-y-3"
+                  >
+                    <div className="flex items-center justify-between border-b pb-3">
+                      <div className="flex items-center gap-2">
+                        <Bot className="h-5 w-5 text-amber-500" />
+                        <span className="font-bold text-sm text-foreground">
+                          Сводный отчет по группе
+                        </span>
+                        <Badge variant="outline" className="text-xs py-0 font-mono">
+                          {report.model_used || "Qwen 3.5 9B"}
+                        </Badge>
+                      </div>
+
+                      <span className="text-xs text-muted-foreground">
+                        {new Date(report.date).toLocaleString("ru-RU", {
+                          day: "numeric",
+                          month: "long",
+                          year: "numeric",
+                          hour: "2-digit",
+                          minute: "2-digit",
+                        })}
+                      </span>
+                    </div>
+
+                    <div className="text-xs sm:text-sm text-foreground/90 whitespace-pre-wrap leading-relaxed">
+                      {report.analysis_text}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </CardContent>
+        </Card>
       )}
     </div>
   )

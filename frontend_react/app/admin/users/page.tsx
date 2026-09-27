@@ -245,7 +245,7 @@ export default function AdminUsersPage() {
           </p>
         </div>
 
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-3">
           <Button
             variant="outline"
             onClick={loadUsersList}
@@ -335,8 +335,8 @@ export default function AdminUsersPage() {
 
       {/* Users Table */}
       <Card className="bg-white border-slate-200 shadow-sm overflow-hidden">
-        <div className="overflow-x-auto">
-          <Table>
+        <div className="overflow-x-auto w-full">
+          <Table className="min-w-[650px]">
             <TableHeader>
               <TableRow className="bg-slate-50 border-b border-slate-200">
                 <TableHead className="font-bold text-slate-700">ФИО / Имя</TableHead>
