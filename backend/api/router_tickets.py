@@ -384,6 +384,7 @@ async def list_tickets(
     subcategory: Optional[str] = Query(None, description="Подкатегория"),
     complexity: Optional[int] = Query(None, ge=1, le=3, description="Сложность (1-3)"),
     limit: Optional[int] = Query(100, ge=1, le=500),
+    include_deleted: Optional[bool] = Query(False, description="Включая удаленные"),
     db: AsyncSession = Depends(get_db),
 ) -> List[TicketResponse]:
     """Получение списка сохраненных билетов с поддержкой фильтрации."""
@@ -396,6 +397,11 @@ async def list_tickets(
         stmt = stmt.where(GeneratedTicket.subcategory == subcategory)
     if complexity is not None:
         stmt = stmt.where(GeneratedTicket.complexity == complexity)
+    
+    if not include_deleted:
+        from sqlalchemy import or_
+        stmt = stmt.where(or_(GeneratedTicket.is_deleted == False, GeneratedTicket.is_deleted.is_(None)))
+
     if limit is not None:
         stmt = stmt.limit(limit)
 
@@ -426,7 +432,13 @@ async def list_tickets(
 
     # Legacy fallback to ScenarioTicket if GeneratedTicket has no records and no filters
     if not output and category is None and subcategory is None and complexity is None:
-        stmt_legacy = select(ScenarioTicket).order_by(desc(ScenarioTicket.created_at)).limit(limit or 100)
+        stmt_legacy = select(ScenarioTicket).order_by(desc(ScenarioTicket.created_at))
+        
+        if not include_deleted:
+            from sqlalchemy import or_
+            stmt_legacy = stmt_legacy.where(or_(ScenarioTicket.is_deleted == False, ScenarioTicket.is_deleted.is_(None)))
+            
+        stmt_legacy = stmt_legacy.limit(limit or 100)
         res_legacy = await db.execute(stmt_legacy)
         for r in res_legacy.scalars().all():
             settings = r.settings or {}
@@ -992,9 +1004,9 @@ async def delete_ticket(
         )
 
     if gen_ticket:
-        await db.delete(gen_ticket)
+        gen_ticket.is_deleted = True
     if scenario_ticket:
-        await db.delete(scenario_ticket)
+        scenario_ticket.is_deleted = True
 
     await db.commit()
     return {"status": "ok", "message": f"Билет {ticket_id} успешно удален", "id": ticket_id}

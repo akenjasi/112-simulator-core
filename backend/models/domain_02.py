@@ -7,6 +7,7 @@ from sqlalchemy import (
     Text,
     DateTime,
     JSON,
+    Boolean,
     func,
 )
 from sqlalchemy.orm import Mapped, mapped_column
@@ -36,6 +37,7 @@ class GeneratedTicket(Base):
     )
     sequence_number: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
     status: Mapped[Optional[str]] = mapped_column(String, nullable=True, default="active")
+    is_deleted: Mapped[Optional[bool]] = mapped_column(Boolean, default=False, nullable=True)
 
     @property
     def ticket_id(self) -> str:
@@ -99,6 +101,7 @@ class ScenarioTicket(Base):
         server_default=func.now(),
         nullable=False,
     )
+    is_deleted: Mapped[Optional[bool]] = mapped_column(Boolean, default=False, nullable=True)
 
     def __init__(self, **kwargs):
         kwargs.setdefault("scenario_id", str(uuid.uuid4()))
