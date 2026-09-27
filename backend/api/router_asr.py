@@ -79,9 +79,10 @@ class ASRService:
     """Singleton service managing in-memory GigaAM-v3 CTC model session."""
 
     def __init__(self, model_path: Optional[str] = None, pool_size: int = 6):
+        project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
         self.model_path = model_path or os.getenv(
             "GIGAAM_MODEL_PATH",
-            "/home/orborus/Desktop/A_vibecoding/models/gigaam-v3-ctc-Q8_0.gguf",
+            os.path.join(project_root, "models", "gigaam-v3-ctc-Q8_0.gguf"),
         )
         self.model = None
         self.session_pool = asyncio.Queue()

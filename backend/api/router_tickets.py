@@ -97,10 +97,10 @@ def load_classifier_ekp() -> Dict[str, Any]:
     """Lazy load data/classifier_ekp.json."""
     global _CLASSIFIER_EKP_DATA
     if _CLASSIFIER_EKP_DATA is None:
+        project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
         possible_paths = [
-            os.path.join(os.path.dirname(__file__), "..", "..", "data", "classifier_ekp.json"),
+            os.path.join(project_root, "data", "classifier_ekp.json"),
             os.path.join(os.getcwd(), "data", "classifier_ekp.json"),
-            "/home/orborus/Desktop/A_vibecoding/projects/112_simulator_2/data/classifier_ekp.json",
         ]
         for path in possible_paths:
             if os.path.exists(path):

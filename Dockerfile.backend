@@ -31,7 +31,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # Install in a separate layer — cached unless requirements.txt changes.
 # sqlalchemy[asyncio] pulls in greenlet (required for async SQLAlchemy).
 COPY requirements.txt ./
-RUN pip install --upgrade pip \
+RUN pip install --upgrade pip && pip install torch torchaudio --index-url https://download.pytorch.org/whl/cpu \
     && pip install -r requirements.txt
 
 # ─── Application source ───────────────────────────────────────────────────────

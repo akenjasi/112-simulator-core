@@ -31,8 +31,8 @@ anyio>=4.0.0
 # ─── Optional: ML / TTS ───────────────────────────────────────────────────────
 # Uncomment when enabling real LLM:
 # llama-cpp-python>=0.2.0
-# torch>=2.0.0
-# torchaudio>=2.0.0
+torch>=2.0.0
+torchaudio>=2.0.0
 num2words==0.5.13
 
 # ─── Template engine ──────────────────────────────────────────────────────────
@@ -40,3 +40,4 @@ jinja2>=3.1.0               # reports_engine.py HTML/CSV report generation
 
 # ─── Audio / Signal processing ───────────────────────────────────────────────
 numpy>=1.26.0               # router_asr.py audio array processing
+transformers>=4.30.0

@@ -4,7 +4,8 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 BACKEND_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
 BIN_DIR="${BACKEND_DIR}/bin"
-MODEL_PATH="/home/orborus/Desktop/A_vibecoding/models/gigaam-v3-ctc-Q8_0.gguf"
+PROJECT_ROOT="$(cd "${BACKEND_DIR}/.." && pwd)"
+MODEL_PATH="${PROJECT_ROOT}/models/gigaam-v3-ctc-Q8_0.gguf"
 
 mkdir -p "${BIN_DIR}"
 
