@@ -2,6 +2,17 @@
 
 import asyncio
 from fastapi import APIRouter, Depends
+
+import io
+from fastapi import Response
+from fastapi.responses import StreamingResponse
+from backend.models.domain_01 import SecurityPolicy, SystemErrorLog
+from sqlalchemy import select
+from pydantic import BaseModel
+from reportlab.lib.pagesizes import letter
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer
+from reportlab.lib.styles import getSampleStyleSheet
+
 import psutil
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -54,4 +65,81 @@ async def backup():
     return BackupResponse(
         backup_file=backup_file,
         status="ok",
+    )
+
+
+class SecurityPolicyUpdate(BaseModel):
+    key: str
+    value: str
+
+class SecurityPoliciesUpdateRequest(BaseModel):
+    policies: list[SecurityPolicyUpdate]
+
+@admin_router.get("/security-policies")
+async def get_security_policies(db: AsyncSession = Depends(get_db)):
+    stmt = select(SecurityPolicy)
+    result = await db.execute(stmt)
+    policies = result.scalars().all()
+    
+    defaults = {
+        "MIN_PASSWORD_LENGTH": "8",
+        "SESSION_TIMEOUT_MINUTES": "60",
+        "REQUIRE_2FA_ALL": "false"
+    }
+    
+    current = {p.key: p.value for p in policies}
+    for k, v in defaults.items():
+        if k not in current:
+            current[k] = v
+            db.add(SecurityPolicy(key=k, value=v))
+    await db.commit()
+    
+    return {"policies": [{"key": k, "value": current[k]} for k in current]}
+
+@admin_router.put("/security-policies")
+async def update_security_policies(
+    request: SecurityPoliciesUpdateRequest,
+    db: AsyncSession = Depends(get_db)
+):
+    for p in request.policies:
+        stmt = select(SecurityPolicy).where(SecurityPolicy.key == p.key)
+        result = await db.execute(stmt)
+        policy = result.scalar_one_or_none()
+        if policy:
+            policy.value = p.value
+        else:
+            db.add(SecurityPolicy(key=p.key, value=p.value))
+    await db.commit()
+    return {"status": "ok"}
+
+@admin_router.get("/error-report/pdf")
+async def get_error_report_pdf(db: AsyncSession = Depends(get_db)):
+    stmt = select(SystemErrorLog).order_by(SystemErrorLog.timestamp.desc()).limit(100)
+    result = await db.execute(stmt)
+    logs = result.scalars().all()
+
+    buffer = io.BytesIO()
+    doc = SimpleDocTemplate(buffer, pagesize=letter)
+    styles = getSampleStyleSheet()
+    story = []
+
+    story.append(Paragraph("System Error Report", styles['Title']))
+    story.append(Spacer(1, 12))
+
+    if not logs:
+        story.append(Paragraph("No errors found.", styles['Normal']))
+    else:
+        for log in logs:
+            time_str = log.timestamp.strftime("%Y-%m-%d %H:%M:%S")
+            story.append(Paragraph(f"<b>Time:</b> {time_str}", styles['Normal']))
+            story.append(Paragraph(f"<b>Message:</b> {log.error_message}", styles['Normal']))
+            story.append(Spacer(1, 6))
+
+    doc.build(story)
+    buffer.seek(0)
+    
+    return StreamingResponse(
+        buffer,
+        media_type="application/pdf",
+        headers={"Content-Disposition": "attachment; filename=error_report.pdf"}
     )

@@ -163,6 +163,35 @@ async def api_health_check():
     return {"status": "ok", "version": "v2"}
 
 
+
+import sentry_sdk
+if os.getenv("SENTRY_DSN"):
+    sentry_sdk.init(dsn=os.getenv("SENTRY_DSN"))
+
+from fastapi import Request
+from fastapi.responses import JSONResponse
+import traceback
+from backend.models.domain_01 import SystemErrorLog
+from backend.database import AsyncSessionLocal
+
+@app.exception_handler(Exception)
+async def global_exception_handler(request: Request, exc: Exception):
+    error_msg = str(exc)
+    tb = traceback.format_exc()
+    
+    try:
+        async with AsyncSessionLocal() as session:
+            session.add(SystemErrorLog(error_message=error_msg, traceback=tb))
+            await session.commit()
+    except Exception as db_exc:
+        print(f"Failed to log error to DB: {db_exc}")
+
+    return JSONResponse(
+        status_code=500,
+        content={"detail": "Internal Server Error"}
+    )
+
+
 # ─── Legacy compatibility endpoints for frontend/*.html ──────────────────────
 
 

@@ -8,6 +8,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from backend.core.deps import get_current_user, require_role
 from backend.core.security import check_teacher_user_management, hash_password
 from backend.database import get_db
+from backend.models.domain_01 import SecurityPolicy
+from sqlalchemy import select
+from fastapi import HTTPException, status
 from backend.models.domain_01 import User
 from backend.schemas.users import UserCreate, UserResponse, UserUpdate
 
@@ -114,6 +117,15 @@ async def update_user(
         user.student_id = user_in.student_id
     if user_in.role is not None:
         user.role = user_in.role
+
+    if user_in.password:
+        stmt_policy = select(SecurityPolicy).where(SecurityPolicy.key == 'MIN_PASSWORD_LENGTH')
+        res_policy = await db.execute(stmt_policy)
+        policy_min = res_policy.scalar_one_or_none()
+        min_len = int(policy_min.value) if policy_min and policy_min.value.isdigit() else 8
+        if len(user_in.password) < min_len:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"Password must be at least {min_len} characters")
+
     if user_in.password is not None:
         user.password_hash = hash_password(user_in.password)
     if user_in.is_active is not None:

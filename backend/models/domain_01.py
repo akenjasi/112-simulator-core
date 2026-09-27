@@ -211,3 +211,29 @@ def __getattr__(name):
         from backend.models.domain_03 import AIStudentAdvice, AIGroupAdvice
         return globals().setdefault(name, locals()[name])
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+
+class SecurityPolicy(Base):
+    __tablename__ = "security_policies"
+
+    key: Mapped[str] = mapped_column(String, primary_key=True, unique=True, nullable=False)
+    value: Mapped[str] = mapped_column(String, nullable=False)
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+
+class SystemErrorLog(Base):
+    __tablename__ = "system_error_logs"
+
+    id: Mapped[str] = mapped_column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
+    timestamp: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=lambda: datetime.now(timezone.utc),
+        server_default=func.now(),
+        nullable=False,
+    )
+    error_message: Mapped[str] = mapped_column(String, nullable=False)
+    traceback: Mapped[str] = mapped_column(String, nullable=True)
+
+    def __init__(self, **kwargs):
+        kwargs.setdefault("id", str(uuid.uuid4()))
+        super().__init__(**kwargs)

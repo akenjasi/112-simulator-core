@@ -7,7 +7,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from backend.core.deps import get_current_user
 from backend.core.security import create_access_token, verify_password
 from backend.database import get_db
-from backend.models.domain_01 import User
+from backend.models.domain_01 import User, SecurityPolicy
+from datetime import timedelta
 from backend.core.ldap_adapter import authenticate_ldap
 from backend.core.security import hash_password
 import os
@@ -167,14 +168,28 @@ async def login(
                     headers={"WWW-Authenticate": "Bearer"},
                 )
 
-    # If 2FA is enabled, require TOTP verification
-    if user.is_2fa_enabled:
+
+    # If 2FA is enabled globally or per-user, require TOTP verification
+    stmt_2fa = select(SecurityPolicy).where(SecurityPolicy.key == 'REQUIRE_2FA_ALL')
+    res_2fa = await db.execute(stmt_2fa)
+    policy_2fa = res_2fa.scalar_one_or_none()
+    require_2fa_all = policy_2fa and policy_2fa.value.lower() == 'true'
+
+    if user.is_2fa_enabled or require_2fa_all:
+
         return TwoFactorRequiredResponse(
             requires_2fa=True,
             user_id=user.user_id,
         )
 
-    access_token = create_access_token(subject=user.user_id, role=user.role)
+    
+    stmt_policy = select(SecurityPolicy).where(SecurityPolicy.key == 'SESSION_TIMEOUT_MINUTES')
+    res_policy = await db.execute(stmt_policy)
+    policy_timeout = res_policy.scalar_one_or_none()
+    timeout_mins = int(policy_timeout.value) if policy_timeout and policy_timeout.value.isdigit() else 60
+
+    access_token = create_access_token(subject=user.user_id, role=user.role, expires_delta=timedelta(minutes=timeout_mins))
+
 
     return TokenResponse(
         access_token=access_token,
@@ -249,7 +264,14 @@ async def login_2fa(
             detail="Invalid 2FA code",
         )
 
-    access_token = create_access_token(subject=user.user_id, role=user.role)
+    
+    stmt_policy = select(SecurityPolicy).where(SecurityPolicy.key == 'SESSION_TIMEOUT_MINUTES')
+    res_policy = await db.execute(stmt_policy)
+    policy_timeout = res_policy.scalar_one_or_none()
+    timeout_mins = int(policy_timeout.value) if policy_timeout and policy_timeout.value.isdigit() else 60
+
+    access_token = create_access_token(subject=user.user_id, role=user.role, expires_delta=timedelta(minutes=timeout_mins))
+
 
     return TokenResponse(
         access_token=access_token,
