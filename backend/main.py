@@ -53,6 +53,7 @@ from backend.api.router_knowledge import knowledge_router
 from backend.api.router_asr import router_asr
 from backend.api.router_telephony import router_telephony
 from backend.api.router_ai_analytics import router as ai_analytics_router
+from backend.api.router_integration import router_integration
 from backend.core.audit_middleware import AuditMiddleware
 
 
@@ -148,6 +149,7 @@ app.include_router(knowledge_router)
 app.include_router(router_asr)
 app.include_router(router_telephony)
 app.include_router(ai_analytics_router)
+app.include_router(router_integration)
 
 
 

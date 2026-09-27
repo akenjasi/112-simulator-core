@@ -10,6 +10,26 @@
 services:
 
   # ─── Backend: FastAPI + Qwen TTS ───────────────────────────────────────────
+  postgres:
+    image: postgres:15-alpine
+    container_name: simulator_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: admin
+      POSTGRES_PASSWORD: securepass
+      POSTGRES_DB: simulator112
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U admin -d simulator112"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - simulator_net
+
   backend:
     build:
       context: .
@@ -20,7 +40,7 @@ services:
       - .env
     environment:
       # Абсолютный путь внутри контейнера (volume монтируется на /app/data)
-      DATABASE_URL: "sqlite+aiosqlite:////app/data/112_simulator.db"
+      DATABASE_URL: "postgresql+asyncpg://admin:securepass@postgres:5432/simulator112"
       # CORS: добавь свой домен при необходимости
       CORS_ORIGINS: "http://localhost:3000,http://localhost:8000"
     ports:
@@ -40,6 +60,9 @@ services:
       # При первом запуске скачивается ~880 MB → нужен запас.
       # На быстром интернете ~3-5 мин, на медленном до 30 мин.
       start_period: 600s
+    depends_on:
+      postgres:
+        condition: service_healthy
     networks:
       - simulator_net
 
@@ -66,6 +89,8 @@ volumes:
     driver: local
   # Qwen TTS GGUF-модели (~880 MB, скачиваются один раз)
   simulator_models:
+    driver: local
+  postgres_data:
     driver: local
 
 # ─── Internal network ─────────────────────────────────────────────────────────

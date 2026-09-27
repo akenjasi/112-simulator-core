@@ -41,6 +41,10 @@
 - [DOCKER.md](DOCKER.md) — Инструкция по запуску и обслуживанию Docker-контейнеров.
 - [PROJECT_STRUCTURE.md](PROJECT_STRUCTURE.md) — Подробное описание структуры папок и модулей.
 
+## Безопасность и ФЗ-152
+
+Проект поддерживает работу с PostgreSQL и включает архитектурные решения (в том числе хеширование паролей и инструкции по защите томов БД) для соответствия требованиям ФЗ-152 (защита ПДн). Подробности в [DOCKER.md](DOCKER.md).
+
 ## Быстрый старт (Docker)
 
 1. Создайте файл `.env`:
@@ -57,3 +61,17 @@
    - **Frontend:** http://localhost:3000
    - **Backend API:** http://localhost:8000
    - **Swagger Docs:** http://localhost:8000/docs
+
+## Environment Variables for Integration
+
+### Asterisk PBX Integration
+- `ASTERISK_HOST` - IP or hostname of the Asterisk server (default: 127.0.0.1)
+- `ASTERISK_PORT` - AMI port (default: 5038)
+- `ASTERISK_LOGIN` - AMI user
+- `ASTERISK_PASSWORD` - AMI password
+
+### SPO-112 Integration
+- `SPO112_PROTOCOL` - REST or SOAP (default: REST)
+- `SPO112_ENDPOINT` - URL to SPO-112 system (default: http://localhost:8080/api/export)
+- `SPO112_USERNAME` - Authentication username
+- `SPO112_PASSWORD` - Authentication password

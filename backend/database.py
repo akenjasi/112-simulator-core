@@ -5,7 +5,7 @@ from typing import AsyncGenerator
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
 from sqlalchemy.orm import sessionmaker
 
-DATABASE_URL = os.getenv("DATABASE_URL", "sqlite+aiosqlite:///:memory:")
+DATABASE_URL = os.getenv("DATABASE_URL", "sqlite+aiosqlite:///112_simulator.db")
 
 connect_args = {"check_same_thread": False} if DATABASE_URL.startswith("sqlite") else {}
 

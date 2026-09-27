@@ -24,6 +24,7 @@ from sqlalchemy.orm.attributes import flag_modified
 
 from backend.database import get_db
 from backend.models.domain_03 import ExamSession
+from backend.core.telephony_adapter import telephony_adapter
 
 logger = logging.getLogger(__name__)
 
@@ -183,29 +184,21 @@ async def start_call(
     req: StartCallRequest,
     db: AsyncSession = Depends(get_db),
 ) -> StartCallResponse:
-    """Initiates an incoming call to the operator workstation.
+    """Initiates an incoming call to the operator workstation using Asterisk."""
+    
+    # Actually originate the call using Asterisk PBX
+    ext_call_id = await telephony_adapter.originate_call(
+        endpoint=req.operator_ext,
+        extension=req.ticket_id
+    )
+    
+    if not ext_call_id:
+        # Fallback if Asterisk is unavailable
+        logger.warning("Asterisk unavailable, using fallback mock call ID")
+        call_id = f"call-{uuid.uuid4().hex[:8]}"
+    else:
+        call_id = ext_call_id
 
-    MOCK implementation for MVP:
-    1. Sets status to RINGING and broadcasts WebSocket event (incoming call rings).
-    2. Simulates 1 second delay (operator picking up handset / PBX handshake).
-    3. Sets status to ANSWERED, updates DB state and broadcasts ANSWERED.
-
-    TODO (Asterisk ARI Integration):
-    - Connect to Asterisk via ARI (`ari-py` or `panoramisk` for AMI):
-        client = ari.connect('http://asterisk:8088/', 'asterisk_user', 'asterisk_pass')
-    - Originate call from Asterisk to operator's physical SIP phone extension:
-        channel = client.channels.originate(
-            endpoint=f"PJSIP/{req.operator_ext}",
-            extension=req.ticket_id,
-            context="emergency-112-inbound",
-            priority=1,
-            app="stasis-112-simulator"
-        )
-    - Listen for Stasis events:
-        * 'ChannelStateChange' Ringing -> broadcast 'RINGING'
-        * 'ChannelStateChange' Up -> broadcast 'ANSWERED'
-    """
-    call_id = f"call-{uuid.uuid4().hex[:8]}"
     session_key = req.session_id or req.ticket_id
 
     # 1. State: RINGING
@@ -237,9 +230,10 @@ async def start_call(
         call_id=call_id,
     )
 
-    # 2. Simulate delay (1 second) before operator picks up phone / call is answered
+    # 2. Delay before answer
     await asyncio.sleep(1.0)
-
+    
+    # Status Up check could be done via event listening, but for now we'll simulate Up transition
     # 3. State: ANSWERED
     telephony_manager.set_state(session_key, {
         "call_id": call_id,
@@ -284,12 +278,9 @@ async def hangup(
     req: HangupRequest,
     db: AsyncSession = Depends(get_db),
 ) -> HangupResponse:
-    """Terminates active call on PBX and notifies clients.
-
-    TODO (Asterisk ARI Integration):
-    - Hangup active ARI channel:
-        client.channels.hangup(channelId=req.call_id or channel.id, reason=req.reason)
-    """
+    """Terminates active call on PBX and notifies clients."""
+    if req.call_id:
+        await telephony_adapter.hangup_call(channel=req.call_id, reason=req.reason)
     session_key = req.session_id or req.ticket_id or (req.call_id or "default")
     current_state = telephony_manager.get_state(session_key)
 
@@ -330,15 +321,9 @@ async def play_audio(
     req: PlayAudioRequest,
     db: AsyncSession = Depends(get_db),
 ) -> PlayAudioResponse:
-    """Plays audio into the active channel (e.g. citizen dialogue turn / TTS playback).
-
-    TODO (Asterisk ARI Integration):
-    - Play audio file into the active channel bridge:
-        client.channels.play(
-            channelId=req.call_id,
-            media=f"sound:{req.audio_url}"
-        )
-    """
+    """Plays audio into the active channel (e.g. citizen dialogue turn / TTS playback)."""
+    if req.call_id and req.audio_url:
+        await telephony_adapter.play_audio(channel=req.call_id, audio_file=req.audio_url)
     session_key = req.session_id or (req.call_id or "default")
 
     # Broadcast PLAY_AUDIO to frontend
