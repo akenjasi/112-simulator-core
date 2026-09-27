@@ -10,6 +10,7 @@ import { OperatorBottomBar, type OperatorService } from "@/components/operator/b
 import { AddServiceModal } from "@/components/operator/AddServiceModal"
 import { matchCanonicalService, getServiceShortName, DEFAULT_SERVICES_LIST } from "@/components/operator/services-data"
 import { useTelephony } from "@/hooks/useTelephony"
+import { useCallStore } from "@/store/useCallStore"
 import {
   CheckCircle2,
   X,
@@ -64,6 +65,7 @@ function OperatorContent() {
     ticketId,
     operatorExt: "1002",
   })
+  const isStoreReconnecting = useCallStore((s) => s.isReconnecting)
 
 
 
@@ -596,6 +598,21 @@ function OperatorContent() {
           }`}
         >
           {toastMessage}
+        </div>
+      )}
+
+      {/* Network Resilience Warning Banner (ТЗ 73) */}
+      {(telephony.isReconnecting || isStoreReconnecting) && (
+        <div
+          role="alert"
+          aria-live="assertive"
+          className="bg-amber-600 text-white px-4 py-2 text-xs font-semibold flex items-center justify-center gap-2 shadow-md z-40 border-b border-amber-700 animate-pulse"
+        >
+          <span className="relative flex h-2.5 w-2.5">
+            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-white opacity-75"></span>
+            <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-white"></span>
+          </span>
+          <span>Соединение потеряно, восстанавливаем...</span>
         </div>
       )}
 

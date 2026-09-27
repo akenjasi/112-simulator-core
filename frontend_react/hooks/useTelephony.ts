@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useEffect, useRef, useCallback } from "react"
+import { useCallStore } from "../store/useCallStore"
 // Note: In future stages when Asterisk SIP/WebRTC PBX is connected,
 // sip.js UserAgent will be initialized here for browser softphone registration:
 // import { UserAgent } from "sip.js"
@@ -24,6 +25,7 @@ export function useTelephony({
   const [callId, setCallId] = useState<string | null>(null)
   const [activeExt, setActiveExt] = useState<string>(operatorExt)
   const [isConnected, setIsConnected] = useState(false)
+  const [isReconnecting, setIsReconnecting] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   const wsRef = useRef<WebSocket | null>(null)
@@ -122,58 +124,98 @@ export function useTelephony({
     if (!sessionKey || typeof window === "undefined") return
 
     let isSubscribed = true
-    const protocol = window.location.protocol === "https:" ? "wss:" : "ws:"
-    const wsUrl = `${protocol}//${window.location.host}/api/v2/telephony/ws/${sessionKey}`
+    let reconnectTimeout: any = null
+    let reconnectAttempts = 0
+    let isManualClose = false
 
-    try {
-      const ws = new WebSocket(wsUrl)
-      wsRef.current = ws
+    const connect = () => {
+      if (!isSubscribed) return
+      const protocol = window.location.protocol === "https:" ? "wss:" : "ws:"
+      const wsUrl = `${protocol}//${window.location.host}/api/v2/telephony/ws/${sessionKey}`
 
-      ws.onopen = () => {
-        if (!isSubscribed) return
-        setIsConnected(true)
-        setError(null)
-      }
+      try {
+        const ws = new WebSocket(wsUrl)
+        wsRef.current = ws
 
-      ws.onmessage = (event) => {
-        if (!isSubscribed) return
-        try {
-          const data = JSON.parse(event.data)
-          if (data.type === "CALL_STATUS") {
-            if (data.status) setCallStatus(data.status)
-            if (data.call_id) setCallId(data.call_id)
-            if (data.operator_ext) setActiveExt(data.operator_ext)
-          } else if (data.type === "CONNECTED") {
-            if (data.status && data.status !== "IDLE") {
-              setCallStatus(data.status)
-            }
-          }
-        } catch (err) {
-          console.error("Failed to parse telephony WS event:", err)
+        ws.onopen = () => {
+          if (!isSubscribed) return
+          setIsConnected(true)
+          setIsReconnecting(false)
+          reconnectAttempts = 0
+          setError(null)
+          useCallStore.setState({ isConnected: true, isReconnecting: false, reconnectAttempts: 0 })
         }
-      }
 
-      ws.onclose = () => {
-        if (!isSubscribed) return
-        setIsConnected(false)
-      }
+        ws.onmessage = (event) => {
+          if (!isSubscribed) return
+          try {
+            const data = JSON.parse(event.data)
+            if (data.type === "CALL_STATUS") {
+              if (data.status) {
+                setCallStatus(data.status)
+                useCallStore.setState({ callStatus: data.status })
+              }
+              if (data.call_id) {
+                setCallId(data.call_id)
+                useCallStore.setState({ callId: data.call_id })
+              }
+              if (data.operator_ext) {
+                setActiveExt(data.operator_ext)
+                useCallStore.setState({ operatorExt: data.operator_ext })
+              }
+            } else if (data.type === "CONNECTED") {
+              if (data.status && data.status !== "IDLE") {
+                setCallStatus(data.status)
+                useCallStore.setState({ callStatus: data.status })
+              }
+            }
+          } catch (err) {
+            console.error("Failed to parse telephony WS event:", err)
+          }
+        }
 
-      ws.onerror = (e) => {
-        if (!isSubscribed) return
-        console.warn("Telephony WebSocket error, falling back to REST:", e)
+        ws.onclose = () => {
+          if (!isSubscribed) return
+          setIsConnected(false)
+          useCallStore.setState({ isConnected: false })
+
+          // Reconnect with exponential backoff if not closed manually and call is still active
+          if (!isManualClose && callStatus !== "HANGUP") {
+            setIsReconnecting(true)
+            useCallStore.setState({ isReconnecting: true })
+            reconnectAttempts += 1
+            const delay = Math.min(1000 * Math.pow(2, reconnectAttempts - 1), 30000)
+            reconnectTimeout = setTimeout(() => {
+              if (isSubscribed && !isManualClose && callStatus !== "HANGUP") {
+                connect()
+              }
+            }, delay)
+          }
+        }
+
+        ws.onerror = (e) => {
+          if (!isSubscribed) return
+          console.warn("Telephony WebSocket error, falling back to REST:", e)
+        }
+      } catch (err) {
+        console.warn("Could not create Telephony WebSocket:", err)
       }
-    } catch (err) {
-      console.warn("Could not create Telephony WebSocket:", err)
     }
+
+    connect()
 
     return () => {
       isSubscribed = false
+      isManualClose = true
+      if (reconnectTimeout) {
+        clearTimeout(reconnectTimeout)
+      }
       if (wsRef.current) {
         wsRef.current.close()
         wsRef.current = null
       }
     }
-  }, [sessionId, ticketId])
+  }, [sessionId, ticketId, callStatus])
 
   // ─── Telephony Control Methods ─────────────────────────────────────────────
   const startCall = useCallback(
@@ -277,6 +319,7 @@ export function useTelephony({
     callId,
     operatorExt: activeExt,
     isConnected,
+    isReconnecting,
     error,
     startCall,
     hangupCall,

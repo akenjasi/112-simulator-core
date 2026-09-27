@@ -83,6 +83,7 @@ async def lifespan(app: FastAPI):
             "ALTER TABLE scenario_tickets ADD COLUMN complexity INTEGER DEFAULT 1",
             "ALTER TABLE scenario_tickets ADD COLUMN content JSON DEFAULT '{}'",
             "ALTER TABLE exam_sessions ADD COLUMN ticket_id VARCHAR",
+            "ALTER TABLE user_action_log ADD COLUMN endpoint VARCHAR",
         ]:
             try:
                 await conn.execute(text(alter_sql))

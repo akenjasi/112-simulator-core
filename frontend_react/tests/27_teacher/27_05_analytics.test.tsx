@@ -273,4 +273,22 @@ describe('27.5: Пост-аналитика и Апелляция', () => {
     expect(screen.getByRole('button', { name: /Изменить оценку/i })).toBeInTheDocument();
     expect(screen.getAllByText(/Ошибка в номере дома/i).length).toBeGreaterThan(0);
   });
+
+  it('should render Export to Excel button and trigger generation', async () => {
+    render(<AnalyticsPage />);
+    const exportBtn = screen.getByRole('button', { name: /Экспорт в Excel/i });
+    expect(exportBtn).toBeInTheDocument();
+
+    fireEvent.click(exportBtn);
+
+    await waitFor(() => {
+      expect(global.fetch).toHaveBeenCalledWith(
+        '/api/reports/generate',
+        expect.objectContaining({
+          method: 'POST',
+        })
+      );
+    });
+  });
 });
+

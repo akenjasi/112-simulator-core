@@ -1,5 +1,5 @@
 import Link from "next/link"
-import { GraduationCap, Headphones, ArrowRight, ShieldCheck, Activity } from "lucide-react"
+import { GraduationCap, Headphones, ArrowRight, ShieldCheck, Activity, Shield } from "lucide-react"
 
 export default function LandingPage() {
   return (
@@ -26,8 +26,8 @@ export default function LandingPage() {
         </div>
       </header>
 
-      {/* Main Hero & Dual Entry Points */}
-      <main className="flex-1 flex flex-col items-center justify-center px-4 sm:px-6 py-10 max-w-4xl mx-auto w-full">
+      {/* Main Hero & Triple Entry Points */}
+      <main className="flex-1 flex flex-col items-center justify-center px-4 sm:px-6 py-10 max-w-5xl mx-auto w-full">
         <div className="text-center space-y-4 mb-10 sm:mb-14">
           <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-primary/10 text-primary text-xs font-semibold">
             <ShieldCheck className="h-3.5 w-3.5" />
@@ -43,8 +43,8 @@ export default function LandingPage() {
           </p>
         </div>
 
-        {/* Two Large Entrance Buttons */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 w-full max-w-3xl">
+        {/* Entrance Buttons */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 w-full">
           {/* 1. Teacher Entrance */}
           <Link
             href="/teacher/sessions"
@@ -93,6 +93,32 @@ export default function LandingPage() {
 
             <div className="mt-8 pt-4 border-t flex items-center justify-between text-sm font-semibold text-emerald-600 dark:text-emerald-400">
               <span>Личный кабинет курсанта</span>
+              <ArrowRight className="h-4 w-4 transform group-hover:translate-x-1.5 transition-transform" />
+            </div>
+          </Link>
+
+          {/* 3. Admin Entrance */}
+          <Link
+            href="/admin"
+            className="group relative flex flex-col justify-between p-8 rounded-2xl bg-card border-2 border-border/80 hover:border-purple-600 shadow-sm hover:shadow-xl transition-all duration-300 text-left overflow-hidden cursor-pointer"
+          >
+            <div className="space-y-4">
+              <div className="h-16 w-16 rounded-2xl bg-purple-500/10 dark:bg-purple-500/20 text-purple-600 dark:text-purple-400 flex items-center justify-center group-hover:scale-110 group-hover:bg-purple-700 group-hover:text-white transition-all duration-300">
+                <Shield className="h-8 w-8" />
+              </div>
+
+              <div>
+                <h2 className="text-2xl font-bold text-foreground group-hover:text-purple-600 dark:group-hover:text-purple-400 transition-colors">
+                  Вход для администратора
+                </h2>
+                <p className="text-sm text-muted-foreground mt-2 leading-relaxed">
+                  Мониторинг нагрузки сервера, управление пользователями, сброс паролей и резервное копирование.
+                </p>
+              </div>
+            </div>
+
+            <div className="mt-8 pt-4 border-t flex items-center justify-between text-sm font-semibold text-purple-600 dark:text-purple-400">
+              <span>Панель администратора</span>
               <ArrowRight className="h-4 w-4 transform group-hover:translate-x-1.5 transition-transform" />
             </div>
           </Link>

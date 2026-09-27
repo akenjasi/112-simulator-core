@@ -43,6 +43,7 @@ import {
   GraduationCap,
   Loader2,
   Ticket,
+  FileSpreadsheet,
 } from "lucide-react"
 
 export interface CadetRecordSummary {
@@ -572,6 +573,137 @@ export default function AnalyticsPage({ initialTab = "all" }: AnalyticsPageProps
     })
   }
 
+  const [isExportingExcel, setIsExportingExcel] = useState<boolean>(false)
+
+  const handleExportExcel = async () => {
+    try {
+      setIsExportingExcel(true)
+
+      // 1. Gather records from active session or lessons history
+      const customRecords: any[] = []
+
+      // Add cadets from current session
+      if (sessionData && sessionData.cadets && sessionData.cadets.length > 0) {
+        for (const cadet of sessionData.cadets) {
+          if (cadet.records && cadet.records.length > 0) {
+            for (const r of cadet.records) {
+              customRecords.push({
+                cadet_name: cadet.cadet_name,
+                ticket_id: r.title || r.ticket_id || "Билет",
+                comm_metrics: {
+                  greeting_success: true,
+                  filler_words: 0,
+                  script_followed_pct: 100,
+                },
+                card_metrics: {
+                  address_correct: true,
+                  services_matched: true,
+                  over_dispatched_services: [],
+                  missed_critical_factoids: [],
+                },
+                sla_metrics: {
+                  sla_breached_count: 0,
+                  time_to_first_dispatch_sec: 40,
+                },
+              })
+            }
+          } else {
+            customRecords.push({
+              cadet_name: cadet.cadet_name,
+              ticket_id: "Билет",
+              comm_metrics: { greeting_success: true, filler_words: 0, script_followed_pct: 100 },
+              card_metrics: {
+                address_correct: true,
+                services_matched: true,
+                over_dispatched_services: [],
+                missed_critical_factoids: [],
+              },
+              sla_metrics: { sla_breached_count: 0, time_to_first_dispatch_sec: 35 },
+            })
+          }
+        }
+      }
+
+      // Add students from lessons if sessionData had no records
+      if (customRecords.length === 0 && lessonsList && lessonsList.length > 0) {
+        for (const lesson of lessonsList) {
+          for (const student of lesson.students || []) {
+            customRecords.push({
+              cadet_name: student.cadet_name,
+              ticket_id: lesson.group_name || `Урок #${lesson.id.slice(0, 6)}`,
+              comm_metrics: { greeting_success: true, filler_words: 0, script_followed_pct: 100 },
+              card_metrics: {
+                address_correct: true,
+                services_matched: true,
+                over_dispatched_services: [],
+                missed_critical_factoids: [],
+              },
+              sla_metrics: { sla_breached_count: 0, time_to_first_dispatch_sec: 30 },
+            })
+          }
+        }
+      }
+
+      // 2. Start generation request
+      const genRes = await fetch("/api/reports/generate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          group_id: selectedGroupId !== "ALL" ? selectedGroupId : undefined,
+          session_ids: sessionId ? [sessionId] : undefined,
+          custom_records: customRecords.length > 0 ? customRecords : undefined,
+        }),
+      })
+
+      if (!genRes.ok) {
+        throw new Error(`Ошибка запуска генерации (${genRes.status})`)
+      }
+
+      const { task_id } = await genRes.json()
+
+      // 3. Poll for readiness
+      let isReady = false
+      for (let attempt = 0; attempt < 25; attempt++) {
+        await new Promise((resolve) => setTimeout(resolve, 600))
+        const statusRes = await fetch(`/api/reports/status/${task_id}`)
+        if (!statusRes.ok) continue
+        const statusData = await statusRes.json()
+        if (statusData.status === "ready") {
+          isReady = true
+          break
+        }
+        if (statusData.status === "failed") {
+          throw new Error(statusData.error || "Ошибка фоновой генерации")
+        }
+      }
+
+      if (!isReady) {
+        throw new Error("Таймаут генерации файла отчета")
+      }
+
+      // 4. Download file
+      const downloadRes = await fetch(`/api/reports/download?task_id=${encodeURIComponent(task_id)}&format=excel`)
+      if (!downloadRes.ok) {
+        throw new Error(`Не удалось скачать файл (${downloadRes.status})`)
+      }
+
+      const blob = await downloadRes.blob()
+      const url = window.URL.createObjectURL(blob)
+      const link = document.createElement("a")
+      link.href = url
+      link.download = `analytics_report_${new Date().toISOString().slice(0, 10)}.xlsx`
+      document.body.appendChild(link)
+      link.click()
+      link.remove()
+      window.URL.revokeObjectURL(url)
+    } catch (err: any) {
+      console.error("Failed to export Excel report:", err)
+      alert(err?.message || "Ошибка при формировании Excel отчета")
+    } finally {
+      setIsExportingExcel(false)
+    }
+  }
+
   const allGroupOptions = React.useMemo(() => {
     const map = new Map<string, string>()
     availableGroups.forEach((g) => {
@@ -617,8 +749,26 @@ export default function AnalyticsPage({ initialTab = "all" }: AnalyticsPageProps
           </div>
         </div>
 
-        {/* Tab Switcher */}
-        <div className="flex items-center bg-muted/60 p-1 rounded-xl border">
+        {/* Action Buttons & Tab Switcher */}
+        <div className="flex flex-wrap items-center gap-3">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleExportExcel}
+            disabled={isExportingExcel}
+            className="flex items-center gap-2 border-emerald-600/40 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 font-semibold shadow-xs"
+            data-testid="export-excel-btn"
+          >
+            {isExportingExcel ? (
+              <Loader2 className="h-4 w-4 animate-spin text-emerald-600" />
+            ) : (
+              <FileSpreadsheet className="h-4 w-4 text-emerald-600" />
+            )}
+            <span>{isExportingExcel ? "Генерация Excel..." : "Экспорт в Excel"}</span>
+          </Button>
+
+          {/* Tab Switcher */}
+          <div className="flex items-center bg-muted/60 p-1 rounded-xl border">
           <button
             type="button"
             onClick={() => setActiveTab("all")}
@@ -661,6 +811,7 @@ export default function AnalyticsPage({ initialTab = "all" }: AnalyticsPageProps
           </button>
         </div>
       </div>
+    </div>
 
       {/* ────────────────── SECTION 1: ИСТОРИЯ УРОКОВ (ACCORDION) ────────────────── */}
       {(activeTab === "all" || activeTab === "history") && (

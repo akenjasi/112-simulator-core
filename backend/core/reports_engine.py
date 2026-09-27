@@ -3,6 +3,7 @@
 import csv
 import io
 import os
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Tuple
 from jinja2 import Environment, FileSystemLoader, select_autoescape
@@ -204,3 +205,196 @@ def generate_csv_from_data(cadets: List[Dict[str, Any]]) -> str:
         ])
 
     return output.getvalue()
+
+
+def generate_excel_from_data(cadets_data: List[Dict[str, Any]]) -> bytes:
+    """Generate a styled XLSX Excel spreadsheet from cadet reports in-memory.
+
+    Args:
+        cadets_data: List of cadet evaluation records.
+
+    Returns:
+        Raw bytes of the .xlsx file.
+    """
+    from openpyxl import Workbook
+    from openpyxl.styles import Alignment, Border, Font, PatternFill, Side
+    from openpyxl.utils import get_column_letter
+
+    wb = Workbook()
+    ws = wb.active
+    ws.title = "Аттестация курсантов"
+
+    # Ensure grid lines are visible
+    ws.views.sheetView[0].showGridLines = True
+
+    # Styling definitions
+    title_fill = PatternFill(start_color="1E3A8A", end_color="1E3A8A", fill_type="solid")
+    title_font = Font(name="Calibri", size=14, bold=True, color="FFFFFF")
+
+    header_fill = PatternFill(start_color="2563EB", end_color="2563EB", fill_type="solid")
+    header_font = Font(name="Calibri", size=11, bold=True, color="FFFFFF")
+
+    zebra_fill = PatternFill(start_color="F8FAFC", end_color="F8FAFC", fill_type="solid")
+    white_fill = PatternFill(start_color="FFFFFF", end_color="FFFFFF", fill_type="solid")
+
+    thin_border_side = Side(border_style="thin", color="CBD5E1")
+    cell_border = Border(
+        left=thin_border_side,
+        right=thin_border_side,
+        top=thin_border_side,
+        bottom=thin_border_side,
+    )
+
+    header_border = Border(
+        left=Side(border_style="thin", color="1E40AF"),
+        right=Side(border_style="thin", color="1E40AF"),
+        top=Side(border_style="medium", color="1E3A8A"),
+        bottom=Side(border_style="medium", color="1E3A8A"),
+    )
+
+    summary_fill = PatternFill(start_color="EFF6FF", end_color="EFF6FF", fill_type="solid")
+    summary_font = Font(name="Calibri", size=11, bold=True, color="1E3A8A")
+
+    # Row 1: Title Banner
+    ws.merge_cells("A1:J1")
+    title_cell = ws["A1"]
+    title_cell.value = "СИСТЕМА-112: ОТЧЕТ ПО РЕЗУЛЬТАТАМ АТТЕСТАЦИИ И ТРЕНИРОВОК КУРСАНТОВ"
+    title_cell.font = title_font
+    title_cell.fill = title_fill
+    title_cell.alignment = Alignment(horizontal="center", vertical="center")
+    ws.row_dimensions[1].height = 36
+
+    # Row 2: Subtitle / Date
+    ws.merge_cells("A2:J2")
+    sub_cell = ws["A2"]
+    now_str = datetime.now(timezone.utc).strftime("%d.%m.%Y %H:%M UTC")
+    sub_cell.value = f"Сформировано: {now_str} | Всего записей: {len(cadets_data)}"
+    sub_cell.font = Font(name="Calibri", size=10, italic=True, color="64748B")
+    sub_cell.alignment = Alignment(horizontal="center", vertical="center")
+    ws.row_dimensions[2].height = 20
+
+    # Row 3: Blank spacing row
+    ws.row_dimensions[3].height = 10
+
+    # Row 4: Column Headers
+    headers = [
+        "Курсант",
+        "Билет / Задание",
+        "Итоговый балл",
+        "Балл коммуникация",
+        "Балл карточка",
+        "Балл SLA",
+        "Время диспетчеризации (сек)",
+        "Лишние службы (гипер-диспетчеризация)",
+        "Пропущенные фактоиды",
+        "Штрафы и замечания",
+    ]
+
+    ws.row_dimensions[4].height = 28
+    for col_idx, h in enumerate(headers, start=1):
+        cell = ws.cell(row=4, column=col_idx, value=h)
+        cell.font = header_font
+        cell.fill = header_fill
+        cell.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
+        cell.border = header_border
+
+    # Rows 5+: Cadet Data
+    current_row = 5
+    for idx, c in enumerate(cadets_data):
+        row_fill = zebra_fill if idx % 2 == 1 else white_fill
+        ws.row_dimensions[current_row].height = 22
+
+        def _format_list(val: Any) -> str:
+            if isinstance(val, (list, tuple, set)):
+                return ", ".join(str(x) for x in val) if val else "—"
+            return str(val) if val else "—"
+
+        cadet_name = str(c.get("cadet_name") or "—")
+        ticket_id = str(c.get("ticket_id") or "—")
+        final_score = int(c.get("final_score", 0))
+        comm_score = int(c.get("comm_score", 0))
+        card_score = int(c.get("card_score", 0))
+        sla_score = int(c.get("sla_score", 0))
+        dispatch_sec = int(c.get("time_to_first_dispatch_sec", 0))
+        over_disp = _format_list(c.get("over_dispatched_services"))
+        missed_fact = _format_list(c.get("missed_critical_factoids"))
+        penalties = _format_list(c.get("penalties_list"))
+
+        row_values = [
+            (cadet_name, Alignment(horizontal="left", vertical="center"), None),
+            (ticket_id, Alignment(horizontal="center", vertical="center"), None),
+            (final_score, Alignment(horizontal="center", vertical="center"), "score"),
+            (comm_score, Alignment(horizontal="center", vertical="center"), None),
+            (card_score, Alignment(horizontal="center", vertical="center"), None),
+            (sla_score, Alignment(horizontal="center", vertical="center"), None),
+            (dispatch_sec, Alignment(horizontal="center", vertical="center"), None),
+            (over_disp, Alignment(horizontal="left", vertical="center", wrap_text=True), "alert" if over_disp != "—" else None),
+            (missed_fact, Alignment(horizontal="left", vertical="center", wrap_text=True), "alert" if missed_fact != "—" else None),
+            (penalties, Alignment(horizontal="left", vertical="center", wrap_text=True), None),
+        ]
+
+        for col_idx, (val, align, flag) in enumerate(row_values, start=1):
+            cell = ws.cell(row=current_row, column=col_idx, value=val)
+            cell.alignment = align
+            cell.border = cell_border
+
+            if flag == "score":
+                if final_score >= 80:
+                    cell.font = Font(name="Calibri", size=11, bold=True, color="15803D")
+                    cell.fill = PatternFill(start_color="DCFCE7", end_color="DCFCE7", fill_type="solid")
+                elif final_score >= 60:
+                    cell.font = Font(name="Calibri", size=11, bold=True, color="B45309")
+                    cell.fill = PatternFill(start_color="FEF3C7", end_color="FEF3C7", fill_type="solid")
+                else:
+                    cell.font = Font(name="Calibri", size=11, bold=True, color="B91C1C")
+                    cell.fill = PatternFill(start_color="FEE2E2", end_color="FEE2E2", fill_type="solid")
+            elif flag == "alert":
+                cell.font = Font(name="Calibri", size=10, color="B91C1C", bold=True)
+                cell.fill = PatternFill(start_color="FFF1F2", end_color="FFF1F2", fill_type="solid")
+            else:
+                cell.font = Font(name="Calibri", size=10, color="0F172A")
+                cell.fill = row_fill
+
+        current_row += 1
+
+    # Summary Row if cadets_data has entries
+    if cadets_data:
+        ws.row_dimensions[current_row].height = 24
+        avg_score = round(sum(c.get("final_score", 0) for c in cadets_data) / len(cadets_data), 1)
+        ws.cell(row=current_row, column=1, value="Среднее значение:").font = summary_font
+        ws.cell(row=current_row, column=1).alignment = Alignment(horizontal="right", vertical="center")
+        ws.cell(row=current_row, column=3, value=avg_score).font = summary_font
+        ws.cell(row=current_row, column=3).alignment = Alignment(horizontal="center", vertical="center")
+
+        for c_idx in range(1, len(headers) + 1):
+            cell = ws.cell(row=current_row, column=c_idx)
+            cell.fill = summary_fill
+            cell.border = Border(
+                top=Side(border_style="medium", color="2563EB"),
+                bottom=Side(border_style="double", color="2563EB"),
+                left=thin_border_side,
+                right=thin_border_side,
+            )
+        current_row += 1
+
+    # Freeze panes below headers
+    ws.freeze_panes = "A5"
+
+    # Auto-adjust column widths
+    for col in ws.columns:
+        max_len = 0
+        col_letter = get_column_letter(col[0].column)
+        for cell in col:
+            if cell.row in (1, 2):
+                continue
+            if cell.value:
+                val_lines = str(cell.value).split("\n")
+                line_max = max(len(l) for l in val_lines)
+                if line_max > max_len:
+                    max_len = line_max
+        ws.column_dimensions[col_letter].width = max(max_len + 4, 14)
+
+    output = io.BytesIO()
+    wb.save(output)
+    return output.getvalue()
+

@@ -35,8 +35,9 @@ torch>=2.0.0
 torchaudio>=2.0.0
 num2words==0.5.13
 
-# ─── Template engine ──────────────────────────────────────────────────────────
+# ─── Template & Report engines ────────────────────────────────────────────────
 jinja2>=3.1.0               # reports_engine.py HTML/CSV report generation
+openpyxl>=3.1.0             # reports_engine.py XLSX Excel report generation
 
 # ─── Audio / Signal processing ───────────────────────────────────────────────
 numpy>=1.26.0               # router_asr.py audio array processing

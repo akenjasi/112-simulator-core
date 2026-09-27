@@ -10,6 +10,8 @@ class UserActionLogResponse(BaseModel):
     user_id: Optional[str] = None
     role: Optional[str] = None
     action: str
+    action_type: Optional[str] = None
+    endpoint: Optional[str] = None
     target_entity: Optional[str] = None
     target_id: Optional[str] = None
     ip_address: Optional[str] = None

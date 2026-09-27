@@ -116,6 +116,8 @@ async def update_user(
         user.role = user_in.role
     if user_in.password is not None:
         user.password_hash = hash_password(user_in.password)
+    if user_in.is_active is not None:
+        user.is_active = user_in.is_active
 
     await db.commit()
     await db.refresh(user)

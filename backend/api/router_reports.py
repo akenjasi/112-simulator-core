@@ -16,6 +16,7 @@ from backend.core.deps import require_role
 from backend.core.reports_engine import (
     calculate_final_score,
     generate_csv_from_data,
+    generate_excel_from_data,
     generate_pdf_from_html,
     render_report_html,
 )
@@ -243,10 +244,16 @@ async def _background_generate_report(
         csv_data = generate_csv_from_data(cadets_data)
         await asyncio.to_thread(Path(output_csv).write_text, csv_data, encoding="utf-8")
 
+        # Save XLSX asynchronously via asyncio.to_thread (Event loop is NEVER blocked)
+        output_xlsx = f"/tmp/report_{task_id}.xlsx"
+        excel_data = await asyncio.to_thread(generate_excel_from_data, cadets_data)
+        await asyncio.to_thread(Path(output_xlsx).write_bytes, excel_data)
+
         TASKS[task_id]["status"] = "ready"
         TASKS[task_id]["file_path"] = output_pdf
         TASKS[task_id]["csv_path"] = output_csv
-        logger.info("Report task %s finished successfully -> %s", task_id, output_pdf)
+        TASKS[task_id]["excel_path"] = output_xlsx
+        logger.info("Report task %s finished successfully -> %s, %s", task_id, output_pdf, output_xlsx)
 
     except Exception as exc:
         logger.exception("Background report generation failed for task %s", task_id)
@@ -265,6 +272,7 @@ async def generate_report(
         "status": "processing",
         "file_path": None,
         "csv_path": None,
+        "excel_path": None,
         "error": None,
         "created_at": datetime.now(timezone.utc).isoformat(),
     }
@@ -298,12 +306,7 @@ async def get_report_status(task_id: str):
     }
 
 
-@reports_router.get("/download/{task_id}")
-async def download_report(
-    task_id: str,
-    format: str = Query("pdf", description="Format to download: 'pdf' or 'csv'"),
-):
-    """Download the generated report in PDF or CSV format."""
+async def _download_report_response(task_id: str, format: str):
     if task_id not in TASKS:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -323,7 +326,8 @@ async def download_report(
             detail=f"Report generation failed: {task.get('error')}",
         )
 
-    if format.lower() == "csv":
+    fmt = format.lower()
+    if fmt == "csv":
         csv_path = task.get("csv_path")
         if not csv_path or not os.path.exists(csv_path):
             raise HTTPException(
@@ -334,6 +338,19 @@ async def download_report(
             path=csv_path,
             filename=f"report_{task_id}.csv",
             media_type="text/csv",
+        )
+
+    if fmt in ("excel", "xlsx"):
+        excel_path = task.get("excel_path")
+        if not excel_path or not os.path.exists(excel_path):
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Excel report file not found",
+            )
+        return FileResponse(
+            path=excel_path,
+            filename=f"report_{task_id}.xlsx",
+            media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         )
 
     file_path = task["file_path"]
@@ -348,3 +365,22 @@ async def download_report(
         filename=f"report_{task_id}.pdf",
         media_type="application/pdf",
     )
+
+
+@reports_router.get("/download")
+async def download_report_query(
+    task_id: str = Query(..., description="Task ID to download"),
+    format: str = Query("pdf", description="Format to download: 'pdf', 'csv', or 'excel'"),
+):
+    """Download the generated report by task_id query parameter."""
+    return await _download_report_response(task_id=task_id, format=format)
+
+
+@reports_router.get("/download/{task_id}")
+async def download_report_path(
+    task_id: str,
+    format: str = Query("pdf", description="Format to download: 'pdf', 'csv', or 'excel'"),
+):
+    """Download the generated report in PDF, CSV, or Excel format."""
+    return await _download_report_response(task_id=task_id, format=format)
+

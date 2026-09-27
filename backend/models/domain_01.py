@@ -15,7 +15,7 @@ from sqlalchemy import (
     Enum as SQLEnum,
     func,
 )
-from sqlalchemy.orm import Mapped, mapped_column, relationship
+from sqlalchemy.orm import Mapped, mapped_column, relationship, synonym
 from backend.models.base import Base
 
 
@@ -170,6 +170,8 @@ class UserActionLog(Base):
     )
     role: Mapped[Optional[str]] = mapped_column(String, nullable=True)
     action: Mapped[str] = mapped_column(String, nullable=False)
+    action_type = synonym("action")
+    endpoint: Mapped[Optional[str]] = mapped_column(String, nullable=True)
     target_entity: Mapped[Optional[str]] = mapped_column(String, nullable=True)
     target_id: Mapped[Optional[str]] = mapped_column(String, nullable=True)
     ip_address: Mapped[Optional[str]] = mapped_column(String, nullable=True)
@@ -182,5 +184,7 @@ class UserActionLog(Base):
     )
 
     def __init__(self, **kwargs):
+        if "action_type" in kwargs and "action" not in kwargs:
+            kwargs["action"] = kwargs.pop("action_type")
         kwargs.setdefault("log_id", str(uuid.uuid4()))
         super().__init__(**kwargs)

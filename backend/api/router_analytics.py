@@ -3,6 +3,7 @@
 Provides endpoints for heatmaps, progress trends, and group leaderboards.
 """
 
+import json
 import logging
 from typing import Any, Dict, List, Optional, Set
 from fastapi import APIRouter, Depends, Query, status
@@ -10,9 +11,9 @@ from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.core.analytics_engine import build_error_heatmap, calculate_trends
-from backend.core.deps import require_role
+from backend.core.deps import get_current_user, require_role
 from backend.database import get_db
-from backend.models.domain_01 import StudentGroup, User
+from backend.models.domain_01 import StudentGroup, User, UserActionLog
 from backend.models.domain_02 import ScenarioTicket
 from backend.models.domain_03 import Assignment, ExamSession
 from datetime import datetime, timezone
@@ -569,6 +570,7 @@ async def appeal_analytics_record(
     record_id: str,
     req: RecordAppealRequest,
     db: AsyncSession = Depends(get_db),
+    current_user: Optional[User] = Depends(get_current_user),
 ):
     """Teacher appeal endpoint to adjust evaluation status and store comment."""
     tr_res = await db.execute(select(TicketResult).where(TicketResult.result_id == record_id))
@@ -576,10 +578,34 @@ async def appeal_analytics_record(
 
     is_passed = (req.status == "passed")
     if tr:
+        old_is_passed = tr.is_passed
         tr.is_passed = is_passed
         tr.teacher_comment = req.comment
         tr.is_appealed = True
         tr.updated_at = datetime.now(timezone.utc)
+
+        endpoint_path = f"/api/analytics/records/{record_id}/appeal"
+        audit_details = json.dumps(
+            {
+                "old_is_passed": old_is_passed,
+                "new_is_passed": is_passed,
+                "comment": req.comment,
+                "endpoint": endpoint_path,
+            },
+            ensure_ascii=False,
+        )
+
+        log_entry = UserActionLog(
+            user_id=str(current_user.user_id) if current_user else None,
+            role=current_user.role if current_user else None,
+            action="GRADE_MODIFIED",
+            target_entity="ticket_results",
+            target_id=record_id,
+            endpoint=endpoint_path,
+            details=audit_details,
+        )
+        db.add(log_entry)
+
         await db.commit()
         await db.refresh(tr)
         return await get_record_detail(record_id=record_id, db=db)
