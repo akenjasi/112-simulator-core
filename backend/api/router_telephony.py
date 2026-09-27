@@ -230,8 +230,10 @@ async def start_call(
         call_id=call_id,
     )
 
-    # 2. Delay before answer
-    await asyncio.sleep(1.0)
+    # 2. Wait for answer event from Asterisk
+    answered = await telephony_adapter.wait_for_answer(req.operator_ext, timeout=30.0)
+    if not answered:
+        logger.warning(f"Asterisk wait_for_answer timeout or failed for endpoint {req.operator_ext}, using fallback ANSWERED")
     
     # Status Up check could be done via event listening, but for now we'll simulate Up transition
     # 3. State: ANSWERED

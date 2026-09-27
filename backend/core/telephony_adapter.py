@@ -21,7 +21,33 @@ class TelephonyAdapter:
             ping_delay=10
         )
         self.connected = False
-        
+        self._pending_answers = {}
+        self.manager.register_event('Newstate', self._on_newstate)
+
+    async def _on_newstate(self, manager, message):
+        state = message.get('ChannelStateDesc')
+        channel = message.get('Channel', '')
+        if state == 'Up':
+            for endpoint, future in list(self._pending_answers.items()):
+                if channel.startswith(f"PJSIP/{endpoint}") or channel.startswith(f"SIP/{endpoint}"):
+                    if not future.done():
+                        future.set_result(True)
+
+    async def wait_for_answer(self, endpoint: str, timeout: float = 30.0) -> bool:
+        if not await self._ensure_connected():
+            return False
+            
+        loop = asyncio.get_running_loop()
+        fut = loop.create_future()
+        self._pending_answers[endpoint] = fut
+        try:
+            await asyncio.wait_for(fut, timeout=timeout)
+            return True
+        except asyncio.TimeoutError:
+            return False
+        finally:
+            self._pending_answers.pop(endpoint, None)
+
     async def connect(self):
         try:
             await asyncio.wait_for(self.manager.connect(), timeout=5.0)
