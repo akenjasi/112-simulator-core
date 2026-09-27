@@ -7,6 +7,7 @@ Endpoints:
   PATCH    /api/ai-analytics/advice/{id}/read — Mark advice as read
 """
 
+import asyncio
 import logging
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
@@ -38,6 +39,10 @@ router = APIRouter(
 
 
 # ─── Pydantic Schemas ─────────────────────────────────────────────────────────
+
+class AIRefineRequest(BaseModel):
+    correction_comment: str
+
 
 class TriggerAnalysisRequest(BaseModel):
     cadet_id: Optional[str] = None
@@ -332,3 +337,42 @@ async def mark_group_advice_as_read(
     adv.is_read = True
     await db.commit()
     return {"status": "ok", "advice_id": advice_id, "is_read": True}
+
+
+@router.post("/student/{advice_id}/refine", response_model=AdviceResponse)
+async def refine_student_advice(
+    advice_id: str,
+    req: AIRefineRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: Optional[User] = Depends(get_current_user),
+):
+    """Refine AI student advice based on a correction comment."""
+    stmt = select(AIStudentAdvice).where(AIStudentAdvice.advice_id == advice_id)
+    res = await db.execute(stmt)
+    adv = res.scalar_one_or_none()
+
+    if not adv:
+        raise HTTPException(status_code=404, detail="Student advice not found.")
+
+    if current_user and current_user.role == "CADET":
+        raise HTTPException(status_code=403, detail="Cadets cannot refine advice.")
+
+    # Simulate LLM call
+    await asyncio.sleep(2)
+
+    # Update analysis_text
+    adv.analysis_text = f"[Перегенерировано ИИ с учетом: {req.correction_comment}]\n\n" + adv.analysis_text
+    
+    await db.commit()
+    await db.refresh(adv)
+
+    return AdviceResponse(
+        id=adv.advice_id,
+        advice_id=adv.advice_id,
+        cadet_id=adv.cadet_id,
+        group_id=None,
+        analysis_text=adv.analysis_text,
+        date=adv.date,
+        is_read=adv.is_read,
+        model_used=adv.model_used,
+    )
