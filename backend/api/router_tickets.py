@@ -286,6 +286,7 @@ async def generate_tickets_background_task(
                     current_seq = seq_res.scalar() or 0
                     current_seq += 1
 
+
                     gen_ticket = GeneratedTicket(
                         id=t.ticket_id,
                         category=cur_cat,
@@ -770,16 +771,12 @@ async def upload_tickets_import(
     await db.execute(
         text("CREATE TABLE IF NOT EXISTS sys_sequences (name VARCHAR PRIMARY KEY, last_val INTEGER NOT NULL DEFAULT 0)")
     )
-    try:
-        await db.execute(
-            text("INSERT INTO sys_sequences (name, last_val) VALUES ('generated_tickets', 0) ON CONFLICT (name) DO NOTHING")
-        )
-    except Exception:
-        await db.execute(
-            text("INSERT OR IGNORE INTO sys_sequences (name, last_val) VALUES ('generated_tickets', 0)")
-        )
+    await db.execute(
+        text("INSERT INTO sys_sequences (name, last_val) VALUES ('generated_tickets', 0) ON CONFLICT (name) DO NOTHING")
+    )
     seq_res = await db.execute(text("SELECT last_val FROM sys_sequences WHERE name='generated_tickets'"))
     current_seq = seq_res.scalar() or 0
+
 
     for row_idx, row in enumerate(
         ws.iter_rows(min_row=header_row_idx + 1, values_only=True),

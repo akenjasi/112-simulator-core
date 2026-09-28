@@ -36,12 +36,12 @@ echo "🤖 Models are built into the image"
 # ─── 3. Export LD_LIBRARY_PATH for native shared libs ────────────────────────
 export LD_LIBRARY_PATH="/app/backend/bin:${LD_LIBRARY_PATH:-}"
 
-# ─── 4. Run Seed Script ────────────────────────────────────────────────────────
+# ─── 3.5. Ensure initial seed data exists ───────────────────────────────────
 echo ""
-echo "🌱 Running database seeder..."
-# python3 -m scripts.seed || echo "⚠️  Seeder returned an error, but continuing..."
+echo "🌱 Checking / seeding database initial data..."
+python3 seed.py || echo "⚠️ Seed script completed or skipped."
 
-# ─── 5. Start uvicorn ────────────────────────────────────────────────────────
+# ─── 4. Start uvicorn ────────────────────────────────────────────────────────
 echo ""
 echo "🚀 Запускаем FastAPI backend (uvicorn)..."
 echo "   API:     http://0.0.0.0:8000"

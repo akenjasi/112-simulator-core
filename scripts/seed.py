@@ -395,8 +395,9 @@ async def seed_analytics_data(
             sessions_to_add.append(session_obj)
 
             # Create IncidentCard
+            cid = str(uuid.uuid4())
             card_obj = IncidentCard(
-                card_id=str(uuid.uuid4()),
+                card_id=cid,
                 session_id=session_obj.session_id,
                 scenario_id=chosen_scenario.scenario_id,
                 operator_id=cadet.user_id,
@@ -413,7 +414,7 @@ async def seed_analytics_data(
 
             # Create EvaluationResult
             eval_obj = EvaluationResult(
-                card_id=card_obj.card_id,
+                card_id=cid,
                 session_id=session_obj.session_id,
                 scores={
                     "final_score": float(score),
@@ -444,8 +445,14 @@ async def seed_analytics_data(
             total_tickets += 1
 
     # Batch add
-    # Batch add
-    pass
+    db.add_all(sessions_to_add)
+    await db.flush()
+    db.add_all(cards_to_add)
+    await db.flush()
+    db.add_all(evals_to_add)
+    await db.flush()
+    db.add_all(tickets_to_add)
+
     await db.commit()
 
 

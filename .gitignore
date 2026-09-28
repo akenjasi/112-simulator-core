@@ -14,3 +14,4 @@ data/tts_cache/
 backend/core/qwen_tts/models/
 data/records/
 *.raw
+docker_errors.log
