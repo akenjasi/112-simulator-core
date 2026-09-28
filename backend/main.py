@@ -75,10 +75,11 @@ async def lifespan(app: FastAPI):
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
         from sqlalchemy import text
+        is_pg = conn.dialect.name == "postgresql"
         for alter_sql in [
             "ALTER TABLE users ADD COLUMN student_id VARCHAR",
             "ALTER TABLE users ADD COLUMN totp_secret VARCHAR",
-            "ALTER TABLE users ADD COLUMN is_2fa_enabled BOOLEAN DEFAULT 0",
+            "ALTER TABLE users ADD COLUMN is_2fa_enabled BOOLEAN DEFAULT FALSE",
             "ALTER TABLE generated_tickets ADD COLUMN status VARCHAR",
             "ALTER TABLE ticket_results ADD COLUMN score_total FLOAT",
             "ALTER TABLE ticket_results ADD COLUMN status VARCHAR",
@@ -88,16 +89,23 @@ async def lifespan(app: FastAPI):
             "ALTER TABLE scenario_tickets ADD COLUMN content JSON DEFAULT '{}'",
             "ALTER TABLE exam_sessions ADD COLUMN ticket_id VARCHAR",
             "ALTER TABLE user_action_log ADD COLUMN endpoint VARCHAR",
-            "ALTER TABLE scenario_tickets ADD COLUMN is_deleted BOOLEAN DEFAULT 0",
-            "ALTER TABLE generated_tickets ADD COLUMN is_deleted BOOLEAN DEFAULT 0",
+            "ALTER TABLE scenario_tickets ADD COLUMN is_deleted BOOLEAN DEFAULT FALSE",
+            "ALTER TABLE generated_tickets ADD COLUMN is_deleted BOOLEAN DEFAULT FALSE",
         ]:
+            if is_pg:
+                alter_sql = alter_sql.replace("ADD COLUMN ", "ADD COLUMN IF NOT EXISTS ")
             try:
-                await conn.execute(text(alter_sql))
+                async with conn.begin_nested():
+                    await conn.execute(text(alter_sql))
             except Exception:
                 pass
-        await conn.execute(
-            text("INSERT OR IGNORE INTO sys_sequences (name, last_val) VALUES ('generated_tickets', 0)")
-        )
+        try:
+            async with conn.begin_nested():
+                await conn.execute(
+                    text("INSERT INTO sys_sequences (name, last_val) VALUES ('generated_tickets', 0) ON CONFLICT (name) DO NOTHING")
+                )
+        except Exception:
+            pass
 
     yield
     # (Optional) dispose engine on shutdown to release pool connections

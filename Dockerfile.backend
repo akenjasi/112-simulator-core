@@ -42,8 +42,19 @@ RUN pip install --upgrade pip && pip install torch torchaudio --index-url https:
 COPY . .
 
 # ─── Executable permissions ───────────────────────────────────────────────────
-# Ensure all native binaries are executable inside the container.
-RUN chmod +x \
+# Ensure all native binaries are executable inside the container and line endings are LF.
+# Also restore Linux symlinks for *.so.0 if checked out as text files on Windows.
+RUN cd /app/backend/bin && \
+    for f in *.so.0; do \
+        if [ -f "$f" ] && [ ! -L "$f" ]; then \
+            target=$(cat "$f" | tr -d '\r\n '); \
+            if [ -f "$target" ]; then \
+                rm -f "$f" && ln -sf "$target" "$f"; \
+            fi; \
+        fi; \
+    done && \
+    sed -i 's/\r$//' /app/scripts/*.sh && \
+    chmod +x \
     /app/backend/bin/transcribe-cli \
     /app/backend/core/qwen_tts/qwen-tts \
     /app/scripts/init.sh

@@ -66,6 +66,11 @@ download_if_missing \
 # ─── 3. Export LD_LIBRARY_PATH for native shared libs ────────────────────────
 export LD_LIBRARY_PATH="/app/backend/bin:${LD_LIBRARY_PATH:-}"
 
+# ─── 3.5. Ensure initial seed data exists ───────────────────────────────────
+echo ""
+echo "🌱 Checking / seeding database initial data..."
+python3 seed.py || echo "⚠️ Seed script completed or skipped."
+
 # ─── 4. Start uvicorn ────────────────────────────────────────────────────────
 echo ""
 echo "🚀 Запускаем FastAPI backend (uvicorn)..."

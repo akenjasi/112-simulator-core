@@ -262,7 +262,7 @@ async def generate_tickets_background_task(
                 text("CREATE TABLE IF NOT EXISTS sys_sequences (name VARCHAR PRIMARY KEY, last_val INTEGER NOT NULL DEFAULT 0)")
             )
             await session.execute(
-                text("INSERT OR IGNORE INTO sys_sequences (name, last_val) VALUES ('generated_tickets', 0)")
+                text("INSERT INTO sys_sequences (name, last_val) VALUES ('generated_tickets', 0) ON CONFLICT (name) DO NOTHING")
             )
             await session.commit()
 
@@ -741,7 +741,7 @@ async def upload_tickets_import(
         text("CREATE TABLE IF NOT EXISTS sys_sequences (name VARCHAR PRIMARY KEY, last_val INTEGER NOT NULL DEFAULT 0)")
     )
     await db.execute(
-        text("INSERT OR IGNORE INTO sys_sequences (name, last_val) VALUES ('generated_tickets', 0)")
+        text("INSERT INTO sys_sequences (name, last_val) VALUES ('generated_tickets', 0) ON CONFLICT (name) DO NOTHING")
     )
     seq_res = await db.execute(text("SELECT last_val FROM sys_sequences WHERE name='generated_tickets'"))
     current_seq = seq_res.scalar() or 0
