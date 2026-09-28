@@ -50,7 +50,8 @@ function OperatorContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const sessionId = searchParams ? searchParams.get("session_id") : null
-  const ticketId = searchParams ? searchParams.get("ticket_id") : null
+  // Hardcode the ticket ID to the specific test ticket so voice and data are guaranteed to work for now
+  const ticketId = "b5b3e417-a82e-4653-8095-e31eed834d33"
 
   // ТЗ 59: Задача 1 — Защита страницы (Route Guard)
   useEffect(() => {
@@ -234,11 +235,7 @@ function OperatorContent() {
   }, [storageKey])
 
 
-  // Force specific ticket in test mode to ensure voice and data are present, as requested
-  const rawTicketId = searchParams ? searchParams.get("ticket_id") : null
-  const ticketId = "b5b3e417-a82e-4653-8095-e31eed834d33"
-
-  // ТЗ 62: Call must be started by user interaction to allow audio playback!
+  // Call must be started by user interaction to allow audio playback!
   // Removed the auto-start useEffect here.
 
 
