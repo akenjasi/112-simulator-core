@@ -107,7 +107,7 @@ export function ServicesBar({ data, onStatusChange, onAccept, onNextCard }: Prop
     <div id="tour-services" className="relative select-none">
       {/* 1. Белая горизонтальная полоса редактирования статуса (строго как на скриншоте со стр. 24) */}
       {editingServiceId && (
-        <div className="absolute bottom-full left-32 2xl:left-44 z-30 flex h-[42px] 2xl:h-[59px] w-[800px] 2xl:w-[1120px] items-center border border-[#b4b9bc] bg-white text-sm 2xl:text-lg shadow-lg">
+        <div className="absolute bottom-full left-32 2xl:left-44 z-30 flex h-[42px] 2xl:h-[59px] w-[800px] 2xl:w-[1120px] items-center border border-[#b4b9bc] bg-white text-sm 2xl:text-sm shadow-lg">
           {/* Кастомный выпадающий селект статусов */}
           <div className="relative flex h-full w-[220px] 2xl:w-[308px] items-center border-r border-[#d1d5db] px-3 2xl:px-4">
             <div
@@ -115,7 +115,7 @@ export function ServicesBar({ data, onStatusChange, onAccept, onNextCard }: Prop
               className="flex w-full cursor-pointer items-center justify-between font-medium text-[#111827]"
             >
               <span>{selectedStatus}</span>
-              <span className="text-xs 2xl:text-base text-[#4b5563]">▾</span>
+              <span className="text-xs 2xl:text-sm text-[#4b5563]">▾</span>
             </div>
 
             {/* Выпадающий список опций */}
@@ -128,7 +128,7 @@ export function ServicesBar({ data, onStatusChange, onAccept, onNextCard }: Prop
                       setSelectedStatus(opt)
                       setIsSelectDropdownOpen(false)
                     }}
-                    className={`cursor-pointer px-4 2xl:px-6 py-1.5 2xl:py-2 text-sm 2xl:text-lg transition-colors ${
+                    className={`cursor-pointer px-4 2xl:px-5 py-1.5 2xl:py-2 text-sm 2xl:text-sm transition-colors ${
                       selectedStatus === opt
                         ? "bg-[#0078d4] text-white font-medium"
                         : "text-[#111827] hover:bg-gray-100"
@@ -148,7 +148,7 @@ export function ServicesBar({ data, onStatusChange, onAccept, onNextCard }: Prop
               value={orderNumber}
               onChange={(e) => setOrderNumber(e.target.value)}
               placeholder="Номер наряда"
-              className="w-full text-sm 2xl:text-lg text-[#111827] placeholder:text-[#6b7280] outline-none border-b border-transparent focus:border-[#0078d4]"
+              className="w-full text-sm 2xl:text-sm text-[#111827] placeholder:text-[#6b7280] outline-none border-b border-transparent focus:border-[#0078d4]"
             />
           </div>
 
@@ -159,7 +159,7 @@ export function ServicesBar({ data, onStatusChange, onAccept, onNextCard }: Prop
               value={commentText}
               onChange={(e) => setCommentText(e.target.value)}
               placeholder={isRejection ? "Причина отказа (обязательно)" : "Комментарий..."}
-              className="w-full text-sm 2xl:text-lg text-[#111827] placeholder:text-[#6b7280] outline-none border-b border-transparent focus:border-[#0078d4]"
+              className="w-full text-sm 2xl:text-sm text-[#111827] placeholder:text-[#6b7280] outline-none border-b border-transparent focus:border-[#0078d4]"
             />
           </div>
 
@@ -175,7 +175,7 @@ export function ServicesBar({ data, onStatusChange, onAccept, onNextCard }: Prop
             }`}
             title="Подтвердить"
           >
-            <Check className="h-5 2xl:h-7 w-5 2xl:w-7 stroke-[2.5]" />
+            <Check className="h-5 2xl:h-5 w-5 2xl:w-5 stroke-[2.5]" />
           </button>
 
           {/* Кнопка отмены ✕ */}
@@ -185,7 +185,7 @@ export function ServicesBar({ data, onStatusChange, onAccept, onNextCard }: Prop
             className="flex h-full w-[42px] 2xl:w-[59px] items-center justify-center text-[#4b5563] hover:bg-gray-100 hover:text-[#111]"
             title="Отмена"
           >
-            <X className="h-5 2xl:h-7 w-5 2xl:w-7" />
+            <X className="h-5 2xl:h-5 w-5 2xl:w-5" />
           </button>
         </div>
       )}
@@ -194,7 +194,7 @@ export function ServicesBar({ data, onStatusChange, onAccept, onNextCard }: Prop
 
       {/* 3. Нижняя панель служб (Футер) */}
       <div className="flex h-[52px] 2xl:h-[73px] items-stretch bg-[#303335] border-t border-[#b4b9bc]">
-        <div className="flex w-[80px] 2xl:w-[112px] items-center px-3 2xl:px-4 text-sm 2xl:text-lg font-semibold text-white/90">
+        <div className="flex w-[80px] 2xl:w-[112px] items-center px-3 2xl:px-4 text-sm 2xl:text-sm font-semibold text-white/90">
           Службы:
         </div>
 
@@ -213,14 +213,14 @@ export function ServicesBar({ data, onStatusChange, onAccept, onNextCard }: Prop
                     isActive ? "bg-[#157dbd]" : "bg-[#3e4850] hover:bg-[#46525b]"
                   }`}
                 >
-                  <div className="flex items-center justify-between text-sm 2xl:text-lg font-bold text-white">
+                  <div className="flex items-center justify-between text-sm 2xl:text-sm font-bold text-white">
                     <div className="flex items-center gap-1 2xl:gap-1.5">
                       {isActive ? (
-                        <span className="flex h-5 2xl:h-7 w-5 2xl:w-7 items-center justify-center rounded-[1px] bg-white/20 text-xs 2xl:text-base text-white">
+                        <span className="flex h-5 2xl:h-5 w-5 2xl:w-5 items-center justify-center rounded-[1px] bg-white/20 text-xs 2xl:text-sm text-white">
                           ⌄
                         </span>
                       ) : (
-                        <span className="text-xs 2xl:text-base text-white/80">^</span>
+                        <span className="text-xs 2xl:text-sm text-white/80">^</span>
                       )}
 
                       {/* Карандаш (для любой службы в режиме тренажера) */}
@@ -230,7 +230,7 @@ export function ServicesBar({ data, onStatusChange, onAccept, onNextCard }: Prop
                           type="button"
                           aria-label="Редактировать статус"
                           onClick={(e) => handlePencilClick(e, service)}
-                          className="flex h-5 2xl:h-7 w-5 2xl:w-7 items-center justify-center rounded-[1px] border border-transparent bg-white/10 text-white hover:bg-white/20"
+                          className="flex h-5 2xl:h-5 w-5 2xl:w-5 items-center justify-center rounded-[1px] border border-transparent bg-white/10 text-white hover:bg-white/20"
                           title="Проставить статус реагирования"
                         >
                           <Pencil className="h-3 2xl:h-4 w-3 2xl:w-4" />
@@ -240,7 +240,7 @@ export function ServicesBar({ data, onStatusChange, onAccept, onNextCard }: Prop
                     <span className="truncate text-right flex-1 ml-1 2xl:ml-1.5">{service.name}</span>
                   </div>
 
-                  <div className="flex items-center gap-1 2xl:gap-1.5 text-xs 2xl:text-base text-white/90 mt-0.5 2xl:mt-1">
+                  <div className="flex items-center gap-1 2xl:gap-1.5 text-xs 2xl:text-sm text-white/90 mt-0.5 2xl:mt-1">
                     <span className={`px-1 2xl:px-1.5 rounded-[1px] ${isRejected ? "bg-[#b91c1c] font-bold text-white" : ""}`}>
                       {service.time}
                     </span>
@@ -253,7 +253,7 @@ export function ServicesBar({ data, onStatusChange, onAccept, onNextCard }: Prop
                       onClick={(e) => e.stopPropagation()}
                     >
                       <div className="mb-3 2xl:mb-4 flex items-center justify-between border-b border-white/20 pb-2 2xl:pb-3">
-                        <span className="text-base 2xl:text-xl font-bold">{service.name}</span>
+                        <span className="text-base 2xl:text-sm font-bold">{service.name}</span>
                         <button
                           type="button"
                           aria-label="Закрыть"
@@ -261,17 +261,17 @@ export function ServicesBar({ data, onStatusChange, onAccept, onNextCard }: Prop
                             setPopupOpen(false)
                             setActiveId(null)
                           }}
-                          className="text-white hover:opacity-80 text-sm 2xl:text-lg"
+                          className="text-white hover:opacity-80 text-sm 2xl:text-sm"
                         >
-                          <X className="h-5 2xl:h-7 w-5 2xl:w-7" />
+                          <X className="h-5 2xl:h-5 w-5 2xl:w-5" />
                         </button>
                       </div>
 
-                      <div className="flex flex-col gap-1.5 2xl:gap-2 text-sm 2xl:text-lg">
+                      <div className="flex flex-col gap-1.5 2xl:gap-2 text-sm 2xl:text-sm">
                         {(service.history || []).map((entry, idx) => {
                           const isRej = entry.isRejected || entry.status === "Не принята" || entry.status === "Отказ от выполнения работ"
                           return (
-                            <div key={idx} className="flex flex-wrap items-center gap-2 2xl:gap-3 leading-tight">
+                            <div key={idx} className="flex flex-wrap items-center gap-2 2xl:gap-2 leading-tight">
                               <span className="w-16 2xl:w-24 text-white/90">{entry.op}</span>
                               <span className="text-white/60">&gt;</span>
 
@@ -310,7 +310,7 @@ export function ServicesBar({ data, onStatusChange, onAccept, onNextCard }: Prop
             type="button"
             aria-label="Отработана"
             onClick={onNextCard}
-            className="flex items-center justify-center px-4 2xl:px-6 border-r border-[#49555d] text-sm 2xl:text-lg font-bold text-white bg-[#157dbd] hover:bg-[#136ba3] transition-colors"
+            className="flex items-center justify-center px-4 2xl:px-5 border-r border-[#49555d] text-sm 2xl:text-sm font-bold text-white bg-[#157dbd] hover:bg-[#136ba3] transition-colors"
             title="Отработана"
           >
             отработана
@@ -321,7 +321,7 @@ export function ServicesBar({ data, onStatusChange, onAccept, onNextCard }: Prop
             className="flex w-[46px] 2xl:w-[64px] items-center justify-center border-r border-[#49555d] text-white/80 hover:text-white hover:bg-white/10 transition-colors"
             title="Связи"
           >
-            <Link className="h-5 2xl:h-7 w-5 2xl:w-7" />
+            <Link className="h-5 2xl:h-5 w-5 2xl:w-5" />
           </button>
           <button
             type="button"
@@ -329,7 +329,7 @@ export function ServicesBar({ data, onStatusChange, onAccept, onNextCard }: Prop
             className="flex w-[46px] 2xl:w-[64px] items-center justify-center border-r border-[#49555d] text-white/80 hover:text-white hover:bg-white/10 transition-colors"
             title="Таймер"
           >
-            <Timer className="h-5 2xl:h-7 w-5 2xl:w-7" />
+            <Timer className="h-5 2xl:h-5 w-5 2xl:w-5" />
           </button>
           <button
             type="button"
@@ -337,7 +337,7 @@ export function ServicesBar({ data, onStatusChange, onAccept, onNextCard }: Prop
             className="flex w-[46px] 2xl:w-[64px] items-center justify-center border-r border-[#49555d] text-white/80 hover:text-white hover:bg-white/10 transition-colors"
             title="Оповещения"
           >
-            <Bell className="h-5 2xl:h-7 w-5 2xl:w-7" />
+            <Bell className="h-5 2xl:h-5 w-5 2xl:w-5" />
           </button>
           <button
             type="button"
@@ -345,7 +345,7 @@ export function ServicesBar({ data, onStatusChange, onAccept, onNextCard }: Prop
             className="flex w-[46px] 2xl:w-[64px] items-center justify-center border-r border-[#49555d] text-white/80 hover:text-white hover:bg-white/10 transition-colors"
             title="Сообщения"
           >
-            <MessageSquareWarning className="h-5 2xl:h-7 w-5 2xl:w-7" />
+            <MessageSquareWarning className="h-5 2xl:h-5 w-5 2xl:w-5" />
           </button>
           <button
             type="button"
@@ -354,7 +354,7 @@ export function ServicesBar({ data, onStatusChange, onAccept, onNextCard }: Prop
             className="flex w-[46px] 2xl:w-[64px] items-center justify-center text-white/80 hover:text-white hover:bg-red-600/80 transition-colors"
             title="Закрыть"
           >
-            <X className="h-5 2xl:h-7 w-5 2xl:w-7" />
+            <X className="h-5 2xl:h-5 w-5 2xl:w-5" />
           </button>
         </div>
       </div>

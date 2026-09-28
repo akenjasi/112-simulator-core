@@ -1071,11 +1071,11 @@ function DdsJournalContent() {
                               <span className="w-[84px] shrink-0 text-gray-400 font-medium">Заявитель:</span>
                               <div className="flex-1 flex items-center flex-wrap gap-x-3 gap-y-1">
                                 <strong className="text-white font-bold">{incident.preview.applicant.name}</strong>
-                                <div className="flex items-center gap-1">
+                                <div className="flex items-center gap-1 whitespace-nowrap">
                                   <span className="text-gray-400 text-[11px]">АОН</span>
                                   <span className="font-mono text-gray-200">{incident.preview.applicant.aon}</span>
                                 </div>
-                                <div className="flex items-center gap-1">
+                                <div className="flex items-center gap-1 whitespace-nowrap">
                                   <span className="text-gray-400 text-[11px]">предоставленный телефон</span>
                                   <span className="font-mono text-gray-200">{incident.preview.applicant.phone}</span>
                                 </div>

@@ -2,6 +2,7 @@
 
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+from typing import Optional
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -68,6 +69,15 @@ async def get_current_user(
 
     return user
 
+async def get_current_user_optional(
+    credentials: HTTPAuthorizationCredentials = Depends(bearer_scheme),
+    db: AsyncSession = Depends(get_db),
+) -> Optional[User]:
+    try:
+        user = await get_current_user(credentials, db)
+        return user
+    except HTTPException:
+        return None
 
 def require_role(*roles: str):
     """Dependency factory that enforces role-based access control.

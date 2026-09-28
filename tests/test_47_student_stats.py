@@ -163,7 +163,7 @@ async def test_demo_session_creation(cadet_auth_client: AsyncClient, db_session:
     assert "role" in data
     assert data["role"] == "OPERATOR_112"
     assert "redirect_url" in data
-    assert "/operator?" in data["redirect_url"]
+    assert "/operator/journal?" in data["redirect_url"]
 
     session_id = data["session_id"]
     sess_res = await db_session.execute(select(ExamSession).where(ExamSession.session_id == session_id))
@@ -189,7 +189,7 @@ async def test_demo_session_creation_dds(cadet_auth_client: AsyncClient, db_sess
     data = response.json()
 
     assert data["role"] == "DISPATCHER_DDS"
-    assert "/dds?" in data["redirect_url"]
+    assert "/dds/journal?" in data["redirect_url"]
 
     # Проверяем карточку инцидента
     session_id = data["session_id"]

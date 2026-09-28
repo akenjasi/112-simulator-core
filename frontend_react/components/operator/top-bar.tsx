@@ -101,42 +101,42 @@ export function OperatorTopBar({
       {/* 2. Статус соединения / АТС + системные кнопки */}
       <div
         className="flex flex-col justify-center gap-1 px-3 py-1.5"
-        style={{ borderLeft: `1px solid ${border}`, minWidth: 230 }}
+        style={{ borderLeft: `1px solid ${border}`, minWidth: 200 }}
       >
         {callStatus === "RINGING" ? (
-          <span className="text-[12px] leading-tight font-bold text-amber-600 animate-pulse flex items-center gap-1.5">
+          <span className="text-[12px] leading-tight font-bold text-amber-600 animate-pulse flex items-center gap-1.5 whitespace-nowrap">
             <span className="h-2 w-2 rounded-full bg-amber-500 animate-ping" />
             Входящий звонок (гудки...)
           </span>
         ) : callStatus === "ANSWERED" ? (
-          <span className="text-[12px] leading-tight font-medium text-emerald-700 flex items-center gap-1.5">
+          <span className="text-[12px] leading-tight font-medium text-emerald-700 flex items-center gap-1.5 whitespace-nowrap">
             <span className="h-2 w-2 rounded-full bg-emerald-500" />
             В эфире (линия занята)
           </span>
         ) : callStatus === "HANGUP" ? (
-          <span className="text-[12px] leading-tight font-medium text-gray-500 flex items-center gap-1.5">
+          <span className="text-[12px] leading-tight font-medium text-gray-500 flex items-center gap-1.5 whitespace-nowrap">
             <span className="h-2 w-2 rounded-full bg-gray-400" />
             Вызов завершён
           </span>
         ) : (
-          <span className="text-[12px] leading-tight font-medium" style={{ color: slate }}>
+          <span className="text-[12px] leading-tight font-medium whitespace-nowrap" style={{ color: slate }}>
             не подключен
           </span>
         )}
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1">
           <button
             type="button"
             onClick={onCallRecords}
-            className="text-[11px] hover:bg-gray-100 transition-colors cursor-pointer active:scale-95"
-            style={{ padding: "3px 8px", border: `1px solid ${border}`, background: "#fbfdfe", color: slate }}
+            className="text-[11px] hover:bg-gray-100 transition-colors cursor-pointer active:scale-95 whitespace-nowrap"
+            style={{ padding: "3px 6px", border: `1px solid ${border}`, background: "#fbfdfe", color: slate }}
           >
             записи звонков
           </button>
           <button
             type="button"
             onClick={onSmsList}
-            className="text-[11px] hover:bg-gray-100 transition-colors cursor-pointer active:scale-95"
-            style={{ padding: "3px 8px", border: `1px solid ${border}`, background: "#fbfdfe", color: slate }}
+            className="text-[11px] hover:bg-gray-100 transition-colors cursor-pointer active:scale-95 whitespace-nowrap"
+            style={{ padding: "3px 6px", border: `1px solid ${border}`, background: "#fbfdfe", color: slate }}
           >
             список SMS
           </button>
@@ -146,23 +146,23 @@ export function OperatorTopBar({
 
       {/* 3. Телефонный слот: АОН */}
       <div className="flex-1 basis-0 min-w-0 flex items-stretch" style={{ borderLeft: `1px solid ${border}` }}>
-        <div className="flex items-center px-2">
+        <div className="flex items-center px-1.5">
           <PhoneGlyph />
         </div>
-        <div className="flex flex-col justify-center gap-0.5 py-1.5 pr-3 flex-1 min-w-0">
+        <div className="flex flex-col justify-center gap-0.5 py-1.5 pr-2 flex-1 min-w-0">
           <div className="flex items-center justify-between">
             <span className="text-[11px] truncate font-medium" style={{ color: slate }}>
               АОН
             </span>
-            <div className="flex items-center gap-1.5 pl-2" style={{ color: "#8a949b" }}>
+            <div className="flex items-center gap-1 pl-1" style={{ color: "#8a949b" }}>
               <HelpCircle
-                size={13}
+                size={12}
                 onClick={onAonInfo}
                 className="hover:text-blue-500 cursor-pointer transition-colors"
                 title="Справка по определению номера АОН"
               />
               <MapPin
-                size={13}
+                size={12}
                 onClick={onMapInfo}
                 className="hover:text-blue-500 cursor-pointer transition-colors"
                 fill="currentColor"
@@ -170,7 +170,7 @@ export function OperatorTopBar({
                 title="Определение местоположения базовой станции"
               />
               <Globe
-                size={13}
+                size={12}
                 onClick={onProviderInfo}
                 className="hover:text-blue-500 cursor-pointer transition-colors"
                 title="Данные оператора связи"
@@ -178,7 +178,7 @@ export function OperatorTopBar({
             </div>
           </div>
           <div className="flex items-center justify-between gap-1">
-            <span className="text-[17px] leading-none font-medium tabular-nums" style={{ color: slate }}>
+            <span className="text-[15px] 2xl:text-[17px] tracking-tighter leading-none font-medium tabular-nums whitespace-nowrap" style={{ color: slate }}>
               {aonPhone}
             </span>
             <MsgBox onClick={onOpenMsg} />
@@ -188,17 +188,17 @@ export function OperatorTopBar({
 
       {/* 4. Телефонный слот: предоставленный */}
       <div className="flex-1 basis-0 min-w-0 flex items-stretch" style={{ borderLeft: `1px solid ${border}` }}>
-        <div className="flex items-center px-2">
+        <div className="flex items-center px-1.5">
           <PhoneGlyph />
         </div>
-        <div className="flex flex-col justify-center gap-0.5 py-1.5 pr-3 flex-1 min-w-0">
+        <div className="flex flex-col justify-center gap-0.5 py-1.5 pr-2 flex-1 min-w-0">
           <div className="flex items-center justify-between">
             <span className="text-[11px] truncate font-medium" style={{ color: slate }}>
               предоставленный
             </span>
-            <div className="flex items-center gap-1.5 pl-2" style={{ color: "#8a949b" }}>
+            <div className="flex items-center gap-1 pl-1" style={{ color: "#8a949b" }}>
               <Globe
-                size={13}
+                size={12}
                 onClick={onProviderInfo}
                 className="hover:text-blue-500 cursor-pointer transition-colors"
                 title="Данные оператора связи"
@@ -206,10 +206,10 @@ export function OperatorTopBar({
             </div>
           </div>
           <div className="flex items-center justify-between gap-1">
-            <span className="text-[17px] leading-none font-medium tabular-nums" style={{ color: slate }}>
+            <span className="text-[15px] 2xl:text-[17px] tracking-tighter leading-none font-medium tabular-nums whitespace-nowrap" style={{ color: slate }}>
               {providedPhone}
             </span>
-            <div className="flex items-center gap-1.5">
+            <div className="flex items-center gap-1">
               <AonBox onClick={onCopyAonToProvided} />
               <MsgBox onClick={onOpenMsg} />
             </div>
@@ -219,17 +219,17 @@ export function OperatorTopBar({
 
       {/* 5. Телефонный слот: телефон на место (БЕЗ MsgBox по регламенту) */}
       <div className="flex-1 basis-0 min-w-0 flex items-stretch" style={{ borderLeft: `1px solid ${border}` }}>
-        <div className="flex items-center px-2">
+        <div className="flex items-center px-1.5">
           <PhoneGlyph />
         </div>
-        <div className="flex flex-col justify-center gap-0.5 py-1.5 pr-3 flex-1 min-w-0">
+        <div className="flex flex-col justify-center gap-0.5 py-1.5 pr-2 flex-1 min-w-0">
           <div className="flex items-center justify-between">
             <span className="text-[11px] truncate font-medium" style={{ color: slate }}>
               телефон на место
             </span>
-            <div className="flex items-center gap-1.5 pl-2" style={{ color: "#8a949b" }}>
+            <div className="flex items-center gap-1 pl-1" style={{ color: "#8a949b" }}>
               <Globe
-                size={13}
+                size={12}
                 onClick={onProviderInfo}
                 className="hover:text-blue-500 cursor-pointer transition-colors"
                 title="Данные оператора связи"
@@ -237,10 +237,10 @@ export function OperatorTopBar({
             </div>
           </div>
           <div className="flex items-center justify-between gap-1">
-            <span className="text-[17px] leading-none font-medium tabular-nums" style={{ color: slate }}>
+            <span className="text-[15px] 2xl:text-[17px] tracking-tighter leading-none font-medium tabular-nums whitespace-nowrap" style={{ color: slate }}>
               {onSitePhone}
             </span>
-            <div className="flex items-center gap-1.5">
+            <div className="flex items-center gap-1">
               <AonBox onClick={onCopyAonToOnSite} />
             </div>
           </div>
@@ -250,15 +250,15 @@ export function OperatorTopBar({
       {/* 6. Блок происшествия */}
       <div
         className="flex flex-col justify-center gap-0.5 px-3 py-1.5"
-        style={{ borderLeft: `1px solid ${border}`, minWidth: 230 }}
+        style={{ borderLeft: `1px solid ${border}`, minWidth: 200 }}
       >
-        <span className="text-[14px] font-bold" style={{ color: "#303335" }}>
+        <span className="text-[13px] font-bold whitespace-nowrap" style={{ color: "#303335" }}>
           Происшествие {incidentNumber}
         </span>
-        <span className="text-[11px] leading-tight" style={{ color: slate }}>
+        <span className="text-[11px] leading-tight whitespace-nowrap" style={{ color: slate }}>
           Сохр. 19.12.2022 в 09:04:37
         </span>
-        <span className="text-[11px] truncate leading-tight" style={{ color: slate }}>
+        <span className="text-[11px] truncate leading-tight whitespace-nowrap" style={{ color: slate }}>
           {operatorInfo}
         </span>
       </div>

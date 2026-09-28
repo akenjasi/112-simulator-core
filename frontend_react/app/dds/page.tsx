@@ -37,17 +37,35 @@ function DdsSimulator() {
   const [userOrderNumber, setUserOrderNumber] = useState("")
   const [whoAccepted, setWhoAccepted] = useState("")
   const [summary, setSummary] = useState("")
+  const [calledServices, setCalledServices] = useState<string[]>([])
   const [showEndShiftModal, setShowEndShiftModal] = useState(false)
 
   // Load real ticket data for DDS
   useEffect(() => {
     if (ticketId) {
-      fetch(`/api/v1/tickets`)
-        .then(res => res.json())
-        .then(tickets => {
-          const ticket = Array.isArray(tickets) ? tickets.find(t => t.id === ticketId) : null;
-          if (ticket && ticket.ground_truth) {
-            const gt = ticket.ground_truth;
+      fetch(`/api/v1/tickets/${ticketId}`)
+        .then(res => {
+          if (!res.ok) throw new Error("Network response was not ok");
+          return res.json();
+        })
+        .then(ticket => {
+          if (ticket) {
+            const gt = ticket.ground_truth || {};
+            
+            const servicesList = Array.isArray(ticket.etalon_services) 
+              ? ticket.etalon_services.map((s: string, idx: number) => ({
+                  id: `srv_${idx}`,
+                  name: s,
+                  time: "12:00",
+                  status: "Получена службой",
+                  isRejected: false,
+                  history: [
+                    { op: "Система", time: "20.09.2026 12:00:00", status: "Добавлена" },
+                    { op: "Система", time: "20.09.2026 12:00:00", status: "Получена службой" },
+                  ],
+              }))
+              : [];
+              
             setData(prev => ({
               ...prev,
               caller: {
@@ -61,12 +79,27 @@ function DdsSimulator() {
                 provided: gt.phone || prev.phones.provided,
                 onSite: gt.phone || prev.phones.onSite,
               },
-              description: gt.plot || prev.description,
+              description: ticket.plot || gt.plot || prev.description,
+              statuses: {
+                ...prev.statuses,
+                injured: gt.injured || prev.statuses.injured,
+                ambulanceRefusal: gt.ambulanceRefusal || prev.statuses.ambulanceRefusal,
+                blocked: gt.blocked || prev.statuses.blocked,
+              },
               classification: {
                 ...prev.classification,
-                title: ticket.category || prev.classification.title,
-                section: ticket.subcategory || prev.classification.section
-              }
+                title: ticket.subcategory || prev.classification.title,
+                section: ticket.category || prev.classification.section,
+                class: gt.class || prev.classification.class,
+                visClass: gt.visClass || prev.classification.visClass
+              },
+              incident: {
+                ...prev.incident,
+                number: ticket.ticket_id ? ticket.ticket_id.split("-")[0] : prev.incident.number,
+                savedAt: ticket.created_at ? new Date(ticket.created_at).toLocaleString('ru-RU', {day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit',second:'2-digit'}) : prev.incident.savedAt
+              },
+              connection: "Установлено",
+              services: servicesList.length > 0 ? servicesList : prev.services
             }));
           }
         })
@@ -208,6 +241,7 @@ function DdsSimulator() {
         visClass: rawClassification.visClass || "bg-red-500",
       },
       services: servicesList,
+      description: rawCard.description || sc.plot || sc.explanation || "Нет описания",
     }
 
     setData(normalizedData)
@@ -217,22 +251,25 @@ function DdsSimulator() {
     setUserOrderNumber("")
     setWhoAccepted("")
     setSummary("")
+    setCalledServices([])
     startSlaTimer()
   }
 
   // Load scenarios on mount and show initial scenario immediately
   useEffect(() => {
-    loadScenario(0, ddsScenarios)
-    fetch("/api/dds/scenarios")
-      .then((res) => res.json())
-      .then((data) => {
-        if (data.scenarios && data.scenarios.length > 0) {
-          setLiveScenarios(data.scenarios)
-          loadScenario(0, data.scenarios)
-        }
-      })
-      .catch((err) => console.error("Ошибка загрузки карточек ДДС:", err))
-  }, [])
+    if (!ticketId) {
+      loadScenario(0, ddsScenarios)
+      fetch("/api/dds/scenarios")
+        .then((res) => res.json())
+        .then((data) => {
+          if (data.scenarios && data.scenarios.length > 0) {
+            setLiveScenarios(data.scenarios)
+            loadScenario(0, data.scenarios)
+          }
+        })
+        .catch((err) => console.error("Ошибка загрузки карточек ДДС:", err))
+    }
+  }, [ticketId])
 
   // Switch to next demo card
   const nextDemoCard = () => {
@@ -248,7 +285,17 @@ function DdsSimulator() {
     setNetworkStatus("waiting")
     setTimeout(() => {
       setNetworkStatus("active")
-      loadScenario(demoIndex)
+      if (ticketId) {
+        setIsCardAccepted(false)
+        setUserDecision(null)
+        setUserComment("")
+        setUserOrderNumber("")
+        setWhoAccepted("")
+        setSummary("")
+        startSlaTimer()
+      } else {
+        loadScenario(demoIndex)
+      }
     }, 500)
   }
 
@@ -372,11 +419,20 @@ function DdsSimulator() {
         dispatchScore = 25
       }
     } else {
-      // Normal ticket requires call & telephony fields
-      if (whoAccepted.trim().length > 0 && summary.trim().length > 0) {
-        dispatchScore = 25
-      } else if (whoAccepted.trim().length > 0 || summary.trim().length > 0) {
-        dispatchScore = 10
+      // Normal ticket requires call & telephony fields for ALL assigned services
+      const requiredServicesCount = data.services.length;
+      if (requiredServicesCount > 0) {
+        if (calledServices.length >= requiredServicesCount) {
+          dispatchScore = 25
+        } else if (calledServices.length > 0) {
+          dispatchScore = Math.floor(25 * (calledServices.length / requiredServicesCount))
+        }
+      } else {
+        if (whoAccepted.trim().length > 0 && summary.trim().length > 0) {
+          dispatchScore = 25
+        } else if (whoAccepted.trim().length > 0 || summary.trim().length > 0) {
+          dispatchScore = 10
+        }
       }
     }
 
@@ -402,33 +458,33 @@ function DdsSimulator() {
     }`}>
       
       {/* Permanent Status Banner */}
-      <div className={`w-full z-50 flex shrink-0 items-center justify-between px-4 2xl:px-8 py-2 2xl:py-3 border-b-2 shadow-md transition-colors ${
+      <div className={`w-full z-50 flex shrink-0 items-center justify-between px-4 2xl:px-8 py-2 2xl:py-2 border-b-2 shadow-md transition-colors ${
         networkStatus === "active" 
           ? "bg-[#2b3a42] border-[#157dbd] text-white" 
           : "bg-[#303335] border-orange-500 text-white"
       }`}>
         {networkStatus === "offline" ? (
           <>
-            <span className="font-bold text-sm 2xl:text-lg">Режим: Учебный тренажер ДДС (Ожидание старта)</span>
+            <span className="font-bold text-sm 2xl:text-sm">Режим: Учебный тренажер ДДС (Ожидание старта)</span>
             <div className="flex items-center gap-3">
-              <button onClick={handleConnect} type="button" className="px-4 2xl:px-6 py-1.5 2xl:py-2 bg-[#157dbd] text-white text-[11px] 2xl:text-sm uppercase tracking-wide rounded-sm hover:bg-[#136ba3] transition-colors font-bold shadow">
+              <button onClick={handleConnect} type="button" className="px-4 2xl:px-5 py-1.5 2xl:py-2 bg-[#157dbd] text-white text-[11px] 2xl:text-sm uppercase tracking-wide rounded-sm hover:bg-[#136ba3] transition-colors font-bold shadow">
                 Начать смену
               </button>
               <button
                 onClick={() => setIsTutorialRunning(true)}
                 type="button"
-                className="px-4 2xl:px-6 py-1.5 2xl:py-2 bg-[#1f2b31] border border-[#157dbd] text-[#4ade80] text-[11px] 2xl:text-sm uppercase tracking-wide rounded-sm hover:bg-[#157dbd] hover:text-white transition-colors font-bold"
+                className="px-4 2xl:px-5 py-1.5 2xl:py-2 bg-[#1f2b31] border border-[#157dbd] text-[#4ade80] text-[11px] 2xl:text-sm uppercase tracking-wide rounded-sm hover:bg-[#157dbd] hover:text-white transition-colors font-bold"
               >
                 Обучение
               </button>
             </div>
           </>
         ) : networkStatus === "waiting" ? (
-          <span className="font-bold text-sm 2xl:text-lg text-orange-400 animate-pulse">Инициализация экзаменационных билетов...</span>
+          <span className="font-bold text-sm 2xl:text-sm text-orange-400 animate-pulse">Инициализация экзаменационных билетов...</span>
         ) : (
           <div className="flex w-full items-center justify-between">
             <div className="flex items-center gap-3">
-              <span className="font-bold text-xs 2xl:text-base text-[#4ade80] flex items-center gap-1.5">
+              <span className="font-bold text-xs 2xl:text-sm text-[#4ade80] flex items-center gap-1.5">
                 <span className="h-2.5 w-2.5 rounded-full bg-[#4ade80] animate-ping" />
                 Смена активна (ДДС-112)
               </span>
@@ -437,13 +493,33 @@ function DdsSimulator() {
                   Сессия #{sessionId.slice(0, 8)} {ticketId ? `• Билет: ${ticketId.slice(0, 8)}` : ""}
                 </span>
               )}
-              <span className="bg-[#1f2b31] border border-blue-400/40 text-blue-300 px-3 py-0.5 rounded text-xs 2xl:text-sm font-semibold">
-                Билет {demoIndex + 1} из {liveScenarios.length || ddsScenarios.length}: {currentScenario.title}
-              </span>
               {currentScenario.isTrick && (
                 <span className="bg-amber-900/60 border border-amber-500 text-amber-300 px-2 py-0.5 rounded text-[11px] font-bold">
                   ⚠️ Билет с подвохом
                 </span>
+              )}
+              {displaySlaTimer !== null && displaySlaTimer !== undefined && (
+                <div 
+                  className={`flex items-center gap-1.5 px-2 py-0.5 rounded font-mono font-bold text-xs border ml-2 ${
+                    slaViolated || displaySlaTimer <= 5
+                      ? "bg-red-600 text-white border-red-500 animate-pulse"
+                      : displaySlaTimer <= 15
+                      ? "bg-amber-500/20 text-amber-400 border-amber-500/50"
+                      : "bg-emerald-500/20 text-emerald-400 border-emerald-500/50"
+                  }`}
+                  title={
+                    slaViolated
+                      ? "Внимание! Регламентный норматив 30с нарушен"
+                      : `Осталось ${displaySlaTimer} сек на первичное реагирование`
+                  }
+                >
+                  <span className="uppercase tracking-wider opacity-90 text-[10px]">
+                    {slaViolated ? "ПРОСРОЧКА" : "SLA 30С:"}
+                  </span>
+                  <span className="text-sm">
+                    {displaySlaTimer} сек
+                  </span>
+                </div>
               )}
             </div>
 
@@ -478,6 +554,13 @@ function DdsSimulator() {
             setWhoAccepted={setWhoAccepted}
             summary={summary}
             setSummary={setSummary}
+            services={displayData.services}
+            calledServices={calledServices}
+            onServiceSaved={(srv) => {
+              if (!calledServices.includes(srv)) {
+                setCalledServices(prev => [...prev, srv])
+              }
+            }}
           />
         </div>
       </div>
@@ -500,7 +583,7 @@ function DdsSimulator() {
               <div className="flex items-center gap-2">
                 <Award className="h-6 w-6 text-amber-400" />
                 <div>
-                  <h2 className="text-lg 2xl:text-xl font-bold">Протокол аттестации диспетчера ДДС</h2>
+                  <h2 className="text-lg 2xl:text-sm font-bold">Протокол аттестации диспетчера ДДС</h2>
                   <p className="text-xs text-gray-400">Регламент первичного реагирования ЕКП 2025</p>
                 </div>
               </div>
@@ -626,7 +709,7 @@ function DdsSimulator() {
               <div className="border-t border-gray-200 pt-4 flex items-center justify-between bg-gray-50 p-4 rounded-md">
                 <div>
                   <div className="text-xs text-gray-500 font-medium uppercase tracking-wider">Итоговый результат:</div>
-                  <div className={`text-2xl 2xl:text-3xl font-extrabold ${
+                  <div className={`text-2xl 2xl:text-sm font-extrabold ${
                     scoreResult.total >= 85 ? "text-emerald-600" : scoreResult.total >= 70 ? "text-amber-600" : "text-red-600"
                   }`}>
                     {scoreResult.total} из 100 баллов
@@ -651,15 +734,16 @@ function DdsSimulator() {
             <div className="bg-gray-100 px-6 py-3 border-t border-gray-200 flex items-center justify-between">
               <button 
                 onClick={() => {
-                  setShowEndShiftModal(false)
-                  nextDemoCard()
+                  window.location.href = "/dds/journal"
                 }}
                 className="px-4 py-2 bg-[#157dbd] text-white text-xs 2xl:text-sm font-bold rounded hover:bg-[#136ba3] transition"
               >
-                Следующий билет →
+                В журнал (Поиск происшествий) →
               </button>
               <button 
-                onClick={() => setShowEndShiftModal(false)}
+                onClick={() => {
+                  window.location.href = "/dds/journal"
+                }}
                 className="px-4 py-2 bg-gray-200 text-gray-800 text-xs 2xl:text-sm font-semibold rounded hover:bg-gray-300 transition"
               >
                 Закрыть протокол

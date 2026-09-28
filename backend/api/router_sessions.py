@@ -5,7 +5,7 @@ from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm.attributes import flag_modified
 
-from backend.core.deps import require_role, get_current_user
+from backend.core.deps import require_role, get_current_user, get_current_user_optional
 from backend.core.runtime_router import RuntimeRouter
 from backend.database import get_db
 from backend.models.domain_01 import User
@@ -258,7 +258,7 @@ from starlette.requests import Request
 async def create_demo_session(
     request: Request,
     req: Optional[DemoSessionRequest] = None,
-    current_user: Optional[User] = Depends(get_current_user),
+    current_user: Optional[User] = Depends(get_current_user_optional),
     db: AsyncSession = Depends(get_db),
 ):
     """Create a demo training session with 1 random ticket."""
@@ -276,15 +276,59 @@ async def create_demo_session(
     if target_role not in ("OPERATOR_112", "DISPATCHER_DDS"):
         target_role = "OPERATOR_112"
 
-    stmt = select(GeneratedTicket).order_by(func.random()).limit(1)
-    res = await db.execute(stmt)
-    ticket = res.scalar_one_or_none()
+    import uuid
+    demo_uuid = str(uuid.uuid4())
+    scenario_ticket = ScenarioTicket(
+        scenario_id=demo_uuid,
+        settings={
+            "complexity": 2,
+            "etalon_services": ["01 Пожарные", "02 Полиция", "03 Скорая"],
+            "plot": "Очевидец сообщает о лобовом столкновении двух легковых АМ на пересечении улицы Ленина и улицы Пушкина. Имеются пострадавшие: один без сознания, второй с травмой головы. Сильный запах бензина, открытого горения нет. Требуется реагирование экстренных служб.",
+            "category": "ДТП",
+            "subcategory": "ДТП с пострадавшими",
+            "class": "Экстренная",
+            "visClass": "bg-red-500",
+            "sequence_number": 9999,
+        },
+        ground_truth={
+            "fio": "Смирнов Алексей Иванович",
+            "phone": "+7 999 123-45-67",
+            "street": "улица Ленина, пересечение с улицей Пушкина",
+            "house": "15",
+            "gender": "male",
+            "speaker": "aidar",
+            "injured": "да",
+            "ambulanceRefusal": "нет",
+            "blocked": "нет",
+            "caller_status": "Очевидец",
+            "class": "Экстренная",
+            "visClass": "bg-red-500",
+            "plot": "Здравствуйте! Тут страшная авария в городе Москва, на пересечении улицы Ленина и улицы Пушкина, прямо возле дома 15. Две легковые машины столкнулись лоб в лоб. Один водитель без сознания, весь в крови, второй вроде ходит, но держится за голову. Бензином сильно пахнет, но огня пока нет. Пришлите скорее скорую, пожарных и ДПС! Меня зовут Смирнов Алексей Иванович.",
+        },
+        ai_content={
+            "factoids": {
+                "situation_1": "ДТП лобовое столкновение двух легковых автомобилей",
+                "victims_2": "Один водитель без сознания, второй ходит, держится за голову",
+                "danger_3": "Запах бензина, угроза возгорания"
+            },
+            "plot": "Здравствуйте! Тут страшная авария в городе Москва, на пересечении улицы Ленина и улицы Пушкина, прямо возле дома 15. Две легковые машины столкнулись лоб в лоб. Один водитель без сознания, весь в крови, второй вроде ходит, но держится за голову. Бензином сильно пахнет, но огня пока нет. Пришлите скорее скорую, пожарных и ДПС! Меня зовут Смирнов Алексей Иванович.",
+        },
+        workflow_state={"status": "active"},
+    )
+    db.add(scenario_ticket)
+    await db.flush()
 
-    if not ticket:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail="Билеты не найдены. Пожалуйста, сначала сгенерируйте билеты.",
-        )
+    class DemoTicketObj:
+        def __init__(self, sc):
+            self.ticket_id = sc.scenario_id
+            self.category = sc.settings.get("category", "ДТП")
+            self.subcategory = sc.settings.get("subcategory", "ДТП с пострадавшими")
+            self.complexity = sc.settings.get("complexity", 2)
+            self.plot = sc.settings.get("plot", "")
+            self.factoids = sc.ai_content.get("factoids", {})
+            self.etalon_services = sc.settings.get("etalon_services", [])
+            
+    ticket = DemoTicketObj(scenario_ticket)
 
     session_type = "CALL_SIMULATION" if target_role == "OPERATOR_112" else "CARD_ACTIONS"
     cadet_id = current_user.user_id if current_user else None

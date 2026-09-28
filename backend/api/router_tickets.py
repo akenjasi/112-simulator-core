@@ -129,7 +129,17 @@ def get_templates_for_category(category: str, subcategory: Optional[str] = None)
 
 
 def extract_service_codes(record: dict, category: str) -> list:
+    main_svc = record.get("main_service")
     raw_services = record.get("base_services") or record.get("services") or []
+    
+    # Heuristic: If there are too many services, filter to core emergency ones or just main_service
+    if len(raw_services) > 4:
+        core = [s for s in raw_services if any(x in str(s) for x in ["101", "102", "103", "104", "Антитеррор"])]
+        if core:
+            raw_services = core
+        elif main_svc:
+            raw_services = [main_svc]
+
     codes = set()
     for s in raw_services:
         s_str = str(s).strip()
@@ -373,6 +383,64 @@ async def get_tickets_counts(
             counts[cat_name]["subcategories"][subcat] = count
             
     return list(counts.values())
+
+@api_tickets_router.get("/{ticket_id}", response_model=TicketResponse)
+@api_tickets_router.get("/{ticket_id}/", response_model=TicketResponse, include_in_schema=False)
+@tickets_router.get("/{ticket_id}", response_model=TicketResponse)
+@tickets_router.get("/{ticket_id}/", response_model=TicketResponse, include_in_schema=False)
+async def get_ticket(
+    ticket_id: str,
+    db: AsyncSession = Depends(get_db),
+) -> TicketResponse:
+    # Try GeneratedTicket
+    ticket = await db.get(GeneratedTicket, ticket_id)
+    if ticket:
+        seq = ticket.sequence_number if ticket.sequence_number is not None else 0
+        display_id = f"{make_abbr(ticket.category)}_{make_abbr(ticket.subcategory)}_{seq}"
+        return TicketResponse(
+            id=ticket.id,
+            ticket_id=ticket.id,
+            display_id=display_id,
+            sequence_number=ticket.sequence_number,
+            category=ticket.category,
+            subcategory=ticket.subcategory,
+            complexity=ticket.complexity,
+            plot=ticket.plot,
+            factoids=ticket.factoids or {},
+            ground_truth=ticket.ground_truth or {},
+            etalon_services=ticket.etalon_services or [],
+            status="active",
+            created_at=ticket.created_at,
+        )
+    
+    # Try ScenarioTicket
+    scenario = await db.get(ScenarioTicket, ticket_id)
+    if scenario:
+        settings = scenario.settings or {}
+        ai = scenario.ai_content or {}
+        gt = scenario.ground_truth or {}
+        cat = settings.get("category", "Общее")
+        sub = settings.get("subcategory")
+        seq = settings.get("sequence_number", 0)
+        display_id = f"{make_abbr(cat)}_{make_abbr(sub)}_{seq}"
+        return TicketResponse(
+            id=scenario.scenario_id,
+            ticket_id=scenario.scenario_id,
+            display_id=display_id,
+            sequence_number=seq,
+            category=cat,
+            subcategory=sub,
+            complexity=settings.get("complexity", 1),
+            plot=settings.get("plot") or ai.get("plot", ""),
+            factoids=ai.get("factoids", {}),
+            ground_truth=gt,
+            etalon_services=settings.get("etalon_services", []),
+            status=scenario.workflow_state.get("status", "active") if scenario.workflow_state else "active",
+            created_at=scenario.created_at,
+        )
+        
+    raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Билет не найден")
+
 
 
 @api_tickets_router.get("", response_model=List[TicketResponse])
@@ -910,6 +978,63 @@ async def get_ticket_audio(
         logger.error("Error generating ticket audio for ticket %s: %s", ticket_id, e, exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
 
+
+@api_tickets_router.get("/tts/service-reply")
+@tickets_router.get("/tts/service-reply")
+async def get_service_reply(
+    service_name: str,
+):
+    try:
+        service_lower = service_name.lower()
+        if "пожар" in service_lower or "101" in service_lower or "мчс" in service_lower:
+            phrase = "Пожарная охрана, ... радиотелефонист Иванова Мария Сергеевна, ... слушаю."
+            speaker = "baya"
+        elif "полиц" in service_lower or "102" in service_lower or "гибдд" in service_lower:
+            phrase = "Дежурная часть полиции, ... майор Смирнов Петр Алексеевич, ... слушаю."
+            speaker = "aidar"
+        elif "скор" in service_lower or "103" in service_lower or "мц" in service_lower:
+            phrase = "Станция скорой медицинской помощи, ... диспетчер Соколова Анна Юрьевна, ... слушаю."
+            speaker = "kseniya"
+        elif "газ" in service_lower or "104" in service_lower:
+            phrase = "Аварийная служба газа, ... мастер Петров Иван Васильевич, ... слушаю."
+            speaker = "eugene"
+        else:
+            phrase = f"Дежурный диспетчер службы {service_name}, ... слушаю."
+            speaker = "baya"
+            
+        audio_bytes = tts_engine_v2.concatenate_tts([phrase], speaker=speaker)
+        return Response(content=audio_bytes, media_type="audio/wav")
+    except Exception as e:
+        logger.error("Error generating service reply audio: %s", e)
+        raise HTTPException(status_code=500, detail=str(e))
+
+@api_tickets_router.get("/tts/service-accepted")
+@tickets_router.get("/tts/service-accepted")
+async def get_service_accepted(
+    service_name: str,
+):
+    try:
+        service_lower = service_name.lower()
+        if "пожар" in service_lower or "101" in service_lower or "мчс" in service_lower:
+            speaker = "baya"
+            phrase = "Информацию, ... приняла."
+        elif "полиц" in service_lower or "102" in service_lower or "гибдд" in service_lower:
+            speaker = "aidar"
+            phrase = "Информацию, ... принял."
+        elif "скор" in service_lower or "103" in service_lower or "мц" in service_lower:
+            speaker = "kseniya"
+            phrase = "Информацию, ... приняла."
+        elif "газ" in service_lower or "104" in service_lower:
+            speaker = "eugene"
+            phrase = "Информацию, ... принял."
+        else:
+            speaker = "baya"
+            phrase = "Информацию, ... приняла."
+        audio_bytes = tts_engine_v2.concatenate_tts([phrase], speaker=speaker)
+        return Response(content=audio_bytes, media_type="audio/wav")
+    except Exception as e:
+        logger.error("Error generating service accepted audio: %s", e)
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 @api_tickets_router.patch("/{ticket_id}", response_model=TicketResponse)
