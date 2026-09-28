@@ -92,12 +92,54 @@ async def lifespan(app: FastAPI):
             "ALTER TABLE generated_tickets ADD COLUMN is_deleted BOOLEAN DEFAULT 0",
         ]:
             try:
-                await conn.execute(text(alter_sql))
+                async with conn.begin_nested():
+                    await conn.execute(text(alter_sql))
             except Exception:
                 pass
-        await conn.execute(
-            text("INSERT OR IGNORE INTO sys_sequences (name, last_val) VALUES ('generated_tickets', 0)")
-        )
+        try:
+            async with conn.begin_nested():
+                await conn.execute(
+                    text("INSERT INTO sys_sequences (name, last_val) VALUES ('generated_tickets', 0) ON CONFLICT (name) DO NOTHING")
+                )
+        except Exception:
+            try:
+                async with conn.begin_nested():
+                    await conn.execute(
+                        text("INSERT OR IGNORE INTO sys_sequences (name, last_val) VALUES ('generated_tickets', 0)")
+                    )
+            except Exception:
+                pass
+
+    # --- Warmup Heavy Models (ASR, SLM, TTS) ---
+    import logging
+    logger = logging.getLogger("main")
+    logger.info("Warming up heavy models...")
+    
+    try:
+        from backend.api.router_asr import asr_service
+        import numpy as np
+        if asr_service.is_ready():
+            await asr_service.transcribe_pcm(np.zeros(16000, dtype=np.float32))
+        logger.info("ASR service warmed up.")
+    except Exception as e:
+        logger.error(f"ASR warmup failed: {e}")
+
+    try:
+        from backend.core.intent_classifier import classify_intent_sync
+        classify_intent_sync("warmup")
+        logger.info("Intent classifier warmed up.")
+    except Exception as e:
+        logger.error(f"Intent classifier warmup failed: {e}")
+        
+    try:
+        from backend.core.runtime_router import RuntimeRouter
+        r = RuntimeRouter()
+        r.process_message("warmup")
+        logger.info("RuntimeRouter warmed up.")
+    except Exception as e:
+        logger.error(f"RuntimeRouter warmup failed: {e}")
+
+    logger.info("Models warmup complete.")
 
     yield
     # (Optional) dispose engine on shutdown to release pool connections
@@ -152,6 +194,45 @@ app.include_router(router_asr)
 app.include_router(router_telephony)
 app.include_router(ai_analytics_router)
 app.include_router(router_integration)
+
+# Standalone addresses search endpoint (must be separate to avoid conflict with /{ticket_id})
+from fastapi import APIRouter as _APIRouter, Query as _Query
+import json as _json, os as _os
+
+_addresses_router = _APIRouter(prefix="/api/v1/addresses", tags=["Addresses"])
+
+@_addresses_router.get("")
+@_addresses_router.get("/", include_in_schema=False)
+async def _search_addresses(q: str = _Query("", description="Поисковый запрос")):
+    """Поиск адресов Москвы по строке."""
+    _project_root = _os.path.dirname(_os.path.dirname(_os.path.abspath(__file__)))
+    _paths = [
+        _os.path.join(_project_root, "data", "moscow_112_addresses.json"),
+        _os.path.join(_os.getcwd(), "data", "moscow_112_addresses.json"),
+    ]
+    _data = []
+    for _path in _paths:
+        if _os.path.exists(_path):
+            try:
+                with open(_path, "r", encoding="utf-8") as _f:
+                    _data = _json.load(_f)
+                break
+            except Exception:
+                pass
+    _q = q.lower()
+    _results, _seen = [], set()
+    for _item in _data:
+        _street = _item.get("street", "")
+        if _q and _q in _street.lower():
+            _key = f"{_street}|{_item.get('okrug','')}|{_item.get('district','')}"
+            if _key not in _seen:
+                _seen.add(_key)
+                _results.append({"street": _street, "okrug": _item.get("okrug", ""), "district": _item.get("district", "")})
+                if len(_results) >= 20:
+                    break
+    return _results
+
+app.include_router(_addresses_router)
 
 
 

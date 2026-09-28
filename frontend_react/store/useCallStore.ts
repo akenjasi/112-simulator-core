@@ -28,6 +28,8 @@ export interface CallStoreState {
   addMessage: (message: DialogMessage) => void
   setMessages: (messages: DialogMessage[]) => void
   setIsAudioActive: (active: boolean) => void
+  sendAsrText?: (text: string) => void
+  registerAsrSender: (fn: (text: string) => void) => void
   connectWS: (sessionId?: string | null, ticketId?: string | null) => void
   disconnectWS: (manual?: boolean) => void
   startCall: (overrideTicketId?: string, overrideExt?: string) => Promise<any>
@@ -71,6 +73,7 @@ export const useCallStore = create<CallStoreState>((set, get) => ({
   setMessages: (messages) => set({ messages }),
 
   setIsAudioActive: (isAudioActive) => set({ isAudioActive }),
+  registerAsrSender: (fn) => set({ sendAsrText: fn }),
 
   connectWS: (sessionIdParam, ticketIdParam) => {
     if (reconnectTimer) {

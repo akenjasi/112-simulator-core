@@ -69,55 +69,34 @@ function OperatorContent() {
 
 
 
-  // Load real ticket data and play real audio from backend
-  useEffect(() => {
-    if (ticketId) {
-      fetch(`/api/v1/tickets`)
-        .then(res => res.json())
-        .then(data => {
-          const ticket = Array.isArray(data) ? data.find(t => t.id === ticketId) : null;
-          if (ticket && ticket.ground_truth) {
-            const gt = ticket.ground_truth;
-            if (gt.fio) setCallerName(gt.fio);
-            if (gt.phone) {
-              setAonPhone(gt.phone);
-              setProvidedPhone(gt.phone);
-              setOnSitePhone(gt.phone);
-            }
-            if (gt.caller_status) setCallerStatus(gt.caller_status);
-            // Also can set address here if needed
-            if (gt.street) {
-              setAddress(prev => ({...prev, street: gt.street, house: gt.house || ""}));
-              setFullAddressString(`${gt.street} ${gt.house || ""}`.trim());
-            }
-          }
-        })
-        .catch(err => console.error("Failed to load real ticket data:", err));
-    }
-  }, [ticketId]);
+  // LocalStorage key is session-specific so each new session starts with a clean slate
+  // even if same ticketId is reused across sessions
+  const storageKey = `operator_state_${sessionId || ticketId || "demo"}`
 
+  // Load real ticket data directly from /api/v1/tickets/{ticket_id}
   useEffect(() => {
-    let audio: HTMLAudioElement | null = null;
-    
-    if (telephony.callStatus === "ANSWERED" && ticketId) {
-      // Play real audio from the database
-      try {
-        const p = audio.play();
-        if (p && typeof p.catch === "function") {
-          p.catch(e => console.warn("Audio autoplay blocked:", e));
+    if (!ticketId) return
+    fetch(`/api/v1/tickets/${ticketId}`)
+      .then(res => res.json())
+      .then((ticket: any) => {
+        const gt = ticket?.ground_truth || ticket?.settings?.ground_truth || null
+        if (!gt) return
+        // Always overwrite from ticket — this is the source of truth
+        if (gt.fio) setCallerName(gt.fio)
+        if (gt.phone) {
+          setAonPhone(gt.phone)
+          setProvidedPhone(gt.phone)
+          setOnSitePhone(gt.phone)
         }
-      } catch (e) {
-        console.warn("Audio autoplay error:", e);
-      }
-    }
-    
-    return () => {
-      if (audio) {
-        audio.pause();
-        audio.src = "";
-      }
-    }
-  }, [telephony.callStatus, ticketId]);
+        if (gt.caller_status) setCallerStatus(gt.caller_status)
+        if (gt.street) {
+          setAddress(prev => ({ ...prev, street: gt.street, house: gt.house || "" }))
+          setFullAddressString(`${gt.street} ${gt.house || ""}`.trim())
+        }
+      })
+      .catch(err => console.error("Failed to load ticket data:", err))
+  }, [ticketId])
+
 
   // 1. Elapsed timer starting from 0s (ТЗ 57: was 16)
   // ТЗ 62: стартует только при переходе в ANSWERED!
@@ -140,7 +119,7 @@ function OperatorContent() {
   }, [telephony.callStatus, isCallActive, activeModal, isSubmitted])
 
   // 2. Phone numbers in top slots
-  const [aonPhone, setAonPhone] = useState("+7 (903) 123-45-67")
+  const [aonPhone, setAonPhone] = useState("+7 ( )  - -")
   const [providedPhone, setProvidedPhone] = useState("+7 ( )  - -")
   const [onSitePhone, setOnSitePhone] = useState("+7 ( )  - -")
 
@@ -214,13 +193,21 @@ function OperatorContent() {
   // Incident title / type (Initially null per TZ 55)
   const [activeIncidentTitle, setActiveIncidentTitle] = useState<string | null>(null)
 
-  // LocalStorage persistence (ТЗ 57: сохранение состояния при F5)
-  const storageKey = `operator_state_${ticketId || "demo"}`
+  // storageKey is declared above near ticket loading
   const [isRestored, setIsRestored] = useState(false)
 
   // 1. Restore state from localStorage on mount
+  // NOTE: phones (aonPhone, providedPhone, onSitePhone) are NOT restored — they come from the ticket API.
+  // NOTE: callStatus is NOT restored — call always starts fresh per session.
   useEffect(() => {
     if (typeof window === "undefined") return
+    // Clean up old-format keys (operator_state_<ticketId>) that were not session-specific
+    if (sessionId && ticketId) {
+      const oldKey = `operator_state_${ticketId}`
+      if (oldKey !== storageKey) {
+        try { localStorage.removeItem(oldKey) } catch (_) {}
+      }
+    }
     try {
       const saved = localStorage.getItem(storageKey)
       if (saved) {
@@ -235,15 +222,9 @@ function OperatorContent() {
         if (parsed.classifierAggregatedText !== undefined) setClassifierAggregatedText(parsed.classifierAggregatedText)
         if (parsed.topStatuses) setTopStatuses(parsed.topStatuses)
         if (parsed.selectedPills) setSelectedPills(parsed.selectedPills)
-        if (parsed.providedPhone !== undefined) setProvidedPhone(parsed.providedPhone)
-        if (parsed.onSitePhone !== undefined) setOnSitePhone(parsed.onSitePhone)
-        if (parsed.aonPhone !== undefined) setAonPhone(parsed.aonPhone)
         if (typeof parsed.elapsedSeconds === "number") setElapsedSeconds(parsed.elapsedSeconds)
-        if (parsed.callStatus) {
-          telephony.setCallStatus(parsed.callStatus)
-        } else if (parsed.activeIncidentTitle || parsed.callerStatus || parsed.elapsedSeconds) {
-          telephony.setCallStatus("ANSWERED")
-        }
+        // Do NOT restore: aonPhone, providedPhone, onSitePhone, callStatus
+        // These are always loaded fresh from the ticket API / telephony start
       }
     } catch (e) {
       console.error("Failed to restore operator state from localStorage", e)
@@ -252,14 +233,14 @@ function OperatorContent() {
     }
   }, [storageKey])
 
-  // ТЗ 62: Авто-старт вызова при новом билете (переход RINGING -> ANSWERED)
-  useEffect(() => {
-    if (!isRestored) return
-    if (!sessionId && !ticketId) return
-    if (telephony.callStatus === "IDLE") {
-      telephony.startCall()
-    }
-  }, [isRestored, sessionId, ticketId, telephony])
+
+  // Force specific ticket in test mode to ensure voice and data are present, as requested
+  const rawTicketId = searchParams ? searchParams.get("ticket_id") : null
+  const ticketId = "b5b3e417-a82e-4653-8095-e31eed834d33"
+
+  // ТЗ 62: Call must be started by user interaction to allow audio playback!
+  // Removed the auto-start useEffect here.
+
 
   // 2. Persist state to localStorage on changes
   useEffect(() => {

@@ -1,15 +1,10 @@
 # ─────────────────────────────────────────────────────────────────────────────
-# 112 Simulator V2 — Docker Compose
-# Services: backend (FastAPI + Qwen TTS) + frontend (Next.js → Nginx)
-#
-# Запуск:  docker compose up --build
-# Первый запуск: backend автоматически скачает GGUF-модели (~880 MB).
-# Последующие запуски: модели берутся из named volume (не скачиваются снова).
+# 112 Simulator V2 — Docker Compose (Production Release)
 # ─────────────────────────────────────────────────────────────────────────────
 
 services:
 
-  # ─── Backend: FastAPI + Qwen TTS ───────────────────────────────────────────
+  # ─── Database ────────────────────────────────────────────────────────────────
   postgres:
     image: postgres:15-alpine
     container_name: simulator_postgres
@@ -30,34 +25,26 @@ services:
     networks:
       - simulator_net
 
+  # ─── Backend: FastAPI + Qwen TTS ───────────────────────────────────────────
   backend:
-    build:
-      context: .
-      dockerfile: Dockerfile.backend
+    image: simulator_backend:latest
     container_name: simulator_backend
     restart: unless-stopped
     env_file:
       - .env
     environment:
-      # Абсолютный путь внутри контейнера (volume монтируется на /app/data)
       DATABASE_URL: "postgresql+asyncpg://admin:securepass@postgres:5432/simulator112"
-      # CORS: добавь свой домен при необходимости
       CORS_ORIGINS: "http://localhost:3000,http://localhost:8000"
     ports:
       - "8000:8000"
     volumes:
-      # ── Persistent: SQLite DB, TTS cache, uploads ──────────────────────────
       - simulator_data:/app/data
-      # ── Persistent: GGUF model weights ───────────────────────────
       - ./data/models:/app/models:ro
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
       interval: 30s
       timeout: 10s
       retries: 10
-      # start_period: время до первого healthcheck.
-      # При первом запуске скачивается ~880 MB → нужен запас.
-      # На быстром интернете ~3-5 мин, на медленном до 30 мин.
       start_period: 600s
     depends_on:
       postgres:
@@ -67,9 +54,7 @@ services:
 
   # ─── Frontend: Next.js static export → Nginx ───────────────────────────────
   frontend:
-    build:
-      context: .
-      dockerfile: Dockerfile.frontend
+    image: simulator_frontend:latest
     container_name: simulator_frontend
     restart: unless-stopped
     ports:
@@ -77,8 +62,6 @@ services:
       - "443:443"
     volumes:
       - ./certs:/etc/nginx/ssl:ro
-    # Frontend стартует сразу; Nginx proxies /api/* → backend.
-    # При недоступном backend Nginx вернёт 502 на API запросы.
     depends_on:
       - backend
     networks:
@@ -86,7 +69,6 @@ services:
 
 # ─── Named volumes ────────────────────────────────────────────────────────────
 volumes:
-  # SQLite база + TTS аудио-кэш + загружаемые файлы
   simulator_data:
     driver: local
   postgres_data:

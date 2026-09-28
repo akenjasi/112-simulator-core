@@ -29,6 +29,7 @@ export function useTelephony({
   const [error, setError] = useState<string | null>(null)
 
   const wsRef = useRef<WebSocket | null>(null)
+  const asrWsRef = useRef<WebSocket | null>(null)
   const audioContextRef = useRef<AudioContext | null>(null)
   const ringOscillatorRef = useRef<OscillatorNode | null>(null)
   const ringGainRef = useRef<GainNode | null>(null)
@@ -106,6 +107,16 @@ export function useTelephony({
     }
   }, [stopRingAudio])
 
+  useEffect(() => {
+    useCallStore.getState().registerAsrSender((text: string) => {
+      if (asrWsRef.current?.readyState === WebSocket.OPEN) {
+        asrWsRef.current.send(JSON.stringify({ type: "text_input", text }))
+      } else {
+        console.warn("ASR WebSocket is not open, cannot send text")
+      }
+    })
+  }, [])
+
   // Manage ringing sound according to callStatus
   useEffect(() => {
     if (callStatus === "RINGING") {
@@ -168,6 +179,14 @@ export function useTelephony({
                 setCallStatus(data.status)
                 useCallStore.setState({ callStatus: data.status })
               }
+            } else if (data.type === "CHAT_MESSAGE" || data.type === "MESSAGE") {
+              const msg = {
+                id: data.id || `msg_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`,
+                sender: data.sender || "caller",
+                text: data.text || "",
+                timestamp: data.timestamp || Date.now(),
+              }
+              useCallStore.getState().addMessage(msg)
             }
           } catch (err) {
             console.error("Failed to parse telephony WS event:", err)
@@ -214,8 +233,15 @@ export function useTelephony({
         wsRef.current.close()
         wsRef.current = null
       }
+      if (asrWsRef.current) {
+        asrWsRef.current.close()
+        asrWsRef.current = null
+      }
     }
   }, [sessionId, ticketId, callStatus])
+
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null)
+  const mediaStreamRef = useRef<MediaStream | null>(null)
 
   // ─── Telephony Control Methods ─────────────────────────────────────────────
   const startCall = useCallback(
@@ -225,8 +251,84 @@ export function useTelephony({
 
       setCallStatus("RINGING")
       setError(null)
+      // Clear dialogue chat for a fresh session
+      useCallStore.getState().setMessages([])
 
       try {
+        // 1. Establish ASR / Dialogue WebSocket
+        const sessionKey = sessionId || tId
+        if (sessionKey) {
+          // Close existing ASR WS before opening a new one to prevent duplicate initial_phrase
+          if (asrWsRef.current && asrWsRef.current.readyState !== WebSocket.CLOSED) {
+            asrWsRef.current.close()
+            asrWsRef.current = null
+          }
+          const protocol = window.location.protocol === "https:" ? "wss:" : "ws:"
+          const asrWsUrl = ticketId
+            ? `${protocol}//${window.location.host}/api/v2/asr/stream/${sessionKey}?ticket_id=${encodeURIComponent(ticketId)}`
+            : `${protocol}//${window.location.host}/api/v2/asr/stream/${sessionKey}`
+          const asrWs = new WebSocket(asrWsUrl)
+          asrWsRef.current = asrWs
+          
+          asrWs.onmessage = (event) => {
+            try {
+              const data = JSON.parse(event.data)
+              if (data.type === "dialogue_response") {
+                // operator_text is already added to store in ChatInput.handleSend — skip to avoid duplicates
+                if (data.applicant_text) {
+                  useCallStore.getState().addMessage({
+                    id: `msg_app_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`,
+                    sender: "caller",
+                    text: data.applicant_text,
+                    timestamp: Date.now(),
+                  })
+                  // Play TTS audio for each applicant reply (one phrase at a time)
+                  try {
+                    if ((window as any).currentCallAudio) {
+                      ;(window as any).currentCallAudio.pause()
+                      ;(window as any).currentCallAudio.src = ""
+                    }
+                    const ttsUrl =
+                      `/api/v1/tickets/tts/speak?` +
+                      `text=${encodeURIComponent(data.applicant_text)}&speaker=aidar`
+                    const ttsAudio = new Audio(ttsUrl)
+                    ;(window as any).currentCallAudio = ttsAudio
+                    const p = ttsAudio.play()
+                    if (p && typeof p.catch === "function") {
+                      p.catch((e: unknown) =>
+                        console.warn("TTS dialogue audio autoplay blocked:", e)
+                      )
+                    }
+                  } catch (e) {
+                    console.warn("TTS dialogue audio error:", e)
+                  }
+                }
+              }
+            } catch (err) {
+              console.error("Failed to parse ASR WS event:", err)
+            }
+          }
+
+
+        }
+
+        // 2. Запрос микрофона (optional fallback if no mic)
+        try {
+          const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
+          mediaStreamRef.current = stream
+          const mediaRecorder = new MediaRecorder(stream)
+          mediaRecorderRef.current = mediaRecorder
+
+          mediaRecorder.ondataavailable = (e) => {
+            if (e.data.size > 0 && asrWsRef.current?.readyState === WebSocket.OPEN) {
+              asrWsRef.current.send(e.data)
+            }
+          }
+          mediaRecorder.start(250)
+        } catch (e) {
+          console.warn("Microphone access denied or error. Falling back to text-only mode.", e)
+        }
+
         const res = await fetch("/api/v2/telephony/start_call", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -261,6 +363,20 @@ export function useTelephony({
     async (reason = "operator_hangup") => {
       setCallStatus("HANGUP")
       stopRingAudio()
+      
+      if (asrWsRef.current) {
+        asrWsRef.current.close()
+        asrWsRef.current = null
+      }
+
+      if (mediaRecorderRef.current) {
+        mediaRecorderRef.current.stop()
+        mediaRecorderRef.current = null
+      }
+      if (mediaStreamRef.current) {
+        mediaStreamRef.current.getTracks().forEach((track) => track.stop())
+        mediaStreamRef.current = null
+      }
 
       try {
         const res = await fetch("/api/v2/telephony/hangup", {

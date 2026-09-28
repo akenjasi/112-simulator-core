@@ -142,6 +142,18 @@ async def post_session_message(
     flag_modified(session, "dialogue_log")
     await db.commit()
     await db.refresh(session)
+    
+    # Save to file system as well
+    import os
+    records_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "..", "data", "records")
+    os.makedirs(records_dir, exist_ok=True)
+    text_file_path = os.path.join(records_dir, f"{session_id}.txt")
+    try:
+        with open(text_file_path, "a", encoding="utf-8") as tf:
+            tf.write(f"[{datetime.datetime.now().isoformat()}] OPERATOR: {req.text}\n")
+            tf.write(f"[{datetime.datetime.now().isoformat()}] CALLER: {ai_result.get('reply_text', 'Error')}\n")
+    except Exception as e:
+        pass
 
     return {
         "reply": ai_result.get("reply_text", ""),
@@ -303,7 +315,19 @@ async def create_demo_session(
             "caller_status": "Очевидец",
             "class": "Экстренная",
             "visClass": "bg-red-500",
-            "plot": "Здравствуйте! Тут страшная авария в городе Москва, на пересечении улицы Ленина и улицы Пушкина, прямо возле дома 15. Две легковые машины столкнулись лоб в лоб. Один водитель без сознания, весь в крови, второй вроде ходит, но держится за голову. Бензином сильно пахнет, но огня пока нет. Пришлите скорее скорую, пожарных и ДПС! Меня зовут Смирнов Алексей Иванович.",
+            # Structured bricks for the dialogue classifier (categories 0-9)
+            "bricks": [
+                {"intent": "intro", "text": "Алло! Помогите! Тут авария!", "emotion": "panic"},
+                {"intent": "address", "text": "Улица Ленина, пересечение с улицей Пушкина, возле дома 15!", "emotion": "panic"},
+                {"intent": "address_details", "text": "Это около большого перекрёстка, напротив магазина, ориентир — светофор.", "emotion": "neutral"},
+                {"intent": "situation", "text": "Две легковые машины столкнулись лоб в лоб. Бензином пахнет сильно, огня пока нет.", "emotion": "panic"},
+                {"intent": "victims", "text": "Да, есть пострадавшие! Один водитель без сознания, весь в крови. Второй ходит, но голову держит.", "emotion": "panic"},
+                {"intent": "caller_id", "text": "Меня зовут Смирнов Алексей Иванович.", "emotion": "neutral"},
+                {"intent": "phone", "text": "Мой номер: плюс семь, девятьсот девяносто девять, сто двадцать три, сорок пять, шестьдесят семь.", "emotion": "neutral"},
+                {"intent": "repeat", "text": "Я повторяю! Улица Ленина, дом пятнадцать! Быстрее приезжайте, вас плохо слышно!", "emotion": "panic"},
+                {"intent": "bureaucracy", "text": "Какие бумаги?! Человек умирает! Высылайте скорее!", "emotion": "panic"},
+                {"intent": "outro", "text": "Хорошо, жду здесь. Поторопитесь, пожалуйста. До свидания.", "emotion": "neutral"},
+            ],
         },
         ai_content={
             "factoids": {

@@ -9,10 +9,7 @@
 
 set -euo pipefail
 
-MODELS_DIR="/app/backend/core/qwen_tts/models"
-TOKENIZER_FILE="${MODELS_DIR}/qwen-tokenizer-12hz-Q4_K_M.gguf"
-MODEL_FILE="${MODELS_DIR}/qwen-talker-0.6b-base-Q4_K_M.gguf"
-HF_BASE="https://huggingface.co/Serveurperso/Qwen3-TTS-GGUF/resolve/main"
+
 
 echo ""
 echo "╔══════════════════════════════════════════════════════╗"
@@ -25,48 +22,20 @@ echo "📁 Ensuring data directories exist..."
 mkdir -p \
     /app/data/tts_cache \
     /app/data/backups \
-    /app/data/uploads \
-    "${MODELS_DIR}"
+    /app/data/uploads
 
-# ─── 2. Download GGUF models (idempotent) ────────────────────────────────────
-download_if_missing() {
-    local dest="$1"
-    local url="$2"
-    local name
-    name="$(basename "${dest}")"
-
-    if [ -f "${dest}" ] && [ -s "${dest}" ]; then
-        echo "  ✅ ${name} — уже есть, пропускаем."
-    else
-        echo "  ⬇️  Скачиваем ${name}..."
-        echo "     URL: ${url}"
-        wget \
-            --quiet \
-            --show-progress \
-            --continue \
-            --tries=5 \
-            --timeout=60 \
-            -O "${dest}" \
-            "${url}" \
-            || { echo "  ❌ Ошибка скачивания ${name}. Проверьте сеть / доступ к HuggingFace."; exit 1; }
-        echo "  ✅ ${name} — успешно скачан."
-    fi
-}
-
-echo ""
-echo "🤖 Проверяем модели Qwen TTS..."
-download_if_missing \
-    "${TOKENIZER_FILE}" \
-    "${HF_BASE}/qwen-tokenizer-12hz-Q4_K_M.gguf?download=true"
-
-download_if_missing \
-    "${MODEL_FILE}" \
-    "${HF_BASE}/qwen-talker-0.6b-base-Q4_K_M.gguf?download=true"
+# ─── 2. Models are now provided via volume mount ─────────────────────────────
+echo "🤖 Models are provided via /app/models"
 
 # ─── 3. Export LD_LIBRARY_PATH for native shared libs ────────────────────────
 export LD_LIBRARY_PATH="/app/backend/bin:${LD_LIBRARY_PATH:-}"
 
-# ─── 4. Start uvicorn ────────────────────────────────────────────────────────
+# ─── 4. Run Seed Script ────────────────────────────────────────────────────────
+echo ""
+echo "🌱 Running database seeder..."
+python3 -m scripts.seed || echo "⚠️  Seeder returned an error, but continuing..."
+
+# ─── 5. Start uvicorn ────────────────────────────────────────────────────────
 echo ""
 echo "🚀 Запускаем FastAPI backend (uvicorn)..."
 echo "   API:     http://0.0.0.0:8000"

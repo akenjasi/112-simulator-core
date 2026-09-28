@@ -212,7 +212,7 @@ export default function StudentLobbyPage() {
       const wsProtocol = window.location.protocol === "https:" ? "wss:" : "ws:"
       const wsHost = window.location.hostname || "127.0.0.1"
       const wsPort = window.location.port === "3000" ? "8000" : window.location.port || "8000"
-      const wsUrl = `${wsProtocol}//${wsHost}:${wsPort}/api/v2/asr/stream`
+      const wsUrl = `${wsProtocol}//${wsHost}:${wsPort}/api/v2/asr/stream/lobby_mic_test`
 
       const ws = new WebSocket(wsUrl)
       wsRef.current = ws
@@ -789,7 +789,17 @@ export default function StudentLobbyPage() {
                 )}
               </div>
 
-              <div className="flex justify-end pt-1">
+              <div className="flex justify-between items-center pt-1">
+                <Button
+                  type="button"
+                  variant="secondary"
+                  size="sm"
+                  onClick={() => console.log("VOIP check initiated")}
+                  className="text-xs cursor-pointer flex items-center gap-2"
+                >
+                  <Radio className="h-4 w-4" />
+                  VOIP
+                </Button>
                 <Button
                   type="button"
                   variant="outline"

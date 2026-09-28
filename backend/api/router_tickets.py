@@ -261,9 +261,14 @@ async def generate_tickets_background_task(
             await session.execute(
                 text("CREATE TABLE IF NOT EXISTS sys_sequences (name VARCHAR PRIMARY KEY, last_val INTEGER NOT NULL DEFAULT 0)")
             )
-            await session.execute(
-                text("INSERT OR IGNORE INTO sys_sequences (name, last_val) VALUES ('generated_tickets', 0)")
-            )
+            try:
+                await session.execute(
+                    text("INSERT INTO sys_sequences (name, last_val) VALUES ('generated_tickets', 0) ON CONFLICT (name) DO NOTHING")
+                )
+            except Exception:
+                await session.execute(
+                    text("INSERT OR IGNORE INTO sys_sequences (name, last_val) VALUES ('generated_tickets', 0)")
+                )
             await session.commit()
 
             # Get persistent sequence
@@ -740,9 +745,14 @@ async def upload_tickets_import(
     await db.execute(
         text("CREATE TABLE IF NOT EXISTS sys_sequences (name VARCHAR PRIMARY KEY, last_val INTEGER NOT NULL DEFAULT 0)")
     )
-    await db.execute(
-        text("INSERT OR IGNORE INTO sys_sequences (name, last_val) VALUES ('generated_tickets', 0)")
-    )
+    try:
+        await db.execute(
+            text("INSERT INTO sys_sequences (name, last_val) VALUES ('generated_tickets', 0) ON CONFLICT (name) DO NOTHING")
+        )
+    except Exception:
+        await db.execute(
+            text("INSERT OR IGNORE INTO sys_sequences (name, last_val) VALUES ('generated_tickets', 0)")
+        )
     seq_res = await db.execute(text("SELECT last_val FROM sys_sequences WHERE name='generated_tickets'"))
     current_seq = seq_res.scalar() or 0
 
@@ -976,6 +986,30 @@ async def get_ticket_audio(
         raise
     except Exception as e:
         logger.error("Error generating ticket audio for ticket %s: %s", ticket_id, e, exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@api_tickets_router.get("/tts/speak")
+@tickets_router.get("/tts/speak")
+async def tts_speak(
+    text: str = Query(..., description="Текст для озвучки"),
+    speaker: str = Query("aidar", description="Голос TTS (aidar, baya, kseniya, eugene)"),
+) -> Response:
+    """Генерирует WAV-аудио для произвольного текста через TTS-движок.
+    Используется фронтендом для воспроизведения реплик заявителя по одной."""
+    try:
+        if not text or not text.strip():
+            raise HTTPException(status_code=400, detail="Параметр 'text' не может быть пустым")
+        audio_bytes = tts_engine_v2.concatenate_tts([text.strip()], speaker=speaker)
+        return Response(
+            content=audio_bytes,
+            media_type="audio/wav",
+            headers={"Cache-Control": "no-cache"},
+        )
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error("Error in tts_speak: %s", e, exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -1216,3 +1250,42 @@ async def refine_ticket(
         status="active",
         created_at=res_created,
     )
+
+
+@api_tickets_router.get("/addresses")
+@api_tickets_router.get("/addresses/", include_in_schema=False)
+@tickets_router.get("/addresses")
+@tickets_router.get("/addresses/", include_in_schema=False)
+async def search_addresses(q: str = Query("", description="Поисковый запрос")):
+    """Поиск адресов по строке."""
+    project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    possible_paths = [
+        os.path.join(project_root, "data", "moscow_112_addresses.json"),
+        os.path.join(os.getcwd(), "data", "moscow_112_addresses.json"),
+    ]
+    data = []
+    for path in possible_paths:
+        if os.path.exists(path):
+            try:
+                with open(path, "r", encoding="utf-8") as f:
+                    data = json.load(f)
+                break
+            except Exception as e:
+                logger.warning("Error loading moscow_112_addresses.json from %s: %s", path, e)
+    
+    q_lower = q.lower()
+    results = []
+    seen = set()
+    for item in data:
+        street = item.get("street", "")
+        if q_lower in street.lower():
+            okrug = item.get("okrug", "")
+            district = item.get("district", "")
+            key = f"{street}|{okrug}|{district}"
+            if key not in seen:
+                seen.add(key)
+                results.append({"street": street, "okrug": okrug, "district": district})
+                if len(results) >= 20:
+                    break
+    
+    return results

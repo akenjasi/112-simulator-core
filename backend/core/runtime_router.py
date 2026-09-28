@@ -108,7 +108,7 @@ class V2ApplicantSession:
                     except Exception as err:
                         logger.warning(f"Failed to read bricks file {p}: {err}")
 
-        return {}
+        return self.scenario.get("ground_truth", {}) or self.scenario.get("content", {}) or {}
 
     def _enrich_from_bricks_metadata(self) -> None:
         """Enriches session attributes from bricks metadata if scenario fields were empty."""

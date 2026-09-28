@@ -28,11 +28,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 # ─── Python dependencies ──────────────────────────────────────────────────────
-# Install in a separate layer — cached unless requirements.txt changes.
+# Install in a separate layer — cached unless requirements.lock changes.
 # sqlalchemy[asyncio] pulls in greenlet (required for async SQLAlchemy).
-COPY requirements.txt ./
+COPY requirements.lock ./
 RUN pip install --upgrade pip && pip install torch torchaudio --index-url https://download.pytorch.org/whl/cpu \
-    && pip install -r requirements.txt
+    && pip install -r requirements.lock
 
 # ─── Application source ───────────────────────────────────────────────────────
 # Heavy binary files (*.so, qwen-tts, transcribe-cli) are in the repo under
@@ -47,6 +47,16 @@ RUN chmod +x \
     /app/backend/bin/transcribe-cli \
     /app/backend/core/qwen_tts/qwen-tts \
     /app/scripts/init.sh
+
+# Fix Windows CRLF issues in shell scripts
+RUN find . -type f -name "*.sh" -exec sed -i -e 's/\r$//' {} +
+
+# Restore symlinks that Git on Windows turns into text files
+RUN cd /app/backend/bin && for f in *.so.0; do \
+        target=$(cat "$f"); \
+        rm "$f"; \
+        ln -s "$target" "$f"; \
+    done
 
 # ─── Runtime: shared library search path ─────────────────────────────────────
 # backend/bin/ contains: libggml.so, libggml.so.0 (symlink),

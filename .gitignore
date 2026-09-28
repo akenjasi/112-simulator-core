@@ -12,3 +12,5 @@ data/tts_cache/
 *.tsbuildinfo
 *.gguf
 backend/core/qwen_tts/models/
+data/records/
+*.raw

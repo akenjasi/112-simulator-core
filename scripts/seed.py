@@ -191,12 +191,25 @@ async def seed_analytics_data(
     # 1. Ensure Scenarios exist
     scenarios: List[ScenarioTicket] = []
     for sc_conf in SCENARIO_CONFIGS:
+        bricks = [
+            {"intent": "intro", "text": f"Алло! Это 112?! {sc_conf['title']}! Помогите скорее!", "emotion": "panic"},
+            {"intent": "address", "text": "Мы находимся на улице Ленина, дом 10!", "emotion": "panic"},
+            {"intent": "address_details", "text": "Это второй подъезд, ориентир — большой супермаркет на углу!", "emotion": "neutral"},
+            {"intent": "situation", "text": f"Произошло следующее: {sc_conf['title']}, всё выглядит очень серьезно, высылайте помощь!", "emotion": "panic"},
+            {"intent": "victims", "text": "Да, к сожалению, есть пострадавшие, срочно нужна скорая помощь!", "emotion": "panic"},
+            {"intent": "caller_id", "text": "Меня зовут Иванов Иван Иванович!", "emotion": "neutral"},
+            {"intent": "phone", "text": "Запишите мой номер: 8-900-123-45-67!", "emotion": "neutral"},
+            {"intent": "repeat", "text": "Я повторяю еще раз, быстрее приезжайте, вас очень плохо слышно!", "emotion": "panic"},
+            {"intent": "bureaucracy", "text": "Хватит задавать мне эти бюрократические вопросы! Высылайте помощь немедленно!", "emotion": "panic"},
+            {"intent": "outro", "text": "Хорошо, ждем на месте. Поторопитесь, до свидания!", "emotion": "neutral"}
+        ]
+        
         sc = ScenarioTicket(
             title=sc_conf["title"],
             category=sc_conf["category"],
             complexity=rng.choice([1, 2, 3]),
             settings={"category": sc_conf["category"], "title": sc_conf["title"]},
-            ground_truth={"services": sc_conf["services"], "category": sc_conf["category"]},
+            ground_truth={"services": sc_conf["services"], "category": sc_conf["category"], "bricks": bricks},
         )
         db.add(sc)
         scenarios.append(sc)
@@ -368,6 +381,7 @@ async def seed_analytics_data(
 
             # Create IncidentCard
             card_obj = IncidentCard(
+                card_id=str(uuid.uuid4()),
                 session_id=session_obj.session_id,
                 scenario_id=chosen_scenario.scenario_id,
                 operator_id=cadet.user_id,
