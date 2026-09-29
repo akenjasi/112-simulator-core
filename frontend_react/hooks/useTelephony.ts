@@ -233,10 +233,7 @@ export function useTelephony({
         wsRef.current.close()
         wsRef.current = null
       }
-      if (asrWsRef.current) {
-        asrWsRef.current.close()
-        asrWsRef.current = null
-      }
+      // NOTE: Do NOT close asrWsRef here — its lifecycle is managed by startCall/hangupCall
     }
   }, [sessionId, ticketId, callStatus])
 
