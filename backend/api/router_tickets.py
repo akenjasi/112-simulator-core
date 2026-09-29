@@ -1282,7 +1282,7 @@ async def search_addresses(q: str = Query("", description="Поисковый з
                     break
     
     return results
-\ndef _generate_preview_audio_for_ticket(plot: str, gt: dict):
+def _generate_preview_audio_for_ticket(plot: str, gt: dict):
     from backend.core.text_normalization import expand_address_for_tts, format_phone_for_tts
     from backend.core.tts_v2 import tts_engine_v2
     import hashlib
