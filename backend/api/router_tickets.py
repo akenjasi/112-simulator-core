@@ -939,21 +939,29 @@ async def get_ticket_audio(
     """Генерация/склеивание аудио озвучки билета."""
     try:
         ticket = await db.get(GeneratedTicket, ticket_id)
-        plot = ""
-        gt = {}
         if ticket:
             plot = ticket.plot or ""
             gt = ticket.ground_truth or {}
+            audio_bytes = await asyncio.to_thread(_generate_preview_audio_for_ticket, plot, gt)
         else:
             scenario_ticket = await db.get(ScenarioTicket, ticket_id)
             if not scenario_ticket:
                 raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Билет не найден")
-            settings = scenario_ticket.settings or {}
-            ai = scenario_ticket.ai_content or {}
-            plot = settings.get("plot") or ai.get("plot", "")
+            
+            # For ScenarioTicket, we should concatenate all bricks from ground_truth
             gt = scenario_ticket.ground_truth or {}
+            bricks = gt.get("bricks", [])
+            texts = [b.get("text", "") for b in bricks if b.get("text")]
+            if not texts:
+                texts = [scenario_ticket.title or "Билет без текста"]
+            
+            from backend.core.tts_v2 import tts_engine_v2
+            speaker = gt.get("speaker", "aidar")
+            audio_bytes = await asyncio.to_thread(tts_engine_v2.concatenate_tts, texts, speaker=speaker)
 
-        audio_bytes = await asyncio.to_thread(_generate_preview_audio_for_ticket, plot, gt)
+        if not audio_bytes:
+            raise HTTPException(status_code=404, detail="Audio generated is empty")
+
         return Response(content=audio_bytes, media_type="audio/wav")
     except HTTPException:
         raise
