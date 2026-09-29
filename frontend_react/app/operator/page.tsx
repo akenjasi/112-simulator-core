@@ -112,47 +112,10 @@ function OperatorContent() {
   }, [ticketId])
 
   const [isPlayingAudio, setIsPlayingAudio] = useState(false)
-  const [audioAutoplayBlocked, setAudioAutoplayBlocked] = useState(false)
+  const [isPlayingAudio, setIsPlayingAudio] = useState(false)
   const audioPlayerRef = useRef<HTMLAudioElement | null>(null)
 
-  const playTicketAudio = useCallback(() => {
-    if (!ticketId || typeof window === "undefined") return
-    try {
-      if (audioPlayerRef.current) {
-        audioPlayerRef.current.pause()
-        audioPlayerRef.current = null
-      }
-      const audioUrl = `/api/v1/tickets/${encodeURIComponent(ticketId)}/audio`
-      const audio = new Audio(audioUrl)
-      audioPlayerRef.current = audio
-
-      audio.onplay = () => {
-        setIsPlayingAudio(true)
-        setAudioAutoplayBlocked(false)
-      }
-      audio.onended = () => {
-        setIsPlayingAudio(false)
-      }
-      audio.onerror = (e) => {
-        console.warn("Audio error playing ticket audio:", e)
-        setIsPlayingAudio(false)
-      }
-
-      const p = audio.play()
-      if (p && typeof p.catch === "function") {
-        p.catch((e) => {
-          console.warn("Audio autoplay blocked by browser policy:", e)
-          setAudioAutoplayBlocked(true)
-          setIsPlayingAudio(false)
-        })
-      }
-    } catch (e) {
-      console.warn("Audio initialization error:", e)
-    }
-  }, [ticketId])
-
   useEffect(() => {
-    // DO NOT autoplay the full static ticket audio on answer.
     // The interactive TTS in useTelephony will handle dialogue audio.
     return () => {
       if (audioPlayerRef.current) {
@@ -164,21 +127,6 @@ function OperatorContent() {
     }
   }, [telephony.callStatus, ticketId])
 
-  // Resume audio on first user click if autoplay was blocked
-  useEffect(() => {
-    if (!audioAutoplayBlocked) return
-    const handleFirstInteraction = () => {
-      playTicketAudio()
-      window.removeEventListener("click", handleFirstInteraction)
-      window.removeEventListener("keydown", handleFirstInteraction)
-    }
-    window.addEventListener("click", handleFirstInteraction)
-    window.addEventListener("keydown", handleFirstInteraction)
-    return () => {
-      window.removeEventListener("click", handleFirstInteraction)
-      window.removeEventListener("keydown", handleFirstInteraction)
-    }
-  }, [audioAutoplayBlocked, playTicketAudio])
 
   // 1. Elapsed timer starting from 0s (ТЗ 57: was 16)
   // ТЗ 62: стартует только при переходе в ANSWERED!
@@ -693,7 +641,6 @@ function OperatorContent() {
         onCopyAonToProvided={handleCopyAonToProvided}
         onCopyAonToOnSite={handleCopyAonToOnSite}
         isPlayingAudio={isPlayingAudio}
-        onPlayAudio={playTicketAudio}
       />
 
       {/* Main Two-Column Workstation Grid (50 / 50 Desktop Split) */}
