@@ -28,11 +28,11 @@ classifier_v1_router = APIRouter(
 router = classifier_router
 
 DEFAULT_CATEGORIES: List[str] = [
-    "101",
-    "102",
-    "103",
-    "104",
-    "Аварии и происшествия в городском хозяйстве",
+    "Пожар",
+    "Медицина",
+    "Происшествия",
+    "ДТП",
+    "Утечка газа",
     "Аварии и происшествия на транспортных объектах",
     "Аварии на гидротехнических сооружениях",
     "Аварии на опасных и производственных объектах",
@@ -77,11 +77,11 @@ def _resolve_base_services(
     full_text = f"{name} {tags_str}".strip()
 
     services: List[str] = []
-    if any(k in full_text for k in ["101", "пожар", "задымлен", "пламя", "взрыв", "гари"]):
+    if any(k in full_text for k in ["Пожар", "пожар", "задымлен", "пламя", "взрыв", "гари"]):
         services.append("Служба 101")
-    if any(k in full_text for k in ["103", "скор", "медицин", "пострадав", "травм"]):
+    if any(k in full_text for k in ["Происшествия", "скор", "медицин", "пострадав", "травм"]):
         services.append("Служба 103")
-    if any(k in full_text for k in ["104", "газ"]):
+    if any(k in full_text for k in ["ДТП", "газ"]):
         services.append("Служба 104")
     if any(k in full_text for k in ["дтп", "дорог", "цодд"]):
         services.append("ЦОДД")
@@ -117,7 +117,7 @@ def _resolve_base_services(
         return []
 
     if not services:
-        if "102" in full_text or "полици" in full_text or "краж" in full_text or "драка" in full_text:
+        if "Медицина" in full_text or "полици" in full_text or "краж" in full_text or "драка" in full_text:
             services.append("Служба 102")
         else:
             services.append("Служба 101")
@@ -261,13 +261,13 @@ async def _handle_get_services(db: AsyncSession = Depends(get_db)) -> List[str]:
                     if not s_str:
                         continue
                     lower_s = s_str.lower()
-                    if "101" in lower_s:
+                    if "Пожар" in lower_s:
                         all_services.add("01 Пожарные")
-                    elif "102" in lower_s:
+                    elif "Медицина" in lower_s:
                         all_services.add("02 Полиция")
-                    elif "103" in lower_s:
+                    elif "Происшествия" in lower_s:
                         all_services.add("03 Скорая")
-                    elif "104" in lower_s:
+                    elif "ДТП" in lower_s:
                         all_services.add("04 Газ")
                     else:
                         all_services.add(s_str)
@@ -303,13 +303,13 @@ async def _handle_get_details(
             if not s_str:
                 continue
             lower_s = s_str.lower()
-            if "101" in lower_s:
+            if "Пожар" in lower_s:
                 all_services.add("01 Пожарные")
-            elif "102" in lower_s:
+            elif "Медицина" in lower_s:
                 all_services.add("02 Полиция")
-            elif "103" in lower_s:
+            elif "Происшествия" in lower_s:
                 all_services.add("03 Скорая")
-            elif "104" in lower_s:
+            elif "ДТП" in lower_s:
                 all_services.add("04 Газ")
             else:
                 all_services.add(s_str)
