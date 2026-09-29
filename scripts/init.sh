@@ -24,6 +24,12 @@ mkdir -p \
     /app/data/backups \
     /app/data/uploads
 
+if [ -d "/app/preseeded_tts_cache" ] && [ "$(ls -A /app/preseeded_tts_cache)" ]; then
+    echo "🎵 Copying pre-generated TTS audio files to cache..."
+    cp -rn /app/preseeded_tts_cache/* /app/data/tts_cache/ || true
+fi
+
+
 # ─── 2. Models are pre-downloaded in Dockerfile ─────────────────────────────
 echo "🤖 Models are built into the image"
 
