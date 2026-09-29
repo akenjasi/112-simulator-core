@@ -91,10 +91,9 @@ export interface LiveDashboardProps {
 
 export default function LiveDashboardPage(props: LiveDashboardProps = {}) {
   let initialId = props.sessionId || "demo"
-  if (props.params) {
-    if (typeof (props.params as any)?.then !== "function" && (props.params as { id: string })?.id) {
-      initialId = (props.params as { id: string }).id
-    }
+  if (typeof window !== "undefined") {
+    const sp = new URLSearchParams(window.location.search).get("id")
+    if (sp) initialId = sp
   }
 
   // Detect initial status from props or URL

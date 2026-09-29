@@ -425,7 +425,7 @@ export default function SessionSetupPage() {
       setSuccessMessage(`Урок успешно создан и подготовлен к запуску!`)
 
       // Redirect teacher to live lobby
-      const liveUrl = `/teacher/sessions/${lessonId}/live`
+      const liveUrl = `/teacher/sessions/live?id=${lessonId}`
       if (router && typeof router.push === "function") {
         router.push(liveUrl)
       } else if (typeof window !== "undefined") {
@@ -552,7 +552,7 @@ export default function SessionSetupPage() {
           </div>
           {createdSessionId && (
             <a
-              href={`/teacher/sessions/${createdSessionId}/live`}
+              href={`/teacher/sessions/live?id=${createdSessionId}`}
               className="inline-flex items-center justify-center text-xs font-semibold px-3 py-1.5 rounded-md bg-green-600 text-white hover:bg-green-700 transition-colors shrink-0"
             >
               Перейти в лобби урока →

@@ -1846,7 +1846,7 @@ export default function AnalyticsPage({ initialTab = "all" }: AnalyticsPageProps
                               <span>Курсанты урока ({lesson.students?.length || 0})</span>
                             </h4>
 
-                            <Link href={`/teacher/sessions/${lesson.id}/live?status=${lesson.status}`}>
+                            <Link href={`/teacher/sessions/live?id=${lesson.id}&status=${lesson.status}`}>
                               <Button variant="outline" size="sm" className="h-8 text-xs gap-1.5">
                                 <ExternalLink className="h-3.5 w-3.5" />
                                 <span>Открыть Live-дашборд урока</span>
