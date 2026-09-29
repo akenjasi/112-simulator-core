@@ -660,13 +660,14 @@ export default function AnalyticsPage({ initialTab = "all" }: AnalyticsPageProps
   const fetchLessonsHistory = useCallback(async () => {
     try {
       setIsLoadingLessons(true)
-      const res = await fetch(`/api/v1/lessons?status_filter=COMPLETED`)
+      const res = await fetch(`/api/v1/lessons`)
       if (res.ok) {
         const data = await res.json()
         if (Array.isArray(data)) {
-          setLessonsList(data)
-          if (!expandedLessonId && data.length > 0 && data[0]?.id) {
-            setExpandedLessonId(data[0].id)
+          const nonWaiting = data.filter((l: any) => l.status === "ACTIVE" || l.status === "COMPLETED")
+          setLessonsList(nonWaiting)
+          if (!expandedLessonId && nonWaiting.length > 0 && nonWaiting[0]?.id) {
+            setExpandedLessonId(nonWaiting[0].id)
           }
         }
       }
