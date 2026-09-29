@@ -160,6 +160,8 @@ export default function LiveDashboardPage(props: LiveDashboardProps = {}) {
   // Fetch stats from API with fallback
   const fetchStats = useCallback(
     async (isInitial = false) => {
+      // Don't fetch if sessionId is not yet resolved from URL
+      if (!sessionId) return
       try {
         if (isInitial) setIsLoading(true)
         setError(null)
