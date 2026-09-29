@@ -108,7 +108,17 @@ export default function LiveDashboardPage(props: LiveDashboardProps = {}) {
   }
 
   const [sessionId, setSessionId] = useState<string>(initialId)
-  const [initialStatusHint] = useState<string>(getInitialStatus())
+  const [initialStatusHint, setInitialStatusHint] = useState<string>(getInitialStatus())
+
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      const sp = new URLSearchParams(window.location.search)
+      const id = sp.get("id")
+      const status = sp.get("status")
+      if (id && id !== sessionId) setSessionId(id)
+      if (status && status.toUpperCase() !== initialStatusHint) setInitialStatusHint(status.toUpperCase())
+    }
+  }, [])
   const [stats, setStats] = useState<SessionStats | null>(() => {
     if (initialId === "sess-101") {
       return {
