@@ -236,8 +236,8 @@ async def generate_tickets_background_task(
     processed = 0
     try:
         faker = FakeDataGenerator()
-        tickets_with_sub = []
         import random
+        from sqlalchemy import text
 
         for _ in range(count):
             cur_cat = category
@@ -251,86 +251,79 @@ async def generate_tickets_background_task(
             classifier_row = resolve_classifier_row(category=cur_cat, subcategory=cur_sub)
             ticket_sub = classifier_row.incident_name
             generated_list = await asyncio.to_thread(generate_tickets, classifier_row=classifier_row, count=1, faker=faker)
+            
             for t in generated_list:
-                tickets_with_sub.append((t, cur_cat, ticket_sub))
+                # 1. GENERATE AUDIO FIRST!
+                try:
+                    matrix = await asyncio.to_thread(compile_ticket, t)
+                    for brick in matrix.bricks:
+                        if brick.text:
+                            try:
+                                await asyncio.to_thread(tts_engine_v2.synthesize, brick.text)
+                            except Exception as e:
+                                logger.warning("TTS synthesize error for text '%s': %s", brick.text[:30], e)
+                    # Cache preview audio
+                    await asyncio.to_thread(_generate_preview_audio_for_ticket, t.plot or "", t.ground_truth or {})
+                except Exception as e:
+                    logger.warning("Error compiling bricks for ticket %s: %s", t.ticket_id, e)
+                
+                # 2. SAVE TO DB (Only after audio is ready!)
+                async with AsyncSessionLocal() as session:
+                    await session.execute(
+                        text("CREATE TABLE IF NOT EXISTS sys_sequences (name VARCHAR PRIMARY KEY, last_val INTEGER NOT NULL DEFAULT 0)")
+                    )
+                    try:
+                        await session.execute(
+                            text("INSERT INTO sys_sequences (name, last_val) VALUES ('generated_tickets', 0) ON CONFLICT (name) DO NOTHING")
+                        )
+                    except Exception:
+                        await session.execute(
+                            text("INSERT OR IGNORE INTO sys_sequences (name, last_val) VALUES ('generated_tickets', 0)")
+                        )
+                    await session.commit()
 
-        # 1. Save to DB
-        from sqlalchemy import text
-        async with AsyncSessionLocal() as session:
-            # Ensure sys_sequences exists and has default row
-            await session.execute(
-                text("CREATE TABLE IF NOT EXISTS sys_sequences (name VARCHAR PRIMARY KEY, last_val INTEGER NOT NULL DEFAULT 0)")
-            )
-            try:
-                await session.execute(
-                    text("INSERT INTO sys_sequences (name, last_val) VALUES ('generated_tickets', 0) ON CONFLICT (name) DO NOTHING")
-                )
-            except Exception:
-                await session.execute(
-                    text("INSERT OR IGNORE INTO sys_sequences (name, last_val) VALUES ('generated_tickets', 0)")
-                )
-            await session.commit()
+                    seq_res = await session.execute(text("SELECT last_val FROM sys_sequences WHERE name='generated_tickets'"))
+                    current_seq = seq_res.scalar() or 0
+                    current_seq += 1
 
-            # Get persistent sequence
-            seq_res = await session.execute(text("SELECT last_val FROM sys_sequences WHERE name='generated_tickets'"))
-            current_seq = seq_res.scalar() or 0
+                    gen_ticket = GeneratedTicket(
+                        id=t.ticket_id,
+                        category=cur_cat,
+                        subcategory=ticket_sub,
+                        complexity=t.complexity,
+                        plot=t.plot,
+                        factoids=t.factoids,
+                        ground_truth=t.ground_truth,
+                        etalon_services=t.etalon_services,
+                        sequence_number=current_seq,
+                    )
+                    session.add(gen_ticket)
 
-            for t, cur_cat, cur_sub in tickets_with_sub:
-                current_seq += 1
-                gen_ticket = GeneratedTicket(
-                    id=t.ticket_id,
-                    category=cur_cat,
-                    subcategory=cur_sub,
-                    complexity=t.complexity,
-                    plot=t.plot,
-                    factoids=t.factoids,
-                    ground_truth=t.ground_truth,
-                    etalon_services=t.etalon_services,
-                    sequence_number=current_seq,
-                )
-                session.add(gen_ticket)
+                    scenario_ticket = ScenarioTicket(
+                        scenario_id=t.ticket_id,
+                        settings={
+                            "complexity": t.complexity,
+                            "etalon_services": t.etalon_services,
+                            "plot": t.plot,
+                            "category": cur_cat,
+                            "subcategory": ticket_sub,
+                            "sequence_number": current_seq,
+                        },
+                        ground_truth=t.ground_truth,
+                        ai_content={
+                            "factoids": t.factoids,
+                            "plot": t.plot,
+                        },
+                        workflow_state={"status": "active"},
+                    )
+                    session.add(scenario_ticket)
 
-                scenario_ticket = ScenarioTicket(
-                    scenario_id=t.ticket_id,
-                    settings={
-                        "complexity": t.complexity,
-                        "etalon_services": t.etalon_services,
-                        "plot": t.plot,
-                        "category": cur_cat,
-                        "subcategory": cur_sub,
-                        "sequence_number": current_seq,
-                    },
-                    ground_truth=t.ground_truth,
-                    ai_content={
-                        "factoids": t.factoids,
-                        "plot": t.plot,
-                    },
-                    workflow_state={"status": "active"},
-                )
-                session.add(scenario_ticket)
+                    await session.execute(
+                        text("UPDATE sys_sequences SET last_val = :val WHERE name = 'generated_tickets'"),
+                        {"val": current_seq}
+                    )
+                    await session.commit()
 
-            # Update persistent sequence
-            await session.execute(
-                text("UPDATE sys_sequences SET last_val = :val WHERE name = 'generated_tickets'"),
-                {"val": current_seq}
-            )
-            await session.commit()
-
-        # 2. Compile BricksMatrix and cache audio via TTS
-        for t, _, _ in tickets_with_sub:
-            try:
-                matrix = await asyncio.to_thread(compile_ticket, t)
-                for brick in matrix.bricks:
-                    if brick.text:
-                        try:
-                            await asyncio.to_thread(tts_engine_v2.synthesize, brick.text)
-                        except Exception as e:
-                            logger.warning("TTS synthesize error for text '%s': %s", brick.text[:30], e)
-                # Cache preview audio
-                await asyncio.to_thread(_generate_preview_audio_for_ticket, t.plot or "", t.ground_truth or {})
-            except Exception as e:
-                logger.warning("Error compiling bricks for ticket %s: %s", t.ticket_id, e)
-            finally:
                 processed += 1
                 active_generations = max(0, active_generations - 1)
 
@@ -340,8 +333,7 @@ async def generate_tickets_background_task(
         logger.error("Error in generate_tickets_background_task: %s", e, exc_info=True)
     finally:
         remaining_to_deduct = count - processed
-        if remaining_to_deduct > 0:
-            active_generations = max(0, active_generations - remaining_to_deduct)
+        active_generations = max(0, active_generations - remaining_to_deduct)
 
 
 
