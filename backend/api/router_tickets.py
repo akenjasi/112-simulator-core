@@ -250,7 +250,7 @@ async def generate_tickets_background_task(
                 
             classifier_row = resolve_classifier_row(category=cur_cat, subcategory=cur_sub)
             ticket_sub = classifier_row.incident_name
-            generated_list = generate_tickets(classifier_row=classifier_row, count=1, faker=faker)
+            generated_list = await asyncio.to_thread(generate_tickets, classifier_row=classifier_row, count=1, faker=faker)
             for t in generated_list:
                 tickets_with_sub.append((t, cur_cat, ticket_sub))
 
@@ -319,13 +319,15 @@ async def generate_tickets_background_task(
         # 2. Compile BricksMatrix and cache audio via TTS
         for t, _, _ in tickets_with_sub:
             try:
-                matrix = compile_ticket(t)
+                matrix = await asyncio.to_thread(compile_ticket, t)
                 for brick in matrix.bricks:
                     if brick.text:
                         try:
-                            tts_engine_v2.synthesize(brick.text)
+                            await asyncio.to_thread(tts_engine_v2.synthesize, brick.text)
                         except Exception as e:
                             logger.warning("TTS synthesize error for text '%s': %s", brick.text[:30], e)
+                # Cache preview audio
+                await asyncio.to_thread(_generate_preview_audio_for_ticket, t.plot or "", t.ground_truth or {})
             except Exception as e:
                 logger.warning("Error compiling bricks for ticket %s: %s", t.ticket_id, e)
             finally:
@@ -899,6 +901,46 @@ async def upload_tickets_import(
 @api_tickets_router.get("/{ticket_id}/audio/", include_in_schema=False)
 @tickets_router.get("/{ticket_id}/audio")
 @tickets_router.get("/{ticket_id}/audio/", include_in_schema=False)
+
+def _generate_preview_audio_for_ticket(plot: str, gt: dict):
+    from backend.core.text_normalization import expand_address_for_tts, format_phone_for_tts
+    from backend.core.tts_v2 import tts_engine_v2
+    if not isinstance(gt, dict):
+        gt = {}
+    speaker = gt.get("speaker", "aidar")
+    texts = []
+    if plot: texts.append(str(plot))
+    if gt.get("fio"): texts.append(str(gt["fio"]))
+    if gt.get("phone"): texts.append("номер " + format_phone_for_tts(str(gt["phone"])))
+    address_parts = []
+    def clean_val(k):
+        v = gt.get(k)
+        if v is None or str(v).lower().strip() in ['none', 'null', '0', '-', '']: return ""
+        return str(v).strip()
+    street = clean_val("street")
+    if street:
+        if not any(m in street.lower() for m in ['ул.', 'улица', 'ш.', 'шоссе', 'пр-кт', 'проспект', 'пер.', 'переулок', 'бульвар', 'б-р']):
+            address_parts.append(f"ул. {street}")
+        else: address_parts.append(street)
+    house = clean_val("house")
+    if house:
+        if not any(m in house.lower() for m in ['д.', 'дом', 'стр', 'строение', 'корп', 'корпус', 'влад']):
+            address_parts.append(f"д. {house}")
+        else: address_parts.append(house)
+    entrance = clean_val("entrance")
+    if entrance: address_parts.append(f"под. {entrance}")
+    floor = clean_val("floor")
+    if floor: address_parts.append(f"эт. {floor}")
+    apartment = clean_val("apartment")
+    if apartment:
+        if not any(m in apartment.lower() for m in ['кв', 'квартира', 'комн']): address_parts.append(f"кв. {apartment}")
+        else: address_parts.append(apartment)
+    intercom = clean_val("intercom")
+    if intercom: address_parts.append(f"домофон {intercom}")
+    if address_parts:
+        texts.append(expand_address_for_tts(", ".join(address_parts)))
+    return tts_engine_v2.concatenate_tts(texts, speaker=speaker)
+
 async def get_ticket_audio(
     ticket_id: str,
     db: AsyncSession = Depends(get_db),
@@ -920,64 +962,7 @@ async def get_ticket_audio(
             plot = settings.get("plot") or ai.get("plot", "")
             gt = scenario_ticket.ground_truth or {}
 
-        if not isinstance(gt, dict):
-            gt = {}
-
-        speaker = gt.get("speaker", "aidar")
-        texts: List[str] = []
-        if plot:
-            texts.append(str(plot))
-        if gt.get("fio"):
-            texts.append(str(gt["fio"]))
-        if gt.get("phone"):
-            texts.append("номер " + format_phone_for_tts(str(gt["phone"])))
-
-        address_parts = []
-        
-        def clean_val(k):
-            v = gt.get(k)
-            if v is None or str(v).lower().strip() in ['none', 'null', '0', '-', '']:
-                return ""
-            return str(v).strip()
-
-        street = clean_val("street")
-        if street:
-            if not any(m in street.lower() for m in ['ул.', 'улица', 'ш.', 'шоссе', 'пр-кт', 'проспект', 'пер.', 'переулок', 'бульвар', 'б-р']):
-                address_parts.append(f"ул. {street}")
-            else:
-                address_parts.append(street)
-                
-        house = clean_val("house")
-        if house:
-            if not any(m in house.lower() for m in ['д.', 'дом', 'стр', 'строение', 'корп', 'корпус', 'влад']):
-                address_parts.append(f"д. {house}")
-            else:
-                address_parts.append(house)
-                
-        entrance = clean_val("entrance")
-        if entrance:
-            address_parts.append(f"под. {entrance}")
-            
-        floor = clean_val("floor")
-        if floor:
-            address_parts.append(f"эт. {floor}")
-            
-        apartment = clean_val("apartment")
-        if apartment:
-            if not any(m in apartment.lower() for m in ['кв', 'квартира', 'комн']):
-                address_parts.append(f"кв. {apartment}")
-            else:
-                address_parts.append(apartment)
-                
-        intercom = clean_val("intercom")
-        if intercom:
-            address_parts.append(f"домофон {intercom}")
-            
-        if address_parts:
-            # expand_address_for_tts will expand 'ул.', 'д.', 'под.', 'эт.', 'кв.' to words and normalize numbers
-            texts.append(expand_address_for_tts(", ".join(address_parts)))
-
-        audio_bytes = await asyncio.to_thread(tts_engine_v2.concatenate_tts, texts, speaker)
+        audio_bytes = await asyncio.to_thread(_generate_preview_audio_for_ticket, plot, gt)
         return Response(content=audio_bytes, media_type="audio/wav")
     except HTTPException:
         raise
