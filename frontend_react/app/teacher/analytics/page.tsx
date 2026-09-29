@@ -665,9 +665,7 @@ export default function AnalyticsPage({ initialTab = "all" }: AnalyticsPageProps
         const data = await res.json()
         if (Array.isArray(data)) {
           setLessonsList(data)
-          if (!expandedLessonId && data.length > 0 && data[0]?.id) {
-            setExpandedLessonId(data[0].id)
-          }
+          
         }
       }
     } catch (err) {
@@ -675,7 +673,7 @@ export default function AnalyticsPage({ initialTab = "all" }: AnalyticsPageProps
     } finally {
       setIsLoadingLessons(false)
     }
-  }, [expandedLessonId])
+  }, [])
 
   useEffect(() => {
     fetchSessionAnalytics(sessionId)
