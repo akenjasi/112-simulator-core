@@ -897,11 +897,6 @@ async def upload_tickets_import(
     }
 
 
-@api_tickets_router.get("/{ticket_id}/audio")
-@api_tickets_router.get("/{ticket_id}/audio/", include_in_schema=False)
-@tickets_router.get("/{ticket_id}/audio")
-@tickets_router.get("/{ticket_id}/audio/", include_in_schema=False)
-
 def _generate_preview_audio_for_ticket(plot: str, gt: dict):
     from backend.core.text_normalization import expand_address_for_tts, format_phone_for_tts
     from backend.core.tts_v2 import tts_engine_v2
@@ -941,6 +936,10 @@ def _generate_preview_audio_for_ticket(plot: str, gt: dict):
         texts.append(expand_address_for_tts(", ".join(address_parts)))
     return tts_engine_v2.concatenate_tts(texts, speaker=speaker)
 
+@api_tickets_router.get("/{ticket_id}/audio")
+@api_tickets_router.get("/{ticket_id}/audio/", include_in_schema=False)
+@tickets_router.get("/{ticket_id}/audio")
+@tickets_router.get("/{ticket_id}/audio/", include_in_schema=False)
 async def get_ticket_audio(
     ticket_id: str,
     db: AsyncSession = Depends(get_db),
