@@ -892,11 +892,19 @@ async def upload_tickets_import(
 def _generate_preview_audio_for_ticket(plot: str, gt: dict):
     from backend.core.text_normalization import expand_address_for_tts, format_phone_for_tts
     from backend.core.tts_v2 import tts_engine_v2
+    import hashlib
+    import re
     if not isinstance(gt, dict):
         gt = {}
-    speaker = gt.get("speaker", "aidar")
+    speaker = gt.get("speaker")
+    if not speaker:
+        speakers = ["aidar", "baya", "kseniya", "xenia", "eugene"]
+        speaker = speakers[hash(plot) % len(speakers)] if plot else "aidar"
+
     texts = []
-    if plot: texts.append(str(plot))
+    if plot:
+        clean_plot = re.sub(r"\b112\b", "сто двенадцать", str(plot))
+        texts.append(clean_plot)
     if gt.get("fio"): texts.append(str(gt["fio"]))
     if gt.get("phone"): texts.append("номер " + format_phone_for_tts(str(gt["phone"])))
     address_parts = []
