@@ -59,6 +59,8 @@ type Props = {
   onProviderInfo?: () => void
   onCopyAonToProvided?: () => void
   onCopyAonToOnSite?: () => void
+  isPlayingAudio?: boolean
+  onPlayAudio?: () => void
 }
 
 export function OperatorTopBar({
@@ -78,6 +80,8 @@ export function OperatorTopBar({
   onProviderInfo,
   onCopyAonToProvided,
   onCopyAonToOnSite,
+  isPlayingAudio = false,
+  onPlayAudio,
 }: Props) {
   const pad = (n: number) => String(n).padStart(2, "0")
   const mins = pad(Math.floor(elapsedSeconds / 60))
@@ -109,10 +113,26 @@ export function OperatorTopBar({
             Входящий звонок (гудки...)
           </span>
         ) : callStatus === "ANSWERED" ? (
-          <span className="text-[12px] leading-tight font-medium text-emerald-700 flex items-center gap-1.5 whitespace-nowrap">
-            <span className="h-2 w-2 rounded-full bg-emerald-500" />
-            В эфире (линия занята)
-          </span>
+          <div className="flex items-center gap-1.5 flex-wrap">
+            <span className="text-[12px] leading-tight font-medium text-emerald-700 flex items-center gap-1.5 whitespace-nowrap">
+              <span className="h-2 w-2 rounded-full bg-emerald-500" />
+              В эфире
+            </span>
+            {onPlayAudio && (
+              <button
+                type="button"
+                onClick={onPlayAudio}
+                title={isPlayingAudio ? "Заявитель говорит (нажмите для повтора)" : "Воспроизвести речь заявителя"}
+                className={`text-[10px] px-1.5 py-0.5 rounded font-medium flex items-center gap-1 transition-all cursor-pointer active:scale-95 whitespace-nowrap ${
+                  isPlayingAudio
+                    ? "bg-emerald-100 text-emerald-800 border border-emerald-300 animate-pulse"
+                    : "bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-300"
+                }`}
+              >
+                <span>{isPlayingAudio ? "🔊 Говорит заявитель..." : "▶ Речь заявителя"}</span>
+              </button>
+            )}
+          </div>
         ) : callStatus === "HANGUP" ? (
           <span className="text-[12px] leading-tight font-medium text-gray-500 flex items-center gap-1.5 whitespace-nowrap">
             <span className="h-2 w-2 rounded-full bg-gray-400" />

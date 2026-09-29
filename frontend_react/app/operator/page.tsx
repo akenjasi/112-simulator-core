@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, Suspense } from "react"
+import { useState, useEffect, useRef, useCallback, Suspense } from "react"
 import { useSearchParams, useRouter } from "next/navigation"
 import Link from "next/link"
 import { OperatorTopBar } from "@/components/operator/top-bar"
@@ -74,30 +74,112 @@ function OperatorContent() {
   // even if same ticketId is reused across sessions
   const storageKey = `operator_state_${sessionId || ticketId || "demo"}`
 
-  // Load real ticket data directly from /api/v1/tickets/{ticket_id}
+  // Load real ticket data and play real audio from backend
   useEffect(() => {
-    if (!ticketId) return
-    fetch(`/api/v1/tickets/${ticketId}`)
-      .then(res => res.json())
-      .then((ticket: any) => {
-        const gt = ticket?.ground_truth || ticket?.settings?.ground_truth || null
-        if (!gt) return
-        // Always overwrite from ticket — this is the source of truth
-        if (gt.fio) setCallerName(gt.fio)
-        if (gt.phone) {
-          setAonPhone(gt.phone)
-          setProvidedPhone(gt.phone)
-          setOnSitePhone(gt.phone)
-        }
-        if (gt.caller_status) setCallerStatus(gt.caller_status)
-        if (gt.street) {
-          setAddress(prev => ({ ...prev, street: gt.street, house: gt.house || "" }))
-          setFullAddressString(`${gt.street} ${gt.house || ""}`.trim())
-        }
-      })
-      .catch(err => console.error("Failed to load ticket data:", err))
+    if (ticketId) {
+      fetch(`/api/v1/tickets/${encodeURIComponent(ticketId)}`)
+        .then((res) => (res.ok ? res.json() : null))
+        .then((ticket) => {
+          if (!ticket) {
+            return fetch(`/api/v1/tickets`)
+              .then((res) => res.json())
+              .then((data) =>
+                Array.isArray(data)
+                  ? data.find((t) => t.id === ticketId || t.ticket_id === ticketId)
+                  : null
+              )
+          }
+          return ticket
+        })
+        .then((ticket) => {
+          if (ticket && ticket.ground_truth) {
+            const gt = ticket.ground_truth
+            if (gt.fio) setCallerName(gt.fio)
+            if (gt.phone) {
+              setAonPhone(gt.phone)
+              setProvidedPhone(gt.phone)
+              setOnSitePhone(gt.phone)
+            }
+            if (gt.caller_status) setCallerStatus(gt.caller_status)
+            if (gt.street) {
+              setAddress((prev) => ({ ...prev, street: gt.street, house: gt.house || "" }))
+              setFullAddressString(`${gt.street} ${gt.house || ""}`.trim())
+            }
+          }
+        })
+        .catch((err) => console.error("Failed to load real ticket data:", err))
+    }
   }, [ticketId])
 
+  const [isPlayingAudio, setIsPlayingAudio] = useState(false)
+  const [audioAutoplayBlocked, setAudioAutoplayBlocked] = useState(false)
+  const audioPlayerRef = useRef<HTMLAudioElement | null>(null)
+
+  const playTicketAudio = useCallback(() => {
+    if (!ticketId || typeof window === "undefined") return
+    try {
+      if (audioPlayerRef.current) {
+        audioPlayerRef.current.pause()
+        audioPlayerRef.current = null
+      }
+      const audioUrl = `/api/v1/tickets/${encodeURIComponent(ticketId)}/audio`
+      const audio = new Audio(audioUrl)
+      audioPlayerRef.current = audio
+
+      audio.onplay = () => {
+        setIsPlayingAudio(true)
+        setAudioAutoplayBlocked(false)
+      }
+      audio.onended = () => {
+        setIsPlayingAudio(false)
+      }
+      audio.onerror = (e) => {
+        console.warn("Audio error playing ticket audio:", e)
+        setIsPlayingAudio(false)
+      }
+
+      const p = audio.play()
+      if (p && typeof p.catch === "function") {
+        p.catch((e) => {
+          console.warn("Audio autoplay blocked by browser policy:", e)
+          setAudioAutoplayBlocked(true)
+          setIsPlayingAudio(false)
+        })
+      }
+    } catch (e) {
+      console.warn("Audio initialization error:", e)
+    }
+  }, [ticketId])
+
+  useEffect(() => {
+    if (telephony.callStatus === "ANSWERED" && ticketId) {
+      playTicketAudio()
+    }
+    return () => {
+      if (audioPlayerRef.current) {
+        audioPlayerRef.current.pause()
+        audioPlayerRef.current.src = ""
+        audioPlayerRef.current = null
+        setIsPlayingAudio(false)
+      }
+    }
+  }, [telephony.callStatus, ticketId, playTicketAudio])
+
+  // Resume audio on first user click if autoplay was blocked
+  useEffect(() => {
+    if (!audioAutoplayBlocked) return
+    const handleFirstInteraction = () => {
+      playTicketAudio()
+      window.removeEventListener("click", handleFirstInteraction)
+      window.removeEventListener("keydown", handleFirstInteraction)
+    }
+    window.addEventListener("click", handleFirstInteraction)
+    window.addEventListener("keydown", handleFirstInteraction)
+    return () => {
+      window.removeEventListener("click", handleFirstInteraction)
+      window.removeEventListener("keydown", handleFirstInteraction)
+    }
+  }, [audioAutoplayBlocked, playTicketAudio])
 
   // 1. Elapsed timer starting from 0s (ТЗ 57: was 16)
   // ТЗ 62: стартует только при переходе в ANSWERED!
@@ -611,6 +693,8 @@ function OperatorContent() {
         onProviderInfo={() => showToast("Оператор связи: ПАО «МТС», коммутатор г. Москвы, СОРМ-3")}
         onCopyAonToProvided={handleCopyAonToProvided}
         onCopyAonToOnSite={handleCopyAonToOnSite}
+        isPlayingAudio={isPlayingAudio}
+        onPlayAudio={playTicketAudio}
       />
 
       {/* Main Two-Column Workstation Grid (50 / 50 Desktop Split) */}

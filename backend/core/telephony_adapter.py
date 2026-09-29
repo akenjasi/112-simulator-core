@@ -1,4 +1,5 @@
 import os
+import socket
 import logging
 import asyncio
 from typing import Optional
@@ -12,17 +13,22 @@ class TelephonyAdapter:
         self.port = int(os.getenv("ASTERISK_PORT", "5038"))
         self.login = os.getenv("ASTERISK_LOGIN", "admin")
         self.password = os.getenv("ASTERISK_PASSWORD", "secret")
+        self.enabled = os.getenv("ENABLE_ASTERISK", "auto").lower()
         
-        self.manager = Manager(
-            host=self.host,
-            port=self.port,
-            username=self.login,
-            secret=self.password,
-            ping_delay=10
-        )
+        self.manager: Optional[Manager] = None
         self.connected = False
         self._pending_answers = {}
-        self.manager.register_event('Newstate', self._on_newstate)
+        self._checked_reachability = False
+        self._is_reachable = False
+
+    def _probe_asterisk(self) -> bool:
+        if self.enabled in ("false", "0", "no"):
+            return False
+        try:
+            with socket.create_connection((self.host, self.port), timeout=0.3):
+                return True
+        except (OSError, socket.error):
+            return False
 
     async def _on_newstate(self, manager, message):
         state = message.get('ChannelStateDesc')
@@ -49,7 +55,27 @@ class TelephonyAdapter:
             self._pending_answers.pop(endpoint, None)
 
     async def connect(self):
+        if not self._checked_reachability:
+            self._is_reachable = self._probe_asterisk()
+            self._checked_reachability = True
+            if not self._is_reachable:
+                logger.info(f"Asterisk AMI not reachable at {self.host}:{self.port}. Running telephony in standalone simulator mode.")
+                return
+
+        if not self._is_reachable:
+            return
+
         try:
+            if self.manager is None:
+                self.manager = Manager(
+                    host=self.host,
+                    port=self.port,
+                    username=self.login,
+                    secret=self.password,
+                    ping_delay=10
+                )
+                self.manager.register_event('Newstate', self._on_newstate)
+
             await asyncio.wait_for(self.manager.connect(), timeout=5.0)
             self.connected = True
             logger.info(f"Connected to Asterisk AMI at {self.host}:{self.port}")

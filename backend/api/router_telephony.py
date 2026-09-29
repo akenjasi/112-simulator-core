@@ -230,10 +230,14 @@ async def start_call(
         call_id=call_id,
     )
 
-    # Skip wait_for_answer — Asterisk is optional in simulator mode.
-    # Transition immediately to ANSWERED (mock / dev / no-PBX environment).
-    logger.info("Skipping Asterisk wait_for_answer — transitioning directly to ANSWERED (simulator mode)")
-
+    # 2. Wait for answer event from Asterisk
+    if telephony_adapter.connected:
+        answered = await telephony_adapter.wait_for_answer(req.operator_ext, timeout=30.0)
+        if not answered:
+            logger.warning(f"Asterisk wait_for_answer timeout or failed for endpoint {req.operator_ext}, using fallback ANSWERED")
+    else:
+        # Standalone / simulator mode: smooth 0.5s ringing cadence before answering
+        await asyncio.sleep(0.5)
     # 3. State: ANSWERED
     telephony_manager.set_state(session_key, {
         "call_id": call_id,
