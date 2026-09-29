@@ -36,13 +36,6 @@ class SingleStudentAddRequest(BaseModel):
     id: Optional[str] = None
     username: Optional[str] = None
 
-    @field_validator("email")
-    @classmethod
-    def validate_email(cls, v: Optional[str]) -> Optional[str]:
-        if v is not None and v != "":
-            if not EMAIL_REGEX.match(v):
-                raise ValueError(f"Invalid email address: {v}")
-        return v
 
 
 
