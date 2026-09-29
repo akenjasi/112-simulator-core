@@ -109,7 +109,7 @@ async def _build_cadet_stats(
             # 1. Process explicit TicketResult items
             for tr in trs:
                 t_id = tr.ticket_id or tr.result_id
-                title = scenario_map.get(t_id, f"Билет #{t_id[:8] if len(t_id) > 8 else t_id}")
+                title = scenario_map.get(t_id) or f"Билет #{t_id[:8] if len(t_id) > 8 else t_id}"
                 errors = []
                 if isinstance(tr.error_details, list):
                     for err in tr.error_details:
@@ -151,7 +151,7 @@ async def _build_cadet_stats(
                 if any(t.ticket_id == t_id for t in cadet_tickets):
                     continue
 
-                title = scenario_map.get(t_id, f"Карточка #{t_id[:8] if len(t_id) > 8 else t_id}")
+                title = scenario_map.get(t_id) or f"Карточка #{t_id[:8] if len(t_id) > 8 else t_id}"
                 ev_errors = []
                 if ev.errors_list:
                     for err in ev.errors_list:
