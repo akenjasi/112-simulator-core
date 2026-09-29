@@ -497,10 +497,9 @@ export interface AnalyticsPageProps {
 
 export default function AnalyticsPage({ initialTab = "all" }: AnalyticsPageProps = {}) {
   const [activeTab, setActiveTab] = useState<"history" | "split" | "all" | "ai_report" | "charts">(initialTab)
-  const [sessionId, setSessionId] = useState<string>("session-1")
+  const [sessionId, setSessionId] = useState<string>("")
   const [sessionData, setSessionData] = useState<SessionData>({ session_id: "", title: "", created_at: "", cadets: [] })
-  const [selectedRecord, setSelectedRecord] = useState<RecordDetail | null>(
-    DEFAULT_SESSION_DATA.cadets[0]?.records[0] as unknown as RecordDetail
+  const [selectedRecord, setSelectedRecord] = useState<RecordDetail | null>(null)
   )
   const [isLoadingSession, setIsLoadingSession] = useState<boolean>(false)
   const [isLoadingRecord, setIsLoadingRecord] = useState<boolean>(false)
@@ -518,7 +517,6 @@ export default function AnalyticsPage({ initialTab = "all" }: AnalyticsPageProps
   const [isLoadingLessons, setIsLoadingLessons] = useState<boolean>(false)
   const [expandedLessonId, setExpandedLessonId] = useState<string | null>("lesson-demo-1")
   const [historySearchQuery, setHistorySearchQuery] = useState<string>("")
-  const [availableGroups, setAvailableGroups] = useState<{ id: string; name: string }[]>([])
   const [selectedGroupId, setSelectedGroupId] = useState<string>("ALL")
   const [expandedCadetId, setExpandedCadetId] = useState<string | null>(null)
   const [editingNotesId, setEditingNotesId] = useState<string | null>(null)
@@ -658,37 +656,17 @@ export default function AnalyticsPage({ initialTab = "all" }: AnalyticsPageProps
   }, [])
 
   // Fetch available groups for filter
-  const fetchGroups = useCallback(async () => {
-    try {
-      const res = await fetch("/api/v1/groups")
-      if (res.ok) {
-        const data = await res.json()
-        if (Array.isArray(data)) {
-          setAvailableGroups(
-            data.map((g: any) => ({
-              id: g.group_id || g.id,
-              name: g.group_name || g.name || "Группа",
-            }))
-          )
-        }
-      }
-    } catch (err) {
-      console.warn("Could not load groups from API:", err)
-    }
-  }, [])
 
   // Fetch lesson history (optionally with group_id filter)
-  const fetchLessonsHistory = useCallback(async (groupId?: string) => {
+  const fetchLessonsHistory = useCallback(async () => {
     try {
       setIsLoadingLessons(true)
-      const targetGroup = groupId !== undefined ? groupId : selectedGroupId
-      const queryParam = targetGroup && targetGroup !== "ALL" ? `?group_id=${encodeURIComponent(targetGroup)}` : ""
-      const res = await fetch(`/api/v1/lessons${queryParam}`)
+      const res = await fetch(`/api/v1/lessons?status_filter=COMPLETED`)
       if (res.ok) {
         const data = await res.json()
         if (Array.isArray(data)) {
           setLessonsList(data)
-          if (!expandedLessonId && data[0]?.id) {
+          if (!expandedLessonId && data.length > 0 && data[0]?.id) {
             setExpandedLessonId(data[0].id)
           }
         }
@@ -698,13 +676,12 @@ export default function AnalyticsPage({ initialTab = "all" }: AnalyticsPageProps
     } finally {
       setIsLoadingLessons(false)
     }
-  }, [expandedLessonId, selectedGroupId])
+  }, [expandedLessonId])
 
   useEffect(() => {
     fetchSessionAnalytics(sessionId)
     fetchLessonsHistory()
-    fetchGroups()
-  }, [fetchSessionAnalytics, fetchLessonsHistory, fetchGroups, sessionId])
+  }, [fetchSessionAnalytics, fetchLessonsHistory,  sessionId])
 
   // Save updated teacher notes for a lesson
   const handleSaveLessonNotes = async (lessonId: string) => {
@@ -953,16 +930,13 @@ export default function AnalyticsPage({ initialTab = "all" }: AnalyticsPageProps
 
   const allGroupOptions = React.useMemo(() => {
     const map = new Map<string, string>()
-    availableGroups.forEach((g) => {
-      if (g.id) map.set(g.id, g.name)
-    })
     lessonsList.forEach((l) => {
       if (l.group_id) {
         map.set(l.group_id, l.group_name || `Группа ${l.group_id.slice(0, 6)}`)
       }
     })
     return Array.from(map.entries()).map(([id, name]) => ({ id, name }))
-  }, [availableGroups, lessonsList])
+  }, [lessonsList])
 
   const filteredCadets = sessionData.cadets.filter((c) =>
     c.cadet_name.toLowerCase().includes(searchQuery.toLowerCase())
@@ -1121,12 +1095,12 @@ export default function AnalyticsPage({ initialTab = "all" }: AnalyticsPageProps
                   data-testid="filter-charts-group"
                 >
                   <option value="ALL">Все группы</option>
-                  {availableGroups.map((g) => (
+                  {allGroupOptions.map((g) => (
                     <option key={g.id} value={g.id}>
                       {g.name}
                     </option>
                   ))}
-                  {availableGroups.length === 0 && (
+                  {allGroupOptions.length === 0 && (
                     <>
                       <option value="grp-1">Группа 101-П</option>
                       <option value="grp-2">Группа 102-П</option>
@@ -1603,7 +1577,7 @@ export default function AnalyticsPage({ initialTab = "all" }: AnalyticsPageProps
                   value={selectedGroupId}
                   onChange={(e) => {
                     setSelectedGroupId(e.target.value)
-                    fetchLessonsHistory(e.target.value)
+                    
                   }}
                   className="h-9 rounded-md border border-input bg-background px-3 py-1 text-sm shadow-xs focus:outline-none focus:ring-1 focus:ring-ring"
                 >
@@ -2284,7 +2258,7 @@ export default function AnalyticsPage({ initialTab = "all" }: AnalyticsPageProps
                   className="h-9 px-3 rounded-lg border bg-background text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-primary/40 cursor-pointer"
                 >
                   <option value="" disabled>Выберите группу</option>
-                  {availableGroups.map((g) => (
+                  {allGroupOptions.map((g) => (
                     <option key={g.id} value={g.id}>
                       {g.name}
                     </option>
