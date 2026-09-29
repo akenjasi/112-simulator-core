@@ -39,7 +39,7 @@ export LD_LIBRARY_PATH="/app/backend/bin:${LD_LIBRARY_PATH:-}"
 # ─── 4. Run Seed Script ────────────────────────────────────────────────────────
 echo ""
 echo "🌱 Running database seeder..."
-python3 -m scripts.seed || echo "⚠️  Seeder returned an error, but continuing..."
+# python3 -m scripts.seed || echo "⚠️  Seeder returned an error, but continuing..."
 
 # ─── 5. Start uvicorn ────────────────────────────────────────────────────────
 echo ""
