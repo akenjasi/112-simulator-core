@@ -112,7 +112,6 @@ function OperatorContent() {
   }, [ticketId])
 
   const [isPlayingAudio, setIsPlayingAudio] = useState(false)
-  const [isPlayingAudio, setIsPlayingAudio] = useState(false)
   const audioPlayerRef = useRef<HTMLAudioElement | null>(null)
 
   useEffect(() => {
