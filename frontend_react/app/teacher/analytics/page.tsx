@@ -500,7 +500,6 @@ export default function AnalyticsPage({ initialTab = "all" }: AnalyticsPageProps
   const [sessionId, setSessionId] = useState<string>("")
   const [sessionData, setSessionData] = useState<SessionData>({ session_id: "", title: "", created_at: "", cadets: [] })
   const [selectedRecord, setSelectedRecord] = useState<RecordDetail | null>(null)
-  )
   const [isLoadingSession, setIsLoadingSession] = useState<boolean>(false)
   const [isLoadingRecord, setIsLoadingRecord] = useState<boolean>(false)
   const [searchQuery, setSearchQuery] = useState<string>("")
