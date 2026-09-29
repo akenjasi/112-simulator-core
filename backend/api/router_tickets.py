@@ -952,6 +952,7 @@ async def get_ticket_audio(
             gt = scenario_ticket.ground_truth or {}
             bricks = gt.get("bricks", [])
             texts = [b.get("text", "") for b in bricks if b.get("text")]
+            logger.error(f"DEBUG: bricks={bricks}, texts={texts}")
             if not texts:
                 texts = [scenario_ticket.title or "Билет без текста"]
             
