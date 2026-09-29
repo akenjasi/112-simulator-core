@@ -152,9 +152,8 @@ function OperatorContent() {
   }, [ticketId])
 
   useEffect(() => {
-    if (telephony.callStatus === "ANSWERED" && ticketId) {
-      playTicketAudio()
-    }
+    // DO NOT autoplay the full static ticket audio on answer.
+    // The interactive TTS in useTelephony will handle dialogue audio.
     return () => {
       if (audioPlayerRef.current) {
         audioPlayerRef.current.pause()
@@ -163,7 +162,7 @@ function OperatorContent() {
         setIsPlayingAudio(false)
       }
     }
-  }, [telephony.callStatus, ticketId, playTicketAudio])
+  }, [telephony.callStatus, ticketId])
 
   // Resume audio on first user click if autoplay was blocked
   useEffect(() => {
