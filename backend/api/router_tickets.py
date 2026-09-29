@@ -358,18 +358,29 @@ async def get_tickets_counts(
     db: AsyncSession = Depends(get_db),
 ):
     """Агрегация количества билетов по категориям и подкатегориям."""
-    stmt = select(
+    # 1. Generated Tickets
+    stmt1 = select(
         GeneratedTicket.category, 
         GeneratedTicket.subcategory, 
         func.count(GeneratedTicket.id).label("count")
     )
     if complexity is not None:
-        stmt = stmt.where(GeneratedTicket.complexity == complexity)
-
-    stmt = stmt.group_by(GeneratedTicket.category, GeneratedTicket.subcategory)
+        stmt1 = stmt1.where(GeneratedTicket.complexity == complexity)
+    stmt1 = stmt1.group_by(GeneratedTicket.category, GeneratedTicket.subcategory)
     
-    result = await db.execute(stmt)
-    records = result.all()
+    # 2. Scenario Tickets
+    stmt2 = select(
+        ScenarioTicket.category, 
+        ScenarioTicket.subcategory, 
+        func.count(ScenarioTicket.scenario_id).label("count")
+    )
+    if complexity is not None:
+        stmt2 = stmt2.where(ScenarioTicket.complexity == complexity)
+    stmt2 = stmt2.group_by(ScenarioTicket.category, ScenarioTicket.subcategory)
+    
+    res1 = await db.execute(stmt1)
+    res2 = await db.execute(stmt2)
+    records = res1.all() + res2.all()
     
     counts = {}
     for cat, subcat, count in records:
@@ -497,22 +508,24 @@ async def list_tickets(
             )
         )
 
-    # Legacy fallback to ScenarioTicket if GeneratedTicket has no records and no filters
-    if not output and category is None and subcategory is None and complexity is None:
-        stmt_legacy = select(ScenarioTicket).order_by(desc(ScenarioTicket.created_at))
+    # Fetch ScenarioTickets as well, applying filters
+    stmt_legacy = select(ScenarioTicket).order_by(desc(ScenarioTicket.created_at))
+    if category: stmt_legacy = stmt_legacy.where(ScenarioTicket.category == category)
+    if subcategory: stmt_legacy = stmt_legacy.where(ScenarioTicket.subcategory == subcategory)
+    if complexity is not None: stmt_legacy = stmt_legacy.where(ScenarioTicket.complexity == complexity)
+    
+    if not include_deleted:
+        from sqlalchemy import or_
+        stmt_legacy = stmt_legacy.where(or_(ScenarioTicket.is_deleted == False, ScenarioTicket.is_deleted.is_(None)))
         
-        if not include_deleted:
-            from sqlalchemy import or_
-            stmt_legacy = stmt_legacy.where(or_(ScenarioTicket.is_deleted == False, ScenarioTicket.is_deleted.is_(None)))
-            
-        stmt_legacy = stmt_legacy.limit(limit or 100)
-        res_legacy = await db.execute(stmt_legacy)
-        for r in res_legacy.scalars().all():
-            settings = r.settings or {}
-            ai = r.ai_content or {}
-            gt = r.ground_truth or {}
-            cat = settings.get("category", "Общее")
-            sub = settings.get("subcategory")
+    stmt_legacy = stmt_legacy.limit(limit or 100)
+    res_legacy = await db.execute(stmt_legacy)
+    for r in res_legacy.scalars().all():
+        settings = r.settings or {}
+        ai = r.ai_content or {}
+        gt = r.ground_truth or {}
+        cat = r.category or settings.get("category", "Общее")
+        sub = r.subcategory or settings.get("subcategory")
             seq = settings.get("sequence_number", 0)
             display_id = f"{make_abbr(cat)}_{make_abbr(sub)}_{seq}"
             output.append(
