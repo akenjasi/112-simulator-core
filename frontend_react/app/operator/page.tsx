@@ -64,6 +64,7 @@ function OperatorContent() {
     sessionId,
     ticketId,
     operatorExt: "1002",
+    autoStart: true,
   })
   const isStoreReconnecting = useCallStore((s) => s.isReconnecting)
 
