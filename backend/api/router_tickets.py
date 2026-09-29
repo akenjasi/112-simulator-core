@@ -977,7 +977,7 @@ async def get_ticket_audio(
             # expand_address_for_tts will expand 'ул.', 'д.', 'под.', 'эт.', 'кв.' to words and normalize numbers
             texts.append(expand_address_for_tts(", ".join(address_parts)))
 
-        audio_bytes = tts_engine_v2.concatenate_tts(texts, speaker=speaker)
+        audio_bytes = await asyncio.to_thread(tts_engine_v2.concatenate_tts, texts, speaker)
         return Response(content=audio_bytes, media_type="audio/wav")
     except HTTPException:
         raise
@@ -1000,7 +1000,7 @@ async def tts_speak(
     try:
         if not text or not text.strip():
             raise HTTPException(status_code=400, detail="Параметр 'text' не может быть пустым")
-        audio_bytes = tts_engine_v2.concatenate_tts([text.strip()], speaker=speaker)
+        audio_bytes = await asyncio.to_thread(tts_engine_v2.concatenate_tts, [text.strip()], speaker)
         return Response(
             content=audio_bytes,
             media_type="audio/wav",
@@ -1036,7 +1036,7 @@ async def get_service_reply(
             phrase = f"Дежурный диспетчер службы {service_name}, ... слушаю."
             speaker = "baya"
             
-        audio_bytes = tts_engine_v2.concatenate_tts([phrase], speaker=speaker)
+        audio_bytes = await asyncio.to_thread(tts_engine_v2.concatenate_tts, [phrase], speaker)
         return Response(content=audio_bytes, media_type="audio/wav")
     except Exception as e:
         logger.error("Error generating service reply audio: %s", e)
@@ -1064,7 +1064,7 @@ async def get_service_accepted(
         else:
             speaker = "baya"
             phrase = "Информацию, ... приняла."
-        audio_bytes = tts_engine_v2.concatenate_tts([phrase], speaker=speaker)
+        audio_bytes = await asyncio.to_thread(tts_engine_v2.concatenate_tts, [phrase], speaker)
         return Response(content=audio_bytes, media_type="audio/wav")
     except Exception as e:
         logger.error("Error generating service accepted audio: %s", e)
