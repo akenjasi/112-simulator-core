@@ -50,8 +50,7 @@ function OperatorContent() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const sessionId = searchParams ? searchParams.get("session_id") : null
-  // Hardcode the ticket ID to the specific test ticket so voice and data are guaranteed to work for now
-  const ticketId = "b5b3e417-a82e-4653-8095-e31eed834d33"
+  const ticketId = searchParams ? searchParams.get("ticket_id") : null
 
   // ТЗ 59: Задача 1 — Защита страницы (Route Guard)
   useEffect(() => {
