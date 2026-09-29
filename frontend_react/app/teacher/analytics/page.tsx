@@ -1135,7 +1135,7 @@ export default function AnalyticsPage({ initialTab = "all" }: AnalyticsPageProps
                 <span className="text-2xl font-black text-foreground">
                   {dynamicsData.length > 0
                     ? (dynamicsData.reduce((acc, d) => acc + d.avg_score, 0) / dynamicsData.length).toFixed(1)
-                    : "84.5"}
+                    : "0"}
                 </span>
                 <span className="text-xs text-muted-foreground">/ 100</span>
               </div>
@@ -1151,7 +1151,7 @@ export default function AnalyticsPage({ initialTab = "all" }: AnalyticsPageProps
               </div>
               <div className="mt-2 flex items-baseline gap-2">
                 <span className="text-2xl font-black text-foreground">
-                  {dynamicsData.reduce((acc, d) => acc + d.total_sessions, 0) || 821}
+                  {dynamicsData.reduce((acc, d) => acc + d.total_sessions, 0) || 0}
                 </span>
                 <span className="text-xs text-muted-foreground">билетов</span>
               </div>
@@ -1167,7 +1167,7 @@ export default function AnalyticsPage({ initialTab = "all" }: AnalyticsPageProps
                 <span className="text-2xl font-black text-foreground">
                   {dynamicsData.length > 0
                     ? (dynamicsData.reduce((acc, d) => acc + d.pass_rate, 0) / dynamicsData.length).toFixed(1)
-                    : "86.2"}%
+                    : "0"}%
                 </span>
                 <span className="text-xs text-muted-foreground">с 1-й попытки</span>
               </div>
@@ -1181,7 +1181,7 @@ export default function AnalyticsPage({ initialTab = "all" }: AnalyticsPageProps
               </div>
               <div className="mt-2 flex items-baseline gap-2">
                 <span className="text-2xl font-black text-foreground">
-                  {Object.values(heatmapData.totals_by_error).reduce((a, b) => a + b, 0) || 565}
+                  {Object.values(heatmapData.totals_by_error).reduce((a, b) => a + b, 0) || 0}
                 </span>
                 <span className="text-xs text-muted-foreground">инцидентов</span>
               </div>
