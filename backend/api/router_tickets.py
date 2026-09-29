@@ -1274,3 +1274,51 @@ async def search_addresses(q: str = Query("", description="Поисковый з
                     break
     
     return results
+\ndef _generate_preview_audio_for_ticket(plot: str, gt: dict):
+    from backend.core.text_normalization import expand_address_for_tts, format_phone_for_tts
+    from backend.core.tts_v2 import tts_engine_v2
+    import hashlib
+    import re
+    if not isinstance(gt, dict):
+        gt = {}
+    speaker = gt.get("speaker")
+    if not speaker:
+        # Pick a deterministic random speaker based on plot
+        speakers = ["aidar", "baya", "kseniya", "xenia", "eugene"]
+        speaker = speakers[hash(plot) % len(speakers)] if plot else "aidar"
+
+    texts = []
+    if plot:
+        # Fix 112 pronunciation
+        clean_plot = re.sub(r"\b112\b", "сто двенадцать", str(plot))
+        texts.append(clean_plot)
+    if gt.get("fio"): texts.append(str(gt["fio"]))
+    if gt.get("phone"): texts.append("номер " + format_phone_for_tts(str(gt["phone"])))
+    address_parts = []
+    def clean_val(k):
+        v = gt.get(k)
+        if v is None or str(v).lower().strip() in ['none', 'null', '0', '-', '']: return ""
+        return str(v).strip()
+    street = clean_val("street")
+    if street:
+        if not any(m in street.lower() for m in ['ул.', 'улица', 'ш.', 'шоссе', 'пр-кт', 'проспект', 'пер.', 'переулок', 'бульвар', 'б-р']):
+            address_parts.append(f"ул. {street}")
+        else: address_parts.append(street)
+    house = clean_val("house")
+    if house:
+        if not any(m in house.lower() for m in ['д.', 'дом', 'стр', 'строение', 'корп', 'корпус', 'влад']):
+            address_parts.append(f"д. {house}")
+        else: address_parts.append(house)
+    entrance = clean_val("entrance")
+    if entrance: address_parts.append(f"под. {entrance}")
+    floor = clean_val("floor")
+    if floor: address_parts.append(f"эт. {floor}")
+    apartment = clean_val("apartment")
+    if apartment:
+        if not any(m in apartment.lower() for m in ['кв', 'квартира', 'комн']): address_parts.append(f"кв. {apartment}")
+        else: address_parts.append(apartment)
+    intercom = clean_val("intercom")
+    if intercom: address_parts.append(f"домофон {intercom}")
+    if address_parts:
+        texts.append(expand_address_for_tts(", ".join(address_parts)))
+    return tts_engine_v2.concatenate_tts(texts, speaker=speaker)
