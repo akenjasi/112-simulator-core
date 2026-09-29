@@ -369,21 +369,35 @@ async def get_tickets_counts(
     stmt1 = stmt1.group_by(GeneratedTicket.category, GeneratedTicket.subcategory)
     
     # 2. Scenario Tickets
-    stmt2 = select(
-        ScenarioTicket.category, 
-        ScenarioTicket.subcategory, 
-        func.count(ScenarioTicket.scenario_id).label("count")
-    )
+    stmt2 = select(ScenarioTicket)
     if complexity is not None:
         stmt2 = stmt2.where(ScenarioTicket.complexity == complexity)
-    stmt2 = stmt2.group_by(ScenarioTicket.category, ScenarioTicket.subcategory)
-    
+        
     res1 = await db.execute(stmt1)
     res2 = await db.execute(stmt2)
-    records = res1.all() + res2.all()
+    records_gen = res1.all()
+    scenarios = res2.scalars().all()
     
     counts = {}
-    for cat, subcat, count in records:
+    for cat, subcat, count in records_gen:
+        cat_name = cat or "Общее"
+        if cat_name not in counts:
+            counts[cat_name] = {"category": cat_name, "total": 0, "subcategories": {}}
+        counts[cat_name]["total"] += count
+        if subcat:
+            counts[cat_name]["subcategories"][subcat] = counts[cat_name]["subcategories"].get(subcat, 0) + count
+
+    for sc in scenarios:
+        cat_name = sc.category or (sc.settings.get("category") if sc.settings else "Общее") or "Общее"
+        subcat = sc.settings.get("subcategory") if sc.settings else None
+        if cat_name not in counts:
+            counts[cat_name] = {"category": cat_name, "total": 0, "subcategories": {}}
+        counts[cat_name]["total"] += 1
+        if subcat:
+            counts[cat_name]["subcategories"][subcat] = counts[cat_name]["subcategories"].get(subcat, 0) + 1
+            
+    # dummy loop for existing code
+    for cat, subcat, count in []:
         cat_name = cat or "Общее"
         if cat_name not in counts:
             counts[cat_name] = {"category": cat_name, "total": 0, "subcategories": {}}
@@ -511,7 +525,7 @@ async def list_tickets(
     # Fetch ScenarioTickets as well, applying filters
     stmt_legacy = select(ScenarioTicket).order_by(desc(ScenarioTicket.created_at))
     if category: stmt_legacy = stmt_legacy.where(ScenarioTicket.category == category)
-    if subcategory: stmt_legacy = stmt_legacy.where(ScenarioTicket.subcategory == subcategory)
+    # ScenarioTicket has no subcategory column, filter in Python later
     if complexity is not None: stmt_legacy = stmt_legacy.where(ScenarioTicket.complexity == complexity)
     
     if not include_deleted:
@@ -525,7 +539,11 @@ async def list_tickets(
         ai = r.ai_content or {}
         gt = r.ground_truth or {}
         cat = r.category or settings.get("category", "Общее")
-        sub = r.subcategory or settings.get("subcategory")
+        sub = settings.get("subcategory")
+        
+        if subcategory and sub != subcategory:
+            continue
+
             seq = settings.get("sequence_number", 0)
             display_id = f"{make_abbr(cat)}_{make_abbr(sub)}_{seq}"
             output.append(
