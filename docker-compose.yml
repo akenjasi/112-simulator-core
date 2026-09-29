@@ -20,8 +20,6 @@ services:
       POSTGRES_DB: simulator112
     volumes:
       - postgres_data:/var/lib/postgresql/data
-    ports:
-      - "5432:5432"
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U admin -d simulator112"]
       interval: 10s
@@ -48,8 +46,8 @@ services:
     volumes:
       # ── Persistent: SQLite DB, TTS cache, uploads ──────────────────────────
       - simulator_data:/app/data
-      # ── Persistent: GGUF model weights ───────────────────────────
-      - ./data/models:/app/models:ro
+      - ./models:/app/models:ro
+      - ./backend/core/qwen_tts/models:/app/backend/core/qwen_tts/models:ro
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
       interval: 30s

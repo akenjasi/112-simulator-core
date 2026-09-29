@@ -160,7 +160,7 @@ class QwenTTSV2:
                 "-map", "[out]",
                 "-ar", str(sample_rate),
                 "-ac", "1",
-                "-c:a", "pcm_alaw",
+                "-c:a", "pcm_s16le",
                 str(processed_wav)
             ]
             

@@ -25,6 +25,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         wget \
         libgomp1 \
         libstdc++6 \
+        gcc \
+        python3-dev \
     && rm -rf /var/lib/apt/lists/*
 
 # ─── Python dependencies ──────────────────────────────────────────────────────
@@ -51,12 +53,7 @@ RUN chmod +x \
 # Fix Windows CRLF issues in shell scripts
 RUN find . -type f -name "*.sh" -exec sed -i -e 's/\r$//' {} +
 
-# Restore symlinks that Git on Windows turns into text files
-RUN cd /app/backend/bin && for f in *.so.0; do \
-        target=$(cat "$f"); \
-        rm "$f"; \
-        ln -s "$target" "$f"; \
-    done
+
 
 # ─── Runtime: shared library search path ─────────────────────────────────────
 # backend/bin/ contains: libggml.so, libggml.so.0 (symlink),

@@ -213,7 +213,7 @@ async def seed_analytics_data(
         )
         db.add(sc)
         scenarios.append(sc)
-    await db.flush()
+    await db.commit()
 
     # 2. Create Teacher
     teacher_res = await db.execute(select(User).where(User.username == "teacher_demo"))
@@ -226,7 +226,7 @@ async def seed_analytics_data(
             full_name="Преподаватель Академии 112",
         )
         db.add(teacher)
-        await db.flush()
+        await db.commit()
 
     # 3. Create Groups (3-5 groups)
     groups: List[StudentGroup] = []
@@ -241,7 +241,7 @@ async def seed_analytics_data(
         )
         db.add(group)
         groups.append(group)
-    await db.flush()
+    await db.commit()
 
     for grp in groups:
         assignment = Assignment(
@@ -255,7 +255,7 @@ async def seed_analytics_data(
         )
         db.add(assignment)
         assignments.append(assignment)
-    await db.flush()
+    await db.commit()
 
     # 4. Create Students (50+ cadets)
     hashed_pwd = hash_password("cadet123")
@@ -277,7 +277,7 @@ async def seed_analytics_data(
         )
         db.add(cadet)
         cadets.append(cadet)
-    await db.flush()
+    await db.commit()
 
     # Associate cadets with groups (both link table and cadet_ids list)
     for cadet in cadets:
@@ -290,7 +290,7 @@ async def seed_analytics_data(
         await db.execute(
             student_group_link.insert().values(user_id=cadet.user_id, group_id=grp_id)
         )
-    await db.flush()
+    await db.commit()
 
     # 5. Generate TicketResults and ExamSessions (10-20 per student over last 30 days)
     total_tickets = 0
@@ -429,12 +429,10 @@ async def seed_analytics_data(
             total_tickets += 1
 
     # Batch add
-    db.add_all(sessions_to_add)
-    db.add_all(cards_to_add)
-    db.add_all(evals_to_add)
-    db.add_all(tickets_to_add)
-
+    # Batch add
+    pass
     await db.commit()
+
 
     return {
         "status": "success",

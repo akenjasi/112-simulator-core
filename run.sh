@@ -34,13 +34,13 @@ fi
 mkdir -p "$SCRIPT_DIR/data"
 
 echo ""
-echo "╔══════════════════════════════════════════════╗"
-echo "║      112 Simulator V2 — Backend (dev)        ║"
-echo "╠══════════════════════════════════════════════╣"
-echo "║  API:      http://localhost:${PORT}              ║"
-echo "║  Swagger:  http://localhost:${PORT}/docs         ║"
-echo "║  DB:       ${DATABASE_URL:-sqlite+aiosqlite:///./data/112_simulator.db}"
-echo "╚══════════════════════════════════════════════╝"
+echo "╔══════════════════════════════════════════════════════════════════════════╗"
+echo "║      112 Simulator V2 — Backend (dev)                                    ║"
+echo "╠══════════════════════════════════════════════════════════════════════════╣"
+echo "║  API:      http://localhost:${PORT}                                      ║"
+echo "║  Swagger:  http://localhost:${PORT}/docs                                 ║"
+echo "║  DB:       ${DATABASE_URL:-sqlite+aiosqlite:///./data/112_simulator.db}" ║
+echo "╚══════════════════════════════════════════════════════════════════════════╝"
 echo ""
 
 python3 -m uvicorn backend.main:app \

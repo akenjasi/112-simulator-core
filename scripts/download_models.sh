@@ -23,7 +23,7 @@ download_if_missing() {
         echo "  ✅ ${name} — уже есть, пропускаем."
     else
         echo "  ⬇️  Скачиваем ${name}..."
-        wget --quiet --show-progress --continue --tries=5 -O "${dest}" "${url}" \
+        wget --inet4-only --continue --tries=5 -O "${dest}" "${url}" \
             || { echo "  ❌ Ошибка скачивания ${name}."; exit 1; }
         echo "  ✅ ${name} — скачан."
     fi
@@ -41,3 +41,8 @@ download_if_missing \
 
 echo ""
 echo "✅ Готово! Модели в: ${MODELS_DIR}"
+
+download_if_missing \
+    "/app/models/gigaam-v3-ctc-Q8_0.gguf" \
+    "https://huggingface.co/salute-developers/GigaAM/resolve/main/gigaam-v3-ctc-Q8_0.gguf?download=true"
+

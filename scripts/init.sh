@@ -24,8 +24,8 @@ mkdir -p \
     /app/data/backups \
     /app/data/uploads
 
-# ─── 2. Models are now provided via volume mount ─────────────────────────────
-echo "🤖 Models are provided via /app/models"
+# ─── 2. Models are pre-downloaded in Dockerfile ─────────────────────────────
+echo "🤖 Models are built into the image"
 
 # ─── 3. Export LD_LIBRARY_PATH for native shared libs ────────────────────────
 export LD_LIBRARY_PATH="/app/backend/bin:${LD_LIBRARY_PATH:-}"
