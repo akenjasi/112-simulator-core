@@ -209,7 +209,15 @@ async def seed_analytics_data(
             category=sc_conf["category"],
             complexity=rng.choice([1, 2, 3]),
             settings={"category": sc_conf["category"], "title": sc_conf["title"]},
-            ground_truth={"services": sc_conf["services"], "category": sc_conf["category"], "bricks": bricks},
+            ground_truth={
+                "services": sc_conf["services"], 
+                "category": sc_conf["category"], 
+                "bricks": bricks,
+                "fio": "Иванов Иван Иванович",
+                "phone": "89001234567",
+                "street": "улица Ленина",
+                "house": "10"
+            },
         )
         db.add(sc)
         scenarios.append(sc)
