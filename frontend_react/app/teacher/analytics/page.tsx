@@ -498,7 +498,7 @@ export interface AnalyticsPageProps {
 export default function AnalyticsPage({ initialTab = "all" }: AnalyticsPageProps = {}) {
   const [activeTab, setActiveTab] = useState<"history" | "split" | "all" | "ai_report" | "charts">(initialTab)
   const [sessionId, setSessionId] = useState<string>("session-1")
-  const [sessionData, setSessionData] = useState<SessionData>(DEFAULT_SESSION_DATA)
+  const [sessionData, setSessionData] = useState<SessionData>({ session_id: "", title: "", created_at: "", cadets: [] })
   const [selectedRecord, setSelectedRecord] = useState<RecordDetail | null>(
     DEFAULT_SESSION_DATA.cadets[0]?.records[0] as unknown as RecordDetail
   )
@@ -514,7 +514,7 @@ export default function AnalyticsPage({ initialTab = "all" }: AnalyticsPageProps
   const [isTriggeringGroupAi, setIsTriggeringGroupAi] = useState<boolean>(false)
 
   // Lesson history state
-  const [lessonsList, setLessonsList] = useState<LessonHistoryItem[]>(DEFAULT_LESSONS_HISTORY)
+  const [lessonsList, setLessonsList] = useState<LessonHistoryItem[]>([])
   const [isLoadingLessons, setIsLoadingLessons] = useState<boolean>(false)
   const [expandedLessonId, setExpandedLessonId] = useState<string | null>("lesson-demo-1")
   const [historySearchQuery, setHistorySearchQuery] = useState<string>("")
@@ -529,9 +529,9 @@ export default function AnalyticsPage({ initialTab = "all" }: AnalyticsPageProps
   const [isMounted, setIsMounted] = useState<boolean>(false)
   const [dynamicsDays, setDynamicsDays] = useState<number>(30)
   const [dynamicsGroupId, setDynamicsGroupId] = useState<string>("ALL")
-  const [dynamicsData, setDynamicsData] = useState<DailyDynamicsPoint[]>(DEFAULT_DYNAMICS_DATA)
-  const [groupComparisonData, setGroupComparisonData] = useState<GroupComparisonItem[]>(DEFAULT_GROUPS_COMPARISON)
-  const [heatmapData, setHeatmapData] = useState<ErrorHeatmapData>(DEFAULT_HEATMAP_DATA)
+  const [dynamicsData, setDynamicsData] = useState<DailyDynamicsPoint[]>([])
+  const [groupComparisonData, setGroupComparisonData] = useState<GroupComparisonItem[]>([])
+  const [heatmapData, setHeatmapData] = useState<ErrorHeatmapData>({ error_types: [], grid: [] })
   const [heatmapEntityType, setHeatmapEntityType] = useState<"students" | "groups">("students")
   const [heatmapCategory, setHeatmapCategory] = useState<string>("ALL")
   const [heatmapSearch, setHeatmapSearch] = useState<string>("")
@@ -686,7 +686,7 @@ export default function AnalyticsPage({ initialTab = "all" }: AnalyticsPageProps
       const res = await fetch(`/api/v1/lessons${queryParam}`)
       if (res.ok) {
         const data = await res.json()
-        if (Array.isArray(data) && data.length > 0) {
+        if (Array.isArray(data)) {
           setLessonsList(data)
           if (!expandedLessonId && data[0]?.id) {
             setExpandedLessonId(data[0].id)
