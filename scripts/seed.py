@@ -244,17 +244,6 @@ async def seed_analytics_data(
     await db.commit()
 
     for grp in groups:
-        assignment = Assignment(
-            session_type="CALL_SIMULATION",
-            mode="EXAM",
-            group_id=grp.group_id,
-            assigned_by=teacher.user_id,
-            scenario_id=scenarios[0].scenario_id,
-            available_from=now - timedelta(days=35),
-            deadline=now + timedelta(days=30),
-        )
-        db.add(assignment)
-        assignments.append(assignment)
     await db.commit()
 
     # 4. Create Students (50+ cadets)
