@@ -90,52 +90,36 @@ export interface LiveDashboardProps {
 }
 
 export default function LiveDashboardPage(props: LiveDashboardProps = {}) {
-  let initialId = props.sessionId || "demo"
-  if (typeof window !== "undefined") {
-    const sp = new URLSearchParams(window.location.search).get("id")
-    if (sp) initialId = sp
+  // Always derive ID from URL on every render (client-side navigation safe)
+  const getIdFromUrl = () => {
+    if (typeof window !== "undefined") {
+      const sp = new URLSearchParams(window.location.search).get("id")
+      if (sp) return sp
+    }
+    return props.sessionId || ""
   }
 
-  // Detect initial status from props or URL
-  const getInitialStatus = (): string => {
+  const getStatusFromUrl = (): string => {
     if (props.initialStatus) return props.initialStatus.toUpperCase()
     if (typeof window !== "undefined") {
       const sp = new URLSearchParams(window.location.search).get("status")
       if (sp) return sp.toUpperCase()
     }
-    if (initialId === "sess-101") return "ACTIVE"
     return "UNKNOWN"
   }
 
-  const [sessionId, setSessionId] = useState<string>(initialId)
-  const [initialStatusHint, setInitialStatusHint] = useState<string>(getInitialStatus())
+  const [sessionId, setSessionId] = useState<string>(getIdFromUrl)
+  const [initialStatusHint, setInitialStatusHint] = useState<string>(getStatusFromUrl)
 
+  // Re-sync on client-side navigation (URL changes without page reload)
   useEffect(() => {
-    if (typeof window !== "undefined") {
-      const sp = new URLSearchParams(window.location.search)
-      const id = sp.get("id")
-      const status = sp.get("status")
-      if (id && id !== sessionId) setSessionId(id)
-      if (status && status.toUpperCase() !== initialStatusHint) setInitialStatusHint(status.toUpperCase())
-    }
-  }, [])
-  const [stats, setStats] = useState<SessionStats | null>(() => {
-    if (initialId === "sess-101") {
-      return {
-        session_id: "sess-101",
-        session_name: "Сессия #sess-101",
-        group_name: "Группа 101 (Операторы)",
-        status: "ACTIVE",
-        overall_progress: 75,
-        total_cadets: 2,
-        total_in_progress: 1,
-        total_passed: 3,
-        total_failed: 1,
-        cadets: [],
-      }
-    }
-    return null
-  })
+    const id = getIdFromUrl()
+    const status = getStatusFromUrl()
+    if (id && id !== sessionId) setSessionId(id)
+    if (status !== initialStatusHint) setInitialStatusHint(status)
+  }, [typeof window !== "undefined" ? window.location.search : ""])
+  const [stats, setStats] = useState<SessionStats | null>(null)
+
   const [isLoading, setIsLoading] = useState<boolean>(true)
   const [error, setError] = useState<string | null>(null)
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null)
