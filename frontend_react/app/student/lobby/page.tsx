@@ -6,6 +6,7 @@ import Link from "next/link"
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
+import { LogoutButton } from "@/components/auth/LogoutButton"
 import {
   Headphones,
   Radio,
@@ -401,8 +402,8 @@ export default function StudentLobbyPage() {
   return (
     <div className="min-h-screen bg-gradient-to-b from-slate-50 via-background to-slate-100 dark:from-slate-950 dark:via-background dark:to-slate-900 flex flex-col justify-between p-4 md:p-8">
       {/* Top Header */}
-      <header className="max-w-4xl w-full mx-auto flex items-center justify-between border-b pb-4">
-        <div className="flex items-center gap-3">
+      <header className="max-w-4xl w-full mx-auto flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b pb-4">
+        <div className="flex items-center gap-3 min-w-0">
           <div className="h-10 w-10 rounded-xl bg-primary text-primary-foreground flex items-center justify-center shadow-md font-bold text-lg">
             112
           </div>
@@ -416,7 +417,7 @@ export default function StudentLobbyPage() {
           </div>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center justify-end gap-2">
           <Link href="/student/profile">
             <Button variant="outline" size="sm" className="gap-2 text-xs h-9">
               <User className="h-3.5 w-3.5" />
@@ -431,6 +432,8 @@ export default function StudentLobbyPage() {
             <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
             <span>Сервер подключен</span>
           </Badge>
+
+          <LogoutButton compact />
         </div>
       </header>
 

@@ -48,4 +48,12 @@ describe("выход из кабинета", () => {
     await waitFor(() => expect(replaceMock).toHaveBeenCalledWith("/login"))
     expect(localStorage.getItem("access_token")).toBeNull()
   })
+
+  it("имеет компактный вариант для адаптивной шапки ученика", () => {
+    render(<LogoutButton compact />)
+
+    const button = screen.getByRole("button", { name: /выйти/i })
+    expect(button).toHaveClass("inline-flex", "h-8", "w-auto", "shrink-0")
+    expect(button).not.toHaveClass("fixed")
+  })
 })

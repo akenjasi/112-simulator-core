@@ -12,6 +12,7 @@ import {
 } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
+import { LogoutButton } from "@/components/auth/LogoutButton"
 import {
   Radar,
   RadarChart,
@@ -410,7 +411,7 @@ export default function StudentProfilePage() {
     <div className="min-h-screen bg-slate-50 dark:bg-slate-950 text-foreground flex flex-col justify-between">
       {/* 1. Ultra-compact horizontal header row (no avatar, FIO + short ID + role toggle) */}
       <header className="border-b bg-card sticky top-0 z-30 shadow-xs">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 h-14 flex items-center justify-between gap-3">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 min-h-14 py-2 flex flex-wrap items-center justify-between gap-2 sm:gap-3">
           {/* Left: Brand badge, FIO and short student ID */}
           <div className="flex items-center gap-3 min-w-0">
             <div className="h-8 w-8 rounded-lg bg-primary text-primary-foreground flex items-center justify-center font-black text-sm shrink-0 shadow-xs">
@@ -431,8 +432,8 @@ export default function StudentProfilePage() {
           </div>
 
           {/* Center / Right: Fixed dispatcher role and quick actions */}
-          <div className="flex items-center gap-2 shrink-0">
-            <Badge variant="outline" className="flex items-center gap-1.5 px-3 py-1 text-xs font-semibold">
+          <div className="flex flex-wrap items-center justify-end gap-2 shrink-0">
+            <Badge variant="outline" className="hidden lg:flex items-center gap-1.5 px-3 py-1 text-xs font-semibold">
               <Radio className="h-3.5 w-3.5" />
               <span>Диспетчер ДДС</span>
             </Badge>
@@ -459,6 +460,8 @@ export default function StudentProfilePage() {
                 <ArrowRight className="h-3.5 w-3.5" />
               </Button>
             </Link>
+
+            <LogoutButton compact />
           </div>
         </div>
       </header>
