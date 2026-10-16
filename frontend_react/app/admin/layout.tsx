@@ -4,6 +4,7 @@ import React, { useEffect, useState } from "react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 import RequireAuth from "@/components/auth/RequireAuth"
+import { LogoutButton } from "@/components/auth/LogoutButton"
 import {
   LayoutDashboard,
   Users,
@@ -179,6 +180,7 @@ export default function AdminLayout({
                 </div>
                 <Activity className="w-4 h-4 text-emerald-600" />
               </div>
+              <LogoutButton className="mt-3" />
             </div>
           </aside>
         </>
@@ -246,6 +248,7 @@ export default function AdminLayout({
             </div>
             <Activity className="w-4 h-4 text-emerald-600" />
           </div>
+          <LogoutButton className="mt-3" />
         </div>
       </aside>
 

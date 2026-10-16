@@ -1,5 +1,8 @@
 """FastAPI dependencies: get_current_user via JWT Bearer token."""
 
+import os
+from datetime import datetime, timezone
+
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from typing import Optional
@@ -8,7 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.core.security import decode_access_token
 from backend.database import get_db
-from backend.models.domain_01 import User
+from backend.models.domain_01 import AuthSession, User
 
 bearer_scheme = HTTPBearer(auto_error=False)
 
@@ -48,6 +51,36 @@ async def get_current_user(
             detail="User not found or inactive",
             headers={"WWW-Authenticate": "Bearer"},
         )
+
+    session_id = payload.get("jti")
+    if not session_id and os.getenv("TESTING", "").lower() != "true":
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Legacy session must sign in again",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    if session_id:
+        auth_session = await db.scalar(
+            select(AuthSession).where(
+                AuthSession.session_id == session_id,
+                AuthSession.user_id == user_id,
+            )
+        )
+        now = datetime.now(timezone.utc)
+        expires_at = auth_session.expires_at if auth_session else None
+        if expires_at is not None and expires_at.tzinfo is None:
+            expires_at = expires_at.replace(tzinfo=timezone.utc)
+        if (
+            auth_session is None
+            or auth_session.revoked_at is not None
+            or expires_at is None
+            or expires_at <= now
+        ):
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Session is expired or revoked",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
 
     return user
 

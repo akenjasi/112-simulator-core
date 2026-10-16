@@ -96,6 +96,34 @@ class User(Base):
         super().__init__(**kwargs)
 
 
+class AuthSession(Base):
+    __tablename__ = "auth_sessions"
+
+    session_id: Mapped[str] = mapped_column(String, primary_key=True)
+    user_id: Mapped[str] = mapped_column(
+        String,
+        ForeignKey("users.user_id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=lambda: datetime.now(timezone.utc),
+        server_default=func.now(),
+        nullable=False,
+    )
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    last_seen_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True),
+        default=lambda: datetime.now(timezone.utc),
+        server_default=func.now(),
+        nullable=False,
+    )
+    revoked_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
+    ip_address: Mapped[Optional[str]] = mapped_column(String, nullable=True)
+    user_agent: Mapped[Optional[str]] = mapped_column(String, nullable=True)
+
+
 class StudentGroup(Base):
     __tablename__ = "student_groups"
 

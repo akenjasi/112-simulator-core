@@ -9,6 +9,7 @@ from sqlalchemy.orm import selectinload
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.core.deps import require_role, get_current_user
+from backend.core.auth_sessions import revoke_all_user_sessions
 from backend.core.security import hash_password
 from backend.database import get_db
 from backend.models.domain_01 import StudentGroup, User
@@ -414,6 +415,7 @@ async def reset_group_passwords(
         new_pin = str(random.randint(10000, 99999))
         student.password_hash = hash_password(new_pin)
         student.password_changed_at = datetime.now(timezone.utc)
+        await revoke_all_user_sessions(db, user_id=student.user_id)
         results.append({
             "user_id": student.user_id,
             "fio": student.full_name or student.username,

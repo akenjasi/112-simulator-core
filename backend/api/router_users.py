@@ -6,6 +6,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.core.deps import get_current_user, require_role
+from backend.core.auth_sessions import revoke_all_user_sessions
 from backend.core.security import check_teacher_user_management, hash_password
 from backend.database import get_db
 from backend.models.domain_01 import SecurityPolicy
@@ -111,14 +112,17 @@ async def update_user(
         new_role=user_in.role,
     )
 
+    security_changed = False
+
     if user_in.full_name is not None:
         user.full_name = user_in.full_name
     if user_in.student_id is not None:
         user.student_id = user_in.student_id
     if user_in.role is not None:
+        security_changed = security_changed or user_in.role != user.role
         user.role = user_in.role
 
-    if user_in.password:
+    if user_in.password is not None:
         stmt_policy = select(SecurityPolicy).where(SecurityPolicy.key == 'MIN_PASSWORD_LENGTH')
         res_policy = await db.execute(stmt_policy)
         policy_min = res_policy.scalar_one_or_none()
@@ -128,9 +132,14 @@ async def update_user(
 
     if user_in.password is not None:
         user.password_hash = hash_password(user_in.password)
+        user.password_changed_at = datetime.now(timezone.utc)
+        security_changed = True
     if user_in.is_active is not None:
+        security_changed = security_changed or user_in.is_active != user.is_active
         user.is_active = user_in.is_active
 
+    if security_changed:
+        await revoke_all_user_sessions(db, user_id=user.user_id)
     await db.commit()
     await db.refresh(user)
     return user
@@ -162,6 +171,7 @@ async def delete_user(
 
     # Soft delete: do not drop row to preserve foreign keys
     user.is_active = False
+    await revoke_all_user_sessions(db, user_id=user.user_id)
     await db.commit()
 
     return {"status": "ok", "user_id": user_id, "is_active": False}
@@ -197,6 +207,7 @@ async def reset_user_password(
     new_password = str(random.randint(10000, 99999))
     user.password_hash = hash_password(new_password)
     user.password_changed_at = datetime.now(timezone.utc)
+    await revoke_all_user_sessions(db, user_id=user.user_id)
     await db.commit()
     await db.refresh(user)
 

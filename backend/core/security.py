@@ -42,6 +42,7 @@ def create_access_token(
     role: str,
     extra: Optional[dict] = None,
     expires_delta: Optional[timedelta] = None,
+    token_id: Optional[str] = None,
 ) -> str:
     """Create a signed JWT access token.
 
@@ -50,6 +51,7 @@ def create_access_token(
         role: user role (ADMIN / TEACHER / CADET).
         extra: additional fields to include in payload.
         expires_delta: custom token lifetime.
+        token_id: optional session identifier stored in the JWT jti claim.
     """
     expire = datetime.now(timezone.utc) + (
         expires_delta or timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
@@ -62,6 +64,8 @@ def create_access_token(
     }
     if extra:
         payload.update(extra)
+    if token_id is not None:
+        payload["jti"] = token_id
     return jwt.encode(payload, SECRET_KEY, algorithm=ALGORITHM)
 
 

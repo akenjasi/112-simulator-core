@@ -4,6 +4,7 @@ import React, { useState, useEffect } from "react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 import RequireAuth from "@/components/auth/RequireAuth"
+import { LogoutButton } from "@/components/auth/LogoutButton"
 import {
   Home,
   PlayCircle,
@@ -182,6 +183,7 @@ export default function TeacherLayout({
                   Система активна
                 </div>
               </div>
+              <LogoutButton className="mt-3" />
             </div>
           </aside>
         </>
@@ -246,6 +248,7 @@ export default function TeacherLayout({
               Система активна
             </div>
           </div>
+          <LogoutButton className="mt-3" />
         </div>
       </aside>
 

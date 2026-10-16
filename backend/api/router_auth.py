@@ -1,14 +1,20 @@
+from datetime import datetime, timedelta, timezone
 from typing import Any, Optional, Union
 import pyotp
 from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi.security import HTTPAuthorizationCredentials
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from backend.core.deps import get_current_user
-from backend.core.security import create_access_token, verify_password
+from backend.core.auth_sessions import (
+    create_user_session,
+    revoke_all_user_sessions,
+    revoke_session,
+)
+from backend.core.deps import bearer_scheme, get_current_user
+from backend.core.security import create_access_token, decode_access_token, verify_password
 from backend.database import get_db
-from backend.models.domain_01 import User, SecurityPolicy
-from datetime import timedelta
+from backend.models.domain_01 import SecurityPolicy, User, UserActionLog
 from backend.core.ldap_adapter import authenticate_ldap
 from backend.core.security import hash_password
 import os
@@ -32,6 +38,83 @@ _ROLE_MAP = {
     "student": "CADET",
     "cadet": "CADET",
 }
+
+LOCKOUT_FAILURES = 5
+LOCKOUT_MINUTES = 15
+
+
+def _as_utc(value: datetime) -> datetime:
+    if value.tzinfo is None:
+        return value.replace(tzinfo=timezone.utc)
+    return value.astimezone(timezone.utc)
+
+
+def _client_ip(request: Request) -> Optional[str]:
+    forwarded_for = request.headers.get("x-forwarded-for")
+    if forwarded_for:
+        return forwarded_for.split(",", 1)[0].strip()
+    return request.client.host if request.client else None
+
+
+def _add_auth_log(
+    db: AsyncSession,
+    *,
+    request: Request,
+    action: str,
+    user: Optional[User],
+    details: Optional[str] = None,
+) -> None:
+    db.add(
+        UserActionLog(
+            user_id=user.user_id if user else None,
+            role=user.role if user else None,
+            action=action,
+            endpoint=request.url.path,
+            target_entity="auth_session",
+            ip_address=_client_ip(request),
+            details=details,
+        )
+    )
+
+
+async def _session_timeout_minutes(db: AsyncSession) -> int:
+    policy = await db.scalar(
+        select(SecurityPolicy).where(SecurityPolicy.key == "SESSION_TIMEOUT_MINUTES")
+    )
+    return int(policy.value) if policy and policy.value.isdigit() else 60
+
+
+async def _issue_access_token(db: AsyncSession, request: Request, user: User) -> str:
+    timeout_mins = await _session_timeout_minutes(db)
+    expires_delta = timedelta(minutes=timeout_mins)
+    expires_at = datetime.now(timezone.utc) + expires_delta
+    session_id = await create_user_session(
+        db,
+        user_id=user.user_id,
+        expires_at=expires_at,
+        ip_address=_client_ip(request),
+        user_agent=request.headers.get("user-agent"),
+    )
+    token = create_access_token(
+        subject=user.user_id,
+        role=user.role,
+        expires_delta=expires_delta,
+        token_id=session_id,
+    )
+    await db.commit()
+    return token
+
+
+def _token_response(user: User, access_token: str) -> TokenResponse:
+    return TokenResponse(
+        access_token=access_token,
+        token_type="bearer",
+        user_id=user.user_id,
+        username=user.username,
+        role=user.role,
+        token=access_token,
+        user={"username": user.username, "role": user.role, "user_id": user.user_id},
+    )
 
 
 async def _extract_body(request: Request) -> dict:
@@ -126,30 +209,58 @@ async def login(
                 is_active=True
             )
             db.add(user)
-            await db.commit()
-            await db.refresh(user)
+            await db.flush()
     else:
-        if normalized_role:
-            stmt = select(User).where(
-                User.username == username,
-                User.role == normalized_role,
-                User.is_active == True,  # noqa: E712
-            )
-        else:
-            stmt = select(User).where(
-                User.username == username,
-                User.is_active == True,  # noqa: E712
-            )
-        result = await db.execute(stmt)
-        user = result.scalar_one_or_none()
+        user = await db.scalar(select(User).where(User.username == username))
 
-        if not user or not verify_password(password, user.password_hash):
+        now = datetime.now(timezone.utc)
+        if user and user.locked_until and _as_utc(user.locked_until) > now:
+            raise HTTPException(
+                status_code=status.HTTP_423_LOCKED,
+                detail="Account is temporarily locked",
+            )
+
+        valid_role = not normalized_role or (user is not None and user.role == normalized_role)
+        valid_credentials = bool(
+            user
+            and user.is_active
+            and valid_role
+            and verify_password(password, user.password_hash)
+        )
+        if not valid_credentials:
+            if user:
+                user.failed_login_attempts += 1
+                if user.failed_login_attempts >= LOCKOUT_FAILURES:
+                    user.failed_login_attempts = LOCKOUT_FAILURES
+                    user.locked_until = now + timedelta(minutes=LOCKOUT_MINUTES)
+            _add_auth_log(
+                db,
+                request=request,
+                action="LOGIN_FAILED",
+                user=user,
+                details="Invalid credentials",
+            )
+            await db.commit()
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="Invalid credentials",
                 headers={"WWW-Authenticate": "Bearer"},
             )
 
+    now = datetime.now(timezone.utc)
+    if user.locked_until and _as_utc(user.locked_until) > now:
+        raise HTTPException(
+            status_code=status.HTTP_423_LOCKED,
+            detail="Account is temporarily locked",
+        )
+    if not user.is_active:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid credentials",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    user.failed_login_attempts = 0
+    user.locked_until = None
 
     # If 2FA is enabled globally or per-user, require TOTP verification
     stmt_2fa = select(SecurityPolicy).where(SecurityPolicy.key == 'REQUIRE_2FA_ALL')
@@ -158,31 +269,16 @@ async def login(
     require_2fa_all = policy_2fa and policy_2fa.value.lower() == 'true'
 
     if user.is_2fa_enabled or require_2fa_all:
-
+        await db.commit()
         return TwoFactorRequiredResponse(
             requires_2fa=True,
             user_id=user.user_id,
         )
 
-    
-    stmt_policy = select(SecurityPolicy).where(SecurityPolicy.key == 'SESSION_TIMEOUT_MINUTES')
-    res_policy = await db.execute(stmt_policy)
-    policy_timeout = res_policy.scalar_one_or_none()
-    timeout_mins = int(policy_timeout.value) if policy_timeout and policy_timeout.value.isdigit() else 60
-
-    access_token = create_access_token(subject=user.user_id, role=user.role, expires_delta=timedelta(minutes=timeout_mins))
-
-
-    return TokenResponse(
-        access_token=access_token,
-        token_type="bearer",
-        user_id=user.user_id,
-        username=user.username,
-        role=user.role,
-        # Legacy compatibility for index.html
-        token=access_token,
-        user={"username": user.username, "role": user.role, "user_id": user.user_id},
-    )
+    user.last_login = now
+    _add_auth_log(db, request=request, action="LOGIN", user=user)
+    access_token = await _issue_access_token(db, request, user)
+    return _token_response(user, access_token)
 
 
 @router.post(
@@ -246,24 +342,46 @@ async def login_2fa(
             detail="Invalid 2FA code",
         )
 
-    
-    stmt_policy = select(SecurityPolicy).where(SecurityPolicy.key == 'SESSION_TIMEOUT_MINUTES')
-    res_policy = await db.execute(stmt_policy)
-    policy_timeout = res_policy.scalar_one_or_none()
-    timeout_mins = int(policy_timeout.value) if policy_timeout and policy_timeout.value.isdigit() else 60
+    user.failed_login_attempts = 0
+    user.locked_until = None
+    user.last_login = datetime.now(timezone.utc)
+    _add_auth_log(db, request=request, action="LOGIN", user=user, details="2FA")
+    access_token = await _issue_access_token(db, request, user)
+    return _token_response(user, access_token)
 
-    access_token = create_access_token(subject=user.user_id, role=user.role, expires_delta=timedelta(minutes=timeout_mins))
+
+@router.post("/api/auth/logout")
+async def logout(
+    request: Request,
+    current_user: User = Depends(get_current_user),
+    credentials: HTTPAuthorizationCredentials = Depends(bearer_scheme),
+    db: AsyncSession = Depends(get_db),
+):
+    payload = decode_access_token(credentials.credentials) if credentials else None
+    session_id = payload.get("jti") if payload else None
+    if session_id:
+        await revoke_session(db, session_id=session_id, user_id=current_user.user_id)
+    _add_auth_log(db, request=request, action="LOGOUT", user=current_user)
+    await db.commit()
+    return {"status": "ok"}
 
 
-    return TokenResponse(
-        access_token=access_token,
-        token_type="bearer",
-        user_id=user.user_id,
-        username=user.username,
-        role=user.role,
-        token=access_token,
-        user={"username": user.username, "role": user.role, "user_id": user.user_id},
+@router.post("/api/auth/logout-all")
+async def logout_all(
+    request: Request,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    revoked_count = await revoke_all_user_sessions(db, user_id=current_user.user_id)
+    _add_auth_log(
+        db,
+        request=request,
+        action="LOGOUT",
+        user=current_user,
+        details=f"Revoked {revoked_count} sessions",
     )
+    await db.commit()
+    return {"status": "ok", "revoked_sessions": revoked_count}
 
 
 @router.api_route("/api/auth/2fa/setup", methods=["GET", "POST"], response_model=TwoFactorSetupResponse)
