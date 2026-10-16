@@ -3,6 +3,7 @@
 # Usage: ./run.sh [port]
 #   Default port: 8000
 #   Requires: Python 3.11+ with .deps packages OR system-installed packages
+#
 
 set -euo pipefail
 
