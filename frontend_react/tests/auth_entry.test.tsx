@@ -1,17 +1,49 @@
-import { describe, expect, it, vi } from "vitest"
+import { render, waitFor } from "@testing-library/react"
+import { beforeEach, describe, expect, it, vi } from "vitest"
 
-const { redirectMock } = vi.hoisted(() => ({ redirectMock: vi.fn() }))
+const { replaceMock } = vi.hoisted(() => ({ replaceMock: vi.fn() }))
 
 vi.mock("next/navigation", () => ({
-  redirect: redirectMock,
+  useRouter: () => ({ replace: replaceMock }),
 }))
 
 import LandingPage from "@/app/page"
 
 describe("точка входа", () => {
-  it("перенаправляет корневой маршрут на страницу авторизации", () => {
-    LandingPage()
+  beforeEach(() => {
+    vi.clearAllMocks()
+    localStorage.clear()
+    global.fetch = vi.fn()
+  })
 
-    expect(redirectMock).toHaveBeenCalledWith("/login")
+  it("без сохранённой сессии отправляет на страницу авторизации", async () => {
+    render(<LandingPage />)
+
+    await waitFor(() => expect(replaceMock).toHaveBeenCalledWith("/login"))
+    expect(global.fetch).not.toHaveBeenCalled()
+  })
+
+  it("с действующим токеном администратора открывает его кабинет", async () => {
+    localStorage.setItem("access_token", "valid-admin-token")
+    global.fetch = vi.fn().mockImplementation(() =>
+      Promise.resolve(new Response(JSON.stringify({ role: "ADMIN" }), { status: 200 }))
+    )
+
+    render(<LandingPage />)
+
+    await waitFor(() => expect(replaceMock).toHaveBeenCalledWith("/admin"))
+    expect(global.fetch).toHaveBeenCalledWith("/api/v1/users/me", {
+      headers: { Authorization: "Bearer valid-admin-token" },
+    })
+  })
+
+  it("с истёкшим токеном очищает сессию и отправляет на страницу авторизации", async () => {
+    localStorage.setItem("access_token", "expired-token")
+    global.fetch = vi.fn().mockResolvedValue(new Response(null, { status: 401 }))
+
+    render(<LandingPage />)
+
+    await waitFor(() => expect(replaceMock).toHaveBeenCalledWith("/login"))
+    expect(localStorage.getItem("access_token")).toBeNull()
   })
 })
