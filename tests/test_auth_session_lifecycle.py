@@ -143,7 +143,7 @@ async def test_logout_revokes_only_current_session_and_logout_all_revokes_rest()
 
 
 @pytest.mark.asyncio
-async def test_password_change_revokes_target_users_sessions():
+async def test_password_change_keeps_target_users_sessions():
     admin = await _create_user(role="ADMIN")
     target = await _create_user(role="CADET")
     admin_token = create_access_token(subject=admin.user_id, role=admin.role)
@@ -160,4 +160,4 @@ async def test_password_change_revokes_target_users_sessions():
         assert update_response.status_code == 200
         assert (
             await client.get("/api/v1/users/me", headers=_headers(target_token))
-        ).status_code == 401
+        ).status_code == 200

@@ -18,6 +18,11 @@ class UserUpdate(BaseModel):
     is_active: Optional[bool] = None
 
 
+class PasswordResetRequest(BaseModel):
+    password: Optional[str] = None
+    revoke_sessions: bool = False
+
+
 class UserResponse(BaseModel):
     user_id: str
     username: str

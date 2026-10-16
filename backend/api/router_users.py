@@ -1,4 +1,5 @@
-import random
+import secrets
+import string
 from datetime import datetime, timezone
 from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -13,7 +14,7 @@ from backend.models.domain_01 import SecurityPolicy
 from sqlalchemy import select
 from fastapi import HTTPException, status
 from backend.models.domain_01 import User
-from backend.schemas.users import UserCreate, UserResponse, UserUpdate
+from backend.schemas.users import PasswordResetRequest, UserCreate, UserResponse, UserUpdate
 
 users_router = APIRouter(
     prefix="/api/admin/users",
@@ -133,7 +134,8 @@ async def update_user(
     if user_in.password is not None:
         user.password_hash = hash_password(user_in.password)
         user.password_changed_at = datetime.now(timezone.utc)
-        security_changed = True
+        user.failed_login_attempts = 0
+        user.locked_until = None
     if user_in.is_active is not None:
         security_changed = security_changed or user_in.is_active != user.is_active
         user.is_active = user_in.is_active
@@ -185,6 +187,7 @@ async def reset_user_password(
     user_id: str,
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
+    reset_in: Optional[PasswordResetRequest] = None,
 ):
     stmt = select(User).where(User.user_id == user_id)
     result = await db.execute(stmt)
@@ -204,10 +207,35 @@ async def reset_user_password(
         target_user_role=user.role,
     )
 
-    new_password = str(random.randint(10000, 99999))
+    policy_min = await db.scalar(
+        select(SecurityPolicy).where(SecurityPolicy.key == "MIN_PASSWORD_LENGTH")
+    )
+    min_len = int(policy_min.value) if policy_min and policy_min.value.isdigit() else 8
+
+    has_custom_password = reset_in is not None and reset_in.password is not None
+    requested_password = reset_in.password.strip() if has_custom_password else None
+    password_was_generated = not has_custom_password
+    if has_custom_password and len(requested_password) < min_len:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Password must be at least {min_len} characters",
+        )
+
+    if password_was_generated:
+        alphabet = string.ascii_letters + string.digits
+        new_password = "".join(
+            secrets.choice(alphabet) for _ in range(max(min_len, 12))
+        )
+    else:
+        new_password = requested_password
+
     user.password_hash = hash_password(new_password)
     user.password_changed_at = datetime.now(timezone.utc)
-    await revoke_all_user_sessions(db, user_id=user.user_id)
+    user.failed_login_attempts = 0
+    user.locked_until = None
+    revoke_sessions = bool(reset_in and reset_in.revoke_sessions)
+    if revoke_sessions:
+        await revoke_all_user_sessions(db, user_id=user.user_id)
     await db.commit()
     await db.refresh(user)
 
@@ -217,6 +245,8 @@ async def reset_user_password(
         "email": user.username,
         "fio": user.full_name or user.username,
         "new_password": new_password,
+        "password_was_generated": password_was_generated,
+        "sessions_revoked": revoke_sessions,
         "message": "Пароль успешно сброшен",
     }
 

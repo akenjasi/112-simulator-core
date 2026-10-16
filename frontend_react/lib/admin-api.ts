@@ -38,6 +38,8 @@ export interface ResetPasswordResult {
   user_id: string
   username: string
   new_password: string
+  password_was_generated: boolean
+  sessions_revoked: boolean
   message: string
 }
 
@@ -133,10 +135,17 @@ export async function deleteUser(userId: string): Promise<{ status: string; user
   return res.json()
 }
 
-export async function resetUserPassword(userId: string): Promise<ResetPasswordResult> {
+export async function resetUserPassword(
+  userId: string,
+  options: { password?: string; revokeSessions?: boolean } = {}
+): Promise<ResetPasswordResult> {
   const res = await fetch(`/api/admin/users/${userId}/reset-password`, {
     method: "POST",
     headers: getAuthHeaders(),
+    body: JSON.stringify({
+      password: options.password ?? null,
+      revoke_sessions: options.revokeSessions ?? false,
+    }),
   })
   if (!res.ok) {
     const errorBody = await res.json().catch(() => ({}))
