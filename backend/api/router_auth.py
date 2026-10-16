@@ -104,69 +104,51 @@ async def login(
     if role:
         normalized_role = _ROLE_MAP.get(str(role).lower(), str(role).upper())
 
-    if password in ("demo", "demo123"):
-        # DEVELOPMENT BYPASS: Allow login with password "demo"
-        if normalized_role:
-            stmt = select(User).where(User.role == normalized_role, User.is_active == True)  # noqa: E712
-        else:
-            stmt = select(User).where(User.username == username, User.is_active == True)  # noqa: E712
+    ldap_success = False
+    ldap_enabled = os.getenv("LDAP_ENABLED", "False").lower() in ("true", "1", "yes")
+    if ldap_enabled:
+        ldap_success = authenticate_ldap(username, password)
+
+    if ldap_success:
+        stmt = select(User).where(User.username == username)
         result = await db.execute(stmt)
-        user = result.scalars().first()
-        if not user and not normalized_role:
-            stmt = select(User).where(User.is_active == True)  # noqa: E712
-            result = await db.execute(stmt)
-            user = result.scalars().first()
+        user = result.scalar_one_or_none()
+
         if not user:
-            raise HTTPException(
-                status_code=status.HTTP_404_NOT_FOUND,
-                detail=f"No active user found in demo mode",
-            )
-    else:
-        ldap_success = False
-        ldap_enabled = os.getenv("LDAP_ENABLED", "False").lower() in ("true", "1", "yes")
-        if ldap_enabled:
-            ldap_success = authenticate_ldap(username, password)
-
-        if ldap_success:
-            stmt = select(User).where(User.username == username)
-            result = await db.execute(stmt)
-            user = result.scalar_one_or_none()
-
-            if not user:
-                # JIT Provisioning
-                default_role = "CADET"
-                if normalized_role:
-                    default_role = normalized_role
-                user = User(
-                    username=username,
-                    password_hash=hash_password("ldap_provisioned_no_password"),
-                    role=default_role,
-                    is_active=True
-                )
-                db.add(user)
-                await db.commit()
-                await db.refresh(user)
-        else:
+            # JIT Provisioning
+            default_role = "CADET"
             if normalized_role:
-                stmt = select(User).where(
-                    User.username == username,
-                    User.role == normalized_role,
-                    User.is_active == True,  # noqa: E712
-                )
-            else:
-                stmt = select(User).where(
-                    User.username == username,
-                    User.is_active == True,  # noqa: E712
-                )
-            result = await db.execute(stmt)
-            user = result.scalar_one_or_none()
-    
-            if not user or not verify_password(password, user.password_hash):
-                raise HTTPException(
-                    status_code=status.HTTP_401_UNAUTHORIZED,
-                    detail="Invalid credentials",
-                    headers={"WWW-Authenticate": "Bearer"},
-                )
+                default_role = normalized_role
+            user = User(
+                username=username,
+                password_hash=hash_password("ldap_provisioned_no_password"),
+                role=default_role,
+                is_active=True
+            )
+            db.add(user)
+            await db.commit()
+            await db.refresh(user)
+    else:
+        if normalized_role:
+            stmt = select(User).where(
+                User.username == username,
+                User.role == normalized_role,
+                User.is_active == True,  # noqa: E712
+            )
+        else:
+            stmt = select(User).where(
+                User.username == username,
+                User.is_active == True,  # noqa: E712
+            )
+        result = await db.execute(stmt)
+        user = result.scalar_one_or_none()
+
+        if not user or not verify_password(password, user.password_hash):
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid credentials",
+                headers={"WWW-Authenticate": "Bearer"},
+            )
 
 
     # If 2FA is enabled globally or per-user, require TOTP verification

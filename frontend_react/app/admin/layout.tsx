@@ -2,7 +2,8 @@
 
 import React, { useEffect, useState } from "react"
 import Link from "next/link"
-import { usePathname, useRouter } from "next/navigation"
+import { usePathname } from "next/navigation"
+import RequireAuth from "@/components/auth/RequireAuth"
 import {
   LayoutDashboard,
   Users,
@@ -10,8 +11,6 @@ import {
   Home,
   Shield,
   Activity,
-  AlertOctagon,
-  ArrowLeft,
   Menu,
   SlidersHorizontal,
   X,
@@ -61,7 +60,6 @@ export default function AdminLayout({
 }: {
   children: React.ReactNode
 }) {
-  const router = useRouter()
   let pathname = ""
   try {
     pathname = usePathname() || ""
@@ -69,83 +67,15 @@ export default function AdminLayout({
     pathname = ""
   }
 
-  const [authorized, setAuthorized] = useState<boolean | null>(null)
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false)
 
   useEffect(() => {
     setIsMobileMenuOpen(false)
   }, [pathname])
 
-  useEffect(() => {
-    // Check if user is admin
-    let isCancelled = false
-
-    async function checkRole() {
-      try {
-        const storedRole = localStorage.getItem("user_role") || localStorage.getItem("role")
-        if (storedRole && storedRole.toUpperCase() !== "ADMIN") {
-          if (!isCancelled) {
-            setAuthorized(false)
-          }
-          return
-        }
-
-        const res = await fetch("/api/v1/users/me")
-        if (res.ok) {
-          const user = await res.json()
-          if (!isCancelled) {
-            if (user.role && user.role.toUpperCase() !== "ADMIN") {
-              setAuthorized(false)
-            } else {
-              setAuthorized(true)
-            }
-          }
-        } else {
-          // If in test or dev fallback, assume authorized unless explicitly non-admin
-          if (!isCancelled) {
-            setAuthorized(storedRole ? storedRole.toUpperCase() === "ADMIN" : true)
-          }
-        }
-      } catch {
-        if (!isCancelled) {
-          setAuthorized(true)
-        }
-      }
-    }
-
-    checkRole()
-    return () => {
-      isCancelled = true
-    }
-  }, [])
-
-  if (authorized === false) {
-    return (
-      <div className="min-h-screen bg-slate-100 flex items-center justify-center p-6">
-        <div className="bg-white border-2 border-red-200 rounded-2xl shadow-xl max-w-md w-full p-8 text-center space-y-4">
-          <div className="w-16 h-16 mx-auto bg-red-100 text-red-600 rounded-full flex items-center justify-center">
-            <AlertOctagon className="w-8 h-8" />
-          </div>
-          <h2 className="text-xl font-bold text-slate-800">Доступ ограничен</h2>
-          <p className="text-sm text-slate-600">
-            Этот раздел предназначен исключительно для учетных записей с ролью Администратора.
-          </p>
-          <div className="pt-4">
-            <button
-              onClick={() => router.push("/")}
-              className="inline-flex items-center gap-2 px-5 py-2.5 bg-slate-800 hover:bg-slate-900 text-white text-sm font-semibold rounded-xl transition-colors cursor-pointer"
-            >
-              <ArrowLeft className="w-4 h-4" />
-              Вернуться на главную
-            </button>
-          </div>
-        </div>
-      </div>
-    )
-  }
-
   return (
-    <div className="flex flex-col md:flex-row min-h-screen bg-slate-100 text-slate-800 font-sans admin-workspace">
+    <RequireAuth allowedRoles={["ADMIN"]}>
+      <div className="flex flex-col md:flex-row min-h-screen bg-slate-100 text-slate-800 font-sans admin-workspace">
       {/* Mobile Top Header */}
       <header className="md:hidden flex items-center justify-between px-4 py-3 bg-white border-b-2 border-slate-200 sticky top-0 z-30 shadow-xs">
         <div className="flex items-center gap-2.5">
@@ -323,7 +253,8 @@ export default function AdminLayout({
       <main className="flex-1 min-w-0 bg-slate-50 text-slate-900 p-4 sm:p-6 md:p-8 overflow-y-auto min-h-screen">
         {children}
       </main>
-    </div>
+      </div>
+    </RequireAuth>
   )
 }
 

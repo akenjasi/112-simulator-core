@@ -13,8 +13,6 @@ from backend.models.domain_01 import User
 bearer_scheme = HTTPBearer(auto_error=False)
 
 
-import os
-
 async def get_current_user(
     credentials: HTTPAuthorizationCredentials = Depends(bearer_scheme),
     db: AsyncSession = Depends(get_db),
@@ -23,16 +21,7 @@ async def get_current_user(
 
     Raises HTTP 401 if token is missing, invalid, expired, or user not found.
     """
-    is_testing = os.getenv("TESTING", "").lower() in ("true", "1")
-
     if credentials is None:
-        if not is_testing:
-            # Dev / Demo fallback: use active ADMIN user
-            stmt = select(User).where(User.role == "ADMIN", User.is_active == True)  # noqa: E712
-            result = await db.execute(stmt)
-            dev_user = result.scalars().first()
-            if dev_user:
-                return dev_user
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Not authenticated",
@@ -40,13 +29,6 @@ async def get_current_user(
         )
 
     token = credentials.credentials
-    if token in ("demo_token", "demo"):
-        stmt = select(User).where(User.role == "ADMIN", User.is_active == True)  # noqa: E712
-        result = await db.execute(stmt)
-        demo_user = result.scalars().first()
-        if demo_user:
-            return demo_user
-
     payload = decode_access_token(token)
     if payload is None:
         raise HTTPException(

@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from "react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
+import RequireAuth from "@/components/auth/RequireAuth"
 import {
   Home,
   PlayCircle,
@@ -79,7 +80,8 @@ export default function TeacherLayout({
   }, [pathname])
 
   return (
-    <div className="flex flex-col md:flex-row min-h-screen bg-gray-100 text-[#49555d] font-sans teacher-workspace">
+    <RequireAuth allowedRoles={["TEACHER"]}>
+      <div className="flex flex-col md:flex-row min-h-screen bg-gray-100 text-[#49555d] font-sans teacher-workspace">
       {/* Mobile Top Header */}
       <header className="md:hidden flex items-center justify-between px-4 py-3 bg-white border-b-2 border-[#c9ced1] sticky top-0 z-30 shadow-xs">
         <div className="flex items-center gap-2.5">
@@ -251,7 +253,8 @@ export default function TeacherLayout({
       <main className="flex-1 min-w-0 bg-white text-[#49555d] p-4 sm:p-6 md:p-8 overflow-y-auto min-h-screen">
         {children}
       </main>
-    </div>
+      </div>
+    </RequireAuth>
   )
 }
 

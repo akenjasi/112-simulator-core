@@ -270,7 +270,7 @@ describe('Admin Panel Pages and Components', () => {
       </AdminLayout>
     );
 
-    expect(screen.getByText(/Панель администратора/i)).toBeInTheDocument();
+    expect(await screen.findByText(/Панель администратора/i)).toBeInTheDocument();
     expect(screen.getByRole('link', { name: /Дашборд/i })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: /Пользователи/i })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: /Система и бэкапы/i })).toBeInTheDocument();
