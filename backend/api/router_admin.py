@@ -84,7 +84,10 @@ async def get_security_policies(db: AsyncSession = Depends(get_db)):
     defaults = {
         "MIN_PASSWORD_LENGTH": "8",
         "SESSION_TIMEOUT_MINUTES": "60",
-        "REQUIRE_2FA_ALL": "false"
+        "REQUIRE_2FA_ALL": "false",
+        # Disabled by default: an administrator explicitly enables the legacy
+        # operator role before teachers may assign it to a lesson.
+        "ENABLE_OPERATOR_112_FOR_LESSONS": "false",
     }
     
     current = {p.key: p.value for p in policies}

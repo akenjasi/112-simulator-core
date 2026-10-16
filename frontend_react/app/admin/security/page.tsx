@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { Button, Card, Col, Form, Input, Row, Switch, notification } from "antd";
 import { DownloadOutlined, SaveOutlined } from "@ant-design/icons";
+import { getAuthHeaders } from "@/lib/admin-api";
 
 interface SecurityPolicy {
   key: string;
@@ -12,6 +13,8 @@ interface SecurityPolicy {
 export default function SecurityPoliciesPage() {
   const [form] = Form.useForm();
   const [loading, setLoading] = useState(false);
+  const [operator112Enabled, setOperator112Enabled] = useState(false);
+  const [isSavingOperator112Access, setIsSavingOperator112Access] = useState(false);
 
   useEffect(() => {
     fetchPolicies();
@@ -21,27 +24,59 @@ export default function SecurityPoliciesPage() {
     try {
       setLoading(true);
       const res = await fetch("/api/admin/security-policies", {
-        headers: {
-          Authorization: `Bearer ${localStorage.getItem("token") || ""}`,
-        },
+        headers: getAuthHeaders(),
       });
       if (res.ok) {
         const data = await res.json();
         const policies = data.policies || [];
         const initialValues: any = {};
+        let nextOperator112Enabled = false;
         policies.forEach((p: SecurityPolicy) => {
-          if (p.key === "REQUIRE_2FA_ALL") {
+          if (p.key === "ENABLE_OPERATOR_112_FOR_LESSONS") {
+            nextOperator112Enabled = p.value === "true";
+          } else if (p.key === "REQUIRE_2FA_ALL") {
             initialValues[p.key] = p.value === "true";
           } else {
             initialValues[p.key] = p.value;
           }
         });
         form.setFieldsValue(initialValues);
+        setOperator112Enabled(nextOperator112Enabled);
       }
     } catch (error) {
       console.error(error);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleOperator112AccessChange = async (enabled: boolean) => {
+    const previousValue = operator112Enabled;
+    setOperator112Enabled(enabled);
+    setIsSavingOperator112Access(true);
+
+    try {
+      const res = await fetch("/api/admin/security-policies", {
+        method: "PUT",
+        headers: getAuthHeaders(),
+        body: JSON.stringify({
+          policies: [
+            {
+              key: "ENABLE_OPERATOR_112_FOR_LESSONS",
+              value: enabled.toString(),
+            },
+          ],
+        }),
+      });
+
+      if (!res.ok) throw new Error("Не удалось сохранить настройку");
+      notification.success({ message: "Доступ к роли «Оператор 112» обновлён" });
+    } catch (error) {
+      console.error(error);
+      setOperator112Enabled(previousValue);
+      notification.error({ message: "Не удалось обновить доступ к роли «Оператор 112»" });
+    } finally {
+      setIsSavingOperator112Access(false);
     }
   };
 
@@ -54,10 +89,7 @@ export default function SecurityPoliciesPage() {
     try {
       const res = await fetch("/api/admin/security-policies", {
         method: "PUT",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${localStorage.getItem("token") || ""}`,
-        },
+        headers: getAuthHeaders(),
         body: JSON.stringify({ policies }),
       });
       if (res.ok) {
@@ -137,6 +169,18 @@ export default function SecurityPoliciesPage() {
             valuePropName="checked"
           >
             <Switch />
+          </Form.Item>
+
+          <Form.Item
+            label="Разрешить роль «Оператор 112» при создании уроков"
+            extra="При выключенной настройке преподаватели видят и могут выбрать только роль «Диспетчер ДДС»."
+          >
+            <Switch
+              checked={operator112Enabled}
+              loading={isSavingOperator112Access}
+              onChange={handleOperator112AccessChange}
+              aria-label="Разрешить роль «Оператор 112» при создании уроков"
+            />
           </Form.Item>
 
           <Button type="primary" htmlType="submit" icon={<SaveOutlined />}>

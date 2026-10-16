@@ -3,7 +3,7 @@ from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 from backend.models.domain_03 import Assignment, ExamSession
 from backend.models.domain_04 import TicketResult, EvaluationResult, IncidentCard
-from backend.models.domain_02 import GeneratedTicket
+from backend.models.domain_02 import GeneratedTicket, ScenarioTicket
 from backend.models.domain_01 import User
 from backend.core.security import decode_access_token
 from sqlalchemy import select
@@ -144,16 +144,15 @@ async def test_get_student_lessons(cadet_auth_client: AsyncClient, db_session: A
 
 
 @pytest.mark.asyncio
-async def test_demo_session_creation(cadet_auth_client: AsyncClient, db_session: AsyncSession):
+async def test_demo_session_creation_defaults_to_dds(cadet_auth_client: AsyncClient, db_session: AsyncSession):
     """
-    Проверка эндпоинта создания демо-сессии POST /api/v1/sessions/demo для OPERATOR_112.
+    Демо-сессия курсанта по умолчанию создаётся для ДДС.
     """
     gt = GeneratedTicket(category="ДТП", subcategory="Авария", complexity=2, plot="Demo plot", status="active")
     db_session.add(gt)
     await db_session.commit()
 
-    payload = {"target_role": "OPERATOR_112"}
-    response = await cadet_auth_client.post("/api/v1/sessions/demo", json=payload)
+    response = await cadet_auth_client.post("/api/v1/sessions/demo", json={})
 
     assert response.status_code == 200, f"Error: {response.text}"
     data = response.json()
@@ -161,9 +160,9 @@ async def test_demo_session_creation(cadet_auth_client: AsyncClient, db_session:
     assert "session_id" in data
     assert "ticket_id" in data
     assert "role" in data
-    assert data["role"] == "OPERATOR_112"
+    assert data["role"] == "DISPATCHER_DDS"
     assert "redirect_url" in data
-    assert "/operator/journal?" in data["redirect_url"]
+    assert "/dds/journal?" in data["redirect_url"]
 
     session_id = data["session_id"]
     sess_res = await db_session.execute(select(ExamSession).where(ExamSession.session_id == session_id))
@@ -171,6 +170,29 @@ async def test_demo_session_creation(cadet_auth_client: AsyncClient, db_session:
 
     assert exam_session is not None
     assert exam_session.status == "ACTIVE"
+
+
+@pytest.mark.asyncio
+async def test_demo_session_rejects_operator_role_for_cadet(cadet_auth_client: AsyncClient):
+    """Курсант не может вернуть скрытую роль 112 прямым API-запросом."""
+    response = await cadet_auth_client.post(
+        "/api/v1/sessions/demo",
+        json={"target_role": "OPERATOR_112"},
+    )
+
+    assert response.status_code == 403
+
+
+@pytest.mark.asyncio
+async def test_demo_session_allows_operator_role_for_admin(auth_client: AsyncClient):
+    """Администратор может запустить 112 только при явном выборе роли."""
+    response = await auth_client.post(
+        "/api/v1/sessions/demo",
+        json={"target_role": "OPERATOR_112"},
+    )
+
+    assert response.status_code == 200, response.text
+    assert response.json()["role"] == "OPERATOR_112"
 
 
 @pytest.mark.asyncio
@@ -198,11 +220,13 @@ async def test_demo_session_creation_dds(cadet_auth_client: AsyncClient, db_sess
     assert card is not None
     assert card.card_origin == "112_CALL"
 
-    # Выбранный билет должен соответствовать категории карточки
-    ticket_res = await db_session.execute(select(GeneratedTicket).where(GeneratedTicket.id == data["ticket_id"]))
-    chosen_ticket = ticket_res.scalar_one_or_none()
-    assert chosen_ticket is not None
-    assert card.filled_data.get("category") == chosen_ticket.category
+    # Демо-эндпоинт создаёт собственный сценарий, который наполняет карточку.
+    scenario_res = await db_session.execute(
+        select(ScenarioTicket).where(ScenarioTicket.scenario_id == data["ticket_id"])
+    )
+    scenario = scenario_res.scalar_one_or_none()
+    assert scenario is not None
+    assert card.filled_data.get("category") == scenario.settings.get("category")
 
 
 @pytest.mark.asyncio
@@ -244,15 +268,15 @@ async def test_student_id_and_no_avatar_url(auth_client: AsyncClient, cadet_auth
 
 
 @pytest.mark.asyncio
-async def test_demo_session_no_tickets_404(cadet_auth_client: AsyncClient, db_session: AsyncSession):
+async def test_demo_session_uses_its_own_scenario(cadet_auth_client: AsyncClient, db_session: AsyncSession):
     """
-    Проверка возврата 404, если в GeneratedTicket нет билетов.
+    Демо-запуск не зависит от ранее созданных GeneratedTicket.
     """
     from sqlalchemy import delete
     await db_session.execute(delete(GeneratedTicket))
     await db_session.commit()
 
-    res = await cadet_auth_client.post("/api/v1/sessions/demo", json={"target_role": "OPERATOR_112"})
-    assert res.status_code == 404
-    assert "билеты" in res.json()["detail"].lower()
+    res = await cadet_auth_client.post("/api/v1/sessions/demo", json={"target_role": "DISPATCHER_DDS"})
+    assert res.status_code == 200
+    assert res.json()["role"] == "DISPATCHER_DDS"
 

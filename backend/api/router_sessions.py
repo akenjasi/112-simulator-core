@@ -284,9 +284,15 @@ async def create_demo_session(
         except Exception:
             pass
 
-    target_role = (req.target_role if req and req.target_role else "OPERATOR_112").upper()
+    target_role = (req.target_role if req and req.target_role else "DISPATCHER_DDS").upper()
     if target_role not in ("OPERATOR_112", "DISPATCHER_DDS"):
-        target_role = "OPERATOR_112"
+        target_role = "DISPATCHER_DDS"
+
+    if target_role == "OPERATOR_112" and (not current_user or current_user.role != "ADMIN"):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Демо-сессия оператора 112 доступна только администратору",
+        )
 
     import uuid
     demo_uuid = str(uuid.uuid4())

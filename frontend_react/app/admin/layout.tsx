@@ -13,6 +13,7 @@ import {
   AlertOctagon,
   ArrowLeft,
   Menu,
+  SlidersHorizontal,
   X,
 } from "lucide-react"
 
@@ -37,6 +38,11 @@ export const adminNavItems: AdminNavItem[] = [
     name: "Система и бэкапы",
     href: "/admin/system",
     icon: Database,
+  },
+  {
+    name: "Политики и доступ ролей",
+    href: "/admin/security",
+    icon: SlidersHorizontal,
   },
   {
     name: "Профиль и 2FA",

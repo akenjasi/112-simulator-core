@@ -11,7 +11,7 @@ import backend.models.domain_03  # noqa: F401
 import backend.models.domain_04  # noqa: F401
 import backend.models.domain_05  # noqa: F401
 import backend.models.domain_06  # noqa: F401
-from backend.models.domain_01 import StudentGroup
+from backend.models.domain_01 import SecurityPolicy, StudentGroup
 from backend.models.domain_03 import Assignment
 
 
@@ -32,14 +32,14 @@ async def init_db():
 
 
 @pytest.mark.asyncio
-async def test_create_lesson_waiting_status(teacher_auth_client):
+async def test_create_dds_lesson_waiting_status(teacher_auth_client):
     """
     Тест проверяет эндпоинт создания группового урока.
     Ожидается, что при валидных данных урок будет создан со статусом WAITING.
     """
     payload = {
         "group_id": "group-test-41",
-        "target_role": "OPERATOR_112",
+        "target_role": "DISPATCHER_DDS",
         "categories": ["Взрывы", "ДТП"],
         "complexity": "adaptive",
         "time_limit_seconds": 30,
@@ -51,7 +51,7 @@ async def test_create_lesson_waiting_status(teacher_auth_client):
 
     assert data["status"] == "WAITING"
     assert data["group_id"] == "group-test-41"
-    assert data["target_role"] == "OPERATOR_112"
+    assert data["target_role"] == "DISPATCHER_DDS"
     assert data["complexity"] == "adaptive"
 
     async with AsyncSessionLocal() as session:
@@ -61,6 +61,31 @@ async def test_create_lesson_waiting_status(teacher_auth_client):
 
         assert assignment is not None
         assert assignment.status == "WAITING"
+
+
+@pytest.mark.asyncio
+async def test_operator_112_lesson_is_rejected_when_feature_is_disabled(teacher_auth_client):
+    """Преподаватель не может обойти выключенный переключатель прямым API-запросом."""
+    res = await teacher_auth_client.post(
+        "/api/v1/lessons",
+        json={"group_id": "group-test-41", "target_role": "OPERATOR_112", "complexity": "adaptive"},
+    )
+    assert res.status_code == 403
+
+
+@pytest.mark.asyncio
+async def test_operator_112_lesson_is_available_when_admin_feature_is_enabled(teacher_auth_client):
+    """После включения настройки администратором преподаватель может создать урок 112."""
+    async with AsyncSessionLocal() as session:
+        session.add(SecurityPolicy(key="ENABLE_OPERATOR_112_FOR_LESSONS", value="true"))
+        await session.commit()
+
+    res = await teacher_auth_client.post(
+        "/api/v1/lessons",
+        json={"group_id": "group-test-41", "target_role": "OPERATOR_112", "complexity": "adaptive"},
+    )
+    assert res.status_code == 201, res.text
+    assert res.json()["target_role"] == "OPERATOR_112"
 
 
 @pytest.mark.asyncio

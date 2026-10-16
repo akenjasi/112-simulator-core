@@ -72,7 +72,7 @@ class StudentLessonHistoryItem(BaseModel):
 
 
 class DemoSessionRequest(BaseModel):
-    target_role: Optional[str] = Field("OPERATOR_112", description="Целевая роль (OPERATOR_112 или DISPATCHER_DDS)")
+    target_role: Optional[str] = Field("DISPATCHER_DDS", description="Целевая роль (OPERATOR_112 или DISPATCHER_DDS)")
 
 
 class DemoSessionResponse(BaseModel):

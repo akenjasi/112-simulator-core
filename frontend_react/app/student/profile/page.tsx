@@ -22,7 +22,6 @@ import {
   Tooltip,
 } from "recharts"
 import {
-  Headphones,
   Radio,
   Award,
   AlertTriangle,
@@ -40,7 +39,6 @@ import {
   Download,
   BookOpen,
   Target,
-  Zap,
   Sparkles,
   Bot,
 } from "lucide-react"
@@ -164,7 +162,7 @@ const DEFAULT_CATEGORIES: CompetenceItem[] = [
 ]
 
 export default function StudentProfilePage() {
-  const [role, setRole] = useState<"OPERATOR_112" | "DISPATCHER_DDS">("OPERATOR_112")
+  const role = "DISPATCHER_DDS" as const
   const [activeTab, setActiveTab] = useState<"lessons" | "docs" | "ai_advice">("lessons")
   const [userProfile, setUserProfile] = useState<UserProfile>({
     username: "cadet@system112.ru",
@@ -432,36 +430,12 @@ export default function StudentProfilePage() {
             </div>
           </div>
 
-          {/* Center / Right: Compact Role toggle (112 / DDS) and quick actions */}
+          {/* Center / Right: Fixed dispatcher role and quick actions */}
           <div className="flex items-center gap-2 shrink-0">
-            {/* Role Switcher */}
-            <div className="bg-muted p-1 rounded-lg border flex items-center gap-1">
-              <button
-                type="button"
-                onClick={() => setRole("OPERATOR_112")}
-                className={`flex items-center gap-1.5 px-3 py-1 rounded-md text-xs font-semibold transition-all cursor-pointer ${
-                  role === "OPERATOR_112"
-                    ? "bg-background text-primary shadow-xs ring-1 ring-border"
-                    : "text-muted-foreground hover:text-foreground"
-                }`}
-              >
-                <Headphones className="h-3.5 w-3.5" />
-                <span>Оператор 112</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => setRole("DISPATCHER_DDS")}
-                className={`flex items-center gap-1.5 px-3 py-1 rounded-md text-xs font-semibold transition-all cursor-pointer ${
-                  role === "DISPATCHER_DDS"
-                    ? "bg-background text-primary shadow-xs ring-1 ring-border"
-                    : "text-muted-foreground hover:text-foreground"
-                }`}
-              >
-                <Radio className="h-3.5 w-3.5" />
-                <span>Диспетчер ДДС</span>
-              </button>
-            </div>
+            <Badge variant="outline" className="flex items-center gap-1.5 px-3 py-1 text-xs font-semibold">
+              <Radio className="h-3.5 w-3.5" />
+              <span>Диспетчер ДДС</span>
+            </Badge>
 
             <Button
               variant="outline"
@@ -492,13 +466,7 @@ export default function StudentProfilePage() {
       {/* Main Content Area - Clean, tightly spaced to fit on screen */}
       <main className="max-w-7xl w-full mx-auto px-4 sm:px-6 py-4 space-y-4 flex-1">
         {/* Section 1: Practical Metrics with Trends (Month score removed) */}
-        <div
-          className={`grid gap-3 ${
-            role === "OPERATOR_112"
-              ? "grid-cols-2 sm:grid-cols-3 lg:grid-cols-5"
-              : "grid-cols-2 sm:grid-cols-2 lg:grid-cols-4"
-          }`}
-        >
+        <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-3">
           {/* Metric 1: Average Score All-time */}
           <Card className="border shadow-2xs p-3">
             <div className="flex items-center justify-between text-muted-foreground">
@@ -590,23 +558,6 @@ export default function StudentProfilePage() {
             </div>
           </Card>
 
-          {/* Metric 5: Service Accuracy Percent (Only for OPERATOR_112) */}
-          {role === "OPERATOR_112" && (
-            <Card className="border shadow-2xs p-3">
-              <div className="flex items-center justify-between text-muted-foreground">
-                <span className="text-[11px] font-semibold uppercase tracking-wider">
-                  Точность служб
-                </span>
-                <Zap className="h-4 w-4 text-amber-500" />
-              </div>
-              <div className="mt-1">
-                <div className="text-2xl font-black text-foreground">
-                  {stats.service_accuracy_percent.toFixed(1)}%
-                </div>
-                <p className="text-[11px] text-muted-foreground mt-0.5">Выбор экстренных служб</p>
-              </div>
-            </Card>
-          )}
         </div>
 
         {/* Section 2: Competence Matrix & Top Errors (Fatal vs Minor) */}
@@ -619,7 +570,7 @@ export default function StudentProfilePage() {
                   <CardTitle className="text-sm font-bold flex items-center gap-2">
                     <span>Матрица компетенций</span>
                     <Badge variant="outline" className="text-[10px] font-normal">
-                      {role === "OPERATOR_112" ? "Оператор 112" : "Диспетчер ДДС"}
+                      Диспетчер ДДС
                     </Badge>
                   </CardTitle>
                   <CardDescription className="text-xs mt-0.5">

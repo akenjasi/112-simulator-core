@@ -4,6 +4,8 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import SessionSetupPage from '@/app/teacher/sessions/new/page';
 
 describe('ТЗ 41: Запуск урока (Создание сессии) - Настройка и UI', () => {
+  let operator112Enabled = true;
+
   const mockGroups = [
     {
       group_id: 'grp-1',
@@ -38,8 +40,21 @@ describe('ТЗ 41: Запуск урока (Создание сессии) - Н�
   ];
 
   beforeEach(() => {
+    operator112Enabled = true;
     vi.stubGlobal('fetch', vi.fn((url: string, init?: RequestInit) => {
       const urlStr = url.toString();
+
+      if (urlStr.endsWith('/api/v1/lessons/available-roles')) {
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          json: async () => ({
+            roles: operator112Enabled
+              ? ['OPERATOR_112', 'DISPATCHER_DDS']
+              : ['DISPATCHER_DDS'],
+          }),
+        });
+      }
 
       if (urlStr.endsWith('/api/v1/groups') && (!init || init.method === 'GET' || !init.method)) {
         return Promise.resolve({
@@ -125,7 +140,9 @@ describe('ТЗ 41: Запуск урока (Создание сессии) - Н�
     expect(submitBtn).toBeDisabled();
 
     // Role options (Оператор 112, Диспетчер ДДС)
-    expect(screen.getByText(/Оператор 112/i)).toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.getByText(/Оператор 112/i)).toBeInTheDocument();
+    });
     expect(screen.getByText(/Диспетчер ДДС/i)).toBeInTheDocument();
 
     // Complexity cards: "Базовый", "Средний", "Продвинутый", "Адаптивный / Смешанный"
@@ -152,6 +169,16 @@ describe('ТЗ 41: Запуск урока (Создание сессии) - Н�
     fireEvent.change(groupSelect, { target: { value: 'grp-1' } });
     expect(groupSelect.value).toBe('grp-1');
     expect(submitBtn).not.toBeDisabled();
+  });
+
+  it('hides Operator 112 when the administrator disables it', async () => {
+    operator112Enabled = false;
+    render(<SessionSetupPage />);
+
+    await waitFor(() => {
+      expect(screen.getByRole('radio', { name: /Диспетчер ДДС/i })).toBeInTheDocument();
+    });
+    expect(screen.queryByRole('radio', { name: /Оператор 112/i })).not.toBeInTheDocument();
   });
 
   it('should submit lesson configuration to POST /api/v1/lessons', async () => {

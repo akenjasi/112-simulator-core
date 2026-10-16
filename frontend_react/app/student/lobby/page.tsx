@@ -46,7 +46,7 @@ function downsampleTo16k(buffer: Float32Array, sampleRate: number): Int16Array {
 
 export default function StudentLobbyPage() {
   const router = useRouter()
-  const [selectedRole, setSelectedRole] = useState<"OPERATOR_112" | "DISPATCHER_DDS">("OPERATOR_112")
+  const selectedRole = "DISPATCHER_DDS" as const
   const [isStartingDemo, setIsStartingDemo] = useState<boolean>(false)
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
   const [evaluationToast, setEvaluationToast] = useState<string | null>(null)
@@ -74,13 +74,11 @@ export default function StudentLobbyPage() {
   const recordedChunksRef = useRef<Blob[]>([])
   const scriptProcessorRef = useRef<ScriptProcessorNode | null>(null)
 
-  // Try to read cadet role and evaluation toast from storage if set
+  // The cadet workflow is restricted to dispatcher training. Overwrite the
+  // legacy preference so an old browser session cannot restore the 112 role.
   useEffect(() => {
     if (typeof window !== "undefined") {
-      const storedRole = localStorage.getItem("cadet_role")
-      if (storedRole === "DISPATCHER_DDS" || storedRole === "OPERATOR_112") {
-        setSelectedRole(storedRole)
-      }
+      localStorage.setItem("cadet_role", "DISPATCHER_DDS")
       const storedToast = sessionStorage.getItem("evaluation_toast")
       if (storedToast) {
         setEvaluationToast(storedToast)
@@ -95,13 +93,6 @@ export default function StudentLobbyPage() {
       stopMicTest()
     }
   }, [])
-
-  const handleSelectRole = (role: "OPERATOR_112" | "DISPATCHER_DDS") => {
-    setSelectedRole(role)
-    if (typeof window !== "undefined") {
-      localStorage.setItem("cadet_role", role)
-    }
-  }
 
   // Web Audio test tone with stereo panning for left/right headset verification
   const playChannelTone = (channel: "left" | "right") => {
@@ -373,10 +364,6 @@ export default function StudentLobbyPage() {
     setIsStartingDemo(true)
     setErrorMessage(null)
 
-    if (typeof window !== "undefined") {
-      localStorage.setItem("cadet_role", selectedRole)
-    }
-
     try {
       const response = await fetch("/api/v1/sessions/demo", {
         method: "POST",
@@ -397,9 +384,7 @@ export default function StudentLobbyPage() {
       const data = await response.json()
       const targetUrl =
         data.redirect_url ||
-        (selectedRole === "DISPATCHER_DDS"
-          ? `/dds/journal?session_id=${data.session_id}&ticket_id=${data.ticket_id}&incoming_call=true`
-          : `/operator/journal?session_id=${data.session_id}&ticket_id=${data.ticket_id}&incoming_call=true`)
+        `/dds/journal?session_id=${data.session_id}&ticket_id=${data.ticket_id}&incoming_call=true`
 
       // Perform redirect
       router.push(targetUrl)
@@ -461,11 +446,7 @@ export default function StudentLobbyPage() {
               <div className="absolute inset-0 rounded-full bg-primary/20 animate-ping opacity-75" />
               <div className="absolute inset-2 rounded-full bg-primary/15 animate-pulse" />
               <div className="relative z-10 w-14 h-14 rounded-full bg-primary text-white flex items-center justify-center shadow-lg">
-                {selectedRole === "OPERATOR_112" ? (
-                  <Headphones className="h-7 w-7 animate-pulse" />
-                ) : (
-                  <Radio className="h-7 w-7 animate-pulse" />
-                )}
+                <Radio className="h-7 w-7 animate-pulse" />
               </div>
             </div>
 
@@ -480,7 +461,7 @@ export default function StudentLobbyPage() {
           </CardHeader>
 
           <CardContent className="space-y-4 pt-1 pb-5 px-6">
-            {/* Role switch toggle: Operator 112 vs Dispatcher DDS */}
+            {/* The cadet-facing simulator starts only the dispatcher workflow. */}
             <div className="p-3.5 rounded-xl border bg-muted/40 space-y-2.5">
               <div className="flex items-center justify-between text-xs font-semibold text-muted-foreground uppercase tracking-wider">
                 <span>Целевая учебная роль:</span>
@@ -489,38 +470,12 @@ export default function StudentLobbyPage() {
                 </span>
               </div>
 
-              <div className="grid grid-cols-2 gap-2.5">
-                <button
-                  type="button"
-                  onClick={() => handleSelectRole("OPERATOR_112")}
-                  className={`flex items-center gap-2.5 p-2.5 rounded-lg border text-left transition-all cursor-pointer ${
-                    selectedRole === "OPERATOR_112"
-                      ? "border-primary bg-primary/10 shadow-xs ring-1 ring-primary/40 font-bold"
-                      : "border-border/70 hover:bg-muted/60 opacity-80"
-                  }`}
-                >
-                  <Headphones className="h-5 w-5 text-primary shrink-0" />
-                  <div>
-                    <div className="text-sm font-semibold text-foreground">Оператор 112</div>
-                    <div className="text-[11px] text-muted-foreground">Прием звонков</div>
-                  </div>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => handleSelectRole("DISPATCHER_DDS")}
-                  className={`flex items-center gap-2.5 p-2.5 rounded-lg border text-left transition-all cursor-pointer ${
-                    selectedRole === "DISPATCHER_DDS"
-                      ? "border-primary bg-primary/10 shadow-xs ring-1 ring-primary/40 font-bold"
-                      : "border-border/70 hover:bg-muted/60 opacity-80"
-                  }`}
-                >
-                  <Radio className="h-5 w-5 text-primary shrink-0" />
-                  <div>
-                    <div className="text-sm font-semibold text-foreground">Диспетчер ДДС</div>
-                    <div className="text-[11px] text-muted-foreground">Направление служб</div>
-                  </div>
-                </button>
+              <div className="flex items-center gap-2.5 p-2.5 rounded-lg border border-primary bg-primary/10 shadow-xs ring-1 ring-primary/40">
+                <Radio className="h-5 w-5 text-primary shrink-0" />
+                <div>
+                  <div className="text-sm font-semibold text-foreground">Диспетчер ДДС</div>
+                  <div className="text-[11px] text-muted-foreground">Направление служб</div>
+                </div>
               </div>
             </div>
 
@@ -566,7 +521,7 @@ export default function StudentLobbyPage() {
                   <>
                     <Play className="h-5 w-5 fill-current" />
                     <span>
-                      Демо-запуск ({selectedRole === "DISPATCHER_DDS" ? "Диспетчер ДДС" : "Оператор 112"})
+                      Демо-запуск (Диспетчер ДДС)
                     </span>
                     <ArrowRight className="h-4 w-4 ml-1" />
                   </>
@@ -575,7 +530,7 @@ export default function StudentLobbyPage() {
               <p className="text-[11px] text-muted-foreground text-center">
                 Переход на рабочее место:{" "}
                 <span className="font-semibold text-foreground">
-                  {selectedRole === "DISPATCHER_DDS" ? "Диспетчер ДДС (/dds)" : "Оператор 112 (/operator)"}
+                  Диспетчер ДДС (/dds)
                 </span>
               </p>
             </div>

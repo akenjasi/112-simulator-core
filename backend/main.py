@@ -69,7 +69,7 @@ async def lifespan(app: FastAPI):
     import backend.models.domain_05  # noqa: F401
     import backend.models.domain_06  # noqa: F401
 
-    from backend.database import engine
+    from backend.database import AsyncSessionLocal, engine
     from backend.models.base import Base
 
     async with engine.begin() as conn:
@@ -109,6 +109,15 @@ async def lifespan(app: FastAPI):
                     )
             except Exception:
                 pass
+
+    from backend.core.bootstrap import ensure_initial_admin
+    async with AsyncSessionLocal() as db:
+        await ensure_initial_admin(
+            db,
+            username=os.getenv("INITIAL_ADMIN_USERNAME"),
+            password=os.getenv("INITIAL_ADMIN_PASSWORD"),
+            full_name=os.getenv("INITIAL_ADMIN_FULL_NAME"),
+        )
 
     # --- Warmup Heavy Models (ASR, SLM, TTS) ---
     import logging

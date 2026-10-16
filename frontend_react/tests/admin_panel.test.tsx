@@ -64,6 +64,20 @@ beforeEach(() => {
   vi.clearAllMocks();
   localStorage.clear();
   localStorage.setItem('user_role', 'ADMIN');
+  localStorage.setItem('access_token', 'admin-session-token');
+  Object.defineProperty(window, 'matchMedia', {
+    writable: true,
+    value: vi.fn().mockImplementation((query) => ({
+      matches: false,
+      media: query,
+      onchange: null,
+      addListener: vi.fn(),
+      removeListener: vi.fn(),
+      addEventListener: vi.fn(),
+      removeEventListener: vi.fn(),
+      dispatchEvent: vi.fn(),
+    })),
+  });
 
   global.fetch = vi.fn((url: string | Request | URL, options?: RequestInit) => {
     const urlString = String(url);
@@ -97,6 +111,31 @@ beforeEach(() => {
           JSON.stringify({
             backup_file: 'backup_2026-09-27_112000.sql',
             status: 'ok',
+          }),
+          { status: 200, headers: { 'Content-Type': 'application/json' } }
+        )
+      );
+    }
+
+    if (urlString.includes('/api/admin/security-policies')) {
+      if (options?.method === 'PUT') {
+        return Promise.resolve(
+          new Response(JSON.stringify({ status: 'ok' }), {
+            status: 200,
+            headers: { 'Content-Type': 'application/json' },
+          })
+        );
+      }
+
+      return Promise.resolve(
+        new Response(
+          JSON.stringify({
+            policies: [
+              { key: 'MIN_PASSWORD_LENGTH', value: '8' },
+              { key: 'SESSION_TIMEOUT_MINUTES', value: '60' },
+              { key: 'REQUIRE_2FA_ALL', value: 'false' },
+              { key: 'ENABLE_OPERATOR_112_FOR_LESSONS', value: 'false' },
+            ],
           }),
           { status: 200, headers: { 'Content-Type': 'application/json' } }
         )
@@ -235,7 +274,32 @@ describe('Admin Panel Pages and Components', () => {
     expect(screen.getByRole('link', { name: /Дашборд/i })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: /Пользователи/i })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: /Система и бэкапы/i })).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /Политики и доступ ролей/i })).toHaveAttribute('href', '/admin/security');
     expect(screen.getByRole('link', { name: /На главную/i })).toBeInTheDocument();
     expect(screen.getByText('Admin Content Test')).toBeInTheDocument();
+  });
+
+  it('should save the Operator 112 access toggle without validating unrelated security fields', async () => {
+    const SecurityPoliciesPage = (await import('../app/admin/security/page')).default;
+    render(<SecurityPoliciesPage />);
+
+    const operatorToggle = await screen.findByRole('switch', {
+      name: /Разрешить роль «Оператор 112»/i,
+    });
+    fireEvent.click(operatorToggle);
+
+    await waitFor(() => {
+      const saveCall = (global.fetch as any).mock.calls.find(
+        ([url, options]: [string, RequestInit]) =>
+          String(url).includes('/api/admin/security-policies') && options?.method === 'PUT'
+      );
+      expect(saveCall).toBeTruthy();
+      expect(JSON.parse(saveCall[1].body)).toEqual({
+        policies: [{ key: 'ENABLE_OPERATOR_112_FOR_LESSONS', value: 'true' }],
+      });
+      expect((saveCall[1].headers as Record<string, string>).Authorization).toBe(
+        'Bearer admin-session-token'
+      );
+    });
   });
 });

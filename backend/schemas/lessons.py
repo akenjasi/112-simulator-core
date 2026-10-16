@@ -5,7 +5,7 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator, model_valida
 
 class LessonCreate(BaseModel):
     group_id: str = Field(..., description="ID учебной группы")
-    target_role: Optional[str] = Field("OPERATOR_112", description="Целевая роль (OPERATOR_112 или DISPATCHER_DDS)")
+    target_role: Optional[str] = Field("DISPATCHER_DDS", description="Целевая роль (OPERATOR_112 или DISPATCHER_DDS)")
     categories: Optional[List[str]] = Field(default_factory=list, description="Список категорий происшествий")
     complexity: Optional[str] = Field("adaptive", description="Сложность (level_1, level_2, level_3, adaptive, mixed)")
     time_limit_seconds: Optional[int] = Field(30, description="Лимит времени на вызов в секундах")
@@ -22,7 +22,7 @@ class LessonCreate(BaseModel):
     @classmethod
     def validate_target_role(cls, v: Optional[str]) -> str:
         if v is None:
-            return "OPERATOR_112"
+            return "DISPATCHER_DDS"
         if v not in ("OPERATOR_112", "DISPATCHER_DDS"):
             raise ValueError("target_role must be 'OPERATOR_112' or 'DISPATCHER_DDS'")
         return v

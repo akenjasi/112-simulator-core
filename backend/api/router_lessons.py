@@ -6,7 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.core.deps import require_role, get_current_user
 from backend.database import get_db
-from backend.models.domain_01 import User, StudentGroup
+from backend.models.domain_01 import SecurityPolicy, User, StudentGroup
 from backend.models.domain_02 import ScenarioTicket
 from backend.models.domain_03 import Lesson, ExamSession
 from backend.models.domain_04 import EvaluationResult, TicketResult, IncidentCard
@@ -23,6 +23,29 @@ lessons_router = APIRouter(
     prefix="/api/v1/lessons",
     tags=["Lessons"],
 )
+
+OPERATOR_112_LESSONS_POLICY = "ENABLE_OPERATOR_112_FOR_LESSONS"
+
+
+async def _operator_112_lessons_enabled(db: AsyncSession) -> bool:
+    """Read the administrator-controlled lesson-role feature flag safely."""
+    result = await db.execute(
+        select(SecurityPolicy.value).where(SecurityPolicy.key == OPERATOR_112_LESSONS_POLICY)
+    )
+    value = result.scalar_one_or_none()
+    return str(value).strip().lower() == "true" if value is not None else False
+
+
+@lessons_router.get(
+    "/available-roles",
+    dependencies=[Depends(require_role("ADMIN", "TEACHER"))],
+)
+async def get_available_lesson_roles(db: AsyncSession = Depends(get_db)):
+    """Return the roles a teacher may currently use for a new lesson."""
+    roles = ["DISPATCHER_DDS"]
+    if await _operator_112_lessons_enabled(db):
+        roles.insert(0, "OPERATOR_112")
+    return {"roles": roles}
 
 
 async def _build_cadet_stats(
@@ -320,6 +343,12 @@ async def create_lesson(
     db: AsyncSession = Depends(get_db),
 ):
     """Создать групповой урок со статусом WAITING."""
+    if payload.target_role == "OPERATOR_112" and not await _operator_112_lessons_enabled(db):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Создание уроков для оператора 112 отключено администратором",
+        )
+
     # Check that group exists
     stmt_group = select(StudentGroup).where(StudentGroup.group_id == payload.group_id)
     res_group = await db.execute(stmt_group)

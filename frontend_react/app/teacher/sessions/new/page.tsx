@@ -118,6 +118,7 @@ export default function SessionSetupPage() {
   }
 
   const [groups, setGroups] = useState<StudentGroup[]>([])
+  const [availableRoles, setAvailableRoles] = useState<TargetRole[]>(["DISPATCHER_DDS"])
   const [isLoadingGroups, setIsLoadingGroups] = useState(true)
   const [classifierCategories, setClassifierCategories] = useState<string[]>([])
   const [isLoadingCategories, setIsLoadingCategories] = useState(true)
@@ -149,7 +150,7 @@ export default function SessionSetupPage() {
   } = useForm<SessionFormData>({
     defaultValues: {
       group_id: "",
-      target_role: "OPERATOR_112",
+      target_role: "DISPATCHER_DDS",
       categories: [],
       complexity: "adaptive",
       distribution_mode: "live_stream",
@@ -193,6 +194,25 @@ export default function SessionSetupPage() {
       setIsLoadingGroups(false)
     }
   }, [])
+
+  const loadAvailableRoles = useCallback(async () => {
+    try {
+      const res = await fetch("/api/v1/lessons/available-roles")
+      if (!res.ok) throw new Error(`Unable to load lesson roles: ${res.status}`)
+
+      const data = await res.json()
+      const roles = Array.isArray(data?.roles)
+        ? data.roles.filter((role: unknown): role is TargetRole => role === "OPERATOR_112" || role === "DISPATCHER_DDS")
+        : []
+      const normalizedRoles = roles.includes("DISPATCHER_DDS") ? roles : ["DISPATCHER_DDS"]
+      setAvailableRoles(normalizedRoles)
+      if (!normalizedRoles.includes("OPERATOR_112")) setValue("target_role", "DISPATCHER_DDS")
+    } catch (e) {
+      console.error("Failed to load available lesson roles", e)
+      setAvailableRoles(["DISPATCHER_DDS"])
+      setValue("target_role", "DISPATCHER_DDS")
+    }
+  }, [setValue])
 
   // Load classifier incident categories in strictly alphabetical order
 
@@ -245,8 +265,9 @@ export default function SessionSetupPage() {
 
   useEffect(() => {
     loadGroups()
+    loadAvailableRoles()
     loadCategories()
-  }, [loadGroups, loadCategories])
+  }, [loadGroups, loadAvailableRoles, loadCategories])
 
   useEffect(() => {
     const compNum = COMPLEXITY_LEVEL_MAP[selectedComplexity] ?? null
@@ -723,7 +744,7 @@ export default function SessionSetupPage() {
                     <RadioGroup
                       value={field.value}
                       onValueChange={field.onChange}
-                      className="grid grid-cols-2 gap-2"
+                      className={`grid gap-2 ${availableRoles.length > 1 ? "grid-cols-2" : "grid-cols-1"}`}
                     >
                       {[
                         {
@@ -738,7 +759,7 @@ export default function SessionSetupPage() {
                           icon: Radio,
                           badge: "Карточки ДДС",
                         },
-                      ].map((role) => {
+                      ].filter((role) => availableRoles.includes(role.value as TargetRole)).map((role) => {
                         const Icon = role.icon
                         const isSelected = field.value === role.value
                         return (

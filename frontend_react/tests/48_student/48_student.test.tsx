@@ -186,7 +186,7 @@ describe("ТЗ 48: Личный кабинет ученика и Лобби (Ф�
   })
 
   describe("1. Личный кабинет ученика (/student/profile)", () => {
-    it("renders cadet profile compact header with FIO, short ID, role toggle, and no avatars", async () => {
+    it("renders cadet profile with the dispatcher-only role and no avatars", async () => {
       render(<StudentProfilePage />)
 
       // Header title, FIO and short ID
@@ -196,9 +196,9 @@ describe("ТЗ 48: Личный кабинет ученика и Лобби (Ф�
         expect(screen.getByText("ID: СМ1-12")).toBeInTheDocument()
       })
 
-      // Role buttons
-      expect(screen.getByRole("button", { name: /Оператор 112/i })).toBeInTheDocument()
-      expect(screen.getByRole("button", { name: /Диспетчер ДДС/i })).toBeInTheDocument()
+      // The cadet-facing profile must not expose the 112 operator role.
+      expect(screen.queryByRole("button", { name: /Оператор 112/i })).not.toBeInTheDocument()
+      expect(screen.getAllByText(/Диспетчер ДДС/i).length).toBeGreaterThan(0)
 
       // Absence of avatar change button or gamification
       expect(screen.queryByText(/Сменить фото/i)).not.toBeInTheDocument()
@@ -214,16 +214,15 @@ describe("ТЗ 48: Личный кабинет ученика и Лобби (Ф�
         expect(screen.getByText("За 7 дней")).toBeInTheDocument()
         expect(screen.getByText("Решено карточек")).toBeInTheDocument()
         expect(screen.getByText("Время обработки")).toBeInTheDocument()
-        expect(screen.getByText("Точность служб")).toBeInTheDocument()
+        expect(screen.queryByText("Точность служб")).not.toBeInTheDocument()
       })
 
-      // Check values for 112
+      // The profile loads dispatcher statistics by default.
       await waitFor(() => {
-        expect(screen.getByText("88.5")).toBeInTheDocument()
-        expect(screen.getByText("91.0")).toBeInTheDocument()
-        expect(screen.getByText("24")).toBeInTheDocument()
-        expect(screen.getByText("65")).toBeInTheDocument()
-        expect(screen.getByText("96.2%")).toBeInTheDocument()
+        expect(screen.getByText("81.0")).toBeInTheDocument()
+        expect(screen.getByText("84.0")).toBeInTheDocument()
+        expect(screen.getByText("16")).toBeInTheDocument()
+        expect(screen.getByText("70")).toBeInTheDocument()
       })
     })
 
@@ -240,30 +239,20 @@ describe("ТЗ 48: Личный кабинет ученика и Лобби (Ф�
       await waitFor(() => {
         expect(screen.getByText(/Фатальные ошибки/i)).toBeInTheDocument()
         expect(screen.getByText(/Мелкие недочеты/i)).toBeInTheDocument()
-        expect(screen.getByText("Долго вызывал скорую")).toBeInTheDocument()
-        expect(screen.getByText("Не спросил номер квартиры")).toBeInTheDocument()
+        expect(screen.getByText("Нарушен регламент SLA передачи службе")).toBeInTheDocument()
+        expect(screen.getByText("Не указан наряд дежурной бригады")).toBeInTheDocument()
       })
     })
 
-    it("toggles roles and dynamically updates statistics from API", async () => {
+    it("loads dispatcher statistics without exposing a role switch", async () => {
       render(<StudentProfilePage />)
 
       await waitFor(() => {
-        expect(screen.getByText("88.5")).toBeInTheDocument()
-      })
-
-      // Switch to DISPATCHER_DDS
-      const ddsBtn = screen.getByRole("button", { name: /Диспетчер ДДС/i })
-      await act(async () => {
-        fireEvent.click(ddsBtn)
-      })
-
-      // Should load mockStatsDDS
-      await waitFor(() => {
         expect(screen.getByText("81.0")).toBeInTheDocument()
-        expect(screen.getByText("16")).toBeInTheDocument()
-        expect(screen.getByText("Нарушен регламент SLA передачи службе")).toBeInTheDocument()
       })
+
+      expect(screen.queryByRole("button", { name: /Оператор 112/i })).not.toBeInTheDocument()
+      expect(screen.queryByRole("button", { name: /Диспетчер ДДС/i })).not.toBeInTheDocument()
     })
 
     it("renders learning history and reference materials tabs", async () => {
@@ -312,49 +301,22 @@ describe("ТЗ 48: Личный кабинет ученика и Лобби (Ф�
   })
 
   describe("2. Лобби и Демо-запуск (/student/lobby)", () => {
-    it("renders waiting screen with required text and role toggle", () => {
+    it("renders the waiting screen with the dispatcher as the only available role", () => {
       render(<StudentLobbyPage />)
 
       expect(
         screen.getByText(/Ожидание старта\. Преподаватель подготавливает занятие\.\.\./i)
       ).toBeInTheDocument()
       expect(screen.getByText("Целевая учебная роль:")).toBeInTheDocument()
-      expect(screen.getByText("Оператор 112")).toBeInTheDocument()
+      expect(screen.queryByRole("button", { name: /Оператор 112/i })).not.toBeInTheDocument()
       expect(screen.getByText("Диспетчер ДДС")).toBeInTheDocument()
       expect(screen.getByRole("button", { name: /Демо-запуск/i })).toBeInTheDocument()
       expect(screen.getByText("Личный кабинет")).toBeInTheDocument()
     })
 
-    it("triggers POST /api/v1/sessions/demo for OPERATOR_112 and redirects to /operator", async () => {
+    it("ignores a stored legacy operator role and starts a DDS demo", async () => {
+      localStorage.setItem("cadet_role", "OPERATOR_112")
       render(<StudentLobbyPage />)
-
-      const demoBtn = screen.getByRole("button", { name: /Демо-запуск/i })
-      await act(async () => {
-        fireEvent.click(demoBtn)
-      })
-
-      await waitFor(() => {
-        expect(global.fetch).toHaveBeenCalledWith(
-          "/api/v1/sessions/demo",
-          expect.objectContaining({
-            method: "POST",
-            body: JSON.stringify({ target_role: "OPERATOR_112" }),
-          })
-        )
-        expect(pushMock).toHaveBeenCalledWith(
-          "/operator?session_id=sess-demo-777&ticket_id=ticket-demo-888"
-        )
-      })
-    })
-
-    it("triggers POST /api/v1/sessions/demo for DISPATCHER_DDS and redirects to /dds", async () => {
-      render(<StudentLobbyPage />)
-
-      // Switch to DDS
-      const ddsBtn = screen.getByText("Диспетчер ДДС")
-      await act(async () => {
-        fireEvent.click(ddsBtn)
-      })
 
       const demoBtn = screen.getByRole("button", { name: /Демо-запуск/i })
       await act(async () => {
@@ -374,6 +336,7 @@ describe("ТЗ 48: Личный кабинет ученика и Лобби (Ф�
         )
       })
     })
+
   })
 
   describe("3. Рабочее место ДДС (/dds) при переходе", () => {
