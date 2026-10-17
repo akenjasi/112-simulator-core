@@ -273,8 +273,8 @@ export default function StudentProfilePage() {
 
     try {
       const url = idToUse
-        ? `/api/ai-analytics/trigger?cadet_id=${idToUse}&background=false`
-        : `/api/ai-analytics/trigger?background=false`
+        ? `/api/ai-analytics/trigger?cadet_id=${idToUse}&background=true`
+        : `/api/ai-analytics/trigger?background=true`
 
       const res = await fetch(url, {
         method: "POST",
@@ -295,17 +295,52 @@ export default function StudentProfilePage() {
             ? "Для вашего профиля не найдено данных сессий. Пройдите хотя бы одну тренировку."
             : `Не удалось сформировать отчет (код ошибки: ${res.status}).`)
         setAiError(errMsg)
+        setIsTriggeringAi(false)
         return
       }
 
       const result = await res.json()
       if (result.status === "warning") {
         setAiError(result.message || "Нет завершенных тренировок для формирования анализа.")
+        setIsTriggeringAi(false)
         return
       }
 
-      setAiSuccessMessage("Методические рекомендации успешно обновлены нейросетью Qwen 2.5 9B!")
-      await loadAiAdvice(idToUse || result.target_id)
+      // Record known advice IDs before generation
+      const initialIds = new Set(aiAdvices.map((a) => a.advice_id))
+      const targetCadetId = idToUse || result.target_id || (result.tasks && result.tasks[0]?.target_id)
+
+      // Poll every 2.5s until the new advice appears (up to 45s)
+      let completed = false
+      const maxAttempts = 18
+      for (let attempt = 0; attempt < maxAttempts; attempt++) {
+        await new Promise((resolve) => setTimeout(resolve, 2500))
+        try {
+          const checkRes = await fetch(`/api/ai-analytics/student/${targetCadetId}`, {
+            headers: getAuthHeaders(),
+          })
+          if (checkRes.ok) {
+            const list: AIAdviceItem[] = await checkRes.json()
+            if (Array.isArray(list)) {
+              const hasNew = list.some((item) => !initialIds.has(item.advice_id))
+              if (hasNew || list.length > aiAdvices.length) {
+                setAiAdvices(list)
+                completed = true
+                break
+              }
+            }
+          }
+        } catch {
+          // ignore transient poll error
+        }
+      }
+
+      if (completed) {
+        setAiSuccessMessage("Методические рекомендации успешно обновлены нейросетью Qwen 2.5 9B!")
+      } else {
+        await loadAiAdvice(targetCadetId)
+        setAiSuccessMessage("Анализ обрабатывается. Если отчет не отобразился сразу, обновите список через несколько секунд.")
+      }
     } catch (err: any) {
       console.warn("Failed to trigger AI analysis:", err)
       setAiError(err?.message || "Ошибка сетевого соединения с сервером нейроаналитики.")

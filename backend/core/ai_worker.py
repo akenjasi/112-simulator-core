@@ -404,7 +404,7 @@ class AIAnalysisWorker:
         self,
         job_type: str,
         target_id: str,
-        sleep_seconds: float = 5.0,
+        sleep_seconds: float = 0.0,
         model: str = DEFAULT_MODEL_NAME,
     ) -> str:
         """Enqueue an analysis job and return job_id."""
@@ -426,7 +426,7 @@ class AIAnalysisWorker:
         job_id = job.get("job_id")
         job_type = job.get("type")
         target_id = job.get("target_id")
-        sleep_seconds = job.get("sleep_seconds", 5.0)
+        sleep_seconds = job.get("sleep_seconds", 0.0)
         model = job.get("model", DEFAULT_MODEL_NAME)
 
         logger.info("Processing job %s (%s, target=%s)...", job_id, job_type, target_id)

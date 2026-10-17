@@ -112,7 +112,7 @@ async def trigger_ai_analysis(
         bg = req.background
     sleep_sec = (req.sleep_seconds if req else None) if sleep_seconds is None else sleep_seconds
     if sleep_sec is None:
-        sleep_sec = 0.0 if not bg else 5.0
+        sleep_sec = 0.0
     model = (req.model if req else None) or DEFAULT_MODEL_NAME
 
     # Role check: cadets can only trigger for themselves
