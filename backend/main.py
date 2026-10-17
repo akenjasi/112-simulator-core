@@ -53,6 +53,7 @@ from backend.api.router_knowledge import knowledge_router
 from backend.api.router_asr import router_asr
 from backend.api.router_telephony import router_telephony
 from backend.api.router_ai_analytics import router as ai_analytics_router
+from backend.api.router_dds_reports import router as dds_reports_router
 from backend.api.router_integration import router_integration
 from backend.core.audit_middleware import AuditMiddleware
 
@@ -68,6 +69,7 @@ async def lifespan(app: FastAPI):
     import backend.models.domain_04  # noqa: F401
     import backend.models.domain_05  # noqa: F401
     import backend.models.domain_06  # noqa: F401
+    import backend.models.dds_report_job  # noqa: F401
 
     from backend.database import AsyncSessionLocal, engine
     from backend.models.base import Base
@@ -150,9 +152,17 @@ async def lifespan(app: FastAPI):
 
     logger.info("Models warmup complete.")
 
-    yield
-    # (Optional) dispose engine on shutdown to release pool connections
-    await engine.dispose()
+    from backend.core.dds_report_jobs import dds_report_job_worker
+    await dds_report_job_worker.start()
+
+    try:
+        yield
+    finally:
+        try:
+            await dds_report_job_worker.stop()
+        finally:
+            # (Optional) dispose engine on shutdown to release pool connections
+            await engine.dispose()
 
 
 # ─── App factory ──────────────────────────────────────────────────────────────
@@ -202,6 +212,7 @@ app.include_router(knowledge_router)
 app.include_router(router_asr)
 app.include_router(router_telephony)
 app.include_router(ai_analytics_router)
+app.include_router(dds_reports_router)
 app.include_router(router_integration)
 
 # Standalone addresses search endpoint (must be separate to avoid conflict with /{ticket_id})
