@@ -117,10 +117,19 @@ describe("ТЗ 48: Личный кабинет ученика и Лобби (Ф�
 
   beforeEach(() => {
     pushMock.mockClear()
+    localStorage.clear()
+    localStorage.setItem("token", "student-contract-test-token")
     vi.stubGlobal(
       "fetch",
       vi.fn((url: string, init?: RequestInit) => {
         const urlStr = url.toString()
+
+        if (urlStr === "/api/dds/assignments") {
+          return Promise.resolve({ok: true, status: 200, json: async () => []})
+        }
+        if (urlStr.startsWith("/api/dds/sessions/")) {
+          return Promise.resolve({ok: false, status: 404, json: async () => ({detail: "missing assigned session"})})
+        }
 
         if (urlStr.includes("/api/v1/users/me")) {
           return Promise.resolve({
@@ -183,6 +192,7 @@ describe("ТЗ 48: Личный кабинет ученика и Лобби (Ф�
 
   afterEach(() => {
     vi.unstubAllGlobals()
+    localStorage.clear()
   })
 
   describe("1. Личный кабинет ученика (/student/profile)", () => {
@@ -301,12 +311,11 @@ describe("ТЗ 48: Личный кабинет ученика и Лобби (Ф�
   })
 
   describe("2. Лобби и Демо-запуск (/student/lobby)", () => {
-    it("renders the waiting screen with the dispatcher as the only available role", () => {
+    it("renders actual assignment availability with the dispatcher as the only available role", async () => {
       render(<StudentLobbyPage />)
 
-      expect(
-        screen.getByText(/Ожидание старта\. Преподаватель подготавливает занятие\.\.\./i)
-      ).toBeInTheDocument()
+      expect(await screen.findByText("Нет назначенных занятий ДДС")).toBeInTheDocument()
+      expect(screen.getByText("Назначенные занятия ДДС")).toBeInTheDocument()
       expect(screen.getByText("Целевая учебная роль:")).toBeInTheDocument()
       expect(screen.queryByRole("button", { name: /Оператор 112/i })).not.toBeInTheDocument()
       expect(screen.getByText("Диспетчер ДДС")).toBeInTheDocument()
@@ -340,17 +349,17 @@ describe("ТЗ 48: Личный кабинет ученика и Лобби (Ф�
   })
 
   describe("3. Рабочее место ДДС (/dds) при переходе", () => {
-    it("immediately shows active incident card without waiting offline state", async () => {
+    it("does not substitute demo data when an assigned session cannot be loaded", async () => {
       render(<DdsPage />)
 
-      // Check active state
-      await waitFor(() => {
-        expect(screen.getByText(/Смена активна \(ДДС-112\)/i)).toBeInTheDocument()
-        expect(screen.getByText(/Сессия #session-/i)).toBeInTheDocument()
-      })
-
-      // Incident card panels should be visible immediately
-      expect(screen.getByText(/очевидец/i)).toBeInTheDocument()
+      expect(await screen.findByRole("alert")).toBeInTheDocument()
+      expect(screen.queryByText(/Смена активна \(ДДС-112\)/i)).not.toBeInTheDocument()
+      expect(screen.queryByText(/очевидец/i)).not.toBeInTheDocument()
+      expect(global.fetch).toHaveBeenCalledWith(
+        "/api/dds/sessions/session-demo-123", expect.objectContaining({
+          headers: expect.objectContaining({Authorization: "Bearer student-contract-test-token"}),
+        })
+      )
     })
   })
 })

@@ -180,12 +180,21 @@ export default function GroupsPage() {
   })
   const [isResettingGroup, setIsResettingGroup] = useState<Record<string, boolean>>({})
 
+  // Authentication headers helper
+  const getAuthHeaders = useCallback((): HeadersInit => {
+    if (typeof window === "undefined") return {}
+    const token = localStorage.getItem("token")
+    return token ? { Authorization: `Bearer ${token}` } : {}
+  }, [])
+
   // Fetch groups from backend
   const loadGroups = useCallback(async () => {
     try {
       setIsLoading(true)
       setError(null)
-      const res = await fetch("/api/v1/groups")
+      const res = await fetch("/api/v1/groups", {
+        headers: getAuthHeaders(),
+      })
       if (!res.ok) {
         throw new Error(`Ошибка загрузки списка групп (${res.status})`)
       }
@@ -206,13 +215,15 @@ export default function GroupsPage() {
     } finally {
       setIsLoading(false)
     }
-  }, [bulkTargetGroupId])
+  }, [bulkTargetGroupId, getAuthHeaders])
 
   // Fetch students for a specific group
   const loadGroupStudents = useCallback(async (groupId: string) => {
     try {
       setLoadingGroupStudents((prev) => ({ ...prev, [groupId]: true }))
-      const res = await fetch(`/api/v1/groups/${groupId}/students`)
+      const res = await fetch(`/api/v1/groups/${groupId}/students`, {
+        headers: getAuthHeaders(),
+      })
       if (res.ok) {
         const data = await res.json()
         setGroupStudents((prev) => ({ ...prev, [groupId]: Array.isArray(data) ? data : [] }))
@@ -222,7 +233,7 @@ export default function GroupsPage() {
     } finally {
       setLoadingGroupStudents((prev) => ({ ...prev, [groupId]: false }))
     }
-  }, [])
+  }, [getAuthHeaders])
 
   // Toggle group accordion
   const toggleGroupExpand = (groupId: string) => {
@@ -239,7 +250,9 @@ export default function GroupsPage() {
   const loadAllStudents = useCallback(async () => {
     try {
       setLoadingAllStudents(true)
-      const res = await fetch("/api/v1/students")
+      const res = await fetch("/api/v1/students", {
+        headers: getAuthHeaders(),
+      })
       if (res.ok) {
         const data = await res.json()
         setAllStudents(Array.isArray(data) ? data : [])
@@ -249,7 +262,7 @@ export default function GroupsPage() {
     } finally {
       setLoadingAllStudents(false)
     }
-  }, [])
+  }, [getAuthHeaders])
 
   useEffect(() => {
     loadGroups()
@@ -289,7 +302,10 @@ export default function GroupsPage() {
 
       const res = await fetch("/api/v1/groups", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          ...getAuthHeaders(),
+        },
         body: JSON.stringify(payload),
       })
 
@@ -333,6 +349,7 @@ export default function GroupsPage() {
 
       const res = await fetch(`/api/v1/groups/${selectedGroupId}/students/csv`, {
         method: "POST",
+        headers: getAuthHeaders(),
         body: formData,
       })
 
@@ -375,7 +392,10 @@ export default function GroupsPage() {
 
       const res = await fetch(`/api/v1/groups/${groupId}/students/single`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          ...getAuthHeaders(),
+        },
         body: JSON.stringify({
           last_name: form.last_name.trim(),
           first_name: form.first_name.trim(),
@@ -409,6 +429,7 @@ export default function GroupsPage() {
       setError(null)
       const res = await fetch(`/api/v1/groups/${groupId}/students/${userId}`, {
         method: "DELETE",
+        headers: getAuthHeaders(),
       })
       if (!res.ok) {
         const errData = await res.json().catch(() => null)
@@ -429,6 +450,10 @@ export default function GroupsPage() {
       setError(null)
       const res = await fetch(`/api/users/${student.user_id}/reset-password`, {
         method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...getAuthHeaders(),
+        },
       })
       if (!res.ok) {
         const errData = await res.json().catch(() => null)
@@ -456,6 +481,10 @@ export default function GroupsPage() {
       setError(null)
       const res = await fetch(`/api/groups/${group.group_id}/reset-passwords`, {
         method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...getAuthHeaders(),
+        },
       })
       if (!res.ok) {
         const errData = await res.json().catch(() => null)
@@ -566,7 +595,10 @@ export default function GroupsPage() {
       for (const studentId of selectedStudentIds) {
         await fetch(`/api/v1/groups/${bulkTargetGroupId}/students/single`, {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: {
+            "Content-Type": "application/json",
+            ...getAuthHeaders(),
+          },
           body: JSON.stringify({ user_id: studentId }),
         })
       }

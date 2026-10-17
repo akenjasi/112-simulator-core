@@ -64,7 +64,7 @@ beforeEach(() => {
     }
 
     if (url.includes("/api/admin/backups/") && url.includes("/download")) {
-      return new Response(new Blob(["-- test backup sql dump content --"]), {
+      return new Response("-- test backup sql dump content --", {
         status: 200,
         headers: {
           "Content-Disposition": 'attachment; filename="database_20261017_120000_123456_a1b2c3.sql"',

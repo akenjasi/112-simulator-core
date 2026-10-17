@@ -8,9 +8,11 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm.attributes import flag_modified
 
-from backend.core.deps import require_role
+from backend.core.deps import require_role, get_current_user
 from backend.core.sla_monitor import calculate_sla_status, update_service_status
 from backend.database import get_db
+from backend.models.domain_01 import User
+from backend.models.domain_03 import Assignment, ExamSession
 from backend.models.domain_04 import IncidentCard
 from backend.schemas.dds import DDSActionRequest, DDSCardResponse
 
@@ -56,10 +58,22 @@ def _normalize_assigned_services(
 @router_dds.get("/cards", response_model=List[DDSCardResponse])
 @router_dds.get("/cards/", response_model=List[DDSCardResponse], include_in_schema=False)
 async def get_dds_cards(
+    current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> List[DDSCardResponse]:
     """Get active incident cards not yet marked as 'Отработана' with calculated SLA status."""
     stmt = select(IncidentCard).where(IncidentCard.status != "Отработана")
+    if current_user.role == "CADET":
+        stmt = stmt.where(IncidentCard.operator_id == current_user.user_id)
+    elif current_user.role == "TEACHER":
+        stmt = stmt.where(
+            (IncidentCard.operator_id == current_user.user_id)
+            | (IncidentCard.session_id.in_(
+                select(ExamSession.session_id)
+                .join(Assignment, ExamSession.assignment_id == Assignment.assignment_id)
+                .where(Assignment.assigned_by == current_user.user_id)
+            ))
+        )
     result = await db.execute(stmt)
     cards = result.scalars().all()
 
@@ -89,6 +103,23 @@ async def get_dds_cards(
     return card_responses
 
 
+async def _is_assigned_dds_card(db: AsyncSession, card: IncidentCard) -> bool:
+    if not card.session_id:
+        return False
+    stmt_s = select(ExamSession).where(ExamSession.session_id == card.session_id)
+    sess = (await db.execute(stmt_s)).scalar_one_or_none()
+    if not sess or not sess.assignment_id:
+        return False
+    if (sess.dynamic_state or {}).get("dds"):
+        return True
+    if sess.session_type == "CARD_ACTIONS":
+        stmt_a = select(Assignment).where(Assignment.assignment_id == sess.assignment_id)
+        assign = (await db.execute(stmt_a)).scalar_one_or_none()
+        if assign and assign.target_role == "DISPATCHER_DDS":
+            return True
+    return False
+
+
 @router_dds.post(
     "/cards/{card_id}/action",
     response_model=DDSCardResponse,
@@ -112,6 +143,12 @@ async def perform_card_action(
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=f"IncidentCard with id '{card_id}' not found",
+        )
+
+    if await _is_assigned_dds_card(db, card):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Assigned DDS cards must use /api/dds/sessions/{session_id}/actions",
         )
 
     now = datetime.now(timezone.utc)
@@ -204,35 +241,48 @@ async def post_dds_action(
 ):
     """Handle action submission from DDS trainee simulator."""
     card_id = payload.get("card_id", "")
+    if not card_id:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="card_id is required",
+        )
+
+    stmt = select(IncidentCard).where(IncidentCard.card_id == card_id)
+    result = await db.execute(stmt)
+    card = result.scalar_one_or_none()
+    if not card:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"IncidentCard with id '{card_id}' not found",
+        )
+
+    if await _is_assigned_dds_card(db, card):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Assigned DDS cards must use /api/dds/sessions/{session_id}/actions",
+        )
+
     service_name = payload.get("service_name", "")
     new_status = payload.get("status", "")
     comment = payload.get("comment", "")
 
-    # If the card exists in DB, perform action on it
-    if card_id:
-        stmt = select(IncidentCard).where(IncidentCard.card_id == card_id)
-        result = await db.execute(stmt)
-        card = result.scalar_one_or_none()
-        if card:
-            now = datetime.now(timezone.utc)
-            services = _normalize_assigned_services(card.assigned_services, card.created_at or now)
-            updated_services = update_service_status(
-                services=services,
-                service_name=service_name,
-                new_status=new_status,
-                comment=comment,
-                current_time=now,
-            )
-            card.assigned_services = updated_services
-            flag_modified(card, "assigned_services")
-            await db.commit()
+    now = datetime.now(timezone.utc)
+    services = _normalize_assigned_services(card.assigned_services, card.created_at or now)
+    updated_services = update_service_status(
+        services=services,
+        service_name=service_name,
+        new_status=new_status,
+        comment=comment,
+        current_time=now,
+    )
+    card.assigned_services = updated_services
+    flag_modified(card, "assigned_services")
+    await db.commit()
 
     return {
         "status": "ok",
-        "evaluation": {
-            "passed": True,
-            "card_id": card_id,
-            "status": new_status,
-        },
+        "card_id": card_id,
+        "service_name": service_name,
+        "new_status": new_status,
     }
 

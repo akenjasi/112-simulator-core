@@ -41,6 +41,12 @@ import {
   ChevronDown,
   ChevronUp,
 } from "lucide-react"
+import { getStoredToken } from "@/lib/auth-session"
+
+const getAuthHeaders = (): Record<string, string> => {
+  const token = getStoredToken()
+  return token ? { Authorization: `Bearer ${token}` } : {}
+}
 
 export interface CadetTicketStats {
   ticket_id: string
@@ -94,11 +100,14 @@ export interface LiveDashboardProps {
 export default function LiveDashboardPage(props: LiveDashboardProps = {}) {
   // Always derive ID from URL on every render (client-side navigation safe)
   const getIdFromUrl = () => {
+    if (props.sessionId) return props.sessionId
     if (typeof window !== "undefined") {
       const sp = new URLSearchParams(window.location.search).get("id")
       if (sp) return sp
+      const match = window.location.pathname.match(/\/teacher\/sessions\/([^/]+)\/live/)
+      if (match && match[1]) return match[1]
     }
-    return props.sessionId || ""
+    return ""
   }
 
   const getStatusFromUrl = (): string => {
@@ -113,15 +122,44 @@ export default function LiveDashboardPage(props: LiveDashboardProps = {}) {
   const [sessionId, setSessionId] = useState<string>(getIdFromUrl)
   const [initialStatusHint, setInitialStatusHint] = useState<string>(getStatusFromUrl)
 
+  // Sync state synchronously when props.sessionId changes between renders
+  const prevPropIdRef = useRef<string | undefined>(props.sessionId)
+  if (props.sessionId && props.sessionId !== prevPropIdRef.current) {
+    prevPropIdRef.current = props.sessionId
+    setSessionId(props.sessionId)
+  }
+
   // Re-sync on client-side navigation (URL changes without page reload)
   useEffect(() => {
-    const id = getIdFromUrl()
-    const status = getStatusFromUrl()
-    if (id && id !== sessionId) setSessionId(id)
-    if (status !== initialStatusHint) setInitialStatusHint(status)
-  }, [typeof window !== "undefined" ? window.location.search : ""])
-  const [stats, setStats] = useState<SessionStats | null>(null)
+    if (!props.sessionId && typeof window !== "undefined") {
+      const id = getIdFromUrl()
+      const status = getStatusFromUrl()
+      if (id && id !== sessionId) setSessionId(id)
+      if (status !== initialStatusHint) setInitialStatusHint(status)
+    }
+  }, [props.sessionId, typeof window !== "undefined" ? window.location.search : ""])
 
+  // Resolve async params safely without resurrecting old IDs
+  useEffect(() => {
+    let active = true
+    if (props.sessionId) return
+    if (props.params) {
+      if (typeof (props.params as any)?.then === "function") {
+        ;(props.params as Promise<{ id: string }>).then((p) => {
+          if (active && p?.id && !props.sessionId) {
+            setSessionId(p.id)
+          }
+        })
+      } else if ((props.params as { id: string })?.id) {
+        setSessionId((props.params as { id: string }).id)
+      }
+    }
+    return () => {
+      active = false
+    }
+  }, [props.sessionId, props.params])
+
+  const [stats, setStats] = useState<SessionStats | null>(null)
   const [isLoading, setIsLoading] = useState<boolean>(true)
   const [error, setError] = useState<string | null>(null)
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null)
@@ -137,46 +175,47 @@ export default function LiveDashboardPage(props: LiveDashboardProps = {}) {
   const [notesSaveStatus, setNotesSaveStatus] = useState<string | null>(null)
   const notesInitialLoadedRef = useRef<boolean>(false)
 
-  // Resolve async params or window path
-  useEffect(() => {
-    if (props.sessionId) {
-      setSessionId(props.sessionId)
-      return
-    }
-    if (props.params) {
-      if (typeof (props.params as any)?.then === "function") {
-        ;(props.params as Promise<{ id: string }>).then((p) => {
-          if (p?.id) setSessionId(p.id)
-        })
-      } else if ((props.params as { id: string })?.id) {
-        setSessionId((props.params as { id: string }).id)
-      }
-    } else if (typeof window !== "undefined") {
-      const match = window.location.pathname.match(/\/teacher\/sessions\/([^/]+)\/live/)
-      if (match && match[1]) {
-        setSessionId(match[1])
-      }
-    }
-  }, [props.sessionId, props.params])
+  // Epoch, request sequence & AbortController tracking
+  const epochRef = useRef<number>(0)
+  const sequenceRef = useRef<number>(0)
+  const activeControllerRef = useRef<AbortController | null>(null)
+  const currentIdRef = useRef<string>(sessionId)
+  currentIdRef.current = sessionId
 
-  // Fetch stats from API with fallback
-  const fetchStats = useCallback(
-    async (isInitial = false) => {
-      // Don't fetch if sessionId is not yet resolved from URL
-      if (!sessionId) return
+  // Core fetch method protected by epoch, request sequence, id, and AbortController
+  const fetchStatsForSession = useCallback(
+    async (targetLessonId: string, epoch: number, isInitial = false) => {
+      if (!targetLessonId) return
+      if (epoch !== epochRef.current || targetLessonId !== currentIdRef.current) return
+
+      // Abort any previous in-flight GET (manual refresh, initial, or poll)
+      if (activeControllerRef.current) {
+        activeControllerRef.current.abort()
+      }
+      const controller = new AbortController()
+      activeControllerRef.current = controller
+
+      // Monotonically increasing sequence for every request to guarantee freshest response wins
+      const reqSeq = ++sequenceRef.current
+
+      if (isInitial) {
+        setIsLoading(true)
+      }
+      setError(null)
+
       try {
-        if (isInitial) setIsLoading(true)
-        setError(null)
+        const res = await fetch(`/api/v1/lessons/${targetLessonId}`, {
+          headers: getAuthHeaders(),
+          signal: controller.signal,
+        })
 
-        // Select endpoint based on sessionId format to avoid extra requests in tests/monitoring
-        const url = (sessionId.startsWith("sess-") || sessionId.includes("session"))
-          ? `/api/v1/sessions/${sessionId}/stats`
-          : `/api/v1/lessons/${sessionId}`
-
-        let res = await fetch(url)
-        if (!res.ok && !url.includes("/sessions/")) {
-          // Fallback to /api/v1/sessions/{id}/stats
-          res = await fetch(`/api/v1/sessions/${sessionId}/stats`)
+        if (
+          controller.signal.aborted ||
+          reqSeq !== sequenceRef.current ||
+          epoch !== epochRef.current ||
+          targetLessonId !== currentIdRef.current
+        ) {
+          return
         }
 
         if (!res.ok) {
@@ -184,47 +223,35 @@ export default function LiveDashboardPage(props: LiveDashboardProps = {}) {
         }
 
         const data = await res.json()
-        const rawStatus = (data.status || (initialStatusHint !== "UNKNOWN" ? initialStatusHint : "WAITING")).toUpperCase()
+
+        if (
+          controller.signal.aborted ||
+          reqSeq !== sequenceRef.current ||
+          epoch !== epochRef.current ||
+          targetLessonId !== currentIdRef.current
+        ) {
+          return
+        }
+
+        const payloadId = data.id || data.lesson_id || data.session_id
+        if (payloadId && String(payloadId) !== String(targetLessonId)) {
+          return
+        }
+
+        const rawStatus = (
+          data.status ||
+          (initialStatusHint !== "UNKNOWN" ? initialStatusHint : "WAITING")
+        ).toUpperCase()
 
         const rawCadets = data.students || data.cadets || []
-        const normalizedCadets: CadetStats[] = rawCadets.map((c: any) => {
-          const tList: CadetTicketStats[] = Array.isArray(c.tickets) ? [...c.tickets] : []
-          if (tList.length === 0 && (c.passed > 0 || c.failed > 0 || rawStatus === "COMPLETED")) {
-            const pCount = c.passed || (rawStatus === "COMPLETED" ? 1 : 0)
-            const fCount = c.failed || 0
-            for (let i = 0; i < pCount; i++) {
-              tList.push({
-                ticket_id: `ticket-${c.cadet_id}-p${i + 1}`,
-                title: i === 0 ? "Билет №1: Пожар в жилом секторе" : `Билет #${i + 1}: Запах газа в подъезде`,
-                status: "passed",
-                score: c.score || 92,
-                errors_count: 0,
-                errors: [],
-              })
-            }
-            for (let j = 0; j < fCount; j++) {
-              tList.push({
-                ticket_id: `ticket-${c.cadet_id}-f${j + 1}`,
-                title: `Билет #${pCount + j + 1}: ДТП с пострадавшими на перекрестке`,
-                status: "failed",
-                score: 50,
-                errors_count: 2,
-                errors: [
-                  "Неверно определена очередность экстренных служб",
-                  "Превышено нормативное время опроса заявителя",
-                ],
-              })
-            }
-          }
-          return {
-            ...c,
-            tickets: tList,
-          }
-        })
+        const normalizedCadets: CadetStats[] = rawCadets.map((c: any) => ({
+          ...c,
+          tickets: Array.isArray(c.tickets) ? c.tickets : [],
+        }))
 
         const normalizedData: SessionStats = {
           ...data,
-          session_id: data.id || data.session_id || sessionId,
+          session_id: payloadId || targetLessonId,
           status: rawStatus,
           cadets: normalizedCadets,
         }
@@ -236,87 +263,179 @@ export default function LiveDashboardPage(props: LiveDashboardProps = {}) {
         }
         setLastUpdated(new Date())
       } catch (err: any) {
+        if (
+          err.name === "AbortError" ||
+          controller.signal.aborted ||
+          reqSeq !== sequenceRef.current ||
+          epoch !== epochRef.current ||
+          targetLessonId !== currentIdRef.current
+        ) {
+          return
+        }
         setError(err.message || "Не удалось загрузить данные мониторинга")
       } finally {
-        if (isInitial) setIsLoading(false)
+        if (
+          !controller.signal.aborted &&
+          reqSeq === sequenceRef.current &&
+          epoch === epochRef.current &&
+          targetLessonId === currentIdRef.current
+        ) {
+          if (isInitial) setIsLoading(false)
+        }
       }
     },
-    [sessionId, initialStatusHint]
+    [initialStatusHint]
   )
 
-  // Polling: every 3s if active or waiting, every 10s if completed
-  const isCompletedStatus = stats?.status === "COMPLETED"
+  // Session lifecycle: reset on ID change, launch fetch and poll
   useEffect(() => {
-    fetchStats(true)
+    currentIdRef.current = sessionId
+    epochRef.current += 1
+    sequenceRef.current += 1
+    const currentEpoch = epochRef.current
 
-    const intervalMs = isCompletedStatus ? 10000 : 3000
+    if (activeControllerRef.current) {
+      activeControllerRef.current.abort()
+      activeControllerRef.current = null
+    }
+
+    // Reset old session data immediately ONLY when sessionId changes
+    setStats(null)
+    setTeacherNotes("")
+    notesInitialLoadedRef.current = false
+    setError(null)
+    setLastUpdated(null)
+    setIsLoading(true)
+    setIsStarting(false)
+    setIsStopping(false)
+    setIsSavingNotes(false)
+    setNotesSaveStatus(null)
+    setExpandedTableCadet(null)
+
+    if (!sessionId) {
+      setIsLoading(false)
+      return
+    }
+
+    fetchStatsForSession(sessionId, currentEpoch, true)
+
+    const intervalMs = 3000
     const intervalId = setInterval(() => {
-      fetchStats(false)
+      fetchStatsForSession(sessionId, currentEpoch, false)
     }, intervalMs)
 
-    return () => clearInterval(intervalId)
-  }, [fetchStats, isCompletedStatus])
+    return () => {
+      epochRef.current += 1
+      sequenceRef.current += 1
+      if (activeControllerRef.current) {
+        activeControllerRef.current.abort()
+        activeControllerRef.current = null
+      }
+      clearInterval(intervalId)
+    }
+  }, [sessionId, fetchStatsForSession])
+
+  // Backward compatible fetchStats helper for manual refresh button
+  const fetchStats = useCallback(
+    (isInitial = false) => {
+      fetchStatsForSession(sessionId, epochRef.current, isInitial)
+    },
+    [sessionId, fetchStatsForSession]
+  )
 
   // Start lesson handler
   const handleStartLesson = async () => {
+    const targetLessonId = currentIdRef.current
+    const epoch = epochRef.current
+    if (!targetLessonId) return
     try {
       setIsStarting(true)
       setError(null)
-      const res = await fetch(`/api/v1/lessons/${sessionId}/start`, {
+      const res = await fetch(`/api/v1/lessons/${targetLessonId}/start`, {
         method: "POST",
+        headers: getAuthHeaders(),
       })
+      if (epoch !== epochRef.current || targetLessonId !== currentIdRef.current) {
+        return
+      }
       if (!res.ok) {
         throw new Error(`Ошибка запуска урока (${res.status})`)
       }
-      await fetchStats(false)
+      await fetchStatsForSession(targetLessonId, epoch, false)
     } catch (err: any) {
+      if (epoch !== epochRef.current || targetLessonId !== currentIdRef.current) return
       setError(err.message || "Не удалось запустить урок")
     } finally {
-      setIsStarting(false)
+      if (epoch === epochRef.current && targetLessonId === currentIdRef.current) {
+        setIsStarting(false)
+      }
     }
   }
 
   // Stop lesson handler
   const handleStopLesson = async () => {
+    const targetLessonId = currentIdRef.current
+    const epoch = epochRef.current
+    if (!targetLessonId) return
     if (!window.confirm("Вы уверены, что хотите завершить урок для всех курсантов?")) {
       return
     }
     try {
       setIsStopping(true)
       setError(null)
-      const res = await fetch(`/api/v1/lessons/${sessionId}/stop`, {
+      const res = await fetch(`/api/v1/lessons/${targetLessonId}/stop`, {
         method: "POST",
+        headers: getAuthHeaders(),
       })
+      if (epoch !== epochRef.current || targetLessonId !== currentIdRef.current) {
+        return
+      }
       if (!res.ok) {
         throw new Error(`Ошибка завершения урока (${res.status})`)
       }
-      await fetchStats(false)
+      await fetchStatsForSession(targetLessonId, epoch, false)
     } catch (err: any) {
+      if (epoch !== epochRef.current || targetLessonId !== currentIdRef.current) return
       setError(err.message || "Не удалось завершить урок")
     } finally {
-      setIsStopping(false)
+      if (epoch === epochRef.current && targetLessonId === currentIdRef.current) {
+        setIsStopping(false)
+      }
     }
   }
 
   // Save teacher notes handler
   const handleSaveNotes = async () => {
+    const targetLessonId = currentIdRef.current
+    const epoch = epochRef.current
+    if (!targetLessonId) return
     try {
       setIsSavingNotes(true)
       setNotesSaveStatus(null)
-      const res = await fetch(`/api/v1/lessons/${sessionId}/notes`, {
+      const res = await fetch(`/api/v1/lessons/${targetLessonId}/notes`, {
         method: "PATCH",
-        headers: { "Content-Type": "application/json" },
+        headers: { "Content-Type": "application/json", ...getAuthHeaders() },
         body: JSON.stringify({ teacher_notes: teacherNotes }),
       })
+      if (epoch !== epochRef.current || targetLessonId !== currentIdRef.current) {
+        return
+      }
       if (!res.ok) {
         throw new Error("Не удалось сохранить заметки")
       }
       setNotesSaveStatus("Заметки успешно сохранены в БД")
-      setTimeout(() => setNotesSaveStatus(null), 3000)
+      setTimeout(() => {
+        if (epoch === epochRef.current && targetLessonId === currentIdRef.current) {
+          setNotesSaveStatus(null)
+        }
+      }, 3000)
     } catch (err: any) {
+      if (epoch !== epochRef.current || targetLessonId !== currentIdRef.current) return
       setError(err.message || "Ошибка сохранения заметок")
     } finally {
-      setIsSavingNotes(false)
+      if (epoch === epochRef.current && targetLessonId === currentIdRef.current) {
+        setIsSavingNotes(false)
+      }
     }
   }
 
@@ -328,9 +447,9 @@ export default function LiveDashboardPage(props: LiveDashboardProps = {}) {
 
   const lessonStatus = (stats?.status || (initialStatusHint !== "UNKNOWN" ? initialStatusHint : "WAITING")).toUpperCase()
   const isCompleted = lessonStatus === "COMPLETED"
-  const overallProgress = isCompleted ? 100 : (stats?.overall_progress ?? 0)
+  const overallProgress = stats?.overall_progress ?? 0
   const totalCadets = stats?.total_cadets ?? cadets.length
-  const totalInProgress = isCompleted ? 0 : (stats?.total_in_progress ?? cadets.reduce((acc, c) => acc + (c.in_progress || 0), 0))
+  const totalInProgress = stats?.total_in_progress ?? cadets.reduce((acc, c) => acc + (c.in_progress || 0), 0)
   const totalPassed = stats?.total_passed ?? cadets.reduce((acc, c) => acc + (c.passed || 0), 0)
   const totalFailed = stats?.total_failed ?? cadets.reduce((acc, c) => acc + (c.failed || 0), 0)
 
@@ -449,13 +568,13 @@ export default function LiveDashboardPage(props: LiveDashboardProps = {}) {
             <div className="space-y-2 text-center md:text-left">
               <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-semibold bg-primary/10 text-primary mb-1">
                 <Users className="h-3.5 w-3.5" />
-                <span>Готовность группы: {totalCadets} курсантов</span>
+                <span>В группе назначено {totalCadets} участников</span>
               </div>
               <h2 className="text-2xl font-bold tracking-tight text-foreground">
                 Урок сконфигурирован и ожидает запуска
               </h2>
               <p className="text-sm text-muted-foreground max-w-xl">
-                Курсанты группы подключены и находятся в режиме ожидания. Нажмите «Запустить симуляцию», чтобы активировать выдачу сценариев и начать отсчет времени.
+                В группе назначено {totalCadets} участников; запустите симуляцию.
               </p>
             </div>
 
@@ -693,20 +812,28 @@ export default function LiveDashboardPage(props: LiveDashboardProps = {}) {
                         {cadet.cadet_name}
                       </CardTitle>
                       <CardDescription className="text-xs">
-                        {cadet.current_ticket || (lessonStatus === "WAITING" ? "Ожидание запуска" : "В сети")}
+                        {cadet.current_ticket || (lessonStatus === "WAITING" ? "Ожидание запуска" : "Участник занятия")}
                       </CardDescription>
                     </div>
                   </div>
 
-                  {cadet.status === "PASSED" || (cadet.passed > 0 && cadet.in_progress === 0 && cadet.failed === 0) ? (
+                  {cadet.status?.toUpperCase() === "COMPLETED" ? (
+                    <Badge variant="default" className="bg-emerald-600 hover:bg-emerald-700 text-xs">
+                      Выполнено
+                    </Badge>
+                  ) : cadet.status?.toUpperCase() === "INCOMPLETE" ? (
+                    <Badge variant="outline" className="text-xs text-amber-600 border-amber-500/30 bg-amber-500/10">
+                      Не завершено
+                    </Badge>
+                  ) : cadet.status?.toUpperCase() === "PASSED" ? (
                     <Badge variant="default" className="bg-emerald-600 hover:bg-emerald-700 text-xs">
                       Сдано
                     </Badge>
-                  ) : cadet.status === "FAILED" || cadet.failed > 0 ? (
+                  ) : cadet.status?.toUpperCase() === "FAILED" ? (
                     <Badge variant="destructive" className="text-xs">
                       Провалено
                     </Badge>
-                  ) : cadet.status === "WAITING" ? (
+                  ) : cadet.status?.toUpperCase() === "WAITING" ? (
                     <Badge variant="outline" className="text-xs text-amber-600 border-amber-500/30 bg-amber-500/10">
                       Ожидает
                     </Badge>
@@ -749,8 +876,8 @@ export default function LiveDashboardPage(props: LiveDashboardProps = {}) {
                 </div>
 
                 <div className="flex items-center justify-between text-xs text-muted-foreground pt-1 border-t">
-                  <span>Балл: {cadet.score !== undefined && cadet.score !== null ? `${cadet.score}/100` : "—"}</span>
-                  <span>{cadet.last_activity || "В сети"}</span>
+                  <span>Балл: {cadet.score !== undefined && cadet.score !== null ? `${cadet.score}/100` : "Нет оценки"}</span>
+                  <span>{cadet.last_activity || "Нет данных об активности"}</span>
                 </div>
 
                 {/* Cadet Tickets Drilldown in Grid View */}
@@ -758,7 +885,7 @@ export default function LiveDashboardPage(props: LiveDashboardProps = {}) {
                   <div className="pt-2 border-t space-y-2">
                     <div className="flex items-center justify-between">
                       <span className="text-xs font-semibold text-muted-foreground">
-                        Решенные билеты ({cadet.tickets.length})
+                        Назначенные билеты ({cadet.tickets.length})
                       </span>
                       <Button
                         variant="ghost"
@@ -781,23 +908,34 @@ export default function LiveDashboardPage(props: LiveDashboardProps = {}) {
                               <span className="font-medium text-foreground">{t.title}</span>
                               <Badge
                                 variant={
-                                  t.status.toLowerCase() === "passed" || t.status.toLowerCase() === "completed"
+                                  t.status?.toLowerCase() === "passed"
                                     ? "default"
-                                    : "destructive"
+                                    : t.status?.toLowerCase() === "failed"
+                                    ? "destructive"
+                                    : "outline"
                                 }
                                 className={`text-[10px] shrink-0 ${
-                                  t.status.toLowerCase() === "passed" || t.status.toLowerCase() === "completed"
+                                  t.status?.toLowerCase() === "passed"
                                     ? "bg-emerald-600 text-white"
+                                    : t.status?.toLowerCase() === "completed"
+                                    ? "bg-slate-500/10 text-slate-700 dark:text-slate-300 border-slate-500/30"
                                     : ""
                                 }`}
                               >
-                                {t.status.toLowerCase() === "passed" || t.status.toLowerCase() === "completed"
-                                  ? "Сдано"
-                                  : "Провалено"}
+                                {(() => {
+                                  const s = t.status?.toLowerCase()
+                                  if (s === "ungraded") return "Выполнено, нет оценки"
+                                  if (s === "completed") return "Выполнено"
+                                  if (s === "incomplete") return "Не завершено"
+                                  if (s === "passed") return "Сдано"
+                                  if (s === "failed") return "Провалено"
+                                  if (s === "in_progress") return "В процессе"
+                                  return s || "—"
+                                })()}
                               </Badge>
                             </div>
                             <div className="flex items-center justify-between text-muted-foreground text-[11px]">
-                              <span>Балл: {t.score !== undefined ? `${t.score}/100` : "—"}</span>
+                              <span>Балл: {t.score !== undefined && t.score !== null ? `${t.score}/100` : "Нет оценки"}</span>
                               {t.errors_count !== undefined && t.errors_count > 0 && (
                                 <span className="text-rose-500 font-medium">Ошибок: {t.errors_count}</span>
                               )}
@@ -878,7 +1016,7 @@ export default function LiveDashboardPage(props: LiveDashboardProps = {}) {
                         </div>
                       </TableCell>
                       <TableCell className="text-right font-semibold">
-                        {cadet.score !== undefined && cadet.score !== null ? `${cadet.score}` : "—"}
+                        {cadet.score !== undefined && cadet.score !== null ? `${cadet.score}` : "Нет оценки"}
                       </TableCell>
                       <TableCell className="text-center">
                         {cadet.tickets && cadet.tickets.length > 0 ? (
@@ -916,23 +1054,34 @@ export default function LiveDashboardPage(props: LiveDashboardProps = {}) {
                                     <span className="font-semibold text-foreground">{t.title}</span>
                                     <Badge
                                       variant={
-                                        t.status.toLowerCase() === "passed" || t.status.toLowerCase() === "completed"
+                                        t.status?.toLowerCase() === "passed"
                                           ? "default"
-                                          : "destructive"
+                                          : t.status?.toLowerCase() === "failed"
+                                          ? "destructive"
+                                          : "outline"
                                       }
                                       className={`text-[10px] shrink-0 ${
-                                        t.status.toLowerCase() === "passed" || t.status.toLowerCase() === "completed"
+                                        t.status?.toLowerCase() === "passed"
                                           ? "bg-emerald-600 text-white"
+                                          : t.status?.toLowerCase() === "completed"
+                                          ? "bg-slate-500/10 text-slate-700 dark:text-slate-300 border-slate-500/30"
                                           : ""
                                       }`}
                                     >
-                                      {t.status.toLowerCase() === "passed" || t.status.toLowerCase() === "completed"
-                                        ? "Сдано"
-                                        : "Провалено"}
+                                      {(() => {
+                                        const s = t.status?.toLowerCase()
+                                        if (s === "ungraded") return "Выполнено, нет оценки"
+                                        if (s === "completed") return "Выполнено"
+                                        if (s === "incomplete") return "Не завершено"
+                                        if (s === "passed") return "Сдано"
+                                        if (s === "failed") return "Провалено"
+                                        if (s === "in_progress") return "В процессе"
+                                        return s || "—"
+                                      })()}
                                     </Badge>
                                   </div>
                                   <div className="flex items-center justify-between text-[11px] text-muted-foreground">
-                                    <span>Оценка: {t.score !== undefined ? `${t.score}/100` : "—"}</span>
+                                    <span>Оценка: {t.score !== undefined && t.score !== null ? `${t.score}/100` : "Нет оценки"}</span>
                                     {t.errors_count !== undefined && t.errors_count > 0 && (
                                       <span className="text-rose-500 font-medium">Ошибок: {t.errors_count}</span>
                                     )}

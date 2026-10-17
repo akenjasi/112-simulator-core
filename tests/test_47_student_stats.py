@@ -1,4 +1,5 @@
 import pytest
+import uuid
 from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 from backend.models.domain_03 import Assignment, ExamSession
@@ -53,6 +54,10 @@ async def test_get_student_stats(cadet_auth_client: AsyncClient, db_session: Asy
         status="completed",
         score_total=80.0,
         is_passed=True,
+        error_details=[
+            {"message": "Задержка передачи карточки в службу 03", "is_fatal": True},
+            {"message": "Не спросил номер квартиры", "is_fatal": False},
+        ],
     )
     db_session.add(tr1)
     await db_session.commit()
@@ -100,6 +105,45 @@ async def test_get_student_stats(cadet_auth_client: AsyncClient, db_session: Asy
     has_fatal = any(e["is_fatal"] is True for e in errors)
     has_minor = any(e["is_fatal"] is False for e in errors)
     assert has_fatal or has_minor
+
+
+@pytest.mark.asyncio
+async def test_get_student_stats_empty_cadet(auth_client: AsyncClient, db_session: AsyncSession):
+    """
+    Проверка, что для нового студента без решенных билетов статистика честно возвращает нули и пустые списки без заглушек.
+    """
+    from backend.models.domain_01 import User
+    from backend.core.security import create_access_token
+
+    new_cadet = User(
+        username=f"new_clean_cadet_{uuid.uuid4().hex[:8]}@example.com",
+        password_hash="mockhash",
+        role="CADET",
+        full_name="Чистый Курсант",
+        student_id="СМ2-01",
+    )
+    db_session.add(new_cadet)
+    await db_session.commit()
+
+    token = create_access_token(new_cadet.user_id, "CADET")
+    auth_client.headers["Authorization"] = f"Bearer {token}"
+
+    res = await auth_client.get("/api/v1/students/me/stats?role=DISPATCHER_DDS")
+    assert res.status_code == 200
+    data = res.json()
+
+    assert data["cards_solved"] == 0
+    assert data["lessons_completed"] == 0
+    assert data["average_score"] == 0.0
+    assert data["average_score_7_days"] == 0.0
+    assert data["score_trend"] == 0.0
+    assert data["average_processing_time_seconds"] == 0
+    assert data["time_trend"] == 0
+    assert data["service_accuracy_percent"] == 0.0
+    assert data["competence_matrix"] == []
+    assert data["top_errors"] == []
+    assert data["student_id"] == "СМ2-01"
+    assert data["full_name"] == "Чистый Курсант"
 
 
 @pytest.mark.asyncio
@@ -234,7 +278,7 @@ async def test_student_id_and_no_avatar_url(auth_client: AsyncClient, cadet_auth
     """
     Проверка удаления avatar_url из API и генерации/сохранения короткого student_id формата СМ1-12.
     """
-    username = f"student_test_{pytest.__file__[-6:]}@example.com"
+    username = f"student_test_{uuid.uuid4().hex[:8]}@example.com"
     create_payload = {
         "username": username,
         "password": "secure_password_123",

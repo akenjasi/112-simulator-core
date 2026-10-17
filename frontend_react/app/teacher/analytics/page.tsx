@@ -148,14 +148,27 @@ export interface SessionData {
   cadets: CadetSummary[]
 }
 
+export interface CadetTicketAction {
+  actor_id?: string
+  at?: string
+  service_name?: string
+  status?: string
+  comment?: string
+  order_number?: string
+  who_accepted?: string
+  summary?: string
+}
+
 export interface CadetTicketSummary {
   ticket_id: string
   title: string
-  status: "passed" | "failed" | "in_progress" | string
+  status: "passed" | "failed" | "in_progress" | "completed" | "incomplete" | string
   score?: number | null
   errors_count: number
   errors?: string[]
   completed_at?: string | null
+  card_id?: string
+  actions?: CadetTicketAction[]
 }
 
 export interface LessonHistoryCadet {
@@ -700,9 +713,13 @@ export default function AnalyticsPage({ initialTab = "all" }: AnalyticsPageProps
   const handleSaveLessonNotes = async (lessonId: string) => {
     try {
       setIsSavingNotes(true)
+      const token = getStoredToken()
       const res = await fetch(`/api/v1/lessons/${lessonId}/notes`, {
         method: "PATCH",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
         body: JSON.stringify({ teacher_notes: editingNotesText }),
       })
       if (res.ok) {
@@ -1898,23 +1915,28 @@ export default function AnalyticsPage({ initialTab = "all" }: AnalyticsPageProps
                                             </div>
                                           </TableCell>
                                           <TableCell>
-                                            {student.status === "PASSED" || (student.passed > 0 && student.failed === 0) ? (
-                                              <Badge variant="default" className="bg-emerald-600 text-xs">
-                                                Сдал
-                                              </Badge>
-                                            ) : student.status === "FAILED" || student.failed > 0 ? (
-                                              <Badge variant="destructive" className="text-xs">
-                                                Провалил
-                                              </Badge>
-                                            ) : student.status === "IN_PROGRESS" ? (
-                                              <Badge variant="secondary" className="bg-blue-500/10 text-blue-600 text-xs">
-                                                В процессе
-                                              </Badge>
-                                            ) : (
-                                              <Badge variant="outline" className="text-xs text-muted-foreground">
-                                                {student.status}
-                                              </Badge>
-                                            )}
+                                            {(() => {
+                                              const sStatus = student.status?.toUpperCase()
+                                              if (sStatus === "COMPLETED") {
+                                                return <Badge variant="default" className="bg-emerald-600 text-xs">Выполнено</Badge>
+                                              }
+                                              if (sStatus === "INCOMPLETE") {
+                                                return <Badge variant="outline" className="text-amber-600 border-amber-500/30 text-xs">Не завершено</Badge>
+                                              }
+                                              if (sStatus === "UNGRADED") {
+                                                return <Badge variant="outline" className="text-xs text-muted-foreground border-border">Выполнено, нет оценки</Badge>
+                                              }
+                                              if (sStatus === "PASSED") {
+                                                return <Badge variant="default" className="bg-emerald-600 text-xs">Сдал</Badge>
+                                              }
+                                              if (sStatus === "FAILED") {
+                                                return <Badge variant="destructive" className="text-xs">Провалил</Badge>
+                                              }
+                                              if (sStatus === "IN_PROGRESS") {
+                                                return <Badge variant="secondary" className="bg-blue-500/10 text-blue-600 text-xs">В процессе</Badge>
+                                              }
+                                              return <Badge variant="outline" className="text-xs text-muted-foreground">{student.status || "—"}</Badge>
+                                            })()}
                                           </TableCell>
                                           <TableCell className="text-center font-medium text-green-600 dark:text-green-400">
                                             {student.passed}
@@ -1936,7 +1958,7 @@ export default function AnalyticsPage({ initialTab = "all" }: AnalyticsPageProps
                                             </div>
                                           </TableCell>
                                           <TableCell className="text-right font-bold text-sm">
-                                            {student.score !== undefined && student.score !== null ? `${student.score}/100` : "—"}
+                                            {student.score !== undefined && student.score !== null ? `${student.score}/100` : "Нет оценки"}
                                           </TableCell>
                                           <TableCell className="text-center">
                                             <Button
@@ -1991,29 +2013,38 @@ export default function AnalyticsPage({ initialTab = "all" }: AnalyticsPageProps
                                                               {t.title}
                                                             </h5>
                                                             <span className="text-[10px] text-muted-foreground font-mono block">
-                                                              ID: {t.ticket_id}
+                                                              ID: {t.ticket_id} {t.card_id ? `• Карточка: ${t.card_id}` : ""}
                                                             </span>
                                                           </div>
 
-                                                          {t.status === "passed" ? (
-                                                            <Badge variant="default" className="bg-emerald-600 hover:bg-emerald-700 text-xs shrink-0">
-                                                              Сдан
-                                                            </Badge>
-                                                          ) : t.status === "failed" ? (
-                                                            <Badge variant="destructive" className="text-xs shrink-0">
-                                                              Провален
-                                                            </Badge>
-                                                          ) : (
-                                                            <Badge variant="secondary" className="bg-blue-500/10 text-blue-600 text-xs shrink-0">
-                                                              В процессе
-                                                            </Badge>
-                                                          )}
+                                                          {(() => {
+                                                            const tStatus = t.status?.toLowerCase()
+                                                            if (tStatus === "ungraded") {
+                                                              return <Badge variant="outline" className="text-xs shrink-0 text-muted-foreground border-border">Выполнено, нет оценки</Badge>
+                                                            }
+                                                            if (tStatus === "completed") {
+                                                              return <Badge variant="outline" className="text-xs shrink-0 text-slate-700 dark:text-slate-300 border-slate-500/30">Выполнено</Badge>
+                                                            }
+                                                            if (tStatus === "incomplete") {
+                                                              return <Badge variant="outline" className="text-amber-600 border-amber-500/30 text-xs shrink-0">Не завершено</Badge>
+                                                            }
+                                                            if (tStatus === "passed") {
+                                                              return <Badge variant="default" className="bg-emerald-600 hover:bg-emerald-700 text-xs shrink-0">Сдан</Badge>
+                                                            }
+                                                            if (tStatus === "failed") {
+                                                              return <Badge variant="destructive" className="text-xs shrink-0">Провален</Badge>
+                                                            }
+                                                            if (tStatus === "in_progress") {
+                                                              return <Badge variant="secondary" className="bg-blue-500/10 text-blue-600 text-xs shrink-0">В процессе</Badge>
+                                                            }
+                                                            return <Badge variant="outline" className="text-xs shrink-0">{t.status || "—"}</Badge>
+                                                          })()}
                                                         </div>
 
                                                         <div className="flex items-center justify-between text-xs pt-1.5 border-t">
                                                           <span className="text-muted-foreground font-medium">Оценка за билет:</span>
                                                           <span className="font-bold text-foreground">
-                                                            {t.score !== undefined && t.score !== null ? `${t.score}/100` : "—"}
+                                                            {t.score !== undefined && t.score !== null ? `${t.score}/100` : "Нет оценки"}
                                                           </span>
                                                         </div>
 
@@ -2024,7 +2055,11 @@ export default function AnalyticsPage({ initialTab = "all" }: AnalyticsPageProps
                                                             <span>{t.errors?.length || t.errors_count || 0}</span>
                                                           </div>
 
-                                                          {!t.errors || t.errors.length === 0 ? (
+                                                          {t.score === null || t.score === undefined ? (
+                                                            <div className="text-[11px] text-muted-foreground italic py-0.5">
+                                                              Оценивание не производилось (нет оценки)
+                                                            </div>
+                                                          ) : !t.errors || t.errors.length === 0 ? (
                                                             <div className="flex items-center gap-1.5 text-emerald-600 dark:text-emerald-400 font-medium py-0.5">
                                                               <CheckCircle2 className="h-3.5 w-3.5 shrink-0" />
                                                               <span>Ошибок не обнаружено</span>
@@ -2040,6 +2075,46 @@ export default function AnalyticsPage({ initialTab = "all" }: AnalyticsPageProps
                                                             </ul>
                                                           )}
                                                         </div>
+
+                                                        {/* Actions Journal */}
+                                                        {t.actions && t.actions.length > 0 && (
+                                                          <div className="text-xs pt-2 border-t space-y-1.5">
+                                                            <div className="flex items-center justify-between text-muted-foreground font-semibold text-[11px]">
+                                                              <span>Журнал действий ({t.actions.length}):</span>
+                                                            </div>
+                                                            <div className="space-y-1 max-h-36 overflow-y-auto pr-1">
+                                                              {t.actions.map((act, actIdx) => (
+                                                                <div key={actIdx} className="p-1.5 rounded bg-muted/40 border border-border/50 text-[11px] space-y-0.5">
+                                                                  <div className="flex items-center justify-between gap-1 text-[10px] text-muted-foreground">
+                                                                    <span className="font-semibold text-foreground">{act.service_name || "Служба"}</span>
+                                                                    <span>{act.at ? new Date(act.at).toLocaleTimeString() : ""}</span>
+                                                                  </div>
+                                                                  {act.status && (
+                                                                    <div className="text-foreground">
+                                                                      Статус: <span className="font-medium">{act.status}</span>
+                                                                      {act.order_number ? ` (наряд: ${act.order_number})` : ""}
+                                                                    </div>
+                                                                  )}
+                                                                  {act.who_accepted && (
+                                                                    <div className="text-muted-foreground">
+                                                                      Принял: <span className="text-foreground">{act.who_accepted}</span>
+                                                                    </div>
+                                                                  )}
+                                                                  {act.summary && (
+                                                                    <div className="text-muted-foreground">
+                                                                      Суть: <span className="text-foreground">{act.summary}</span>
+                                                                    </div>
+                                                                  )}
+                                                                  {act.comment && (
+                                                                    <div className="text-muted-foreground italic">
+                                                                      «{act.comment}»
+                                                                    </div>
+                                                                  )}
+                                                                </div>
+                                                              ))}
+                                                            </div>
+                                                          </div>
+                                                        )}
                                                       </div>
                                                     ))}
                                                   </div>

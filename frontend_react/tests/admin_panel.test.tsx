@@ -1,6 +1,8 @@
 import React from 'react';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+// Load the page during suite import, not inside the 5s behavioral test budget.
+import SecurityPoliciesPage from '../app/admin/security/page';
 
 // Recharts ResponsiveContainer mock for jsdom
 vi.mock('recharts', async () => {
@@ -289,7 +291,6 @@ describe('Admin Panel Pages and Components', () => {
   });
 
   it('should save the Operator 112 access toggle without validating unrelated security fields', async () => {
-    const SecurityPoliciesPage = (await import('../app/admin/security/page')).default;
     render(<SecurityPoliciesPage />);
 
     const operatorToggle = await screen.findByRole('switch', {

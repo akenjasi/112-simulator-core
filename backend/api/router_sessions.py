@@ -5,7 +5,7 @@ from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm.attributes import flag_modified
 
-from backend.core.deps import require_role, get_current_user, get_current_user_optional
+from backend.core.deps import require_role, get_current_user
 from backend.core.runtime_router import RuntimeRouter
 from backend.database import get_db
 from backend.models.domain_01 import User
@@ -45,6 +45,17 @@ sessions_router = APIRouter(
 )
 
 
+async def _is_assigned_dds_session(db: AsyncSession, session: ExamSession) -> bool:
+    if (session.dynamic_state or {}).get("dds"):
+        return True
+    if session.session_type == "CARD_ACTIONS" and session.assignment_id:
+        stmt = select(Assignment).where(Assignment.assignment_id == session.assignment_id)
+        assign = (await db.execute(stmt)).scalar_one_or_none()
+        if assign and assign.target_role == "DISPATCHER_DDS":
+            return True
+    return False
+
+
 @sessions_router.post(
     "/assignments/{assignment_id}/sessions/start",
     response_model=SessionStartResponse,
@@ -63,6 +74,12 @@ async def start_session(
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Assignment not found",
+        )
+
+    if assignment.target_role == "DISPATCHER_DDS":
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="DDS assignments must be started via /api/v1/lessons/{id}/start",
         )
 
     exam_session = ExamSession(
@@ -84,6 +101,7 @@ async def start_session(
 )
 async def get_session_state(
     session_id: str,
+    current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     stmt = select(ExamSession).where(ExamSession.session_id == session_id)
@@ -94,6 +112,21 @@ async def get_session_state(
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Session not found",
+        )
+
+    if current_user.role == "CADET" and session.cadet_id != current_user.user_id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied")
+
+    if current_user.role == "TEACHER" and session.assignment_id:
+        stmt_a = select(Assignment).where(Assignment.assignment_id == session.assignment_id)
+        assign = (await db.execute(stmt_a)).scalar_one_or_none()
+        if assign and assign.assigned_by != current_user.user_id:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied")
+
+    if await _is_assigned_dds_session(db, session):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Assigned DDS sessions must use /api/dds/sessions/{session_id}",
         )
 
     return session
@@ -117,6 +150,12 @@ async def post_session_message(
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Session not found",
+        )
+
+    if await _is_assigned_dds_session(db, session):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="DDS sessions cannot receive legacy dialogue messages",
         )
 
     log = list(session.dialogue_log or [])
@@ -184,6 +223,12 @@ async def submit_card(
             detail="Session not found",
         )
 
+    if await _is_assigned_dds_session(db, session):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="DDS sessions must be submitted via /api/dds/sessions/{id}/finish",
+        )
+
     session.status = "COMPLETED"
     session.end_time = datetime.datetime.now(datetime.timezone.utc)
 
@@ -232,6 +277,15 @@ async def appeal_ticket_result(
             detail="Ticket result not found",
         )
 
+    if ticket_result.session_id:
+        stmt_s = select(ExamSession).where(ExamSession.session_id == ticket_result.session_id)
+        sess = (await db.execute(stmt_s)).scalar_one_or_none()
+        if sess and await _is_assigned_dds_session(db, sess):
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="Appeals for assigned DDS sessions are not supported",
+            )
+
     ticket_result.is_passed = req.is_passed
     ticket_result.teacher_comment = req.teacher_comment
     ticket_result.is_appealed = True
@@ -267,18 +321,16 @@ from starlette.requests import Request
 @sessions_v1_router.post(
     "/demo",
     response_model=DemoSessionResponse,
-    dependencies=[Depends(require_role("TEACHER", "CADET"))],
 )
 @sessions_router.post(
     "/sessions/demo",
     response_model=DemoSessionResponse,
     include_in_schema=False,
-    dependencies=[Depends(require_role("TEACHER", "CADET"))],
 )
 async def create_demo_session(
     request: Request,
     req: Optional[DemoSessionRequest] = None,
-    current_user: Optional[User] = Depends(get_current_user_optional),
+    current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     """Create a demo training session with 1 random ticket."""
@@ -296,10 +348,21 @@ async def create_demo_session(
     if target_role not in ("OPERATOR_112", "DISPATCHER_DDS"):
         target_role = "DISPATCHER_DDS"
 
-    if target_role == "OPERATOR_112":
+    if target_role == "DISPATCHER_DDS" and current_user.role not in ("TEACHER", "CADET"):
+        if current_user.role == "ADMIN":
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Администратор не может проходить учебные сессии курсанта",
+            )
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Оператор 112 доступен только в назначенном преподавателем уроке",
+            detail="Демо-сессия диспетчера ДДС доступна только преподавателю или курсанту",
+        )
+
+    if target_role == "OPERATOR_112" and current_user.role != "ADMIN":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Демо-сессия оператора 112 доступна только администратору",
         )
 
     import uuid
@@ -369,7 +432,7 @@ async def create_demo_session(
     ticket = DemoTicketObj(scenario_ticket)
 
     session_type = "CALL_SIMULATION" if target_role == "OPERATOR_112" else "CARD_ACTIONS"
-    cadet_id = current_user.user_id if current_user else None
+    cadet_id = current_user.user_id
 
     assignment = Assignment(
         session_type=session_type,
@@ -587,6 +650,12 @@ async def evaluate_session_card(
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Session not found",
+        )
+
+    if await _is_assigned_dds_session(db, exam_session):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Assigned DDS sessions cannot be evaluated via legacy evaluate endpoint",
         )
 
     ticket_id = req.ticket_id or getattr(exam_session, "ticket_id", None)

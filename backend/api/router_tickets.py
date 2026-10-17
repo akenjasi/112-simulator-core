@@ -17,6 +17,7 @@ from openpyxl.styles import Alignment, Font, PatternFill
 from openpyxl.utils import get_column_letter
 
 from backend.core.bricks_compiler import compile_ticket
+from backend.core.dds_cycle import extract_dds_ticket_metadata, matches_dds_ticket_filters
 from backend.core.deps import require_role
 from backend.core.faker import FakeDataGenerator
 from backend.core.text_normalization import expand_address_for_tts, format_phone_for_tts, expand_address
@@ -367,14 +368,14 @@ async def get_tickets_counts(
         GeneratedTicket.subcategory, 
         func.count(GeneratedTicket.id).label("count")
     )
+    from sqlalchemy import or_
+    stmt1 = stmt1.where(or_(GeneratedTicket.is_deleted == False, GeneratedTicket.is_deleted.is_(None)))
     if complexity is not None:
         stmt1 = stmt1.where(GeneratedTicket.complexity == complexity)
     stmt1 = stmt1.group_by(GeneratedTicket.category, GeneratedTicket.subcategory)
     
     # 2. Scenario Tickets
-    stmt2 = select(ScenarioTicket)
-    if complexity is not None:
-        stmt2 = stmt2.where(ScenarioTicket.complexity == complexity)
+    stmt2 = select(ScenarioTicket).where(or_(ScenarioTicket.is_deleted == False, ScenarioTicket.is_deleted.is_(None)))
         
     res1 = await db.execute(stmt1)
     res2 = await db.execute(stmt2)
@@ -391,8 +392,9 @@ async def get_tickets_counts(
             counts[cat_name]["subcategories"][subcat] = counts[cat_name]["subcategories"].get(subcat, 0) + count
 
     for sc in scenarios:
-        cat_name = sc.category or (sc.settings.get("category") if sc.settings else "Общее") or "Общее"
-        subcat = sc.settings.get("subcategory") if sc.settings else None
+        cat_name, subcat, level, _ = extract_dds_ticket_metadata(sc)
+        if complexity is not None and level != complexity:
+            continue
         if cat_name not in counts:
             counts[cat_name] = {"category": cat_name, "total": 0, "subcategories": {}}
         counts[cat_name]["total"] += 1
@@ -446,8 +448,7 @@ async def get_ticket(
         settings = scenario.settings or {}
         ai = scenario.ai_content or {}
         gt = scenario.ground_truth or {}
-        cat = settings.get("category", "Общее")
-        sub = settings.get("subcategory")
+        cat, sub, level, _ = extract_dds_ticket_metadata(scenario)
         seq = settings.get("sequence_number", 0)
         display_id = f"{make_abbr(cat)}_{make_abbr(sub)}_{seq}"
         return TicketResponse(
@@ -457,7 +458,7 @@ async def get_ticket(
             sequence_number=seq,
             category=cat,
             subcategory=sub,
-            complexity=settings.get("complexity", 1),
+            complexity=level,
             plot=settings.get("plot") or ai.get("plot", ""),
             factoids=ai.get("factoids", {}),
             ground_truth=gt,
@@ -527,45 +528,43 @@ async def list_tickets(
 
     # Fetch ScenarioTickets as well, applying filters
     stmt_legacy = select(ScenarioTicket).order_by(desc(ScenarioTicket.created_at))
-    if category: stmt_legacy = stmt_legacy.where(ScenarioTicket.category == category)
-    # ScenarioTicket has no subcategory column, filter in Python later
-    if complexity is not None: stmt_legacy = stmt_legacy.where(ScenarioTicket.complexity == complexity)
     
     if not include_deleted:
         from sqlalchemy import or_
         stmt_legacy = stmt_legacy.where(or_(ScenarioTicket.is_deleted == False, ScenarioTicket.is_deleted.is_(None)))
         
-    stmt_legacy = stmt_legacy.limit(limit or 100)
+    scenario_count = 0
     res_legacy = await db.execute(stmt_legacy)
     for r in res_legacy.scalars().all():
         settings = r.settings or {}
         ai = r.ai_content or {}
         gt = r.ground_truth or {}
-        cat = r.category or settings.get("category", "Общее")
-        sub = settings.get("subcategory")
-        
-        if subcategory and sub != subcategory:
+        cat, sub, level, _ = extract_dds_ticket_metadata(r)
+        if not matches_dds_ticket_filters(r, category, subcategory, complexity):
             continue
+        if limit is not None and scenario_count >= limit:
+            break
+        scenario_count += 1
 
-            seq = settings.get("sequence_number", 0)
-            display_id = f"{make_abbr(cat)}_{make_abbr(sub)}_{seq}"
-            output.append(
-                TicketResponse(
-                    id=r.scenario_id,
-                    ticket_id=r.scenario_id,
-                    display_id=display_id,
-                    sequence_number=seq,
-                    category=cat,
-                    subcategory=sub,
-                    complexity=settings.get("complexity", 1),
-                    plot=settings.get("plot") or ai.get("plot", ""),
-                    factoids=ai.get("factoids", {}),
-                    ground_truth=gt,
-                    etalon_services=settings.get("etalon_services", []),
-                    status=r.workflow_state.get("status", "active") if r.workflow_state else "active",
-                    created_at=r.created_at,
-                )
+        seq = settings.get("sequence_number", 0)
+        display_id = f"{make_abbr(cat)}_{make_abbr(sub)}_{seq}"
+        output.append(
+            TicketResponse(
+                id=r.scenario_id,
+                ticket_id=r.scenario_id,
+                display_id=display_id,
+                sequence_number=seq,
+                category=cat,
+                subcategory=sub,
+                complexity=level,
+                plot=settings.get("plot") or ai.get("plot", ""),
+                factoids=ai.get("factoids", {}),
+                ground_truth=gt,
+                etalon_services=settings.get("etalon_services", []),
+                status=r.workflow_state.get("status", "active") if r.workflow_state else "active",
+                created_at=r.created_at,
             )
+        )
 
     return output
 

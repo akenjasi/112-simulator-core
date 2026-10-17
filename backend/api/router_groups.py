@@ -3,7 +3,7 @@ import random
 from collections import Counter
 from datetime import datetime, timezone, timedelta
 from typing import Optional, List
-from fastapi import APIRouter, Depends, UploadFile, File, HTTPException, Response, Query
+from fastapi import APIRouter, Depends, UploadFile, File, HTTPException, Response, Query, status
 from sqlalchemy import select
 from sqlalchemy.orm import selectinload
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -105,6 +105,14 @@ async def list_all_students(
     ]
 
 
+def _check_group_access(group: StudentGroup, current_user: User) -> None:
+    if current_user.role == "TEACHER" and group.teacher_id != current_user.user_id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Доступ запрещен: вы не являетесь преподавателем этой группы",
+        )
+
+
 # ─── Groups List & Create ─────────────────────────────────────────────────────
 @groups_router.get("", response_model=list[GroupResponse])
 @groups_router.get("/", response_model=list[GroupResponse], include_in_schema=False)
@@ -112,8 +120,13 @@ async def list_all_students(
 @groups_v1_router.get("/", response_model=list[GroupResponse], include_in_schema=False)
 @api_groups_router.get("", response_model=list[GroupResponse])
 @api_groups_router.get("/", response_model=list[GroupResponse], include_in_schema=False)
-async def list_groups(db: AsyncSession = Depends(get_db)):
+async def list_groups(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
     stmt = select(StudentGroup).options(selectinload(StudentGroup.students))
+    if current_user.role == "TEACHER":
+        stmt = stmt.where(StudentGroup.teacher_id == current_user.user_id)
     result = await db.execute(stmt)
     return result.scalars().all()
 
@@ -129,10 +142,15 @@ async def create_group(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
+    teacher_id = (
+        current_user.user_id
+        if current_user.role == "TEACHER"
+        else (group_in.teacher_id or None)
+    )
     group = StudentGroup(
         group_name=group_in.group_name,
         department=group_in.department,
-        teacher_id=current_user.user_id if current_user.role == "TEACHER" else None,
+        teacher_id=teacher_id,
     )
     db.add(group)
     await db.commit()
@@ -150,6 +168,7 @@ async def create_group(
 async def get_group_students(
     group_id: str,
     db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     stmt = (
         select(StudentGroup)
@@ -160,6 +179,8 @@ async def get_group_students(
     group = result.scalar_one_or_none()
     if not group:
         raise HTTPException(status_code=404, detail="Группа не найдена")
+
+    _check_group_access(group, current_user)
 
     students = list(group.students)
     existing_ids = {s.user_id for s in students}
@@ -200,6 +221,7 @@ async def add_single_student_to_group(
     group_id: str,
     student_in: SingleStudentAddRequest,
     db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     stmt = (
         select(StudentGroup)
@@ -210,6 +232,8 @@ async def add_single_student_to_group(
     group = result.scalar_one_or_none()
     if not group:
         raise HTTPException(status_code=404, detail="Группа не найдена")
+
+    _check_group_access(group, current_user)
 
     target_id = (student_in.user_id or student_in.id or "").strip()
     target_email = (str(student_in.email).strip() if student_in.email else (student_in.username or "").strip())
@@ -287,6 +311,7 @@ async def remove_student_from_group(
     group_id: str,
     user_id: str,
     db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     stmt = (
         select(StudentGroup)
@@ -297,6 +322,8 @@ async def remove_student_from_group(
     group = result.scalar_one_or_none()
     if not group:
         raise HTTPException(status_code=404, detail="Группа не найдена")
+
+    _check_group_access(group, current_user)
 
     user = await db.get(User, user_id)
     if not user:
@@ -328,6 +355,7 @@ async def upload_students_csv(
     group_id: str,
     file: UploadFile = File(...),
     db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     stmt = (
         select(StudentGroup)
@@ -338,6 +366,8 @@ async def upload_students_csv(
     group = result.scalar_one_or_none()
     if not group:
         raise HTTPException(status_code=404, detail="Группа не найдена")
+
+    _check_group_access(group, current_user)
 
     content = await file.read()
     text = content.decode("utf-8-sig", errors="replace")
@@ -393,6 +423,7 @@ async def upload_students_csv(
 async def reset_group_passwords(
     group_id: str,
     db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ):
     stmt = (
         select(StudentGroup)
@@ -403,6 +434,8 @@ async def reset_group_passwords(
     group = result.scalar_one_or_none()
     if not group:
         raise HTTPException(status_code=404, detail="Группа не найдена")
+
+    _check_group_access(group, current_user)
 
     students = list(group.students)
     existing_ids = {s.user_id for s in students}
@@ -580,7 +613,7 @@ async def get_student_stats(
         prev_avg = sum(prev_scores) / len(prev_scores)
         score_trend = round(avg_week - prev_avg, 1)
     elif week_scores:
-        score_trend = 3.5
+        score_trend = 0.0
     else:
         score_trend = 0.0
 
@@ -592,17 +625,21 @@ async def get_student_stats(
                 durations.append(d)
     if durations:
         average_processing_time_seconds = int(sum(durations) / len(durations))
-    elif cards_solved > 0:
-        average_processing_time_seconds = 68
     else:
-        average_processing_time_seconds = 75
+        average_processing_time_seconds = 0
 
-    time_trend = -15
+    if len(durations) >= 2:
+        mid = len(durations) // 2
+        older_avg = sum(durations[:mid]) / mid
+        recent_avg = sum(durations[mid:]) / (len(durations) - mid)
+        time_trend = int(recent_avg - older_avg)
+    else:
+        time_trend = 0
 
     if all_scores:
-        service_accuracy_percent = round(min(100.0, max(60.0, avg_all_time + 4.0)), 1)
+        service_accuracy_percent = round(min(100.0, max(0.0, avg_all_time)), 1)
     else:
-        service_accuracy_percent = 94.0
+        service_accuracy_percent = 0.0
 
     competence_matrix = []
     for cat, scores in category_scores.items():
@@ -619,37 +656,16 @@ async def get_student_stats(
         top_errors = [
             TopErrorItem(
                 text=err,
-                frequency_percent=min(95, max(20, int((count / total_ref) * 100))),
+                frequency_percent=min(100, max(1, int((count / total_ref) * 100))),
                 is_fatal=any(kw in err.lower() for kw in fatal_keywords),
             )
             for err, count in error_counts
         ]
     else:
-        top_errors = [
-            TopErrorItem(
-                text="Задержка передачи карточки в службу 03 более 45 сек",
-                frequency_percent=85,
-                is_fatal=True,
-            ),
-            TopErrorItem(
-                text="Не уточнено наличие пострадавших и угрозы жизни",
-                frequency_percent=70,
-                is_fatal=True,
-            ),
-            TopErrorItem(
-                text="Не спросил номер квартиры / подъезда",
-                frequency_percent=45,
-                is_fatal=False,
-            ),
-            TopErrorItem(
-                text="Не продублирован номер телефона заявителя",
-                frequency_percent=25,
-                is_fatal=False,
-            ),
-        ]
+        top_errors = []
 
-    student_id = getattr(current_user, "student_id", None) or "СМ1-12"
-    full_name = current_user.full_name or "Иванов Иван Иванович"
+    student_id = getattr(current_user, "student_id", None) or ""
+    full_name = current_user.full_name or current_user.username or "Курсант"
 
     return StudentStatsResponse(
         average_score=avg_all_time,

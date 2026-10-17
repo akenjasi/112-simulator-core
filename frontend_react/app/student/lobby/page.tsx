@@ -8,6 +8,7 @@ import Link from "next/link"
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
+import { DDSAssignments } from "@/components/dispatcher/dds-assignments"
 import { LogoutButton } from "@/components/auth/LogoutButton"
 import {
   Headphones,
@@ -439,8 +440,13 @@ export default function StudentLobbyPage() {
         </div>
       </header>
 
-      {/* Main Center Waiting Card (fits screen height without scrolling) */}
-      <main className="max-w-xl w-full mx-auto my-auto py-4">
+      {/* Main Center Waiting Area */}
+      <main className="max-w-2xl w-full mx-auto my-auto py-4 space-y-6">
+        {/* Real assigned DDS lessons */}
+        <Card className="border border-border p-5 shadow-sm bg-card">
+          <DDSAssignments />
+        </Card>
+
         <Card className="border-2 border-primary/20 shadow-xl overflow-hidden backdrop-blur-xs bg-card/95">
           {/* Top Strict Solid Line (no gradient) */}
           <div className="h-1.5 bg-[#1f2b31] dark:bg-slate-700" />
@@ -457,10 +463,10 @@ export default function StudentLobbyPage() {
 
             <div className="space-y-1">
               <CardTitle className="text-xl sm:text-2xl font-extrabold tracking-tight">
-                Ожидание старта. Преподаватель подготавливает занятие...
+                Откройте назначенное занятие в списке выше
               </CardTitle>
               <CardDescription className="text-xs sm:text-sm max-w-md mx-auto leading-relaxed">
-                Сценарий и параметры симуляции будут загружены автоматически. Либо воспользуйтесь режимом «Демо-запуск» для самостоятельной тренировки.
+                Самостоятельный демо-запуск ниже — отдельная тренировка
               </CardDescription>
             </div>
           </CardHeader>
@@ -526,7 +532,7 @@ export default function StudentLobbyPage() {
                   <>
                     <Play className="h-5 w-5 fill-current" />
                     <span>
-                      Демо-запуск (Диспетчер ДДС)
+                      Самостоятельный демо-запуск (отдельный демонстрационный запуск)
                     </span>
                     <ArrowRight className="h-4 w-4 ml-1" />
                   </>
@@ -535,7 +541,7 @@ export default function StudentLobbyPage() {
               <p className="text-[11px] text-muted-foreground text-center">
                 Переход на рабочее место:{" "}
                 <span className="font-semibold text-foreground">
-                  Диспетчер ДДС (/dds)
+                  Диспетчер ДДС (/dds) &bull; отдельный демонстрационный запуск
                 </span>
               </p>
             </div>

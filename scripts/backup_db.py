@@ -47,11 +47,11 @@ def get_database_url(db_url: str | None = None) -> str:
                     return val.strip().strip("'\"")
 
     # Fallback to local default sqlite db if present
-    default_db = PROJECT_ROOT / "data" / "112_simulator.db"
-    if default_db.exists():
-        return f"sqlite+aiosqlite:///{default_db}"
+    for default_db in (PROJECT_ROOT / "112_simulator.db", PROJECT_ROOT / "data" / "112_simulator.db"):
+        if default_db.exists():
+            return f"sqlite+aiosqlite:///{default_db}"
 
-    return "sqlite+aiosqlite:///./data/database.db"
+    return f"sqlite+aiosqlite:///{PROJECT_ROOT / '112_simulator.db'}"
 
 
 def get_backup_dir(custom_dir: Path | str | None = None) -> Path:

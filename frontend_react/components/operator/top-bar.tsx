@@ -13,10 +13,11 @@ function PhoneGlyph() {
   )
 }
 
-function MsgBox() {
+function MsgBox({ onClick }: { onClick?: () => void } = {}) {
   return (
     <button
       type="button"
+      onClick={onClick}
       disabled
       className="flex items-center justify-center cursor-not-allowed opacity-50"
       style={{ width: 26, height: 22, border: `1px solid ${border}`, background: "#fbfdfe" }}

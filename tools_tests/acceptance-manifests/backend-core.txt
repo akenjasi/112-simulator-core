@@ -1,0 +1,22 @@
+# Independent reviewer-owned minimum; paths relative to repository root.
+tests/test_merge_security_regressions.py
+tests/test_auth_required.py
+tests/test_auth_session_model.py
+tests/test_auth_session_lifecycle.py
+tests/test_admin_restrictions.py
+tests/test_admin_backups.py
+tests/test_admin_backups_review.py
+tests/test_admin_journal.py
+tests/test_admin_journal_review.py
+tests/test_password_reset.py
+tests/26_test_admin_tools.py
+tests/test_initial_admin.py
+tests/test_47_student_stats.py
+tests/test_49_profile_enhancements.py
+tests/test_dds_cycle_acceptance.py
+tests/test_dds_report_data_acceptance.py
+tests/test_dds_report_data_unit.py
+tests/test_dds_report_jobs_acceptance.py
+tests/test_dds_report_jobs_unit.py
+tests/test_dds_report_llm_acceptance.py
+tests/test_dds_report_llm_unit.py
