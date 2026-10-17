@@ -42,6 +42,12 @@ import {
   Sparkles,
   Bot,
 } from "lucide-react"
+import { getStoredToken } from "@/lib/auth-session"
+
+const getAuthHeaders = (): Record<string, string> => {
+  const token = getStoredToken()
+  return token ? { Authorization: `Bearer ${token}` } : {}
+}
 
 export interface AIAdviceItem {
   id: string
@@ -174,6 +180,10 @@ export default function StudentProfilePage() {
   const [aiAdvices, setAiAdvices] = useState<AIAdviceItem[]>([])
   const [isLoadingAi, setIsLoadingAi] = useState<boolean>(false)
   const [isTriggeringAi, setIsTriggeringAi] = useState<boolean>(false)
+  const [aiProgressStep, setAiProgressStep] = useState<number>(0)
+  const [aiProgressMessage, setAiProgressMessage] = useState<string>("")
+  const [aiError, setAiError] = useState<string | null>(null)
+  const [aiSuccessMessage, setAiSuccessMessage] = useState<string | null>(null)
 
   const [stats, setStats] = useState<StudentStats>({
     average_score: 84.5,
@@ -221,7 +231,9 @@ export default function StudentProfilePage() {
     if (!idToUse) return
     setIsLoadingAi(true)
     try {
-      const res = await fetch(`/api/ai-analytics/student/${idToUse}`)
+      const res = await fetch(`/api/ai-analytics/student/${idToUse}`, {
+        headers: getAuthHeaders(),
+      })
       if (res.ok) {
         const data = await res.json()
         setAiAdvices(Array.isArray(data) ? data : [])
@@ -234,20 +246,110 @@ export default function StudentProfilePage() {
   }, [userProfile.user_id])
 
   const handleTriggerAiAnalysis = async () => {
+    setAiError(null)
+    setAiSuccessMessage(null)
+
+    const token = getStoredToken()
     const idToUse = userProfile.user_id
-    if (!idToUse) return
+
+    if (!token && !idToUse) {
+      setAiError("Требуется авторизация. Пожалуйста, выполните вход в систему под учетной записью курсанта.")
+      return
+    }
+
     setIsTriggeringAi(true)
+    setAiProgressStep(1)
+    setAiProgressMessage("Сбор логов тренировочных сессий и диалогов...")
+
+    const timer1 = setTimeout(() => {
+      setAiProgressStep(2)
+      setAiProgressMessage("Передача контекста и инференс нейросетью Qwen 2.5 9B...")
+    }, 1500)
+
+    const timer2 = setTimeout(() => {
+      setAiProgressStep(3)
+      setAiProgressMessage("Формирование структурированных методических рекомендаций...")
+    }, 7000)
+
     try {
-      const res = await fetch(`/api/ai-analytics/trigger?cadet_id=${idToUse}&background=false`, {
+      const url = idToUse
+        ? `/api/ai-analytics/trigger?cadet_id=${idToUse}&background=true`
+        : `/api/ai-analytics/trigger?background=true`
+
+      const res = await fetch(url, {
         method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...getAuthHeaders(),
+        },
       })
-      if (res.ok) {
-        await loadAiAdvice(idToUse)
+
+      if (!res.ok) {
+        const errJson = await res.json().catch(() => null)
+        const errMsg =
+          errJson?.detail ||
+          errJson?.message ||
+          (res.status === 401
+            ? "Сессия авторизации истекла. Войдите в систему повторно."
+            : res.status === 404
+            ? "Для вашего профиля не найдено данных сессий. Пройдите хотя бы одну тренировку."
+            : `Не удалось сформировать отчет (код ошибки: ${res.status}).`)
+        setAiError(errMsg)
+        setIsTriggeringAi(false)
+        return
       }
-    } catch (err) {
+
+      const result = await res.json()
+      if (result.status === "warning") {
+        setAiError(result.message || "Нет завершенных тренировок для формирования анализа.")
+        setIsTriggeringAi(false)
+        return
+      }
+
+      // Record known advice IDs before generation
+      const initialIds = new Set(aiAdvices.map((a) => a.advice_id))
+      const targetCadetId = idToUse || result.target_id || (result.tasks && result.tasks[0]?.target_id)
+
+      // Poll every 2.5s until the new advice appears (up to 45s)
+      let completed = false
+      const maxAttempts = 18
+      for (let attempt = 0; attempt < maxAttempts; attempt++) {
+        await new Promise((resolve) => setTimeout(resolve, 2500))
+        try {
+          const checkRes = await fetch(`/api/ai-analytics/student/${targetCadetId}`, {
+            headers: getAuthHeaders(),
+          })
+          if (checkRes.ok) {
+            const list: AIAdviceItem[] = await checkRes.json()
+            if (Array.isArray(list)) {
+              const hasNew = list.some((item) => !initialIds.has(item.advice_id))
+              if (hasNew || list.length > aiAdvices.length) {
+                setAiAdvices(list)
+                completed = true
+                break
+              }
+            }
+          }
+        } catch {
+          // ignore transient poll error
+        }
+      }
+
+      if (completed) {
+        setAiSuccessMessage("Методические рекомендации успешно обновлены нейросетью Qwen 2.5 9B!")
+      } else {
+        await loadAiAdvice(targetCadetId)
+        setAiSuccessMessage("Анализ обрабатывается. Если отчет не отобразился сразу, обновите список через несколько секунд.")
+      }
+    } catch (err: any) {
       console.warn("Failed to trigger AI analysis:", err)
+      setAiError(err?.message || "Ошибка сетевого соединения с сервером нейроаналитики.")
     } finally {
+      clearTimeout(timer1)
+      clearTimeout(timer2)
       setIsTriggeringAi(false)
+      setAiProgressStep(0)
+      setAiProgressMessage("")
     }
   }
 
@@ -255,6 +357,7 @@ export default function StudentProfilePage() {
     try {
       const res = await fetch(`/api/ai-analytics/student/advice/${adviceId}/read`, {
         method: "PATCH",
+        headers: getAuthHeaders(),
       })
       if (res.ok) {
         setAiAdvices((prev) =>
@@ -271,7 +374,8 @@ export default function StudentProfilePage() {
   // Fetch student profile & current user info
   const loadProfile = useCallback(async () => {
     try {
-      const res = await fetch("/api/v1/users/me")
+      const headers = getAuthHeaders()
+      const res = await fetch("/api/v1/users/me", { headers })
       if (res.ok) {
         const data = await res.json()
         setUserProfile((prev) => ({
@@ -294,7 +398,9 @@ export default function StudentProfilePage() {
   // Fetch statistics based on active role
   const loadStats = useCallback(async (currentRole: string) => {
     try {
-      const res = await fetch(`/api/v1/students/me/stats?role=${currentRole}`)
+      const res = await fetch(`/api/v1/students/me/stats?role=${currentRole}`, {
+        headers: getAuthHeaders(),
+      })
       if (res.ok) {
         const data = await res.json()
 
@@ -361,7 +467,9 @@ export default function StudentProfilePage() {
   // Fetch lessons history based on active role
   const loadLessons = useCallback(async (currentRole: string) => {
     try {
-      const res = await fetch(`/api/v1/students/me/lessons?role=${currentRole}`)
+      const res = await fetch(`/api/v1/students/me/lessons?role=${currentRole}`, {
+        headers: getAuthHeaders(),
+      })
       if (res.ok) {
         const data = await res.json()
         if (Array.isArray(data)) {
@@ -1023,7 +1131,7 @@ export default function StudentProfilePage() {
               </div>
             )}
 
-            {/* Tab 3: AI Advice (Qwen 3.5 9B / Qwen 2.5 9B) */}
+            {/* Tab 3: AI Advice (Qwen 2.5 9B) */}
             {activeTab === "ai_advice" && (
               <div className="space-y-4">
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3.5 rounded-xl border bg-gradient-to-r from-amber-500/10 via-primary/5 to-transparent">
@@ -1035,11 +1143,11 @@ export default function StudentProfilePage() {
                       <h4 className="font-bold text-sm text-foreground flex items-center gap-2">
                         Глубокий анализ сессий
                         <Badge variant="outline" className="border-amber-500/40 text-amber-600 dark:text-amber-400 text-[10px]">
-                          Qwen 3.5 9B
+                          Qwen 2.5 9B
                         </Badge>
                       </h4>
                       <p className="text-xs text-muted-foreground">
-                        Автономный разбор речевых логов, выявление ошибок адресации и советы по стрессоустойчивости
+                        Автономный разбор речевых логов, выявление ошибок адресации и персональные методические советы
                       </p>
                     </div>
                   </div>
@@ -1053,7 +1161,7 @@ export default function StudentProfilePage() {
                     {isTriggeringAi ? (
                       <>
                         <RefreshCw className="h-3.5 w-3.5 animate-spin" />
-                        <span>Анализ сессий...</span>
+                        <span>Формирование отчета...</span>
                       </>
                     ) : (
                       <>
@@ -1063,6 +1171,80 @@ export default function StudentProfilePage() {
                     )}
                   </Button>
                 </div>
+
+                {/* Error Banner */}
+                {aiError && (
+                  <div className="p-4 rounded-xl border border-red-500/40 bg-red-500/10 text-red-700 dark:text-red-400 flex items-start gap-3 shadow-xs animate-in fade-in duration-200">
+                    <AlertTriangle className="h-5 w-5 shrink-0 mt-0.5 text-red-600 dark:text-red-400" />
+                    <div className="space-y-1 text-xs">
+                      <p className="font-semibold text-sm">Не удалось сформировать анализ</p>
+                      <p className="text-foreground/90">{aiError}</p>
+                    </div>
+                  </div>
+                )}
+
+                {/* Success Banner */}
+                {aiSuccessMessage && (
+                  <div className="p-4 rounded-xl border border-emerald-500/40 bg-emerald-500/10 text-emerald-800 dark:text-emerald-300 flex items-start gap-3 shadow-xs animate-in fade-in duration-200">
+                    <CheckCircle2 className="h-5 w-5 shrink-0 mt-0.5 text-emerald-600 dark:text-emerald-400" />
+                    <div className="space-y-1 text-xs">
+                      <p className="font-semibold text-sm">Анализ завершен</p>
+                      <p className="text-foreground/90">{aiSuccessMessage}</p>
+                    </div>
+                  </div>
+                )}
+
+                {/* Multi-step Visual Progress Box (User-friendly, no raw logs) */}
+                {isTriggeringAi && (
+                  <div className="p-4 rounded-xl border border-amber-500/40 bg-amber-500/5 shadow-xs space-y-3.5 animate-in fade-in duration-200">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2.5">
+                        <RefreshCw className="h-4 w-4 animate-spin text-amber-500" />
+                        <span className="font-semibold text-xs text-foreground">
+                          {aiProgressMessage || "Идет анализ тренировок..."}
+                        </span>
+                      </div>
+                      <Badge variant="outline" className="border-amber-500/30 text-amber-600 dark:text-amber-400 text-[10px]">
+                        Нейросеть активна
+                      </Badge>
+                    </div>
+
+                    {/* Step indicator */}
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-[11px]">
+                      <div
+                        className={`p-2.5 rounded-lg border text-center transition-all ${
+                          aiProgressStep >= 1
+                            ? "bg-amber-500/20 border-amber-500/50 text-foreground font-semibold"
+                            : "bg-muted/30 border-border text-muted-foreground"
+                        }`}
+                      >
+                        1. Сбор логов и сессий
+                      </div>
+                      <div
+                        className={`p-2.5 rounded-lg border text-center transition-all ${
+                          aiProgressStep >= 2
+                            ? "bg-amber-500/20 border-amber-500/50 text-foreground font-semibold"
+                            : "bg-muted/30 border-border text-muted-foreground"
+                        }`}
+                      >
+                        2. Инференс Qwen 2.5 9B
+                      </div>
+                      <div
+                        className={`p-2.5 rounded-lg border text-center transition-all ${
+                          aiProgressStep >= 3
+                            ? "bg-amber-500/20 border-amber-500/50 text-foreground font-semibold"
+                            : "bg-muted/30 border-border text-muted-foreground"
+                        }`}
+                      >
+                        3. Методический отчет
+                      </div>
+                    </div>
+
+                    <p className="text-[11px] text-muted-foreground">
+                      Нейросеть Qwen сопоставляет хронометраж и реплики диалогов с регламентом Системы-112, выделяет ошибки адресации и формирует персональные рекомендации.
+                    </p>
+                  </div>
+                )}
 
                 {isLoadingAi ? (
                   <div className="text-center py-10">
