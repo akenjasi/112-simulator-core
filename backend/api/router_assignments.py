@@ -25,9 +25,16 @@ async def list_assignments(db: AsyncSession = Depends(get_db)):
     return result.scalars().all()
 
 
-@assignments_router.post("", response_model=AssignmentResponse)
 @assignments_router.post(
-    "/", response_model=AssignmentResponse, include_in_schema=False
+    "",
+    response_model=AssignmentResponse,
+    dependencies=[Depends(require_role("TEACHER"))],
+)
+@assignments_router.post(
+    "/",
+    response_model=AssignmentResponse,
+    include_in_schema=False,
+    dependencies=[Depends(require_role("TEACHER"))],
 )
 async def create_assignment(
     assignment_in: AssignmentCreate, db: AsyncSession = Depends(get_db)

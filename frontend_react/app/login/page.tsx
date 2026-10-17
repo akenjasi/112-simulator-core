@@ -245,13 +245,6 @@ export default function LoginPage() {
                     </>
                   )}
                 </Button>
-
-                <div className="flex items-center justify-between w-full text-xs text-muted-foreground pt-2">
-                  <Link href="/" className="hover:underline flex items-center gap-1">
-                    <ArrowLeft className="h-3 w-3" /> На главную
-                  </Link>
-                  <span className="text-muted-foreground/60">Демо: demo / demo</span>
-                </div>
               </CardFooter>
             </form>
           </>

@@ -49,11 +49,6 @@ export const adminNavItems: AdminNavItem[] = [
     href: "/admin/profile",
     icon: Shield,
   },
-  {
-    name: "На главную",
-    href: "/",
-    icon: Home,
-  },
 ]
 
 export default function AdminLayout({

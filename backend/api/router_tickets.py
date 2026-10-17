@@ -17,6 +17,7 @@ from openpyxl.styles import Alignment, Font, PatternFill
 from openpyxl.utils import get_column_letter
 
 from backend.core.bricks_compiler import compile_ticket
+from backend.core.deps import require_role
 from backend.core.faker import FakeDataGenerator
 from backend.core.text_normalization import expand_address_for_tts, format_phone_for_tts, expand_address
 from backend.core.ticket_generator import generate_tickets
@@ -38,11 +39,13 @@ logger = logging.getLogger(__name__)
 api_tickets_router = APIRouter(
     prefix="/api/tickets",
     tags=["Tickets"],
+    dependencies=[Depends(require_role("ADMIN", "TEACHER", "CADET"))],
 )
 
 tickets_router = APIRouter(
     prefix="/api/v1/tickets",
     tags=["Tickets"],
+    dependencies=[Depends(require_role("ADMIN", "TEACHER", "CADET"))],
 )
 
 # Helper function for display_id
@@ -592,6 +595,7 @@ async def list_tickets(
 async def generate_ticket_endpoint(
     req: TicketGenerateRequest,
     background_tasks: BackgroundTasks,
+    _teacher=Depends(require_role("TEACHER")),
 ) -> TicketGenerateAcceptedResponse:
     """Асинхронная генерация пакета билетов через BackgroundTasks."""
     global active_generations
@@ -687,6 +691,7 @@ async def download_tickets_import_template() -> Response:
 async def upload_tickets_import(
     file: UploadFile = File(...),
     db: AsyncSession = Depends(get_db),
+    _teacher=Depends(require_role("TEACHER")),
 ) -> Dict[str, Any]:
     """Эндпоинт для загрузки и пакетного импорта билетов из Excel."""
     filename = (file.filename or "").lower()
@@ -1103,6 +1108,7 @@ async def update_ticket(
     ticket_id: str,
     ticket_in: TicketUpdate,
     db: AsyncSession = Depends(get_db),
+    _teacher=Depends(require_role("TEACHER")),
 ) -> TicketResponse:
     ticket = await db.get(GeneratedTicket, ticket_id)
     scenario_ticket = await db.get(ScenarioTicket, ticket_id)
@@ -1175,6 +1181,7 @@ async def update_ticket(
 async def delete_ticket(
     ticket_id: str,
     db: AsyncSession = Depends(get_db),
+    _teacher=Depends(require_role("TEACHER")),
 ) -> Dict[str, Any]:
     """Удаление билета по ID из GeneratedTicket и ScenarioTicket."""
     gen_ticket = await db.get(GeneratedTicket, ticket_id)
@@ -1206,6 +1213,7 @@ async def refine_ticket(
     ticket_id: str,
     req: TicketRefineRequest,
     db: AsyncSession = Depends(get_db),
+    _teacher=Depends(require_role("TEACHER")),
 ) -> TicketResponse:
     """Перегенерация сюжета билета на основе комментария (заглушка)."""
     gen_ticket = await db.get(GeneratedTicket, ticket_id)

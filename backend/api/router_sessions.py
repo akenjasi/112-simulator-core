@@ -41,13 +41,14 @@ from backend.schemas.sessions import (
 sessions_router = APIRouter(
     prefix="/api/v2",
     tags=["Runtime Sessions"],
-    dependencies=[Depends(require_role("ADMIN", "TEACHER", "CADET"))],
+    dependencies=[Depends(require_role("TEACHER", "CADET"))],
 )
 
 
 @sessions_router.post(
     "/assignments/{assignment_id}/sessions/start",
     response_model=SessionStartResponse,
+    dependencies=[Depends(require_role("TEACHER", "CADET"))],
 )
 async def start_session(
     assignment_id: str,
@@ -101,6 +102,7 @@ async def get_session_state(
 @sessions_router.post(
     "/sessions/{session_id}/message",
     response_model=MessageResponse,
+    dependencies=[Depends(require_role("TEACHER", "CADET"))],
 )
 async def post_session_message(
     session_id: str,
@@ -165,6 +167,7 @@ async def post_session_message(
 @sessions_router.post(
     "/sessions/{session_id}/submit_card",
     response_model=SubmitCardResponse,
+    dependencies=[Depends(require_role("TEACHER", "CADET"))],
 )
 async def submit_card(
     session_id: str,
@@ -201,6 +204,7 @@ async def submit_card(
 @sessions_router.post(
     "/tickets/evaluate",
     response_model=TicketEvaluationResult,
+    dependencies=[Depends(require_role("TEACHER", "CADET"))],
 )
 async def evaluate_ticket_endpoint(
     req: TicketEvaluationRequest,
@@ -211,6 +215,7 @@ async def evaluate_ticket_endpoint(
 @sessions_router.patch(
     "/ticket-results/{result_id}/appeal",
     response_model=TicketResultResponse,
+    dependencies=[Depends(require_role("TEACHER"))],
 )
 async def appeal_ticket_result(
     result_id: str,
@@ -240,6 +245,7 @@ async def appeal_ticket_result(
 @sessions_router.patch(
     "/tickets/{result_id}/appeal",
     response_model=TicketResultResponse,
+    dependencies=[Depends(require_role("TEACHER"))],
 )
 async def appeal_ticket(
     result_id: str,
@@ -261,11 +267,13 @@ from starlette.requests import Request
 @sessions_v1_router.post(
     "/demo",
     response_model=DemoSessionResponse,
+    dependencies=[Depends(require_role("TEACHER", "CADET"))],
 )
 @sessions_router.post(
     "/sessions/demo",
     response_model=DemoSessionResponse,
     include_in_schema=False,
+    dependencies=[Depends(require_role("TEACHER", "CADET"))],
 )
 async def create_demo_session(
     request: Request,
@@ -288,10 +296,10 @@ async def create_demo_session(
     if target_role not in ("OPERATOR_112", "DISPATCHER_DDS"):
         target_role = "DISPATCHER_DDS"
 
-    if target_role == "OPERATOR_112" and (not current_user or current_user.role != "ADMIN"):
+    if target_role == "OPERATOR_112":
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Демо-сессия оператора 112 доступна только администратору",
+            detail="Оператор 112 доступен только в назначенном преподавателем уроке",
         )
 
     import uuid
@@ -430,13 +438,13 @@ async def create_demo_session(
     "",
     response_model=SessionConfigResponse,
     status_code=status.HTTP_201_CREATED,
-    dependencies=[Depends(require_role("ADMIN", "TEACHER"))],
+    dependencies=[Depends(require_role("TEACHER"))],
 )
 @sessions_v1_router.post(
     "/",
     response_model=SessionConfigResponse,
     status_code=status.HTTP_201_CREATED,
-    dependencies=[Depends(require_role("ADMIN", "TEACHER"))],
+    dependencies=[Depends(require_role("TEACHER"))],
     include_in_schema=False,
 )
 async def create_session_config(
@@ -470,7 +478,7 @@ async def create_session_config(
 @sessions_v1_router.get(
     "/{session_id}/stats",
     response_model=SessionStatsResponse,
-    dependencies=[Depends(require_role("ADMIN", "TEACHER"))],
+    dependencies=[Depends(require_role("TEACHER"))],
 )
 async def get_session_stats(
     session_id: str,
@@ -558,11 +566,13 @@ async def get_session_stats(
 @sessions_v1_router.post(
     "/{session_id}/evaluate",
     response_model=EvaluationResultResponse,
+    dependencies=[Depends(require_role("TEACHER", "CADET"))],
 )
 @sessions_router.post(
     "/sessions/{session_id}/evaluate",
     response_model=EvaluationResultResponse,
     include_in_schema=False,
+    dependencies=[Depends(require_role("TEACHER", "CADET"))],
 )
 async def evaluate_session_card(
     session_id: str,

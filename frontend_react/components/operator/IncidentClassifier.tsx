@@ -1,5 +1,7 @@
 "use client"
 
+import { apiFetch as fetch } from "@/lib/api-fetch"
+
 import React, { useState, useEffect, useRef, useMemo, useCallback } from "react"
 import { X, Search } from "lucide-react"
 import { calculateLocalServices, matchCanonicalService } from "./services-data"

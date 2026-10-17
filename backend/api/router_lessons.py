@@ -328,14 +328,14 @@ async def _build_cadet_stats(
     "",
     response_model=LessonDetailResponse,
     status_code=status.HTTP_201_CREATED,
-    dependencies=[Depends(require_role("ADMIN", "TEACHER"))],
+    dependencies=[Depends(require_role("TEACHER"))],
 )
 @lessons_router.post(
     "/",
     response_model=LessonDetailResponse,
     status_code=status.HTTP_201_CREATED,
     include_in_schema=False,
-    dependencies=[Depends(require_role("ADMIN", "TEACHER"))],
+    dependencies=[Depends(require_role("TEACHER"))],
 )
 async def create_lesson(
     payload: LessonCreate,
@@ -413,13 +413,13 @@ async def create_lesson(
 @lessons_router.get(
     "",
     response_model=List[LessonSummaryResponse],
-    dependencies=[Depends(require_role("ADMIN", "TEACHER"))],
+    dependencies=[Depends(require_role("TEACHER"))],
 )
 @lessons_router.get(
     "/",
     response_model=List[LessonSummaryResponse],
     include_in_schema=False,
-    dependencies=[Depends(require_role("ADMIN", "TEACHER"))],
+    dependencies=[Depends(require_role("TEACHER"))],
 )
 async def list_lessons(
     group_id: Optional[str] = None,
@@ -476,12 +476,12 @@ async def list_lessons(
 @lessons_router.get(
     "/{lesson_id}",
     response_model=LessonDetailResponse,
-    dependencies=[Depends(require_role("ADMIN", "TEACHER", "CADET"))],
+    dependencies=[Depends(require_role("TEACHER", "CADET"))],
 )
 @lessons_router.get(
     "/{lesson_id}/stats",
     response_model=LessonDetailResponse,
-    dependencies=[Depends(require_role("ADMIN", "TEACHER", "CADET"))],
+    dependencies=[Depends(require_role("TEACHER", "CADET"))],
 )
 async def get_lesson_detail(
     lesson_id: str,
@@ -537,7 +537,7 @@ async def get_lesson_detail(
 @lessons_router.post(
     "/{lesson_id}/start",
     response_model=LessonDetailResponse,
-    dependencies=[Depends(require_role("ADMIN", "TEACHER"))],
+    dependencies=[Depends(require_role("TEACHER"))],
 )
 async def start_lesson(
     lesson_id: str,
@@ -629,7 +629,7 @@ async def start_lesson(
 @lessons_router.post(
     "/{lesson_id}/stop",
     response_model=LessonDetailResponse,
-    dependencies=[Depends(require_role("ADMIN", "TEACHER"))],
+    dependencies=[Depends(require_role("TEACHER"))],
 )
 async def stop_lesson(
     lesson_id: str,
@@ -698,7 +698,7 @@ async def stop_lesson(
 @lessons_router.patch(
     "/{lesson_id}/notes",
     response_model=LessonDetailResponse,
-    dependencies=[Depends(require_role("ADMIN", "TEACHER"))],
+    dependencies=[Depends(require_role("TEACHER"))],
 )
 async def update_lesson_notes(
     lesson_id: str,

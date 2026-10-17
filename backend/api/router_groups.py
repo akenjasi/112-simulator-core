@@ -82,12 +82,12 @@ async def get_csv_template():
 async def list_all_students(
     role: Optional[str] = "CADET",
     db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_role("ADMIN", "TEACHER")),
 ):
-    stmt = select(User).options(selectinload(User.groups))
-    if role:
-        stmt = stmt.where(User.role == role)
-    result = await db.execute(stmt)
-    cadets = result.scalars().all()
+    # Keep legacy aliases under the same access rules as the user directory.
+    from backend.api.router_users import get_users
+
+    cadets = await get_users(role=role or "CADET", current_user=current_user, db=db)
     return [
         StudentResponse(
             user_id=s.user_id,
@@ -124,10 +124,15 @@ async def list_groups(db: AsyncSession = Depends(get_db)):
 @groups_v1_router.post("/", response_model=GroupResponse, include_in_schema=False)
 @api_groups_router.post("", response_model=GroupResponse)
 @api_groups_router.post("/", response_model=GroupResponse, include_in_schema=False)
-async def create_group(group_in: GroupCreate, db: AsyncSession = Depends(get_db)):
+async def create_group(
+    group_in: GroupCreate,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
     group = StudentGroup(
         group_name=group_in.group_name,
         department=group_in.department,
+        teacher_id=current_user.user_id if current_user.role == "TEACHER" else None,
     )
     db.add(group)
     await db.commit()

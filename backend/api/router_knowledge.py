@@ -11,12 +11,14 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.database import get_db
+from backend.core.deps import require_role
 from backend.models.domain_03 import KnowledgeFile
 from backend.core.file_storage import generate_safe_filename, get_relative_path
 
 knowledge_router = APIRouter(
     prefix="/api/v1/knowledge",
     tags=["Knowledge Base"],
+    dependencies=[Depends(require_role("ADMIN", "TEACHER", "CADET"))],
 )
 
 UPLOAD_DIR = os.path.join("data", "uploads")
@@ -67,6 +69,7 @@ async def list_knowledge_files(db: AsyncSession = Depends(get_db)):
 async def upload_knowledge_file(
     file: UploadFile = File(...),
     db: AsyncSession = Depends(get_db),
+    _teacher=Depends(require_role("TEACHER")),
 ):
     """Upload a PDF or DOCX file to the knowledge base."""
     if not file.filename:
@@ -131,7 +134,11 @@ async def download_knowledge_file(file_id: str, db: AsyncSession = Depends(get_d
 
 
 @knowledge_router.delete("/files/{file_id}")
-async def delete_knowledge_file(file_id: str, db: AsyncSession = Depends(get_db)):
+async def delete_knowledge_file(
+    file_id: str,
+    db: AsyncSession = Depends(get_db),
+    _teacher=Depends(require_role("TEACHER")),
+):
     """Delete a document from the knowledge base."""
     stmt = select(KnowledgeFile).where(KnowledgeFile.file_id == file_id)
     result = await db.execute(stmt)

@@ -275,7 +275,7 @@ describe('Admin Panel Pages and Components', () => {
     expect(screen.getByRole('link', { name: /Пользователи/i })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: /Система и бэкапы/i })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: /Политики и доступ ролей/i })).toHaveAttribute('href', '/admin/security');
-    expect(screen.getByRole('link', { name: /На главную/i })).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: /На главную/i })).not.toBeInTheDocument();
     expect(screen.getByText('Admin Content Test')).toBeInTheDocument();
   });
 

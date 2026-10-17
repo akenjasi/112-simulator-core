@@ -1,5 +1,7 @@
 "use client"
 
+import { apiFetch as fetch } from "@/lib/api-fetch"
+
 import React, { useState, useEffect, useCallback, useRef } from "react"
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card"
 import {
@@ -209,6 +211,21 @@ export default function KnowledgePage() {
       setFiles((prev) => prev.filter((f) => (f.id ?? f.file_id) !== fileId))
     } catch (err: any) {
       setError(err.message || "Не удалось удалить файл")
+    }
+  }
+
+  const handleDownloadFile = async (url: string, name: string) => {
+    try {
+      const response = await fetch(url)
+      if (!response.ok) throw new Error("Не удалось скачать документ")
+      const objectUrl = URL.createObjectURL(await response.blob())
+      const link = document.createElement("a")
+      link.href = objectUrl
+      link.download = name
+      link.click()
+      setTimeout(() => URL.revokeObjectURL(objectUrl), 1000)
+    } catch (err: any) {
+      setError(err.message || "Не удалось скачать документ")
     }
   }
 
@@ -513,6 +530,10 @@ export default function KnowledgePage() {
                         <a
                           href={file.url}
                           download={name}
+                          onClick={(event) => {
+                            event.preventDefault()
+                            void handleDownloadFile(file.url!, name)
+                          }}
                           className="inline-flex items-center text-xs text-primary hover:underline"
                         >
                           <Download className="h-3.5 w-3.5 mr-1" />
@@ -589,6 +610,10 @@ export default function KnowledgePage() {
                               <a
                                 href={file.url}
                                 download={name}
+                                onClick={(event) => {
+                                  event.preventDefault()
+                                  void handleDownloadFile(file.url!, name)
+                                }}
                                 title="Скачать файл"
                                 className="inline-flex items-center justify-center size-6 rounded-md hover:bg-muted text-foreground transition-colors"
                               >

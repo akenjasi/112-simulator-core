@@ -10,10 +10,7 @@ from backend.core.deps import get_current_user, require_role
 from backend.core.auth_sessions import revoke_all_user_sessions
 from backend.core.security import check_teacher_user_management, hash_password
 from backend.database import get_db
-from backend.models.domain_01 import SecurityPolicy
-from sqlalchemy import select
-from fastapi import HTTPException, status
-from backend.models.domain_01 import User
+from backend.models.domain_01 import SecurityPolicy, StudentGroup, User, student_group_link
 from backend.schemas.users import PasswordResetRequest, UserCreate, UserResponse, UserUpdate
 
 users_router = APIRouter(
@@ -52,10 +49,57 @@ async def get_current_user_profile(
 @users_router.get("/", response_model=list[UserResponse], include_in_schema=False)
 @api_users_router.get("", response_model=list[UserResponse])
 @api_users_router.get("/", response_model=list[UserResponse], include_in_schema=False)
-async def get_users(role: Optional[str] = Query(None), db: AsyncSession = Depends(get_db)):
-    stmt = select(User)
+async def get_users(
+    role: Optional[str] = Query(None),
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    if current_user.role.upper() == "ADMIN":
+        stmt = select(User)
+        if role:
+            stmt = stmt.where(User.role == role.upper())
+        result = await db.execute(stmt)
+        return result.scalars().all()
+
+    allowed_roles = {"CADET", "STUDENT"}
+    if role and role.upper() not in allowed_roles:
+        return []
+
+    groups_stmt = select(StudentGroup).where(StudentGroup.teacher_id == current_user.user_id)
+    groups_res = await db.execute(groups_stmt)
+    teacher_groups = groups_res.scalars().all()
+
+    group_ids = [g.group_id for g in teacher_groups if g.group_id]
+    cadet_ids = set()
+
+    for g in teacher_groups:
+        if g.cadet_ids and isinstance(g.cadet_ids, list):
+            for cid in g.cadet_ids:
+                if isinstance(cid, str):
+                    cadet_ids.add(cid)
+                elif isinstance(cid, dict) and "user_id" in cid:
+                    cadet_ids.add(str(cid["user_id"]))
+                elif cid is not None:
+                    cadet_ids.add(str(cid))
+
+    if group_ids:
+        links_stmt = select(student_group_link.c.user_id).where(
+            student_group_link.c.group_id.in_(group_ids)
+        )
+        links_res = await db.execute(links_stmt)
+        for row in links_res.all():
+            if row[0]:
+                cadet_ids.add(str(row[0]))
+
+    if not cadet_ids:
+        return []
+
+    stmt = select(User).where(User.user_id.in_(cadet_ids))
     if role:
         stmt = stmt.where(User.role == role.upper())
+    else:
+        stmt = stmt.where(User.role.in_(allowed_roles))
+
     result = await db.execute(stmt)
     return result.scalars().all()
 

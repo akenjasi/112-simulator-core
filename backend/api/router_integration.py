@@ -3,10 +3,12 @@ from pydantic import BaseModel
 from typing import Dict, Any
 
 from backend.core.spo_gateway import spo_gateway
+from backend.core.deps import require_role
 
 router_integration = APIRouter(
     prefix="/api/integration",
     tags=["Integration"],
+    dependencies=[Depends(require_role("TEACHER", "CADET"))],
 )
 
 class ExportCardRequest(BaseModel):

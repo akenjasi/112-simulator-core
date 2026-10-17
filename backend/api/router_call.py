@@ -24,7 +24,7 @@ logger = logging.getLogger(__name__)
 router_call = APIRouter(
     prefix="/api/v1/call",
     tags=["Call Runtime"],
-    dependencies=[Depends(require_role("ADMIN", "TEACHER", "CADET"))],
+    dependencies=[Depends(require_role("TEACHER", "CADET"))],
 )
 router = router_call
 

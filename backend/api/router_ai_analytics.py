@@ -25,7 +25,7 @@ from backend.core.ai_worker import (
     run_cadet_analysis,
     run_group_analysis,
 )
-from backend.core.deps import get_current_user
+from backend.core.deps import get_current_user, require_role
 from backend.database import get_db
 from backend.models.domain_01 import User, StudentGroup
 from backend.models.domain_03 import AIStudentAdvice, AIGroupAdvice, Assignment
@@ -39,6 +39,7 @@ logger = logging.getLogger("router_ai_analytics")
 router = APIRouter(
     prefix="/api/ai-analytics",
     tags=["AI Analytics"],
+    dependencies=[Depends(require_role("TEACHER", "CADET"))],
 )
 
 

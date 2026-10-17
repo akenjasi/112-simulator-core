@@ -31,8 +31,17 @@ async def list_scenarios(db: AsyncSession = Depends(get_db)):
     return result.scalars().all()
 
 
-@scenarios_router.post("", response_model=ScenarioResponse)
-@scenarios_router.post("/", response_model=ScenarioResponse, include_in_schema=False)
+@scenarios_router.post(
+    "",
+    response_model=ScenarioResponse,
+    dependencies=[Depends(require_role("TEACHER"))],
+)
+@scenarios_router.post(
+    "/",
+    response_model=ScenarioResponse,
+    include_in_schema=False,
+    dependencies=[Depends(require_role("TEACHER"))],
+)
 async def create_scenario(scenario_in: ScenarioCreate, db: AsyncSession = Depends(get_db)):
     ticket = ScenarioTicket(settings=scenario_in.settings)
     db.add(ticket)
@@ -41,8 +50,17 @@ async def create_scenario(scenario_in: ScenarioCreate, db: AsyncSession = Depend
     return ticket
 
 
-@scenarios_router.post("/{scenario_id}/generate", response_model=ScenarioGenerateResponse)
-@scenarios_router.post("/{scenario_id}/generate/", response_model=ScenarioGenerateResponse, include_in_schema=False)
+@scenarios_router.post(
+    "/{scenario_id}/generate",
+    response_model=ScenarioGenerateResponse,
+    dependencies=[Depends(require_role("TEACHER"))],
+)
+@scenarios_router.post(
+    "/{scenario_id}/generate/",
+    response_model=ScenarioGenerateResponse,
+    include_in_schema=False,
+    dependencies=[Depends(require_role("TEACHER"))],
+)
 async def generate_scenario(scenario_id: str, db: AsyncSession = Depends(get_db)):
     stmt = select(ScenarioTicket).where(ScenarioTicket.scenario_id == scenario_id)
     result = await db.execute(stmt)
@@ -55,8 +73,17 @@ async def generate_scenario(scenario_id: str, db: AsyncSession = Depends(get_db)
     return {"job_id": "mock_job_123"}
 
 
-@scenarios_router.post("/{scenario_id}/compile", response_model=ScenarioCompileResponse)
-@scenarios_router.post("/{scenario_id}/compile/", response_model=ScenarioCompileResponse, include_in_schema=False)
+@scenarios_router.post(
+    "/{scenario_id}/compile",
+    response_model=ScenarioCompileResponse,
+    dependencies=[Depends(require_role("TEACHER"))],
+)
+@scenarios_router.post(
+    "/{scenario_id}/compile/",
+    response_model=ScenarioCompileResponse,
+    include_in_schema=False,
+    dependencies=[Depends(require_role("TEACHER"))],
+)
 async def compile_scenario(scenario_id: str, db: AsyncSession = Depends(get_db)):
     stmt = select(ScenarioTicket).where(ScenarioTicket.scenario_id == scenario_id)
     result = await db.execute(stmt)

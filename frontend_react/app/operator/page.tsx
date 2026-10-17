@@ -1,5 +1,7 @@
 "use client"
 
+import { apiFetch as fetch } from "@/lib/api-fetch"
+
 import { useState, useEffect, useRef, useCallback, Suspense } from "react"
 import { useSearchParams, useRouter } from "next/navigation"
 import Link from "next/link"
