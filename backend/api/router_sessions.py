@@ -5,7 +5,7 @@ from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm.attributes import flag_modified
 
-from backend.core.deps import require_role, get_current_user, get_current_user_optional
+from backend.core.deps import require_role, get_current_user
 from backend.core.runtime_router import RuntimeRouter
 from backend.database import get_db
 from backend.models.domain_01 import User
@@ -330,7 +330,7 @@ from starlette.requests import Request
 async def create_demo_session(
     request: Request,
     req: Optional[DemoSessionRequest] = None,
-    current_user: Optional[User] = Depends(get_current_user_optional),
+    current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     """Create a demo training session with 1 random ticket."""
@@ -348,13 +348,18 @@ async def create_demo_session(
     if target_role not in ("OPERATOR_112", "DISPATCHER_DDS"):
         target_role = "DISPATCHER_DDS"
 
-    if current_user and current_user.role == "ADMIN" and target_role != "OPERATOR_112":
+    if target_role == "DISPATCHER_DDS" and current_user.role not in ("TEACHER", "CADET"):
+        if current_user.role == "ADMIN":
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Администратор не может проходить учебные сессии курсанта",
+            )
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
-            detail="Администратор не может проходить учебные сессии курсанта",
+            detail="Демо-сессия диспетчера ДДС доступна только преподавателю или курсанту",
         )
 
-    if target_role == "OPERATOR_112" and (not current_user or current_user.role != "ADMIN"):
+    if target_role == "OPERATOR_112" and current_user.role != "ADMIN":
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Демо-сессия оператора 112 доступна только администратору",
@@ -427,7 +432,7 @@ async def create_demo_session(
     ticket = DemoTicketObj(scenario_ticket)
 
     session_type = "CALL_SIMULATION" if target_role == "OPERATOR_112" else "CARD_ACTIONS"
-    cadet_id = current_user.user_id if current_user else None
+    cadet_id = current_user.user_id
 
     assignment = Assignment(
         session_type=session_type,

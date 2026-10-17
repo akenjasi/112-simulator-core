@@ -79,7 +79,11 @@ class ModelInfoResponse(BaseModel):
 
 # ─── Endpoints ────────────────────────────────────────────────────────────────
 
-@router.get("/info", response_model=ModelInfoResponse)
+@router.get(
+    "/info",
+    response_model=ModelInfoResponse,
+    dependencies=[Depends(require_role("TEACHER", "CADET"))],
+)
 async def get_ai_model_info():
     """Information about configured heavy LLM for background analysis."""
     return ModelInfoResponse(
@@ -90,8 +94,14 @@ async def get_ai_model_info():
     )
 
 
-@router.post("/trigger")
-@router.get("/trigger")
+@router.post(
+    "/trigger",
+    dependencies=[Depends(require_role("TEACHER", "CADET"))],
+)
+@router.get(
+    "/trigger",
+    dependencies=[Depends(require_role("TEACHER", "CADET"))],
+)
 async def trigger_ai_analysis(
     req: Optional[TriggerAnalysisRequest] = None,
     cadet_id: Optional[str] = Query(None),
@@ -101,7 +111,7 @@ async def trigger_ai_analysis(
     sleep_seconds: Optional[float] = Query(None),
     background_tasks: BackgroundTasks = BackgroundTasks(),
     db: AsyncSession = Depends(get_db),
-    current_user: Optional[User] = Depends(get_current_user),
+    current_user: User = Depends(get_current_user),
 ):
     """Trigger background or immediate AI analysis for a cadet, a group, or all active students."""
     c_id = (req.cadet_id if req else None) or cadet_id
@@ -227,7 +237,7 @@ async def get_student_advice(
     unread_only: bool = Query(False),
     limit: int = Query(20, ge=1, le=100),
     db: AsyncSession = Depends(get_db),
-    current_user: Optional[User] = Depends(get_current_user),
+    current_user: User = Depends(get_current_user),
 ):
     """Retrieve AI-generated guidance and recommendations for a cadet."""
     # Cadets can only inspect their own advice
@@ -260,13 +270,17 @@ async def get_student_advice(
     ]
 
 
-@router.get("/group/{id}", response_model=List[AdviceResponse])
+@router.get(
+    "/group/{id}",
+    response_model=List[AdviceResponse],
+    dependencies=[Depends(require_role("TEACHER", "CADET"))],
+)
 async def get_group_advice(
     id: str,
     unread_only: bool = Query(False),
     limit: int = Query(20, ge=1, le=100),
     db: AsyncSession = Depends(get_db),
-    current_user: Optional[User] = Depends(get_current_user),
+    current_user: User = Depends(get_current_user),
 ):
     """Retrieve AI-generated group analytical reports for instructors."""
     if current_user and current_user.role == "CADET":
@@ -298,12 +312,18 @@ async def get_group_advice(
     ]
 
 
-@router.patch("/advice/{advice_id}/read")
-@router.patch("/student/advice/{advice_id}/read")
+@router.patch(
+    "/advice/{advice_id}/read",
+    dependencies=[Depends(require_role("TEACHER", "CADET"))],
+)
+@router.patch(
+    "/student/advice/{advice_id}/read",
+    dependencies=[Depends(require_role("TEACHER", "CADET"))],
+)
 async def mark_student_advice_as_read(
     advice_id: str,
     db: AsyncSession = Depends(get_db),
-    current_user: Optional[User] = Depends(get_current_user),
+    current_user: User = Depends(get_current_user),
 ):
     """Mark student AI advice item as read."""
     stmt = select(AIStudentAdvice).where(AIStudentAdvice.advice_id == advice_id)
@@ -329,11 +349,14 @@ async def mark_student_advice_as_read(
     return {"status": "ok", "advice_id": advice_id, "is_read": True}
 
 
-@router.patch("/group/advice/{advice_id}/read")
+@router.patch(
+    "/group/advice/{advice_id}/read",
+    dependencies=[Depends(require_role("TEACHER", "CADET"))],
+)
 async def mark_group_advice_as_read(
     advice_id: str,
     db: AsyncSession = Depends(get_db),
-    current_user: Optional[User] = Depends(get_current_user),
+    current_user: User = Depends(get_current_user),
 ):
     """Mark group AI advice report as read."""
     stmt = select(AIGroupAdvice).where(AIGroupAdvice.advice_id == advice_id)
@@ -347,12 +370,16 @@ async def mark_group_advice_as_read(
     return {"status": "ok", "advice_id": advice_id, "is_read": True}
 
 
-@router.post("/student/{advice_id}/refine", response_model=AdviceResponse)
+@router.post(
+    "/student/{advice_id}/refine",
+    response_model=AdviceResponse,
+    dependencies=[Depends(require_role("TEACHER", "CADET"))],
+)
 async def refine_student_advice(
     advice_id: str,
     req: AIRefineRequest,
     db: AsyncSession = Depends(get_db),
-    current_user: Optional[User] = Depends(get_current_user),
+    current_user: User = Depends(get_current_user),
 ):
     """Refine AI student advice based on a correction comment."""
     stmt = select(AIStudentAdvice).where(AIStudentAdvice.advice_id == advice_id)
