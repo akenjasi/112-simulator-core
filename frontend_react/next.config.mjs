@@ -6,7 +6,7 @@ const isDockerBuild = process.env.DOCKER_BUILD === 'true'
 
 const nextConfig = {
   typescript: {
-    ignoreBuildErrors: true,
+    ignoreBuildErrors: false,
   },
   images: {
     unoptimized: true,

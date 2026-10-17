@@ -199,13 +199,13 @@ export function useTelephony({
           useCallStore.setState({ isConnected: false })
 
           // Reconnect with exponential backoff if not closed manually and call is still active
-          if (!isManualClose && callStatus !== "HANGUP") {
+          if (!isManualClose && useCallStore.getState().callStatus !== "HANGUP") {
             setIsReconnecting(true)
             useCallStore.setState({ isReconnecting: true })
             reconnectAttempts += 1
             const delay = Math.min(1000 * Math.pow(2, reconnectAttempts - 1), 30000)
             reconnectTimeout = setTimeout(() => {
-              if (isSubscribed && !isManualClose && callStatus !== "HANGUP") {
+              if (isSubscribed && !isManualClose && useCallStore.getState().callStatus !== "HANGUP") {
                 connect()
               }
             }, delay)

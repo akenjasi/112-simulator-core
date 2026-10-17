@@ -13,10 +13,11 @@ function PhoneGlyph() {
   )
 }
 
-function MsgBox() {
+function MsgBox({ onClick }: { onClick?: () => void } = {}) {
   return (
     <button
       type="button"
+      onClick={onClick}
       disabled
       className="flex items-center justify-center cursor-not-allowed opacity-50"
       style={{ width: 26, height: 22, border: `1px solid ${border}`, background: "#fbfdfe" }}
@@ -175,26 +176,27 @@ export function OperatorTopBar({
               АОН
             </span>
             <div className="flex items-center gap-1 pl-1" style={{ color: "#8a949b" }}>
-              <HelpCircle
-                size={12}
+              <span
                 onClick={onAonInfo}
-                className="hover:text-blue-500 cursor-pointer transition-colors"
+                className="hover:text-blue-500 cursor-pointer transition-colors inline-flex items-center"
                 title="Справка по определению номера АОН"
-              />
-              <MapPin
-                size={12}
+              >
+                <HelpCircle size={12} />
+              </span>
+              <span
                 onClick={onMapInfo}
-                className="hover:text-blue-500 cursor-pointer transition-colors"
-                fill="currentColor"
-                strokeWidth={0}
+                className="hover:text-blue-500 cursor-pointer transition-colors inline-flex items-center"
                 title="Определение местоположения базовой станции"
-              />
-              <Globe
-                size={12}
+              >
+                <MapPin size={12} fill="currentColor" strokeWidth={0} />
+              </span>
+              <span
                 onClick={onProviderInfo}
-                className="hover:text-blue-500 cursor-pointer transition-colors"
+                className="hover:text-blue-500 cursor-pointer transition-colors inline-flex items-center"
                 title="Данные оператора связи"
-              />
+              >
+                <Globe size={12} />
+              </span>
             </div>
           </div>
           <div className="flex items-center justify-between gap-1">
@@ -217,12 +219,13 @@ export function OperatorTopBar({
               предоставленный
             </span>
             <div className="flex items-center gap-1 pl-1" style={{ color: "#8a949b" }}>
-              <Globe
-                size={12}
+              <span
                 onClick={onProviderInfo}
-                className="hover:text-blue-500 cursor-pointer transition-colors"
+                className="hover:text-blue-500 cursor-pointer transition-colors inline-flex items-center"
                 title="Данные оператора связи"
-              />
+              >
+                <Globe size={12} />
+              </span>
             </div>
           </div>
           <div className="flex items-center justify-between gap-1">
@@ -248,12 +251,13 @@ export function OperatorTopBar({
               телефон на место
             </span>
             <div className="flex items-center gap-1 pl-1" style={{ color: "#8a949b" }}>
-              <Globe
-                size={12}
+              <span
                 onClick={onProviderInfo}
-                className="hover:text-blue-500 cursor-pointer transition-colors"
+                className="hover:text-blue-500 cursor-pointer transition-colors inline-flex items-center"
                 title="Данные оператора связи"
-              />
+              >
+                <Globe size={12} />
+              </span>
             </div>
           </div>
           <div className="flex items-center justify-between gap-1">

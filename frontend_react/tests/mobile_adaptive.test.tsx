@@ -335,7 +335,7 @@ describe('Mobile Adaptivity (task_78)', () => {
     });
 
     it('should render Teacher Live Session table with overflow-x-auto container', async () => {
-      const LiveDashboard = (await import('../app/teacher/sessions/[id]/live/page')).default;
+      const LiveDashboard = (await import('../app/teacher/sessions/live/page')).default;
       const { container } = render(<LiveDashboard sessionId="sess-101" />);
 
       await waitFor(() => {

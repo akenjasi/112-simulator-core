@@ -30,7 +30,9 @@ async def security_data(monkeypatch):
         }
         db.add_all(users.values())
         await db.flush()
-        group = StudentGroup(group_name=f"merge_group_{tag}", teacher_id=users["TEACHER"].user_id)
+        # Positive teacher access needs actual membership under the P1 contract.
+        group = StudentGroup(group_name=f"merge_group_{tag}", teacher_id=users["TEACHER"].user_id,
+                             cadet_ids=[users["CADET"].user_id])
         db.add(group)
         await db.flush()
         student_advice = AIStudentAdvice(cadet_id=users["CADET"].user_id, analysis_text="PRIVATE_STUDENT")
