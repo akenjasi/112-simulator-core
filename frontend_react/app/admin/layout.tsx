@@ -11,11 +11,13 @@ import {
   Database,
   Home,
   Shield,
-  Activity,
   Menu,
   SlidersHorizontal,
+  ScrollText,
   X,
 } from "lucide-react"
+import { useSystemStatus } from "@/hooks/useSystemStatus"
+import { SystemStatus } from "@/components/SystemStatus"
 
 export interface AdminNavItem {
   name: string
@@ -33,6 +35,11 @@ export const adminNavItems: AdminNavItem[] = [
     name: "Пользователи",
     href: "/admin/users",
     icon: Users,
+  },
+  {
+    name: "Журналы",
+    href: "/admin/logs",
+    icon: ScrollText,
   },
   {
     name: "Система и бэкапы",
@@ -64,6 +71,7 @@ export default function AdminLayout({
   }
 
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false)
+  const systemStatus = useSystemStatus()
 
   useEffect(() => {
     setIsMobileMenuOpen(false)
@@ -166,15 +174,7 @@ export default function AdminLayout({
             </div>
 
             <div className="p-4 border-t-2 border-slate-200 bg-slate-50">
-              <div className="p-3 bg-white border border-slate-200 rounded-xl flex items-center justify-between">
-                <div className="flex items-center gap-2.5">
-                  <div className="w-3 h-3 rounded-full bg-emerald-500 animate-pulse shrink-0" />
-                  <div className="text-xs font-bold text-slate-700">
-                    Система активна
-                  </div>
-                </div>
-                <Activity className="w-4 h-4 text-emerald-600" />
-              </div>
+              <SystemStatus status={systemStatus} variant="admin" />
               <LogoutButton className="mt-3" />
             </div>
           </aside>
@@ -234,15 +234,7 @@ export default function AdminLayout({
 
         {/* Footer / System Status */}
         <div className="p-4 border-t-2 border-slate-200 bg-slate-50">
-          <div className="p-3 bg-white border border-slate-200 rounded-xl flex items-center justify-between">
-            <div className="flex items-center gap-2.5">
-              <div className="w-3 h-3 rounded-full bg-emerald-500 animate-pulse shrink-0" />
-              <div className="text-xs font-bold text-slate-700">
-                Система активна
-              </div>
-            </div>
-            <Activity className="w-4 h-4 text-emerald-600" />
-          </div>
+          <SystemStatus status={systemStatus} variant="admin" />
           <LogoutButton className="mt-3" />
         </div>
       </aside>

@@ -17,6 +17,8 @@ import {
   X,
   Shield,
 } from "lucide-react"
+import { useSystemStatus } from "@/hooks/useSystemStatus"
+import { SystemStatus } from "@/components/SystemStatus"
 
 export interface NavItem {
   name: string
@@ -75,6 +77,7 @@ export default function TeacherLayout({
   }
 
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false)
+  const systemStatus = useSystemStatus()
 
   useEffect(() => {
     setIsMobileMenuOpen(false)
@@ -177,12 +180,7 @@ export default function TeacherLayout({
             </div>
 
             <div className="p-4 border-t-2 border-[#c9ced1] bg-[#fbfdfe]">
-              <div className="p-3 bg-white border-2 border-[#c9ced1] rounded-xl flex items-center gap-3">
-                <div className="w-3.5 h-3.5 rounded-full bg-emerald-500 animate-pulse shrink-0" />
-                <div className="text-sm font-bold text-[#49555d]">
-                  Система активна
-                </div>
-              </div>
+              <SystemStatus status={systemStatus} variant="teacher" />
               <LogoutButton className="mt-3" />
             </div>
           </aside>
@@ -242,12 +240,7 @@ export default function TeacherLayout({
 
         {/* Footer / System Status */}
         <div className="p-4 border-t-2 border-[#c9ced1] bg-[#fbfdfe]">
-          <div className="p-3 bg-white border-2 border-[#c9ced1] rounded-xl flex items-center gap-3">
-            <div className="w-3.5 h-3.5 rounded-full bg-emerald-500 animate-pulse shrink-0" />
-            <div className="text-sm font-bold text-[#49555d]">
-              Система активна
-            </div>
-          </div>
+          <SystemStatus status={systemStatus} variant="teacher" />
           <LogoutButton className="mt-3" />
         </div>
       </aside>

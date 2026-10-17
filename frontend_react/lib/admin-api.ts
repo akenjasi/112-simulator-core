@@ -7,6 +7,15 @@ export interface HealthCheckData {
 export interface BackupResult {
   backup_file: string
   status: string
+  filename?: string
+  size_bytes?: number
+  created_at?: string
+}
+
+export interface BackupItem {
+  filename: string
+  created_at: string
+  size_bytes: number
 }
 
 export interface AdminUser {
@@ -78,10 +87,43 @@ export async function triggerBackup(): Promise<BackupResult> {
     headers: getAuthHeaders(),
   })
   if (!res.ok) {
-    throw new Error(`Ошибка создания бэкапа: ${res.status}`)
+    const errorBody = await res.json().catch(() => ({}))
+    throw new Error(errorBody.detail || `Ошибка создания бэкапа: ${res.status}`)
   }
   return res.json()
 }
+
+export async function fetchBackups(signal?: AbortSignal): Promise<{ backups: BackupItem[] }> {
+  const res = await fetch("/api/admin/backups", {
+    headers: getAuthHeaders(),
+    signal,
+  })
+  if (!res.ok) {
+    const errorBody = await res.json().catch(() => ({}))
+    throw new Error(errorBody.detail || `Ошибка загрузки списка бэкапов: ${res.status}`)
+  }
+  return res.json()
+}
+
+export async function downloadBackupFile(filename: string): Promise<void> {
+  const res = await fetch(`/api/admin/backups/${encodeURIComponent(filename)}/download`, {
+    headers: getAuthHeaders(),
+  })
+  if (!res.ok) {
+    const errorBody = await res.json().catch(() => ({}))
+    throw new Error(errorBody.detail || `Ошибка скачивания файла: ${res.status}`)
+  }
+  const blob = await res.blob()
+  const url = window.URL.createObjectURL(blob)
+  const a = document.createElement("a")
+  a.href = url
+  a.download = filename
+  document.body.appendChild(a)
+  a.click()
+  a.remove()
+  window.URL.revokeObjectURL(url)
+}
+
 
 export async function fetchUsers(role?: string): Promise<AdminUser[]> {
   const query = role ? `?role=${encodeURIComponent(role)}` : ""
@@ -150,6 +192,79 @@ export async function resetUserPassword(
   if (!res.ok) {
     const errorBody = await res.json().catch(() => ({}))
     throw new Error(errorBody.detail || `Ошибка сброса пароля: ${res.status}`)
+  }
+  return res.json()
+}
+
+export interface UserActionLogItem {
+  log_id: string
+  user_id?: string | null
+  username?: string | null
+  role?: string | null
+  action: string
+  action_type?: string | null
+  endpoint?: string | null
+  target_entity?: string | null
+  target_id?: string | null
+  ip_address?: string | null
+  details?: string | null
+  timestamp: string
+}
+
+export interface SystemErrorLogItem {
+  id: string
+  timestamp: string
+  error_message: string
+  traceback?: string | null
+}
+
+export interface FetchLogsFilter {
+  from_at?: string
+  to_at?: string
+  user_id?: string
+  limit?: number
+  offset?: number
+}
+
+export async function fetchAuditLogs(
+  filter: FetchLogsFilter = {},
+  signal?: AbortSignal
+): Promise<UserActionLogItem[]> {
+  const params = new URLSearchParams()
+  if (filter.limit !== undefined) params.set("limit", String(filter.limit))
+  if (filter.offset !== undefined) params.set("offset", String(filter.offset))
+  if (filter.from_at) params.set("from_at", filter.from_at)
+  if (filter.to_at) params.set("to_at", filter.to_at)
+  if (filter.user_id) params.set("user_id", filter.user_id)
+
+  const query = params.toString() ? `?${params.toString()}` : ""
+  const res = await fetch(`/api/admin/audit-logs${query}`, {
+    headers: getAuthHeaders(),
+    signal,
+  })
+  if (!res.ok) {
+    throw new Error(`Ошибка загрузки журнала действий: ${res.status}`)
+  }
+  return res.json()
+}
+
+export async function fetchErrorLogs(
+  filter: FetchLogsFilter = {},
+  signal?: AbortSignal
+): Promise<SystemErrorLogItem[]> {
+  const params = new URLSearchParams()
+  if (filter.limit !== undefined) params.set("limit", String(filter.limit))
+  if (filter.offset !== undefined) params.set("offset", String(filter.offset))
+  if (filter.from_at) params.set("from_at", filter.from_at)
+  if (filter.to_at) params.set("to_at", filter.to_at)
+
+  const query = params.toString() ? `?${params.toString()}` : ""
+  const res = await fetch(`/api/admin/error-logs${query}`, {
+    headers: getAuthHeaders(),
+    signal,
+  })
+  if (!res.ok) {
+    throw new Error(`Ошибка загрузки журнала ошибок: ${res.status}`)
   }
   return res.json()
 }
