@@ -20,6 +20,8 @@ import {
   RecordDetail,
   ErrorDetailItem,
 } from "@/components/teacher/split-screen"
+import { DDSLessonReport } from "@/components/teacher/dds-lesson-report"
+import { getStoredToken } from "@/lib/auth-session"
 import {
   Users,
   Award,
@@ -521,6 +523,7 @@ export default function AnalyticsPage({ initialTab = "all" }: AnalyticsPageProps
   const [editingNotesId, setEditingNotesId] = useState<string | null>(null)
   const [editingNotesText, setEditingNotesText] = useState<string>("")
   const [isSavingNotes, setIsSavingNotes] = useState<boolean>(false)
+  const [lessonsAuthError, setLessonsAuthError] = useState<string | null>(null)
 
   // Charts & Dashboards state (ТЗ 75)
   const [isMounted, setIsMounted] = useState<boolean>(false)
@@ -658,15 +661,26 @@ export default function AnalyticsPage({ initialTab = "all" }: AnalyticsPageProps
 
   // Fetch lesson history (optionally with group_id filter)
   const fetchLessonsHistory = useCallback(async () => {
+    const token = getStoredToken()
+    if (!token) {
+      setLessonsAuthError("Для загрузки истории уроков требуется авторизация. Пожалуйста, войдите в систему.")
+      return
+    }
     try {
       setIsLoadingLessons(true)
-      const res = await fetch(`/api/v1/lessons`)
+      setLessonsAuthError(null)
+      const res = await fetch(`/api/v1/lessons`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      })
       if (res.ok) {
         const data = await res.json()
         if (Array.isArray(data)) {
           setLessonsList(data)
-          
         }
+      } else if (res.status === 401 || res.status === 403) {
+        setLessonsAuthError("Сессия истекла или недостаточно прав для просмотра истории занятий (войдите в систему).")
       }
     } catch (err) {
       console.warn("Could not load lessons history from API:", err)
@@ -1600,6 +1614,17 @@ export default function AnalyticsPage({ initialTab = "all" }: AnalyticsPageProps
             </Button>
           </div>
 
+          {lessonsAuthError && (
+            <div className="p-4 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-900 dark:text-amber-200 text-sm flex items-center justify-between gap-3">
+              <span>{lessonsAuthError}</span>
+              <Link href="/login">
+                <Button size="sm" variant="default" className="h-8 text-xs shrink-0">
+                  Войти в систему
+                </Button>
+              </Link>
+            </div>
+          )}
+
           {isLoadingLessons && lessonsList.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-16 text-muted-foreground gap-3">
               <Loader2 className="h-8 w-8 animate-spin text-primary" />
@@ -1749,6 +1774,11 @@ export default function AnalyticsPage({ initialTab = "all" }: AnalyticsPageProps
                     {/* Accordion Body / Detailed view per cadet & notes */}
                     {isExpanded && (
                       <div className="border-t bg-muted/10 p-5 space-y-6 animate-in fade-in-50 duration-150">
+                        {/* DDS Lesson Report for COMPLETED DISPATCHER_DDS */}
+                        {isCompleted && lesson.target_role === "DISPATCHER_DDS" && (
+                          <DDSLessonReport lessonId={lesson.id} />
+                        )}
+
                         {/* 1. Teacher Notes Block */}
                         <div className="bg-background rounded-xl p-4 border shadow-xs space-y-3">
                           <div className="flex items-center justify-between">
