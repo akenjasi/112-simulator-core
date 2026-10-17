@@ -12,12 +12,9 @@ import { ServicesBar } from "@/components/dispatcher/services-bar"
 import { Tutorial } from "@/components/tutorial"
 import { DispatchPanel } from "@/components/dispatcher/dispatch-panel"
 import { Award, AlertTriangle, CheckCircle, XCircle, Clock } from "lucide-react"
+import { DDSAssignedConsole } from "@/components/dispatcher/dds-assigned-console"
 
-function DdsSimulator() {
-  const searchParams = useSearchParams()
-  const sessionId = searchParams ? searchParams.get("session_id") : null
-  const ticketId = searchParams ? searchParams.get("ticket_id") : null
-
+function DdsDemoSimulator() {
   const [liveScenarios, setLiveScenarios] = useState<any[]>([])
 
   const [demoIndex, setDemoIndex] = useState(0)
@@ -39,73 +36,6 @@ function DdsSimulator() {
   const [summary, setSummary] = useState("")
   const [calledServices, setCalledServices] = useState<string[]>([])
   const [showEndShiftModal, setShowEndShiftModal] = useState(false)
-
-  // Load real ticket data for DDS
-  useEffect(() => {
-    if (ticketId) {
-      fetch(`/api/v1/tickets/${ticketId}`)
-        .then(res => {
-          if (!res.ok) throw new Error("Network response was not ok");
-          return res.json();
-        })
-        .then(ticket => {
-          if (ticket) {
-            const gt = ticket.ground_truth || {};
-            
-            const servicesList = Array.isArray(ticket.etalon_services) 
-              ? ticket.etalon_services.map((s: string, idx: number) => ({
-                  id: `srv_${idx}`,
-                  name: s,
-                  time: "12:00",
-                  status: "Получена службой",
-                  isRejected: false,
-                  history: [
-                    { op: "Система", time: "20.09.2026 12:00:00", status: "Добавлена" },
-                    { op: "Система", time: "20.09.2026 12:00:00", status: "Получена службой" },
-                  ],
-              }))
-              : [];
-              
-            setData(prev => ({
-              ...prev,
-              caller: {
-                ...prev.caller,
-                name: gt.fio || prev.caller.name,
-                role: gt.caller_status || prev.caller.role,
-                address: gt.street ? `${gt.street} ${gt.house || ""}`.trim() : prev.caller.address,
-              },
-              phones: {
-                aon: gt.phone || prev.phones.aon,
-                provided: gt.phone || prev.phones.provided,
-                onSite: gt.phone || prev.phones.onSite,
-              },
-              description: ticket.plot || gt.plot || prev.description,
-              statuses: {
-                ...prev.statuses,
-                injured: gt.injured || prev.statuses.injured,
-                ambulanceRefusal: gt.ambulanceRefusal || prev.statuses.ambulanceRefusal,
-                blocked: gt.blocked || prev.statuses.blocked,
-              },
-              classification: {
-                ...prev.classification,
-                title: ticket.subcategory || prev.classification.title,
-                section: ticket.category || prev.classification.section,
-                class: gt.class || prev.classification.class,
-                visClass: gt.visClass || prev.classification.visClass
-              },
-              incident: {
-                ...prev.incident,
-                number: ticket.ticket_id ? ticket.ticket_id.split("-")[0] : prev.incident.number,
-                savedAt: ticket.created_at ? new Date(ticket.created_at).toLocaleString('ru-RU', {day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit',second:'2-digit'}) : prev.incident.savedAt
-              },
-              connection: "Установлено",
-              services: servicesList.length > 0 ? servicesList : prev.services
-            }));
-          }
-        })
-        .catch(err => console.error("Failed to load real ticket data for DDS:", err));
-    }
-  }, [ticketId]);
 
   // Play beep sound when timer expires
   const playTimeoutBeep = () => {
@@ -257,19 +187,17 @@ function DdsSimulator() {
 
   // Load scenarios on mount and show initial scenario immediately
   useEffect(() => {
-    if (!ticketId) {
-      loadScenario(0, ddsScenarios)
-      fetch("/api/dds/scenarios")
-        .then((res) => res.json())
-        .then((data) => {
-          if (data.scenarios && data.scenarios.length > 0) {
-            setLiveScenarios(data.scenarios)
-            loadScenario(0, data.scenarios)
-          }
-        })
-        .catch((err) => console.error("Ошибка загрузки карточек ДДС:", err))
-    }
-  }, [ticketId])
+    loadScenario(0, ddsScenarios)
+    fetch("/api/dds/scenarios")
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.scenarios && data.scenarios.length > 0) {
+          setLiveScenarios(data.scenarios)
+          loadScenario(0, data.scenarios)
+        }
+      })
+      .catch((err) => console.error("Ошибка загрузки карточек ДДС:", err))
+  }, [])
 
   // Switch to next demo card
   const nextDemoCard = () => {
@@ -285,17 +213,7 @@ function DdsSimulator() {
     setNetworkStatus("waiting")
     setTimeout(() => {
       setNetworkStatus("active")
-      if (ticketId) {
-        setIsCardAccepted(false)
-        setUserDecision(null)
-        setUserComment("")
-        setUserOrderNumber("")
-        setWhoAccepted("")
-        setSummary("")
-        startSlaTimer()
-      } else {
-        loadScenario(demoIndex)
-      }
+      loadScenario(demoIndex)
     }, 500)
   }
 
@@ -488,11 +406,6 @@ function DdsSimulator() {
                 <span className="h-2.5 w-2.5 rounded-full bg-[#4ade80] animate-ping" />
                 Смена активна (ДДС-112)
               </span>
-              {sessionId && (
-                <span className="bg-blue-900/70 border border-blue-400 text-blue-200 px-2.5 py-0.5 rounded text-xs font-mono font-bold">
-                  Сессия #{sessionId.slice(0, 8)} {ticketId ? `• Билет: ${ticketId.slice(0, 8)}` : ""}
-                </span>
-              )}
               {currentScenario.isTrick && (
                 <span className="bg-amber-900/60 border border-amber-500 text-amber-300 px-2 py-0.5 rounded text-[11px] font-bold">
                   ⚠️ Билет с подвохом
@@ -756,6 +669,47 @@ function DdsSimulator() {
   )
 }
 
+function DdsRoute() {
+  const searchParams = useSearchParams()
+  const sessionId = searchParams ? searchParams.get("session_id") : null
+  const ticketId = searchParams ? searchParams.get("ticket_id") : null
+
+  if (sessionId) {
+    return <DDSAssignedConsole sessionId={sessionId} ticketId={ticketId || undefined} />
+  }
+
+  if (ticketId && !sessionId) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-[#efefef] p-6 text-[#1e2327]">
+        <div className="max-w-md w-full bg-white p-6 rounded-lg border border-[#b4b9bc] shadow-md space-y-4 text-center">
+          <div className="text-amber-600 font-bold text-base">
+            Необходимо открыть назначенное занятие
+          </div>
+          <p className="text-xs text-gray-600">
+            Прямой доступ к билету вне назначенного занятия не поддерживается. Пожалуйста, перейдите в журнал или лобби для выбора назначенного занятия.
+          </p>
+          <div className="pt-2 flex justify-center gap-3">
+            <Link
+              href="/dds/journal"
+              className="px-4 py-2 bg-[#157dbd] text-white text-xs font-bold rounded hover:bg-[#136ba3]"
+            >
+              В журнал ДДС
+            </Link>
+            <Link
+              href="/student/lobby"
+              className="px-4 py-2 bg-gray-200 text-gray-800 text-xs font-semibold rounded hover:bg-gray-300"
+            >
+              В лобби курсанта
+            </Link>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  return <DdsDemoSimulator />
+}
+
 export default function Page() {
   return (
     <Suspense
@@ -765,7 +719,7 @@ export default function Page() {
         </div>
       }
     >
-      <DdsSimulator />
+      <DdsRoute />
     </Suspense>
   )
 }

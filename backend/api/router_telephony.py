@@ -159,6 +159,8 @@ async def _update_db_session_call_status(
         res = await db.execute(stmt)
         exam_session = res.scalar_one_or_none()
         if exam_session:
+            if (exam_session.dynamic_state or {}).get("dds"):
+                return
             b_call = dict(exam_session.browser_call or {})
             b_call["call_status"] = call_status
             b_call["operator_ext"] = operator_ext

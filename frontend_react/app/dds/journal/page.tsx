@@ -1,8 +1,10 @@
 "use client"
 
-import React, { useState, useEffect, Suspense } from "react"
+import React, { useState, useEffect, useCallback, useRef, Suspense } from "react"
 import Link from "next/link"
 import { useSearchParams, useRouter } from "next/navigation"
+import { fetchDDSSessionState, type DDSSessionState } from "@/lib/dds-cycle"
+import { DDSAssignments } from "@/components/dispatcher/dds-assignments"
 import {
   Search,
   ChevronDown,
@@ -1190,10 +1192,262 @@ function DdsJournalContent() {
   )
 }
 
+function AssignedDDSJournal({ sessionId, ticketId }: { sessionId: string; ticketId?: string }) {
+  const [state, setState] = useState<DDSSessionState | null>(null)
+  const [isLoading, setIsLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+  const epochRef = useRef(0)
+  const controllerRef = useRef<AbortController | null>(null)
+
+  const loadData = useCallback(async () => {
+    const epoch = ++epochRef.current
+    if (controllerRef.current) {
+      controllerRef.current.abort()
+    }
+    const controller = new AbortController()
+    controllerRef.current = controller
+
+    setIsLoading(true)
+    setError(null)
+
+    try {
+      const data = await fetchDDSSessionState(sessionId, ticketId, controller.signal)
+      if (epochRef.current === epoch) {
+        setState(data)
+        setError(null)
+      }
+    } catch (err: any) {
+      if (controller.signal.aborted || epochRef.current !== epoch) return
+      setError(err.message || "Ошибка загрузки карточки занятия")
+      setState(null)
+    } finally {
+      if (epochRef.current === epoch) {
+        setIsLoading(false)
+      }
+    }
+  }, [sessionId, ticketId])
+
+  useEffect(() => {
+    loadData()
+    return () => {
+      epochRef.current++
+      if (controllerRef.current) {
+        controllerRef.current.abort()
+      }
+    }
+  }, [loadData])
+
+  if (isLoading && !state) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-[#2b3a42] text-white text-sm">
+        Загрузка назначенной карточки происшествия...
+      </div>
+    )
+  }
+
+  if (error && !state) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-[#2b3a42] p-4">
+        <div role="alert" className="max-w-md w-full bg-red-950/80 border border-red-500/50 p-6 rounded-lg text-white space-y-3">
+          <p className="font-semibold text-sm">{error}</p>
+          <button
+            type="button"
+            onClick={loadData}
+            className="px-3 py-1.5 bg-red-800 hover:bg-red-700 text-xs font-bold rounded text-white"
+          >
+            Повторить попытку
+          </button>
+        </div>
+      </div>
+    )
+  }
+
+  if (!state) return null
+
+  const card = state.incoming_card
+  const statusLabel =
+    state.session_status === "COMPLETED"
+      ? state.submitted_at
+        ? "Выполнено"
+        : "Не завершено"
+      : state.session_status === "ACTIVE"
+      ? "В процессе"
+      : state.session_status
+  const scoreLabel =
+    state.score !== null && state.score !== undefined ? `${state.score}` : "Нет оценки"
+  const consoleUrl = `/dds?session_id=${encodeURIComponent(sessionId)}&ticket_id=${encodeURIComponent(ticketId || state.ticket_id || "")}`
+
+  return (
+    <div className="min-h-screen bg-[#2b3a42] text-gray-100 flex flex-col font-sans">
+      <header className="bg-[#1f2b31] border-b border-[#3d4d55] px-6 py-3 flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <span className="font-bold text-sm text-white">Журнал ДДС &bull; Назначенная карточка</span>
+          <span className="text-xs px-2 py-0.5 rounded bg-blue-500/20 text-blue-300 border border-blue-500/30 font-medium">
+            {statusLabel}
+          </span>
+          <span className="text-xs px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 font-medium">
+            Оценка: {scoreLabel}
+          </span>
+        </div>
+        <div className="flex items-center gap-3">
+          <button
+            type="button"
+            onClick={loadData}
+            className="px-3 py-1 bg-white/10 hover:bg-white/20 text-xs rounded border border-white/20 transition-colors"
+          >
+            Обновить
+          </button>
+          <Link
+            href={consoleUrl}
+            className="px-3 py-1 bg-[#157dbd] hover:bg-[#136ba3] text-xs font-bold rounded text-white transition-colors"
+          >
+            Открыть рабочее место диспетчера &rarr;
+          </Link>
+        </div>
+      </header>
+
+      <main className="flex-1 max-w-5xl w-full mx-auto p-6 space-y-6">
+        {/* Card Header & Description */}
+        <div className="bg-[#34444d] rounded-lg border border-[#485c67] p-5 shadow-sm space-y-3">
+          <div className="flex items-center justify-between border-b border-[#485c67] pb-3">
+            <div>
+              <h2 className="text-base font-bold text-white">
+                Происшествие № {card.incident?.number || state.ticket_id}
+              </h2>
+              <p className="text-xs text-gray-300 mt-0.5">
+                {card.incident?.savedAt} &bull; {card.incident?.operator}
+              </p>
+            </div>
+            <Link
+              href={consoleUrl}
+              className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-xs font-bold rounded text-white transition-colors"
+            >
+              Перейти к отработке
+            </Link>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
+            <div className="space-y-1">
+              <span className="text-gray-400 font-semibold block">Заявитель:</span>
+              <p className="text-gray-200">{card.caller?.name} ({card.caller?.role})</p>
+              <p className="text-gray-300">{card.caller?.address}</p>
+              <p className="text-gray-400">Тел: {card.phones?.aon || card.phones?.provided}</p>
+            </div>
+
+            <div className="space-y-1">
+              <span className="text-gray-400 font-semibold block">Классификация:</span>
+              <p className="text-gray-200">{card.classification?.section}</p>
+              <p className="text-gray-300">{card.classification?.title} &bull; {card.classification?.class}</p>
+              <p className="text-gray-400">
+                Пострадавшие: {card.statuses?.injured} &bull; Заблокированные: {card.statuses?.blocked}
+              </p>
+            </div>
+          </div>
+
+          <div className="pt-2 border-t border-[#485c67]">
+            <span className="text-gray-400 font-semibold text-xs block mb-1">Описание происшествия:</span>
+            <p className="text-sm text-gray-100 bg-[#25333a] p-3 rounded border border-[#3d4d55] whitespace-pre-wrap">
+              {card.description}
+            </p>
+          </div>
+        </div>
+
+        {/* Services & Actions Journal */}
+        <div className="bg-[#34444d] rounded-lg border border-[#485c67] p-5 shadow-sm space-y-4">
+          <h3 className="text-sm font-bold text-white border-b border-[#485c67] pb-2">
+            Журнал действий и привлеченные службы ({state.actions.length} действий)
+          </h3>
+
+          <div className="space-y-2">
+            <span className="text-xs text-gray-400 font-semibold block">Службы в карточке:</span>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              {card.services?.map((s, idx) => (
+                <div key={idx} className="p-2.5 rounded bg-[#25333a] border border-[#3d4d55] text-xs flex items-center justify-between">
+                  <span className="font-semibold text-gray-200">{s.name}</span>
+                  <span className="px-2 py-0.5 rounded bg-white/10 text-gray-300 font-mono text-[11px]">
+                    {s.status}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div className="pt-2 space-y-2">
+            <span className="text-xs text-gray-400 font-semibold block">История действий курсанта:</span>
+            {state.actions.length === 0 ? (
+              <p className="text-xs text-gray-400 italic py-2">
+                Действия по карточке еще не фиксировались.
+              </p>
+            ) : (
+              <div className="space-y-2 max-h-64 overflow-y-auto pr-1">
+                {state.actions.map((act) => (
+                  <div
+                    key={act.request_id}
+                    className="p-3 rounded bg-[#25333a] border border-[#3d4d55] text-xs flex flex-col sm:flex-row sm:items-center justify-between gap-2"
+                  >
+                    <div className="space-y-0.5">
+                      <div className="flex items-center gap-2">
+                        <span className="font-bold text-white">{act.service_name}</span>
+                        <span className="px-1.5 py-0.2 rounded bg-white/10 text-gray-300 text-[11px]">
+                          {act.kind === "status" ? act.status || "Статус" : "Направление"}
+                        </span>
+                        {act.order_number && (
+                          <span className="text-gray-400 text-[11px]">№ {act.order_number}</span>
+                        )}
+                      </div>
+                      {act.comment && <p className="text-gray-200">{act.comment}</p>}
+                      {act.who_accepted && (
+                        <p className="text-gray-300 text-[11px]">
+                          Принял: {act.who_accepted} &bull; {act.summary}
+                        </p>
+                      )}
+                    </div>
+                    {act.at && (
+                      <span className="text-[11px] text-gray-400 shrink-0 font-mono">
+                        {new Date(act.at).toLocaleTimeString()}
+                      </span>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      </main>
+    </div>
+  )
+}
+
+function DdsJournalRouter() {
+  const searchParams = useSearchParams()
+  const sessionId = searchParams ? searchParams.get("session_id") : null
+  const ticketId = searchParams ? searchParams.get("ticket_id") : null
+
+  if (sessionId) {
+    return <AssignedDDSJournal sessionId={sessionId} ticketId={ticketId || undefined} />
+  }
+
+  return (
+    <div className="min-h-screen bg-[#24292e] text-white flex flex-col font-sans">
+      <div className="p-4 max-w-5xl mx-auto w-full space-y-6">
+        <DDSAssignments />
+        <div className="border-t border-gray-700 pt-6">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-base font-bold text-gray-300">
+              Демонстрационный журнал происшествий (ознакомительный режим)
+            </h3>
+          </div>
+          <DdsJournalContent />
+        </div>
+      </div>
+    </div>
+  )
+}
+
 export default function DdsJournalPage() {
   return (
     <Suspense fallback={<div className="flex h-screen items-center justify-center">Загрузка журнала ДДС...</div>}>
-      <DdsJournalContent />
+      <DdsJournalRouter />
     </Suspense>
   )
 }

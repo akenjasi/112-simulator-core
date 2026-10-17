@@ -5,6 +5,7 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator, model_valida
 
 class LessonCreate(BaseModel):
     group_id: str = Field(..., description="ID учебной группы")
+    ticket_id: Optional[str] = Field(None, description="ID подготовленного билета сценария")
     target_role: Optional[str] = Field("DISPATCHER_DDS", description="Целевая роль (OPERATOR_112 или DISPATCHER_DDS)")
     categories: Optional[List[str]] = Field(default_factory=list, description="Список категорий происшествий")
     complexity: Optional[str] = Field("adaptive", description="Сложность (level_1, level_2, level_3, adaptive, mixed)")
@@ -64,6 +65,8 @@ class CadetTicketDetail(BaseModel):
     errors_count: int = 0
     errors: List[str] = Field(default_factory=list)
     completed_at: Optional[datetime.datetime] = None
+    card_id: Optional[str] = None
+    actions: List[dict] = Field(default_factory=list)
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -77,7 +80,7 @@ class CadetLessonStats(BaseModel):
     passed: int = 0
     failed: int = 0
     progress: int = 0
-    score: Optional[int] = None
+    score: Optional[float] = None
     last_activity: Optional[str] = None
     session_id: Optional[str] = None
     tickets: List[CadetTicketDetail] = Field(default_factory=list)
