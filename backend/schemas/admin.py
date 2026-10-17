@@ -1,5 +1,6 @@
-"""Pydantic schemas for admin endpoints (healthcheck, backup)."""
+"""Pydantic schemas for admin endpoints (healthcheck, backup, backups listing)."""
 
+from typing import Optional
 from pydantic import BaseModel
 
 
@@ -12,3 +13,16 @@ class HealthCheckResponse(BaseModel):
 class BackupResponse(BaseModel):
     backup_file: str
     status: str
+    filename: Optional[str] = None
+    size_bytes: Optional[int] = None
+    created_at: Optional[str] = None
+
+
+class BackupItem(BaseModel):
+    filename: str
+    created_at: str
+    size_bytes: int
+
+
+class BackupsListResponse(BaseModel):
+    backups: list[BackupItem]

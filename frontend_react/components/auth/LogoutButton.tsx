@@ -2,14 +2,16 @@
 
 import { useState } from "react"
 import { useRouter } from "next/navigation"
+import { LogOut } from "lucide-react"
 
 import { clearStoredSession, getStoredToken } from "@/lib/auth-session"
 
 interface LogoutButtonProps {
   className?: string
+  compact?: boolean
 }
 
-export function LogoutButton({ className = "" }: LogoutButtonProps) {
+export function LogoutButton({ className = "", compact = false }: LogoutButtonProps) {
   const router = useRouter()
   const [isLoggingOut, setIsLoggingOut] = useState(false)
 
@@ -39,9 +41,17 @@ export function LogoutButton({ className = "" }: LogoutButtonProps) {
       onClick={handleLogout}
       disabled={isLoggingOut}
       aria-busy={isLoggingOut}
-      className={`w-full rounded-xl border-2 border-red-200 bg-white px-4 py-2.5 text-sm font-bold text-red-700 transition-colors hover:bg-red-50 focus:outline-none focus:ring-2 focus:ring-red-500 disabled:cursor-wait disabled:opacity-60 ${className}`}
+      aria-label={isLoggingOut ? "Выполняется выход" : "Выйти"}
+      className={`${
+        compact
+          ? "inline-flex h-8 w-auto shrink-0 items-center justify-center gap-1.5 rounded-lg border border-red-200 bg-white px-2.5 text-xs font-semibold text-red-700"
+          : "w-full rounded-xl border-2 border-red-200 bg-white px-4 py-2.5 text-sm font-bold text-red-700"
+      } transition-colors hover:bg-red-50 focus:outline-none focus:ring-2 focus:ring-red-500 disabled:cursor-wait disabled:opacity-60 ${className}`}
     >
-      {isLoggingOut ? "Выходим…" : "Выйти"}
+      {compact && <LogOut className="h-3.5 w-3.5" aria-hidden="true" />}
+      <span className={compact ? "hidden sm:inline" : undefined}>
+        {isLoggingOut ? "Выходим…" : "Выйти"}
+      </span>
     </button>
   )
 }

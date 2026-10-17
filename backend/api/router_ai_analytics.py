@@ -25,7 +25,7 @@ from backend.core.ai_worker import (
     run_cadet_analysis,
     run_group_analysis,
 )
-from backend.core.deps import get_current_user
+from backend.core.deps import get_current_user, require_role
 from backend.database import get_db
 from backend.models.domain_01 import User, StudentGroup
 from backend.models.domain_03 import AIStudentAdvice, AIGroupAdvice, Assignment
@@ -217,7 +217,11 @@ async def trigger_ai_analysis(
     }
 
 
-@router.get("/student/{id}", response_model=List[AdviceResponse])
+@router.get(
+    "/student/{id}",
+    response_model=List[AdviceResponse],
+    dependencies=[Depends(require_role("TEACHER", "CADET"))],
+)
 async def get_student_advice(
     id: str,
     unread_only: bool = Query(False),

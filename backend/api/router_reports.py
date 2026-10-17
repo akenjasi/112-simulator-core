@@ -35,7 +35,7 @@ logger = logging.getLogger(__name__)
 reports_router = APIRouter(
     prefix="/api/reports",
     tags=["Reports"],
-    dependencies=[Depends(require_role("ADMIN", "TEACHER"))],
+    dependencies=[Depends(require_role("TEACHER"))],
 )
 
 # In-memory dictionary for task status tracking

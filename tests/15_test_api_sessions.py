@@ -38,7 +38,8 @@ async def init_db():
         await conn.run_sync(Base.metadata.drop_all)
 
 @pytest.mark.asyncio
-async def test_start_session(init_db, auth_client):
+async def test_start_session(init_db, teacher_auth_client):
+    auth_client = teacher_auth_client
     assignment_id, cadet_id = init_db
     
     # Start Session

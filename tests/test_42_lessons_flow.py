@@ -50,7 +50,7 @@ async def test_lesson_state_transitions(async_client, db_session):
     # 2. Создаем урок со статусом WAITING
     create_payload = {
         "group_id": group_id,
-        "target_role": "OPERATOR_112",
+        "target_role": "DISPATCHER_DDS",
         "categories": ["Пожары", "ДТП"],
         "complexity": "level_2",
         "time_limit_seconds": 45,
@@ -63,7 +63,7 @@ async def test_lesson_state_transitions(async_client, db_session):
 
     assert lesson_data["status"] == "WAITING"
     assert lesson_data["group_id"] == group_id
-    assert lesson_data["target_role"] == "OPERATOR_112"
+    assert lesson_data["target_role"] == "DISPATCHER_DDS"
     assert lesson_data["total_cadets"] == 2
     assert len(lesson_data["students"]) == 2
 

@@ -4,10 +4,12 @@ import os
 from contextlib import asynccontextmanager
 
 import httpx
-from fastapi import FastAPI
+from fastapi import FastAPI, Depends, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import RedirectResponse
 from fastapi.staticfiles import StaticFiles
+
+from backend.core.deps import require_role
 
 # ─── Compatibility patch ───────────────────────────────────────────────────────
 # httpx >= 0.28 removed the 'app' keyword; patch to use ASGITransport instead.
@@ -25,7 +27,7 @@ httpx.AsyncClient.__init__ = _patched_async_client_init
 
 # ─── Routers ──────────────────────────────────────────────────────────────────
 from backend.api.router_assignments import assignments_router
-from backend.api.router_audit import audit_router
+from backend.api.router_audit import audit_router, error_logs_router
 from backend.api.router_auth import auth_router
 from backend.api.router_call import router_call
 from backend.api.router_classifier import classifier_router, classifier_v1_router
@@ -206,6 +208,7 @@ app.include_router(reports_router)
 app.include_router(analytics_router)
 app.include_router(analytics_v1_router)
 app.include_router(audit_router)
+app.include_router(error_logs_router)
 app.include_router(admin_router)
 app.include_router(generator_router)
 app.include_router(tickets_router)
@@ -320,18 +323,27 @@ async def get_legacy_teacher_analytics():
     }
 
 
-@app.get("/api/admin/audit", tags=["Legacy Compatibility"])
-async def get_legacy_admin_audit(limit: int = 100, offset: int = 0):
+@app.get("/api/admin/audit", tags=["Legacy Compatibility"], dependencies=[Depends(require_role("ADMIN"))])
+async def get_legacy_admin_audit(
+    limit: int = Query(100, ge=1, le=1000, description="Max number of logs to return"),
+    offset: int = Query(0, ge=0, description="Number of logs to skip"),
+    from_at: str | None = Query(None, description="Start datetime with explicit timezone"),
+    to_at: str | None = Query(None, description="End datetime with explicit timezone"),
+    user_id: str | None = Query(None, description="Filter by user ID"),
+):
     from backend.api.router_audit import get_audit_logs
     from backend.database import get_db
     async for db in get_db():
-        logs = await get_audit_logs(limit=limit, offset=offset, db=db)
+        logs = await get_audit_logs(
+            limit=limit,
+            offset=offset,
+            from_at=from_at,
+            to_at=to_at,
+            user_id=user_id,
+            db=db,
+        )
         return {"logs": logs}
 
-
-@app.get("/api/admin/backups", tags=["Legacy Compatibility"])
-async def get_legacy_admin_backups():
-    return {"backups": []}
 
 
 @app.get("/api/admin/system_stats", tags=["Legacy Compatibility"])

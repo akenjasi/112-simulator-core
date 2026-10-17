@@ -9,7 +9,8 @@ from sqlalchemy import select
 
 
 @pytest.fixture(autouse=True)
-async def init_db():
+async def init_db(tmp_path, monkeypatch):
+    monkeypatch.setenv("BACKUP_DIR", str(tmp_path / "backups"))
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
 
@@ -91,14 +92,22 @@ async def test_admin_tools_forbidden_for_non_admin():
 @pytest.mark.asyncio
 async def test_backup_postgres_handling(monkeypatch):
     from unittest.mock import AsyncMock, patch, MagicMock
-    from scripts.backup_db import create_backup, create_backup_async
+    from pathlib import Path
+    from scripts.backup_db import create_backup, create_backup_async, get_backup_dir
 
     # Mock subprocess.run for sync
     with patch("scripts.backup_db.subprocess.run") as mock_run:
-        mock_run.return_value = MagicMock(returncode=0, stdout="", stderr="")
+        def fake_run(args, **kwargs):
+            # args: ["pg_dump", clean_url, "-f", str(temp_path)]
+            Path(args[3]).write_text("-- mock pg_dump content")
+            return MagicMock(returncode=0, stdout="", stderr="")
+
+        mock_run.side_effect = fake_run
         file_path = create_backup("postgresql+asyncpg://user:pass@localhost:5432/testdb")
         assert file_path.endswith(".sql")
-        assert "data/backups" in file_path
+        assert Path(file_path).parent == get_backup_dir()
+        assert Path(file_path).exists()
+        assert Path(file_path).stat().st_size > 0
         mock_run.assert_called_once()
         args = mock_run.call_args[0][0]
         assert args[0] == "pg_dump"
@@ -106,11 +115,24 @@ async def test_backup_postgres_handling(monkeypatch):
 
     # Mock asyncio.create_subprocess_exec for async
     mock_proc = AsyncMock()
-    mock_proc.communicate.return_value = (b"", b"")
     mock_proc.returncode = 0
-    with patch("scripts.backup_db.asyncio.create_subprocess_exec", return_value=mock_proc) as mock_exec:
+
+    async def fake_create_proc(*args, **kwargs):
+        # args: "pg_dump", clean_url, "-f", str(temp_path)
+        out_path = Path(args[3])
+        out_path.write_text("-- mock async pg_dump content")
+
+        async def fake_communicate():
+            return (b"", b"")
+
+        mock_proc.communicate = fake_communicate
+        return mock_proc
+
+    with patch("scripts.backup_db.asyncio.create_subprocess_exec", side_effect=fake_create_proc) as mock_exec:
         file_path_async = await create_backup_async("postgresql+asyncpg://user:pass@localhost:5432/testdb")
         assert file_path_async.endswith(".sql")
+        assert Path(file_path_async).exists()
+        assert Path(file_path_async).stat().st_size > 0
         mock_exec.assert_called_once()
 
 

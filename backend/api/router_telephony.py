@@ -23,6 +23,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm.attributes import flag_modified
 
 from backend.database import get_db
+from backend.core.deps import require_role
 from backend.models.domain_03 import ExamSession
 from backend.core.telephony_adapter import telephony_adapter
 
@@ -181,7 +182,7 @@ async def _update_db_session_call_status(
 
 # ─── Endpoints ────────────────────────────────────────────────────────────────
 
-@router_telephony.post("/start_call", response_model=StartCallResponse)
+@router_telephony.post("/start_call", response_model=StartCallResponse, dependencies=[Depends(require_role("TEACHER", "CADET"))])
 async def start_call(
     req: StartCallRequest,
     db: AsyncSession = Depends(get_db),
@@ -279,7 +280,7 @@ async def start_call(
     )
 
 
-@router_telephony.post("/hangup", response_model=HangupResponse)
+@router_telephony.post("/hangup", response_model=HangupResponse, dependencies=[Depends(require_role("TEACHER", "CADET"))])
 async def hangup(
     req: HangupRequest,
     db: AsyncSession = Depends(get_db),
@@ -322,7 +323,7 @@ async def hangup(
     )
 
 
-@router_telephony.post("/play_audio", response_model=PlayAudioResponse)
+@router_telephony.post("/play_audio", response_model=PlayAudioResponse, dependencies=[Depends(require_role("TEACHER", "CADET"))])
 async def play_audio(
     req: PlayAudioRequest,
     db: AsyncSession = Depends(get_db),

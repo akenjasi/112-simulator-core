@@ -1,5 +1,7 @@
 "use client"
 
+import { apiFetch as fetch } from "@/lib/api-fetch"
+
 import React, { useState, useEffect, useCallback, useRef } from "react"
 import Link from "next/link"
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from "@/components/ui/card"

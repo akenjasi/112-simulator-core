@@ -265,7 +265,7 @@ describe('27.2 / ТЗ 30: База билетов и генерация', () => 
       });
     }));
 
-    global.Audio = vi.fn().mockImplementation(() => ({
+    global.Audio = vi.fn().mockImplementation(function () { return {
       play: vi.fn().mockImplementation(function (this: any) {
         if (this.onplay) this.onplay();
         return Promise.resolve();
@@ -273,7 +273,7 @@ describe('27.2 / ТЗ 30: База билетов и генерация', () => 
       pause: vi.fn(),
       addEventListener: vi.fn(),
       removeEventListener: vi.fn(),
-    })) as any;
+    }; }) as any;
     global.URL.createObjectURL = vi.fn().mockReturnValue('blob:http://localhost/fake-audio');
     global.URL.revokeObjectURL = vi.fn();
   });

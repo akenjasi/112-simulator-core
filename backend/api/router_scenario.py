@@ -9,7 +9,7 @@ from backend.schemas.factoids import FactoidGenerationRequest, FactoidsResponse
 router = APIRouter(
     prefix="/api/v1/scenario",
     tags=["Scenario"],
-    dependencies=[Depends(require_role("ADMIN", "TEACHER"))],
+    dependencies=[Depends(require_role("TEACHER"))],
 )
 scenario_router = router
 

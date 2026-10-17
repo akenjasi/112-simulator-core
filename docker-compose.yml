@@ -94,3 +94,7 @@ volumes:
 networks:
   simulator_net:
     driver: bridge
+    ipam:
+      config:
+        # Keep the Compose network clear of the host VPN's 172.19.0.0/24 route.
+        - subnet: "172.25.0.0/16"

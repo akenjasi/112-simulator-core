@@ -29,7 +29,8 @@ async def init_db():
         await conn.run_sync(Base.metadata.drop_all)
 
 @pytest.mark.asyncio
-async def test_assignments_crud(init_db, auth_client):
+async def test_assignments_crud(init_db, teacher_auth_client):
+    auth_client = teacher_auth_client
     teacher_id, scenario_id = init_db
     
     # Create

@@ -200,8 +200,8 @@ async def get_heatmap(
     return HeatmapResponse(root=heatmap)
 
 
-@analytics_router.get("/trends/{user_id}", response_model=TrendResponse)
-@analytics_router.get("/trends/{user_id}/", response_model=TrendResponse, include_in_schema=False)
+@analytics_router.get("/trends/{user_id}", response_model=TrendResponse, dependencies=[Depends(require_role("TEACHER"))])
+@analytics_router.get("/trends/{user_id}/", response_model=TrendResponse, include_in_schema=False, dependencies=[Depends(require_role("TEACHER"))])
 async def get_trends(
     user_id: str,
     group_id: Optional[str] = Query(default=None, description="Фильтр по учебной группе"),
@@ -303,8 +303,8 @@ async def get_trends(
     return TrendResponse(root=root_dict)
 
 
-@analytics_router.get("/leaderboard", response_model=LeaderboardResponse)
-@analytics_router.get("/leaderboard/", response_model=LeaderboardResponse, include_in_schema=False)
+@analytics_router.get("/leaderboard", response_model=LeaderboardResponse, dependencies=[Depends(require_role("TEACHER"))])
+@analytics_router.get("/leaderboard/", response_model=LeaderboardResponse, include_in_schema=False, dependencies=[Depends(require_role("TEACHER"))])
 async def get_leaderboard(
     group_id: Optional[str] = Query(default=None, description="Фильтр по группе"),
     metric_name: str = Query(
@@ -409,8 +409,8 @@ async def get_leaderboard(
     return LeaderboardResponse(root=top_results)
 
 
-@analytics_router.get("/sessions/{session_id}", response_model=SessionAnalyticsResponse)
-@analytics_v1_router.get("/sessions/{session_id}", response_model=SessionAnalyticsResponse)
+@analytics_router.get("/sessions/{session_id}", response_model=SessionAnalyticsResponse, dependencies=[Depends(require_role("TEACHER"))])
+@analytics_v1_router.get("/sessions/{session_id}", response_model=SessionAnalyticsResponse, dependencies=[Depends(require_role("TEACHER"))])
 async def get_session_analytics(
     session_id: str,
     db: AsyncSession = Depends(get_db),
@@ -485,8 +485,8 @@ async def get_session_analytics(
     )
 
 
-@analytics_router.get("/records/{record_id}", response_model=RecordDetailResponse)
-@analytics_v1_router.get("/records/{record_id}", response_model=RecordDetailResponse)
+@analytics_router.get("/records/{record_id}", response_model=RecordDetailResponse, dependencies=[Depends(require_role("TEACHER"))])
+@analytics_v1_router.get("/records/{record_id}", response_model=RecordDetailResponse, dependencies=[Depends(require_role("TEACHER"))])
 async def get_record_detail(
     record_id: str,
     db: AsyncSession = Depends(get_db),
@@ -569,8 +569,16 @@ async def get_record_detail(
     )
 
 
-@analytics_router.patch("/records/{record_id}/appeal", response_model=RecordDetailResponse)
-@analytics_v1_router.patch("/records/{record_id}/appeal", response_model=RecordDetailResponse)
+@analytics_router.patch(
+    "/records/{record_id}/appeal",
+    response_model=RecordDetailResponse,
+    dependencies=[Depends(require_role("TEACHER"))],
+)
+@analytics_v1_router.patch(
+    "/records/{record_id}/appeal",
+    response_model=RecordDetailResponse,
+    dependencies=[Depends(require_role("TEACHER"))],
+)
 async def appeal_analytics_record(
     record_id: str,
     req: RecordAppealRequest,

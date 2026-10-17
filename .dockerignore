@@ -25,6 +25,8 @@ venv/
 .venv/
 env/
 .env.local
+.env
+certs/
 .env.*.local
 
 # ─── Node / Frontend ──────────────────────────────────────────────────────────

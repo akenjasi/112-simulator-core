@@ -101,7 +101,7 @@ export default function AdminDashboardPage() {
         })
       }
 
-      if (usersData.status === "fulfilled") {
+      if (usersData.status === "fulfilled" && Array.isArray(usersData.value)) {
         setUsers(usersData.value)
       }
     } finally {
@@ -136,7 +136,8 @@ export default function AdminDashboardPage() {
       setIsBackingUp(true)
       setBackupError(null)
       const res = await triggerBackup()
-      setBackupSuccessMessage(`Резервная копия успешно создана: ${res.backup_file}`)
+      const displayFile = res.filename || res.backup_file
+      setBackupSuccessMessage(`Резервная копия успешно создана: ${displayFile}`)
       setTimeout(() => {
         setBackupSuccessMessage(null)
       }, 7000)

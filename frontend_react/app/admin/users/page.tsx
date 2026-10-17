@@ -64,10 +64,22 @@ export default function AdminUsersPage() {
   })
   const [isSubmitting, setIsSubmitting] = useState(false)
 
+  const [passwordDialog, setPasswordDialog] = useState<{
+    userId: string
+    username: string
+  } | null>(null)
+  const [passwordMode, setPasswordMode] = useState<"generated" | "custom">("generated")
+  const [customPassword, setCustomPassword] = useState("")
+  const [confirmPassword, setConfirmPassword] = useState("")
+  const [revokeSessions, setRevokeSessions] = useState(false)
+  const [isPasswordSubmitting, setIsPasswordSubmitting] = useState(false)
+
   // Password reset result modal
   const [resetResult, setResetResult] = useState<{
     username: string
     newPassword: string
+    wasGenerated: boolean
+    sessionsRevoked: boolean
   } | null>(null)
 
   // Notification banners
@@ -161,15 +173,44 @@ export default function AdminUsersPage() {
   }
 
   // Reset user password
-  const handleResetPassword = async (userId: string, username: string) => {
+  const openPasswordDialog = (userId: string, username: string) => {
+    setPasswordDialog({ userId, username })
+    setPasswordMode("generated")
+    setCustomPassword("")
+    setConfirmPassword("")
+    setRevokeSessions(false)
+  }
+
+  const handleResetPassword = async () => {
+    if (!passwordDialog) return
+    if (passwordMode === "custom") {
+      if (!customPassword) {
+        showNotification("error", "Введите новый пароль")
+        return
+      }
+      if (customPassword !== confirmPassword) {
+        showNotification("error", "Пароли не совпадают")
+        return
+      }
+    }
+
+    setIsPasswordSubmitting(true)
     try {
-      const res = await resetUserPassword(userId)
-      setResetResult({
-        username: res.username || username,
-        newPassword: res.new_password,
+      const res = await resetUserPassword(passwordDialog.userId, {
+        password: passwordMode === "custom" ? customPassword : undefined,
+        revokeSessions,
       })
+      setResetResult({
+        username: res.username || passwordDialog.username,
+        newPassword: res.new_password,
+        wasGenerated: res.password_was_generated,
+        sessionsRevoked: res.sessions_revoked,
+      })
+      setPasswordDialog(null)
     } catch (err: any) {
       showNotification("error", err.message || "Ошибка сброса пароля")
+    } finally {
+      setIsPasswordSubmitting(false)
     }
   }
 
@@ -414,8 +455,8 @@ export default function AdminUsersPage() {
                           <Button
                             variant="outline"
                             size="sm"
-                            onClick={() => handleResetPassword(user.user_id, user.username)}
-                            title="Сбросить пароль"
+                            onClick={() => openPasswordDialog(user.user_id, user.username)}
+                            title="Изменить пароль"
                             className="h-8 px-2 text-xs text-amber-700 border-amber-300 hover:bg-amber-50 cursor-pointer"
                           >
                             <KeyRound className="w-3.5 h-3.5" />
@@ -554,6 +595,119 @@ export default function AdminUsersPage() {
         </div>
       )}
 
+      {/* Modal: Password Change */}
+      {passwordDialog && (
+        <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4 backdrop-blur-xs animate-in fade-in">
+          <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 max-w-md w-full overflow-hidden">
+            <div className="p-5 border-b border-slate-200 flex items-center justify-between bg-slate-50">
+              <div className="flex items-center gap-2">
+                <div className="p-2 bg-amber-100 text-amber-700 rounded-lg">
+                  <KeyRound className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-bold text-slate-900">Изменить пароль</h3>
+                  <p className="text-xs text-slate-500">{passwordDialog.username}</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                aria-label="Закрыть окно смены пароля"
+                onClick={() => setPasswordDialog(null)}
+                className="text-slate-400 hover:text-slate-600 cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="p-6 space-y-5">
+              <div className="grid grid-cols-2 gap-2" role="group" aria-label="Способ смены пароля">
+                <Button
+                  type="button"
+                  variant={passwordMode === "generated" ? "default" : "outline"}
+                  onClick={() => setPasswordMode("generated")}
+                  className={passwordMode === "generated" ? "bg-purple-700 text-white" : ""}
+                >
+                  Сгенерировать
+                </Button>
+                <Button
+                  type="button"
+                  variant={passwordMode === "custom" ? "default" : "outline"}
+                  onClick={() => setPasswordMode("custom")}
+                  className={passwordMode === "custom" ? "bg-purple-700 text-white" : ""}
+                >
+                  Задать свой
+                </Button>
+              </div>
+
+              {passwordMode === "custom" && (
+                <div className="space-y-3">
+                  <div>
+                    <label className="text-xs font-semibold text-slate-700 block mb-1">
+                      Новый пароль
+                    </label>
+                    <Input
+                      type="password"
+                      autoComplete="new-password"
+                      value={customPassword}
+                      onChange={(e) => setCustomPassword(e.target.value)}
+                      placeholder="Не короче политики безопасности"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-xs font-semibold text-slate-700 block mb-1">
+                      Повторите пароль
+                    </label>
+                    <Input
+                      type="password"
+                      autoComplete="new-password"
+                      value={confirmPassword}
+                      onChange={(e) => setConfirmPassword(e.target.value)}
+                      placeholder="Введите пароль ещё раз"
+                    />
+                  </div>
+                </div>
+              )}
+
+              <label className="flex items-start gap-3 rounded-xl border border-slate-200 bg-slate-50 p-3 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={revokeSessions}
+                  onChange={(e) => setRevokeSessions(e.target.checked)}
+                  className="mt-0.5 h-4 w-4 rounded border-slate-300 accent-purple-700"
+                />
+                <span>
+                  <span className="block text-sm font-semibold text-slate-800">
+                    Завершить активные сессии
+                  </span>
+                  <span className="block text-xs text-slate-500 mt-0.5">
+                    Включайте, если есть риск, что доступ к аккаунту получил посторонний.
+                  </span>
+                </span>
+              </label>
+
+              <div className="flex justify-end gap-3 pt-2 border-t border-slate-100">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setPasswordDialog(null)}
+                  disabled={isPasswordSubmitting}
+                >
+                  Отмена
+                </Button>
+                <Button
+                  type="button"
+                  onClick={handleResetPassword}
+                  disabled={isPasswordSubmitting}
+                  className="bg-purple-700 hover:bg-purple-800 text-white"
+                >
+                  {isPasswordSubmitting ? "Сохранение..." : "Изменить пароль"}
+                </Button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Modal: Password Reset Display */}
       {resetResult && (
         <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4 backdrop-blur-xs animate-in fade-in">
@@ -562,9 +716,10 @@ export default function AdminUsersPage() {
               <KeyRound className="w-6 h-6" />
             </div>
 
-            <h3 className="text-lg font-bold text-slate-900">Пароль успешно сброшен</h3>
+            <h3 className="text-lg font-bold text-slate-900">Пароль успешно изменён</h3>
             <p className="text-xs text-slate-600">
-              Для пользователя <span className="font-bold text-slate-800">{resetResult.username}</span> сгенерирован новый пароль:
+              Для пользователя <span className="font-bold text-slate-800">{resetResult.username}</span>{" "}
+              {resetResult.wasGenerated ? "сгенерирован" : "установлен"} новый пароль:
             </p>
 
             <div className="p-3 bg-slate-100 border border-slate-300 rounded-xl font-mono text-xl font-black text-purple-700 select-all tracking-wider">
@@ -572,7 +727,9 @@ export default function AdminUsersPage() {
             </div>
 
             <p className="text-xs text-slate-400">
-              Сообщите данный пароль пользователю для входа в систему.
+              {resetResult.sessionsRevoked
+                ? "Все прежние сессии пользователя завершены."
+                : "Активные сессии пользователя сохранены."}
             </p>
 
             <Button
