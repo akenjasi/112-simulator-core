@@ -1,8 +1,8 @@
 "use client"
 
 import React, { useState, useEffect, useCallback, useRef } from "react"
+import Link from "next/link"
 import {
-  ALLOWED_DDS_STATUSES,
   fetchDDSSessionState,
   postDDSAction,
   finishDDSSession,
@@ -14,6 +14,10 @@ import {
 import { TopBar } from "@/components/dispatcher/top-bar"
 import { CallerPanel } from "@/components/dispatcher/caller-panel"
 import { IncidentPanel } from "@/components/dispatcher/incident-panel"
+import { ServicesBar } from "@/components/dispatcher/services-bar"
+import { getDDSServiceResponse } from "@/lib/dds-service-response"
+import { DispatchPanel } from "@/components/dispatcher/dispatch-panel"
+import { getDDSWorkingCard } from "@/lib/dds-working-card"
 
 interface Props {
   sessionId: string
@@ -34,11 +38,14 @@ export function DDSAssignedConsole({ sessionId, ticketId }: Props) {
 
   // Action form state
   const [selectedService, setSelectedService] = useState<string>("")
-  const [selectedStatus, setSelectedStatus] = useState<string>("Принята")
-  const [orderNumber, setOrderNumber] = useState<string>("")
-  const [comment, setComment] = useState<string>("")
   const [whoAccepted, setWhoAccepted] = useState<string>("")
   const [summary, setSummary] = useState<string>("")
+  const [now, setNow] = useState(() => Date.now())
+
+  useEffect(() => {
+    const timer = setInterval(() => setNow(Date.now()), 1000)
+    return () => clearInterval(timer)
+  }, [])
 
   // Pending mutation for retry
   const [pendingMutation, setPendingMutation] = useState<PendingMutation | null>(null)
@@ -106,8 +113,6 @@ export function DDSAssignedConsole({ sessionId, ticketId }: Props) {
     setActionError(null)
     setLoadError(null)
     setSelectedService("")
-    setComment("")
-    setOrderNumber("")
     setWhoAccepted("")
     setSummary("")
 
@@ -139,8 +144,8 @@ export function DDSAssignedConsole({ sessionId, ticketId }: Props) {
   const hasPending = pendingMutation !== null
 
   // Save status action
-  const handleSaveStatus = async () => {
-    if (isSavingRef.current || hasPending || pendingRef.current || isCompleted || !sessionState) return
+  const handleSaveStatus = async (draft: {serviceName: string; status: string; comment: string; orderNumber: string}) => {
+    if (isSavingRef.current || hasPending || pendingRef.current || isCompleted || !sessionState) return false
     isSavingRef.current = true
     setIsSaving(true)
     setActionError(null)
@@ -155,30 +160,31 @@ export function DDSAssignedConsole({ sessionId, ticketId }: Props) {
     const payload: DDSActionPayload = {
       request_id: crypto.randomUUID(),
       kind: "status",
-      service_name: selectedService || sessionState.incoming_card.services[0]?.name || "",
-      status: selectedStatus || "Принята",
+      service_name: draft.serviceName,
+      status: draft.status,
     }
-    if (comment.trim()) {
-      payload.comment = comment.trim()
+    if (draft.comment.trim()) {
+      payload.comment = draft.comment.trim()
     }
-    if (orderNumber.trim()) {
-      payload.order_number = orderNumber.trim()
+    if (draft.orderNumber.trim()) {
+      payload.order_number = draft.orderNumber.trim()
     }
 
     try {
       const updated = await postDDSAction(sessionId, payload, controller.signal)
-      if (epochRef.current !== epoch) return
+      if (epochRef.current !== epoch) return false
       setSessionState(updated)
       setActionError(null)
       setPendingMutation(null)
       pendingRef.current = null
-      setComment("")
-      setOrderNumber("")
+      setSelectedService(draft.serviceName)
+      return true
     } catch (err: any) {
-      if (epochRef.current !== epoch || controller.signal.aborted) return
+      if (epochRef.current !== epoch || controller.signal.aborted) return false
       setActionError(err.message || "Не удалось сохранить статус")
       setPendingMutation({ type: "action", payload })
       pendingRef.current = { type: "action", payload }
+      return false
     } finally {
       if (epochRef.current === epoch) {
         isSavingRef.current = false
@@ -188,8 +194,8 @@ export function DDSAssignedConsole({ sessionId, ticketId }: Props) {
   }
 
   // Save dispatch action
-  const handleSaveDispatch = async () => {
-    if (isSavingRef.current || hasPending || pendingRef.current || isCompleted || !sessionState) return
+  const handleSaveDispatch = async (serviceName: string, receiver: string, message: string) => {
+    if (isSavingRef.current || hasPending || pendingRef.current || isCompleted || !sessionState) return false
     isSavingRef.current = true
     setIsSaving(true)
     setActionError(null)
@@ -204,25 +210,27 @@ export function DDSAssignedConsole({ sessionId, ticketId }: Props) {
     const payload: DDSActionPayload = {
       request_id: crypto.randomUUID(),
       kind: "dispatch",
-      service_name: selectedService || sessionState.incoming_card.services[0]?.name || "",
-      who_accepted: whoAccepted.trim(),
-      summary: summary.trim(),
+      service_name: serviceName,
+      who_accepted: receiver.trim(),
+      summary: message.trim(),
     }
 
     try {
       const updated = await postDDSAction(sessionId, payload, controller.signal)
-      if (epochRef.current !== epoch) return
+      if (epochRef.current !== epoch) return false
       setSessionState(updated)
       setActionError(null)
       setPendingMutation(null)
       pendingRef.current = null
       setWhoAccepted("")
       setSummary("")
+      return true
     } catch (err: any) {
-      if (epochRef.current !== epoch || controller.signal.aborted) return
+      if (epochRef.current !== epoch || controller.signal.aborted) return false
       setActionError(err.message || "Не удалось сохранить направление")
       setPendingMutation({ type: "action", payload })
       pendingRef.current = { type: "action", payload }
+      return false
     } finally {
       if (epochRef.current === epoch) {
         isSavingRef.current = false
@@ -296,8 +304,6 @@ export function DDSAssignedConsole({ sessionId, ticketId }: Props) {
       setPendingMutation(null)
       pendingRef.current = null
       if (currentPending.type === "action") {
-        setComment("")
-        setOrderNumber("")
         setWhoAccepted("")
         setSummary("")
       }
@@ -354,304 +360,79 @@ export function DDSAssignedConsole({ sessionId, ticketId }: Props) {
   }
 
   const card = sessionState.incoming_card
-  const serviceOptions = card.services || []
-
-  // Score and status messages
-  let completionNotice: string | null = null
-  if (isCompleted) {
-    if (sessionState.session_status === "COMPLETED" && sessionState.submitted_at) {
-      const scoreText =
-        sessionState.score !== null && sessionState.score !== undefined
-          ? `Оценка: ${sessionState.score}`
-          : "Нет оценки"
-      completionNotice = `Выполнено. ${scoreText}`
-    } else {
-      completionNotice = "Занятие завершено. Выполнение не завершено. Нет оценки"
+  const workingCard = getDDSWorkingCard(sessionState)
+  const acceptedStatuses = ["Принята", "Начало реагирования", "Прибытие", "Проведение работ", "В пути", "Прибыли"]
+  const acceptedServices = workingCard.services.filter(service => acceptedStatuses.includes(service.status)).map(service => service.name)
+  const dispatches: Record<string, {whoAccepted: string; summary: string}> = {}
+  for (const action of sessionState.actions) {
+    if (action.kind === "dispatch") dispatches[action.service_name] = {
+      whoAccepted: action.who_accepted || "", summary: action.summary || "",
     }
   }
+  const responseService = selectedService || workingCard.services[0]?.name || ""
+  const response = getDDSServiceResponse(sessionState, responseService, now)
+  const remaining = response.remaining
+  const mutationDisabled = isSaving || isCompleted || hasPending
+  const completionNotice = isCompleted
+    ? sessionState.submitted_at
+      ? `Выполнено. ${sessionState.score == null ? "Нет оценки" : `Оценка: ${sessionState.score}`}`
+      : "Занятие завершено. Выполнение не завершено. Нет оценки"
+    : null
 
   return (
-    <div className="min-h-screen bg-[#efefef] text-[#1e2327] flex flex-col font-sans select-none">
-      {/* TopBar using read-only incoming card */}
+    <div className="flex h-screen w-full overflow-hidden select-none flex-col bg-[#c9ced1] text-[#1e2327]" data-testid="dds-reference-workspace">
+      <div className="w-full z-50 flex shrink-0 items-center justify-between px-4 2xl:px-8 py-2 border-b-2 shadow-md bg-[#2b3a42] border-[#157dbd] text-white">
+        <div className="flex items-center gap-3">
+          <span className="font-bold text-xs 2xl:text-sm text-[#4ade80] flex items-center gap-1.5">
+            <span className="h-2.5 w-2.5 rounded-full bg-[#4ade80]" />
+            {isCompleted ? "Смена завершена (ДДС-112)" : "Смена активна (ДДС-112)"}
+          </span>
+          <div aria-label={`Норматив принятия: ${responseService}`} className={`flex items-center gap-1.5 px-2 py-0.5 rounded font-mono font-bold text-xs border ml-2 ${response.overdue ? "bg-red-600 text-white border-red-500" : "bg-emerald-900/40 text-emerald-400 border-emerald-500/50"}`}
+            title={`${responseService}: ${response.responded ? "Первичное решение сохранено; время дальнейших работ не относится к нормативу принятия" : remaining === null ? "Время начала не получено от сервера" : "30 секунд от начала сессии до решения этой службы"}`}>
+            <span className="uppercase tracking-wider opacity-90 text-[10px]">SLA 30С:</span>
+            <span className="text-sm">{response.responded ? "Решение принято" : remaining === null ? "—" : remaining === 0 ? "Просрочено" : `${remaining} сек`}</span>
+          </div>
+        </div>
+        <div className="flex items-center gap-2">
+          <Link href="/student/lobby" className="px-3 py-1.5 text-xs bg-slate-700 hover:bg-slate-600 text-white rounded font-medium">← В Лобби</Link>
+          <button type="button" onClick={handleFinish} disabled={mutationDisabled}
+            className="px-4 py-1.5 text-xs 2xl:text-sm bg-red-600 hover:bg-red-700 text-white rounded font-bold transition shadow disabled:opacity-50">
+            Завершить смену
+          </button>
+        </div>
+      </div>
+      {actionError && <div role="alert" className="shrink-0 flex items-center justify-between gap-4 px-4 py-2 text-sm bg-red-100 text-red-900 border-b border-red-400">
+        <span>{actionError}</span>
+        {pendingMutation && <button type="button" onClick={handleRetry} disabled={isSaving} className="font-bold underline disabled:opacity-50">Повторить сохранение</button>}
+        <button type="button" onClick={handleRefresh} disabled={isSaving} className="underline disabled:opacity-50">Обновить</button>
+      </div>}
+      {completionNotice && <div className="shrink-0 px-4 py-2 text-sm bg-blue-100 text-blue-900">{completionNotice}</div>}
       <TopBar data={card} />
-
-      {/* Main workspace */}
-      <div className="flex-1 flex flex-col gap-3 p-3 max-w-[1600px] w-full mx-auto">
-        {/* Error / Alert banner */}
-        {actionError && (
-          <div
-            role="alert"
-            className="p-3 text-sm rounded bg-red-500/15 border border-red-500/40 text-red-800 dark:text-red-300 flex items-center justify-between gap-4"
-          >
-            <span>{actionError}</span>
-            {pendingMutation && (
-              <button
-                type="button"
-                onClick={handleRetry}
-                disabled={isSaving}
-                className="px-3 py-1 text-xs font-bold rounded bg-red-700 text-white hover:bg-red-800 disabled:opacity-50 shrink-0"
-              >
-                Повторить сохранение
-              </button>
-            )}
-          </div>
-        )}
-
-        {/* Completion status notification */}
-        {completionNotice && (
-          <div className="p-3 text-sm font-semibold rounded bg-blue-500/10 border border-blue-500/30 text-blue-900 dark:text-blue-200 flex items-center justify-between">
-            <span>{completionNotice}</span>
-            <span className="text-xs text-gray-500">
-              {sessionState.submitted_at
-                ? new Date(sessionState.submitted_at).toLocaleTimeString()
-                : ""}
-            </span>
-          </div>
-        )}
-
-        {/* Incoming Card (Read-only panels) */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
-          <div className="rounded border border-[#b4b9bc] bg-[#fbfdfe] p-3 shadow-xs">
-            <CallerPanel data={card} />
-          </div>
-          <div className="rounded border border-[#b4b9bc] bg-[#fbfdfe] p-3 shadow-xs">
-            <IncidentPanel data={card} />
-          </div>
+      <div className="flex flex-1 min-h-0 gap-3 px-2 py-1 overflow-hidden" data-testid="dds-reference-columns">
+        <CallerPanel data={card} />
+        <div className="flex flex-1 min-w-0 flex-col gap-2 overflow-y-auto pr-2 pb-2">
+          <IncidentPanel data={card} />
+          <DispatchPanel
+            key={`${sessionId}-${ticketId || ""}`}
+            isCardAccepted={acceptedServices.length > 0}
+            acceptedServices={acceptedServices}
+            disabled={mutationDisabled}
+            whoAccepted={whoAccepted} setWhoAccepted={setWhoAccepted}
+            summary={summary} setSummary={setSummary}
+            services={workingCard.services}
+            selectedServiceName={selectedService} onServiceChange={setSelectedService}
+            calledServices={Object.keys(dispatches)} savedDispatches={dispatches}
+            onServiceSaved={handleSaveDispatch}
+          />
         </div>
-
-        {/* Cadet actions panel (compact, separate controls) */}
-        <div className="rounded border border-[#b4b9bc] bg-[#fbfdfe] p-4 shadow-xs space-y-4">
-          <div className="flex items-center justify-between border-b border-[#c9ced1] pb-2">
-            <h4 className="text-sm font-bold text-[#111827]">
-              Действия диспетчера ДДС
-            </h4>
-            <div className="flex items-center gap-2">
-              <button
-                type="button"
-                onClick={handleRefresh}
-                disabled={isSaving}
-                className="px-2.5 py-1 text-xs font-medium rounded border border-[#b4b9bc] bg-[#efefef] hover:bg-white text-gray-700 disabled:opacity-50"
-              >
-                Обновить
-              </button>
-              <button
-                type="button"
-                onClick={handleFinish}
-                disabled={isSaving || isCompleted || hasPending}
-                className="px-4 py-1.5 text-xs font-bold rounded bg-[#107c41] text-white hover:bg-[#0d6535] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-              >
-                Завершить выполнение
-              </button>
-            </div>
-          </div>
-
-          {/* Service status mutation */}
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 text-xs">
-            <div>
-              <label
-                htmlFor="dds-service-select"
-                className="block font-semibold text-gray-700 mb-1"
-              >
-                Служба
-              </label>
-              <select
-                id="dds-service-select"
-                aria-label="Служба"
-                value={selectedService}
-                onChange={(e) => setSelectedService(e.target.value)}
-                disabled={isSaving || isCompleted || hasPending}
-                className="w-full h-8 px-2 border border-[#b4b9bc] rounded bg-white text-gray-800 disabled:bg-gray-100"
-              >
-                {serviceOptions.map((s) => (
-                  <option key={s.id || s.name} value={s.name}>
-                    {s.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <div>
-              <label
-                htmlFor="dds-status-select"
-                className="block font-semibold text-gray-700 mb-1"
-              >
-                Статус службы
-              </label>
-              <select
-                id="dds-status-select"
-                aria-label="Статус службы"
-                value={selectedStatus}
-                onChange={(e) => setSelectedStatus(e.target.value)}
-                disabled={isSaving || isCompleted || hasPending}
-                className="w-full h-8 px-2 border border-[#b4b9bc] rounded bg-white text-gray-800 disabled:bg-gray-100"
-              >
-                {ALLOWED_DDS_STATUSES.map((st) => (
-                  <option key={st} value={st}>
-                    {st}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <div>
-              <label
-                htmlFor="dds-order-number"
-                className="block font-semibold text-gray-700 mb-1"
-              >
-                Номер наряда
-              </label>
-              <input
-                id="dds-order-number"
-                aria-label="Номер наряда"
-                type="text"
-                value={orderNumber}
-                onChange={(e) => setOrderNumber(e.target.value)}
-                disabled={isSaving || isCompleted || hasPending}
-                placeholder="Например, 102/4"
-                className="w-full h-8 px-2 border border-[#b4b9bc] rounded bg-white text-gray-800 disabled:bg-gray-100"
-              />
-            </div>
-
-            <div>
-              <label
-                htmlFor="dds-comment"
-                className="block font-semibold text-gray-700 mb-1"
-              >
-                Комментарий
-              </label>
-              <textarea
-                id="dds-comment"
-                aria-label="Комментарий"
-                rows={1}
-                value={comment}
-                onChange={(e) => setComment(e.target.value)}
-                disabled={isSaving || isCompleted || hasPending}
-                placeholder="Заметка к статусу..."
-                className="w-full h-8 px-2 py-1 border border-[#b4b9bc] rounded bg-white text-gray-800 disabled:bg-gray-100 resize-none text-xs"
-              />
-            </div>
-          </div>
-
-          <div className="flex justify-end">
-            <button
-              type="button"
-              onClick={handleSaveStatus}
-              disabled={isSaving || isCompleted || hasPending}
-              className="px-4 py-1.5 text-xs font-semibold rounded bg-[#157dbd] text-white hover:bg-[#136ba3] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-            >
-              Сохранить статус
-            </button>
-          </div>
-
-          {/* Dispatch mutation (separate form) */}
-          <div className="border-t border-[#c9ced1] pt-3 space-y-2">
-            <span className="text-xs font-bold text-gray-700 block">
-              Направление в службу
-            </span>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
-              <div>
-                <label
-                  htmlFor="dds-who-accepted"
-                  className="block font-semibold text-gray-700 mb-1"
-                >
-                  Кто принял
-                </label>
-                <input
-                  id="dds-who-accepted"
-                  aria-label="Кто принял"
-                  type="text"
-                  value={whoAccepted}
-                  onChange={(e) => setWhoAccepted(e.target.value)}
-                  disabled={isSaving || isCompleted || hasPending}
-                  placeholder="ФИО или позывной сотрудника..."
-                  className="w-full h-8 px-2 border border-[#b4b9bc] rounded bg-white text-gray-800 disabled:bg-gray-100"
-                />
-              </div>
-
-              <div>
-                <label
-                  htmlFor="dds-summary"
-                  className="block font-semibold text-gray-700 mb-1"
-                >
-                  Суть сообщения
-                </label>
-                <textarea
-                  id="dds-summary"
-                  aria-label="Суть сообщения"
-                  rows={1}
-                  value={summary}
-                  onChange={(e) => setSummary(e.target.value)}
-                  disabled={isSaving || isCompleted || hasPending}
-                  placeholder="Краткое содержание переданной информации..."
-                  className="w-full h-8 px-2 py-1 border border-[#b4b9bc] rounded bg-white text-gray-800 disabled:bg-gray-100 resize-none text-xs"
-                />
-              </div>
-            </div>
-
-            <div className="flex justify-end">
-              <button
-                type="button"
-                onClick={handleSaveDispatch}
-                disabled={isSaving || isCompleted || hasPending}
-                className="px-4 py-1.5 text-xs font-semibold rounded bg-[#3b5998] text-white hover:bg-[#2d4373] disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-              >
-                Сохранить направление
-              </button>
-            </div>
-          </div>
-
-          {/* Server Actions Journal */}
-          <div className="border-t border-[#c9ced1] pt-3">
-            <h5 className="text-xs font-bold text-gray-700 mb-2">
-              Журнал действий занятия ({sessionState.actions.length})
-            </h5>
-            {sessionState.actions.length === 0 ? (
-              <p className="text-xs text-gray-500 italic py-1">
-                Пока нет сохраненных действий по этой карточке.
-              </p>
-            ) : (
-              <div className="space-y-1.5 max-h-48 overflow-y-auto pr-1">
-                {sessionState.actions.map((act) => (
-                  <div
-                    key={act.request_id}
-                    className="p-2 rounded bg-white border border-[#c9ced1] text-xs flex flex-col sm:flex-row sm:items-center justify-between gap-2"
-                  >
-                    <div className="space-y-0.5">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <span className="font-bold text-[#111827]">
-                          {act.service_name}
-                        </span>
-                        <span className="px-1.5 py-0.5 rounded bg-gray-100 text-gray-600 font-mono text-[11px]">
-                          {act.kind === "status"
-                            ? act.status || "Статус"
-                            : "Направление"}
-                        </span>
-                        {act.order_number && (
-                          <span className="text-gray-500 text-[11px]">
-                            № {act.order_number}
-                          </span>
-                        )}
-                      </div>
-                      {act.comment && (
-                        <p className="text-gray-700">{act.comment}</p>
-                      )}
-                      {act.who_accepted && (
-                        <p className="text-gray-600 text-[11px]">
-                          Принял: {act.who_accepted} &bull; {act.summary}
-                        </p>
-                      )}
-                    </div>
-                    {act.at && (
-                      <span className="text-[11px] text-gray-400 shrink-0">
-                        {new Date(act.at).toLocaleTimeString()}
-                      </span>
-                    )}
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        </div>
+      </div>
+      <div className="shrink-0 z-50 w-full">
+        <ServicesBar key={`${sessionId}-${ticketId || ""}`} data={workingCard} disabled={mutationDisabled}
+          allowedStatuses={sessionState.allowed_service_statuses}
+          closeHref="/dds/journal"
+          disabledReason={isCompleted ? "Занятие завершено: доступен только просмотр" : "Дождитесь сохранения действия или повторите неудавшийся запрос"}
+          onStatusChange={(serviceName, status, comment, orderNumber) => handleSaveStatus({serviceName, status, comment, orderNumber})}
+          onNextCard={handleFinish}/>
       </div>
     </div>
   )

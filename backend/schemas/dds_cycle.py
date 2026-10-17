@@ -191,8 +191,10 @@ class DDSSessionStateResponse(BaseModel):
     card_id: Optional[str] = None
     session_status: str
     lesson_status: str
+    started_at: Optional[str] = None
     incoming_card: Dict[str, Any] = Field(default_factory=dict)
     actions: List[Dict[str, Any]] = Field(default_factory=list)
+    allowed_service_statuses: Dict[str, List[str]] = Field(default_factory=dict)
     submitted_at: Optional[str] = None
     score: Optional[float] = None
 

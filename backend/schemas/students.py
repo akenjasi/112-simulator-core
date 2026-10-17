@@ -72,6 +72,7 @@ class StudentLessonHistoryItem(BaseModel):
 
 
 class DemoSessionRequest(BaseModel):
+    ticket_id: Optional[str] = Field(None, min_length=1, max_length=128)
     target_role: Optional[str] = Field("DISPATCHER_DDS", description="Целевая роль (OPERATOR_112 или DISPATCHER_DDS)")
 
 

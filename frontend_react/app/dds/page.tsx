@@ -20,7 +20,7 @@ function DdsDemoSimulator() {
   const [liveScenarios, setLiveScenarios] = useState<any[]>([])
 
   const [demoIndex, setDemoIndex] = useState(0)
-  const currentScenario = liveScenarios.length > 0 ? liveScenarios[demoIndex] : ddsScenarios[0]
+  const currentScenario = liveScenarios.length > 0 ? liveScenarios[demoIndex] : ddsScenarios[demoIndex]
 
   const [data, setData] = useState<DispatcherData>(emptyDispatcherData)
   const [networkStatus, setNetworkStatus] = useState<"offline" | "waiting" | "active">("active")
@@ -193,12 +193,18 @@ function DdsDemoSimulator() {
     fetch("/api/dds/scenarios")
       .then((res) => res.json())
       .then((data) => {
-        if (data.scenarios && data.scenarios.length > 0) {
+        // Legacy presets contain only titles/answers. They cannot replace a full
+        // demonstration card; assigned sessions use their saved DDS snapshot.
+        if (Array.isArray(data.scenarios) && data.scenarios.length > 0 &&
+            data.scenarios.every((sc: any) => sc.cardData?.services?.length > 0)) {
           setLiveScenarios(data.scenarios)
           loadScenario(0, data.scenarios)
         }
       })
       .catch((err) => console.error("Ошибка загрузки карточек ДДС:", err))
+    return () => {
+      if (slaIntervalRef.current) clearInterval(slaIntervalRef.current)
+    }
   }, [])
 
   // Switch to next demo card
@@ -246,31 +252,7 @@ function DdsDemoSimulator() {
     const timeStr = `${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}`
     const shortTime = `${pad(now.getHours())}:${pad(now.getMinutes())}`
 
-    const finalComment = orderNumber ? `[Наряд: ${orderNumber}] ${commentText}` : commentText
-    const finalCardId = currentScenario.id || data.incident.number.replace("Происшествие ", "")
-
-    try {
-      const response = await fetch("/api/dds/action", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          card_id: finalCardId,
-          service_name: serviceName,
-          status: nextStatus,
-          comment: finalComment,
-          duplicate_id: "",
-          user_name: "Диспетчер ДДС",
-        }),
-      })
-      const resData = await response.json()
-      if (resData && resData.evaluation) {
-        console.log("evaluation", resData.evaluation)
-      }
-    } catch (err) {
-      console.error("Failed to submit DDS action:", err)
-    }
-
-    // Update state
+    // This route has no assigned session. Its fixture actions are local only.
     setData((prev) => {
       const updatedServices = prev.services.map((srv) => {
         if (srv.name === serviceName) {
@@ -406,7 +388,7 @@ function DdsDemoSimulator() {
             <div className="flex items-center gap-3">
               <span className="font-bold text-xs 2xl:text-sm text-[#4ade80] flex items-center gap-1.5">
                 <span className="h-2.5 w-2.5 rounded-full bg-[#4ade80] animate-ping" />
-                Смена активна (ДДС-112)
+                Демонстрация ДДС · без сохранения
               </span>
               {currentScenario.isTrick && (
                 <span className="bg-amber-900/60 border border-amber-500 text-amber-300 px-2 py-0.5 rounded text-[11px] font-bold">
@@ -416,23 +398,23 @@ function DdsDemoSimulator() {
               {displaySlaTimer !== null && displaySlaTimer !== undefined && (
                 <div 
                   className={`flex items-center gap-1.5 px-2 py-0.5 rounded font-mono font-bold text-xs border ml-2 ${
-                    slaViolated || displaySlaTimer <= 5
+                    userDecision ? "bg-emerald-500/20 text-emerald-400 border-emerald-500/50" : slaViolated || displaySlaTimer <= 5
                       ? "bg-red-600 text-white border-red-500 animate-pulse"
                       : displaySlaTimer <= 15
                       ? "bg-amber-500/20 text-amber-400 border-amber-500/50"
                       : "bg-emerald-500/20 text-emerald-400 border-emerald-500/50"
                   }`}
                   title={
-                    slaViolated
+                    userDecision ? "Первичное решение принято; последующие этапы не относятся к нормативу принятия" : slaViolated
                       ? "Внимание! Регламентный норматив 30с нарушен"
                       : `Осталось ${displaySlaTimer} сек на первичное реагирование`
                   }
                 >
                   <span className="uppercase tracking-wider opacity-90 text-[10px]">
-                    {slaViolated ? "ПРОСРОЧКА" : "SLA 30С:"}
+                    {!userDecision && slaViolated ? "ПРОСРОЧКА" : "SLA 30С:"}
                   </span>
                   <span className="text-sm">
-                    {displaySlaTimer} сек
+                    {userDecision ? "Решение принято" : `${displaySlaTimer} сек`}
                   </span>
                 </div>
               )}
@@ -482,6 +464,7 @@ function DdsDemoSimulator() {
 
       <div className="shrink-0 z-50 w-full">
         <ServicesBar 
+          key={isTutorialRunning ? "tutorial" : `${demoIndex}-${displayData.incident.number}`}
           data={displayData} 
           onStatusChange={handleStatusChange} 
           onAccept={() => setIsCardAccepted(true)} 

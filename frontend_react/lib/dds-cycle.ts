@@ -63,8 +63,10 @@ export interface DDSSessionState {
   card_id: string
   session_status: string
   lesson_status: string
+  started_at?: string | null
   incoming_card: DispatcherData
   actions: DDSActionRecord[]
+  allowed_service_statuses?: Record<string, string[]>
   submitted_at: string | null
   score: number | null
 }
@@ -290,6 +292,17 @@ export function validateDDSSessionState(
     throw new Error("Некорректный ответ: actions должен быть массивом")
   }
 
+  let allowedServiceStatuses: Record<string, string[]> | undefined
+  if (obj.allowed_service_statuses !== undefined) {
+    const options = obj.allowed_service_statuses
+    if (!options || typeof options !== "object" || Array.isArray(options) ||
+        Object.values(options).some(value => !Array.isArray(value) ||
+          value.some(status => typeof status !== "string" || !ALLOWED_DDS_STATUSES.includes(status as AllowedDDSStatus)))) {
+      throw new Error("Некорректный ответ: неверные разрешённые статусы служб")
+    }
+    allowedServiceStatuses = Object.fromEntries(Object.entries(options).map(([name, values]) => [name, [...values as string[]]]))
+  }
+
   return {
     session_id: obj.session_id,
     lesson_id: obj.lesson_id,
@@ -297,8 +310,10 @@ export function validateDDSSessionState(
     card_id: obj.card_id,
     session_status: obj.session_status,
     lesson_status: obj.lesson_status,
+    started_at: typeof obj.started_at === "string" && Number.isFinite(Date.parse(obj.started_at)) ? obj.started_at : null,
     incoming_card: card as DispatcherData,
     actions: actionsList,
+    allowed_service_statuses: allowedServiceStatuses,
     submitted_at: submittedAt,
     score: scoreVal,
   }
@@ -438,6 +453,19 @@ export async function postDDSAction(
   }
 
   if (!res.ok) {
+    // Only fixed policy codes become UI text; never expose arbitrary backend detail.
+    if (res.status === 409 || res.status === 422) {
+      const messages: Record<string, string> = {
+        DDS_SERVICE_TRANSITION_FORBIDDEN: "Этот переход статуса службы недоступен. Обновите данные",
+        DDS_SERVICE_NOT_DISPATCHABLE: "Направление доступно только для принятой службы до завершения работ",
+        DDS_REFUSAL_REASON_REQUIRED: "Укажите причину отказа",
+        DDS_STATUS_COMMENT_REQUIRED: "Для повторного статуса укажите комментарий",
+        DDS_DISPATCH_STATUS_FORBIDDEN: "Изменяйте статус через карандаш службы",
+      }
+      let code: unknown
+      try { code = (await res.json())?.detail?.code } catch { /* Safe generic fallback below. */ }
+      if (typeof code === "string" && Object.hasOwn(messages, code)) throw new Error(messages[code])
+    }
     throw new Error(getSafeHttpErrorMessage(res.status))
   }
 

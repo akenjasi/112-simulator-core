@@ -88,6 +88,8 @@ async def test_demo_role_matrix_preserves_existing_exceptions(security_data, pat
     allowed = (target == "DISPATCHER_DDS" and role in ("TEACHER", "CADET")) or (
         target == "OPERATOR_112" and role == "ADMIN" and path == "/api/v1/sessions/demo")
     before = await demo_row_counts()
+    async with AsyncSessionLocal() as db:
+        previous_ticket_ids = set((await db.scalars(select(ScenarioTicket.scenario_id))).all())
     async with AsyncClient(app=app, base_url="http://test") as client:
         response = await client.post(path, headers=security_data["headers"][role],
                                      json={"target_role": target})
@@ -95,7 +97,9 @@ async def test_demo_role_matrix_preserves_existing_exceptions(security_data, pat
     after = await demo_row_counts()
     if allowed:
         assert response.json()["role"] == target
-        assert after == tuple(value + (0 if index == 4 and target == "OPERATOR_112" else 1)
+        # DDS now reuses a saved ticket; the session/card/result must still be new.
+        reused_ticket = target == "DISPATCHER_DDS" and response.json()["ticket_id"] in previous_ticket_ids
+        assert after == tuple(value + (0 if (index == 4 and target == "OPERATOR_112") or (index == 0 and reused_ticket) else 1)
                               for index, value in enumerate(before))
     else:
         assert after == before

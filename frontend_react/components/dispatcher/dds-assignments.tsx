@@ -118,7 +118,7 @@ export function DDSAssignments() {
               item.score !== null && item.score !== undefined
                 ? `${item.score}`
                 : "Нет оценки"
-            const journalUrl = `/dds/journal?session_id=${encodeURIComponent(
+            const consoleUrl = `/dds?session_id=${encodeURIComponent(
               item.session_id
             )}&ticket_id=${encodeURIComponent(item.ticket_id || "")}`
 
@@ -146,7 +146,7 @@ export function DDSAssignments() {
 
                 <div className="shrink-0 flex items-center gap-2">
                   <Link
-                    href={journalUrl}
+                    href={consoleUrl}
                     className="px-3 py-1.5 text-xs font-semibold rounded bg-primary text-primary-foreground hover:bg-primary/90 transition-colors"
                   >
                     Перейти к занятию

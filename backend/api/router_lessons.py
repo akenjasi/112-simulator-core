@@ -9,7 +9,7 @@ from backend.core.dds_cycle import (
     build_dds_cadet_stats,
     is_suitable_dds_ticket,
     lock_assignment,
-    sanitize_incoming_card,
+    incoming_card_from_ticket,
 )
 from backend.core.deps import require_role, get_current_user
 from backend.database import get_db
@@ -643,7 +643,7 @@ async def start_lesson(
         ticket = await db.get(ScenarioTicket, lesson.scenario_id)
         if not is_suitable_dds_ticket(ticket):
             raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Scenario ticket is invalid or deleted")
-        sanitized_incoming = sanitize_incoming_card(ticket.content)
+        sanitized_incoming = incoming_card_from_ticket(ticket)
 
         cadet_user_ids = set(group.cadet_ids or []) if group else set()
         if group and group.students:

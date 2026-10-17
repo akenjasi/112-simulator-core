@@ -1,4 +1,5 @@
 import datetime
+from copy import deepcopy
 from typing import Optional, List, Dict, Any
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select, func
@@ -365,6 +366,52 @@ async def create_demo_session(
             detail="Демо-сессия оператора 112 доступна только администратору",
         )
 
+    if target_role == "DISPATCHER_DDS":
+        from backend.core.dds_cycle import incoming_card_from_ticket, is_suitable_dds_ticket, extract_dds_ticket_metadata
+
+        chosen_id = req.ticket_id if req else None
+        if chosen_id:
+            saved_ticket = await db.get(ScenarioTicket, chosen_id)
+            if not is_suitable_dds_ticket(saved_ticket):
+                raise HTTPException(status_code=404, detail="Готовый билет ДДС не найден или удалён")
+        else:
+            candidates = (await db.scalars(select(ScenarioTicket).where(
+                (ScenarioTicket.is_deleted == False) | ScenarioTicket.is_deleted.is_(None)
+            ).order_by(ScenarioTicket.created_at.desc()))).all()
+            suitable = [ticket for ticket in candidates if is_suitable_dds_ticket(ticket)]
+            # Prefer explicitly active/published material over unmarked legacy rows.
+            published = [ticket for ticket in suitable if (ticket.workflow_state or {}).get("status") in ("active", "published")]
+            import secrets
+            saved_ticket = secrets.choice(published or suitable) if suitable else None
+
+        if saved_ticket:
+            incoming = incoming_card_from_ticket(saved_ticket)
+            category, _, complexity, _ = extract_dds_ticket_metadata(saved_ticket)
+            assignment = Assignment(session_type="CARD_ACTIONS", mode="TRAINING", status="ACTIVE",
+                target_role=target_role, cadet_id=current_user.user_id,
+                assigned_by=current_user.user_id if current_user.role == "TEACHER" else None,
+                scenario_id=saved_ticket.scenario_id, categories=[category], complexity=str(complexity),
+                teacher_notes="Самостоятельная тренировка по сохранённому билету")
+            db.add(assignment)
+            await db.flush()
+            session = ExamSession(assignment_id=assignment.assignment_id, cadet_id=current_user.user_id,
+                ticket_id=saved_ticket.scenario_id, session_type="CARD_ACTIONS", status="ACTIVE",
+                categories=[category], complexity=str(complexity))
+            db.add(session)
+            await db.flush()
+            card = IncidentCard(session_id=session.session_id, scenario_id=saved_ticket.scenario_id,
+                operator_id=current_user.user_id, card_origin="112_CALL", status="open", filled_data=deepcopy(incoming),
+                assigned_services={s["name"]: {"id": s["id"], "status": s["status"], "history": []} for s in incoming["services"]})
+            db.add(card)
+            await db.flush()
+            session.dynamic_state = {"dds": {"incoming_card": incoming, "card_id": card.card_id,
+                                             "actions": [], "submitted_at": None}}
+            db.add(TicketResult(session_id=session.session_id, ticket_id=saved_ticket.scenario_id,
+                                status="active", is_passed=False))
+            await db.commit()
+            return DemoSessionResponse(session_id=session.session_id, ticket_id=saved_ticket.scenario_id,
+                role=target_role, redirect_url=f"/dds/journal?focus_session_id={session.session_id}&focus_ticket_id={saved_ticket.scenario_id}")
+
     import uuid
     demo_uuid = str(uuid.uuid4())
     scenario_ticket = ScenarioTicket(
@@ -440,6 +487,8 @@ async def create_demo_session(
         status="ACTIVE",
         target_role=target_role,
         cadet_id=cadet_id,
+        assigned_by=current_user.user_id if current_user.role == "TEACHER" else None,
+        scenario_id=ticket.ticket_id,
         categories=[ticket.category] if ticket.category else [],
         complexity=str(ticket.complexity or "1"),
         teacher_notes="Демо-запуск",
@@ -450,6 +499,7 @@ async def create_demo_session(
     exam_session = ExamSession(
         assignment_id=assignment.assignment_id,
         cadet_id=cadet_id,
+        ticket_id=ticket.ticket_id,
         session_type=session_type,
         status="ACTIVE",
         categories=[ticket.category] if ticket.category else [],
@@ -467,27 +517,73 @@ async def create_demo_session(
     db.add(tr)
 
     if target_role == "DISPATCHER_DDS":
+        from backend.core.dds_cycle import sanitize_incoming_card
+
+        # The assigned DDS UI reads a validated snapshot, not the legacy plot/factoids.
+        incoming_card = sanitize_incoming_card({
+            "phones": {"aon": scenario_ticket.ground_truth["phone"]},
+            "incident": {"number": f"ДЕМО-{demo_uuid[:8]}", "operator": "112"},
+            "caller": {
+                "name": scenario_ticket.ground_truth["fio"],
+                "role": scenario_ticket.ground_truth["caller_status"],
+                "address": f"{scenario_ticket.ground_truth['street']}, {scenario_ticket.ground_truth['house']}",
+            },
+            "description": ticket.plot,
+            "statuses": {
+                key: scenario_ticket.ground_truth[key]
+                for key in ("injured", "ambulanceRefusal", "blocked")
+            },
+            "classification": {
+                "section": ticket.category,
+                "title": ticket.subcategory,
+                "class": scenario_ticket.settings["class"],
+                "visClass": scenario_ticket.settings["visClass"],
+            },
+            "services": [
+                {"id": str(index), "name": name, "status": "Получена службой"}
+                for index, name in enumerate(ticket.etalon_services)
+            ],
+        })
         card = IncidentCard(
             session_id=exam_session.session_id,
+            scenario_id=ticket.ticket_id,
             operator_id=cadet_id,
             card_origin="112_CALL",
             status="open",
             filled_data={
+                **deepcopy(incoming_card),
                 "category": ticket.category,
                 "subcategory": ticket.subcategory,
                 "plot": ticket.plot,
                 "factoids": ticket.factoids,
             },
-            assigned_services={"services": ticket.etalon_services or []},
+            assigned_services={
+                service["name"]: {
+                    "id": service["id"], "status": service["status"], "history": [],
+                }
+                for service in incoming_card["services"]
+            },
         )
         db.add(card)
+        await db.flush()
+        exam_session.dynamic_state = {
+            "dds": {
+                "incoming_card": incoming_card,
+                "card_id": card.card_id,
+                "actions": [],
+                "submitted_at": None,
+            }
+        }
 
     await db.commit()
     await db.refresh(exam_session)
 
     ticket_key = ticket.ticket_id
-    base_url = "/operator/journal" if target_role == "OPERATOR_112" else "/dds/journal"
-    redirect_url = f"{base_url}?session_id={exam_session.session_id}&ticket_id={ticket_key}&incoming_call=true"
+    redirect_url = (
+        f"/operator/journal?session_id={exam_session.session_id}&ticket_id={ticket_key}&incoming_call=true"
+        if target_role == "OPERATOR_112" else
+        f"/dds/journal?focus_session_id={exam_session.session_id}&focus_ticket_id={ticket_key}"
+    )
 
     return DemoSessionResponse(
         session_id=exam_session.session_id,
