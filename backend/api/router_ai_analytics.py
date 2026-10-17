@@ -28,7 +28,11 @@ from backend.core.ai_worker import (
 from backend.core.deps import get_current_user
 from backend.database import get_db
 from backend.models.domain_01 import User, StudentGroup
-from backend.models.domain_03 import AIStudentAdvice, AIGroupAdvice
+from backend.models.domain_03 import AIStudentAdvice, AIGroupAdvice, Assignment
+from backend.core.dds_report_data import (
+    DDSLessonReportDataResponse,
+    collect_lesson_report_data,
+)
 
 logger = logging.getLogger("router_ai_analytics")
 
@@ -376,3 +380,54 @@ async def refine_student_advice(
         is_read=adv.is_read,
         model_used=adv.model_used,
     )
+
+
+# ─── DDS Lesson Report Data Endpoint ──────────────────────────────────────────
+
+@router.get(
+    "/lessons/{lesson_id}/data",
+    response_model=DDSLessonReportDataResponse,
+)
+async def get_lesson_report_data(
+    lesson_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> Dict[str, Any]:
+    """Retrieve verified, trustworthy completed lesson data for DDS neural report generation.
+
+    Access rules:
+    - 401 if unauthenticated (enforced by get_current_user)
+    - 403 if role is CADET/other, or TEACHER who did not assign the lesson
+    - 404 if lesson not found
+    - 409 if lesson is not COMPLETED or target_role is not DISPATCHER_DDS
+    """
+    if current_user.role not in ("ADMIN", "TEACHER"):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Access denied. Cadets are not authorized to view lesson report data.",
+        )
+
+    stmt = select(Assignment).where(Assignment.assignment_id == lesson_id)
+    res = await db.execute(stmt)
+    lesson = res.scalar_one_or_none()
+    if not lesson:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Lesson '{lesson_id}' not found.",
+        )
+
+    if current_user.role == "TEACHER" and lesson.assigned_by != current_user.user_id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Access denied. Teachers can only access report data for their own lessons.",
+        )
+
+    status_str = (lesson.status or "").strip().upper()
+    target_role_str = (lesson.target_role or "").strip().upper()
+    if status_str != "COMPLETED" or target_role_str != "DISPATCHER_DDS":
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Lesson is not completed or target role is not DISPATCHER_DDS.",
+        )
+
+    return await collect_lesson_report_data(db, lesson_id, lesson=lesson)
