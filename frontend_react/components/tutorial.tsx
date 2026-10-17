@@ -1,6 +1,6 @@
 "use client"
 
-import { Joyride, Step, STATUS } from "react-joyride"
+import { Joyride, Step, EventData, STATUS } from "react-joyride"
 
 type Props = {
   run: boolean
@@ -42,7 +42,7 @@ export function Tutorial({ run, onFinish }: Props) {
     }
   ]
 
-  const handleJoyrideEvent = (data: { status: string }) => {
+  const handleJoyrideCallback = (data: EventData) => {
     const { status } = data
     if (status === STATUS.FINISHED || status === STATUS.SKIPPED) {
       onFinish()
@@ -54,14 +54,14 @@ export function Tutorial({ run, onFinish }: Props) {
       steps={steps}
       run={run}
       continuous
-      onEvent={handleJoyrideEvent}
+      onEvent={handleJoyrideCallback}
       options={{
-        buttons: ["back", "primary", "skip"],
-        showProgress: true,
-        overlayClickAction: false,
         primaryColor: "#157dbd",
         textColor: "#303335",
         zIndex: 1000,
+        showProgress: true,
+        buttons: ["back", "primary", "skip"],
+        overlayClickAction: false,
       }}
       styles={{
         buttonClose: {

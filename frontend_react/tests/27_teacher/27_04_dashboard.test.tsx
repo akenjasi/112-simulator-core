@@ -64,16 +64,16 @@ describe('27.4: Live Dashboard', () => {
   });
 
   afterEach(() => {
+    vi.useRealTimers();
     vi.restoreAllMocks();
   });
 
   it('should render live statistics', async () => {
     render(<LiveDashboardPage sessionId="sess-101" />);
 
-    expect(screen.getByText(/Live Мониторинг сессии/i)).toBeInTheDocument();
-    expect(screen.getByText(/В эфире/i)).toBeInTheDocument();
-
     await waitFor(() => {
+      expect(screen.getByText(/Live Мониторинг сессии/i)).toBeInTheDocument();
+      expect(screen.getByText(/В эфире/i)).toBeInTheDocument();
       expect(screen.getByText('Иван Иванов')).toBeInTheDocument();
       expect(screen.getByText('Петр Петров')).toBeInTheDocument();
     });

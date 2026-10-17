@@ -268,3 +268,34 @@ export async function fetchErrorLogs(
   }
   return res.json()
 }
+
+export interface IntegrityDeviation {
+  path: string
+  reason: "modified" | "missing" | "unreadable" | "unexpected" | string
+  details?: string
+}
+
+export interface IntegrityCheckResponse {
+  status: "ok" | "deviation" | "unavailable"
+  checked_at: string
+  manifest_digest?: string | null
+  checked_files_count: number
+  deviations: IntegrityDeviation[]
+  scope_summary?: string
+  error?: string | null
+}
+
+export async function checkBackendIntegrity(
+  signal?: AbortSignal
+): Promise<IntegrityCheckResponse> {
+  const res = await fetch("/api/admin/integrity/check", {
+    method: "POST",
+    headers: getAuthHeaders(),
+    signal,
+  })
+  if (!res.ok) {
+    const errorBody = await res.json().catch(() => ({}))
+    throw new Error(errorBody.detail || `Ошибка проверки целостности: ${res.status}`)
+  }
+  return res.json()
+}

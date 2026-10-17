@@ -5,6 +5,17 @@ from pathlib import Path
 import pytest
 
 import scripts.backup_db as backups
+from backend.database import engine
+from backend.models.base import Base
+
+
+@pytest.fixture(autouse=True)
+async def isolated_tables():
+    async with engine.begin() as connection:
+        await connection.run_sync(Base.metadata.create_all)
+    yield
+    async with engine.begin() as connection:
+        await connection.run_sync(Base.metadata.drop_all)
 
 
 @pytest.mark.parametrize("use_async", [False, True])

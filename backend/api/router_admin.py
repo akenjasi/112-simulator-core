@@ -23,12 +23,14 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.core.deps import get_current_user, require_role
+from backend.core.integrity import verify_integrity
 from backend.database import get_db
 from backend.schemas.admin import (
     BackupItem,
     BackupsListResponse,
     BackupResponse,
     HealthCheckResponse,
+    IntegrityCheckResponse,
 )
 from scripts.backup_db import (
     create_backup_async,
@@ -315,3 +317,52 @@ async def get_error_report_pdf(db: AsyncSession = Depends(get_db)):
         media_type="application/pdf",
         headers={"Content-Disposition": "attachment; filename=error_report.pdf"}
     )
+
+
+@admin_router.post("/integrity/check", response_model=IntegrityCheckResponse)
+@admin_router.post("/integrity/check/", response_model=IntegrityCheckResponse, include_in_schema=False)
+async def check_integrity(
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """
+    Verify backend file integrity against the SHA-256 build manifest.
+    Hashing is executed in a background thread without blocking the event loop.
+    Logs completion to UserActionLog audit table.
+    """
+    app_root = os.getenv("APP_ROOT")
+    if not app_root:
+        if Path("/app/backend").is_dir():
+            app_root = "/app"
+        else:
+            app_root = str(Path(__file__).resolve().parent.parent.parent)
+
+    result = await asyncio.to_thread(verify_integrity, root_dir=app_root)
+
+    try:
+        log_entry = UserActionLog(
+            user_id=current_user.user_id,
+            role=current_user.role,
+            action="INTEGRITY_CHECK_COMPLETED",
+            endpoint="/api/admin/integrity/check",
+            target_entity="system_integrity",
+            target_id=result.get("manifest_digest"),
+            details=json.dumps(
+                {
+                    "status": result.get("status"),
+                    "checked_files_count": result.get("checked_files_count"),
+                    "deviations_count": len(result.get("deviations", [])),
+                    "deviations": [
+                        {"path": d["path"], "reason": d["reason"]}
+                        for d in result.get("deviations", [])[:20]
+                    ],
+                },
+                ensure_ascii=False,
+            ),
+        )
+        db.add(log_entry)
+        await db.commit()
+    except Exception:
+        pass
+
+    return result

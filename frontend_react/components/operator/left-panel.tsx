@@ -603,7 +603,26 @@ export function OperatorLeftPanel({
         </div>
       </div>
 
-      {/* 3. Блок описания происшествия со слов заявителя (Фабула) - Теперь Чат */}
+      {/* 3. Блок описания происшествия со слов заявителя (Фабула) */}
+      <div style={{ border: `1px solid ${border}` }} className="p-2.5 flex flex-col bg-white">
+        <div className="flex items-center justify-between mb-1">
+          <span className="text-[12px] font-medium" style={{ color: slate }}>
+            Описание происшествия (фабула)
+          </span>
+          <span className="text-[11px] tabular-nums" style={{ color: muted }}>
+            {incidentDescription.length} / 1999
+          </span>
+        </div>
+        <textarea
+          value={incidentDescription}
+          onChange={(e) => setIncidentDescription(e.target.value.slice(0, 1999))}
+          placeholder="введите подробное описание ситуации со слов заявителя..."
+          className="w-full text-[13px] bg-transparent outline-none resize-none placeholder-[#b7bec3] h-16"
+          style={{ color: slate }}
+        />
+      </div>
+
+      {/* 4. Чат-диалог */}
       <div style={{ border: `1px solid ${border}` }} className="flex flex-col flex-1 min-h-[140px] bg-white overflow-hidden">
         <div className="px-3 py-2 border-b" style={{ borderColor: border, backgroundColor: "#f8fafc" }}>
           <span className="text-[12px] font-medium block" style={{ color: slate }}>

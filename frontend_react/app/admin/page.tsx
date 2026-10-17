@@ -48,33 +48,56 @@ import {
 } from "@/lib/admin-api"
 
 interface LoadMetricPoint {
+  measuredAt: number
   time: string
   cpu: number
   ram: number
 }
 
+const LOAD_HISTORY_KEY = "admin-server-load-history-v1"
+const HISTORY_WINDOW_MS = 15 * 60 * 1000
+const MAX_HISTORY_POINTS = 60
+
+function recentHistory(points: LoadMetricPoint[]): LoadMetricPoint[] {
+  const now = Date.now()
+  return points.filter((point) => point && Number.isFinite(point.measuredAt) &&
+    point.measuredAt <= now && point.measuredAt >= now - HISTORY_WINDOW_MS &&
+    typeof point.time === "string" && Number.isFinite(point.cpu) &&
+    Number.isFinite(point.ram) && point.cpu >= 0 && point.cpu <= 100 &&
+    point.ram >= 0 && point.ram <= 100).slice(-MAX_HISTORY_POINTS)
+}
+
 export default function AdminDashboardPage() {
-  const [health, setHealth] = useState<HealthCheckData>({
-    cpu_percent: 18.5,
-    ram_percent: 42.1,
-    db_status: "ok",
-  })
+  const [health, setHealth] = useState<HealthCheckData | null>(null)
   const [users, setUsers] = useState<AdminUser[]>([])
-  const [loadHistory, setLoadHistory] = useState<LoadMetricPoint[]>([
-    { time: "11:00", cpu: 12, ram: 40 },
-    { time: "11:05", cpu: 19, ram: 41 },
-    { time: "11:10", cpu: 25, ram: 43 },
-    { time: "11:15", cpu: 16, ram: 42 },
-    { time: "11:20", cpu: 22, ram: 44 },
-    { time: "11:25", cpu: 18.5, ram: 42.1 },
-  ])
+  const [loadHistory, setLoadHistory] = useState<LoadMetricPoint[]>([])
+  const [lastSuccessTime, setLastSuccessTime] = useState<string | null>(null)
+  const [healthError, setHealthError] = useState<string | null>(null)
   const [isLoading, setIsLoading] = useState(false)
   const [isBackingUp, setIsBackingUp] = useState(false)
   const [backupSuccessMessage, setBackupSuccessMessage] = useState<string | null>(null)
   const [backupError, setBackupError] = useState<string | null>(null)
 
+  const acceptHealth = useCallback((data: HealthCheckData) => {
+    setHealth(data)
+    setHealthError(null)
+    const measuredAt = Date.now()
+    const time = new Date(measuredAt).toLocaleTimeString("ru-RU", {
+      hour: "2-digit", minute: "2-digit", second: "2-digit",
+    })
+    setLastSuccessTime(time)
+    setLoadHistory((previous) => {
+      const history = recentHistory([...previous, {
+        measuredAt, time, cpu: data.cpu_percent, ram: data.ram_percent,
+      }])
+      try { sessionStorage.setItem(LOAD_HISTORY_KEY, JSON.stringify(history)) } catch {}
+      return history
+    })
+  }, [])
+
   const loadData = useCallback(async () => {
     setIsLoading(true)
+    setHealthError(null)
     try {
       const [healthData, usersData] = await Promise.allSettled([
         fetchHealthcheck(),
@@ -82,23 +105,11 @@ export default function AdminDashboardPage() {
       ])
 
       if (healthData.status === "fulfilled") {
-        setHealth(healthData.value)
-        const now = new Date().toLocaleTimeString("ru-RU", {
-          hour: "2-digit",
-          minute: "2-digit",
-          second: "2-digit",
-        })
-        setLoadHistory((prev) => {
-          const updated = [
-            ...prev.slice(-9),
-            {
-              time: now,
-              cpu: healthData.value.cpu_percent,
-              ram: healthData.value.ram_percent,
-            },
-          ]
-          return updated
-        })
+        acceptHealth(healthData.value)
+      } else {
+        setHealthError(
+          healthData.reason?.message || "Ошибка получения статуса системы"
+        )
       }
 
       if (usersData.status === "fulfilled" && Array.isArray(usersData.value)) {
@@ -107,29 +118,24 @@ export default function AdminDashboardPage() {
     } finally {
       setIsLoading(false)
     }
-  }, [])
+  }, [acceptHealth])
 
   useEffect(() => {
+    try {
+      const saved = JSON.parse(sessionStorage.getItem(LOAD_HISTORY_KEY) || "[]")
+      if (Array.isArray(saved)) setLoadHistory(recentHistory(saved))
+    } catch {}
     loadData()
     const timer = setInterval(() => {
       fetchHealthcheck()
-        .then((data) => {
-          setHealth(data)
-          const now = new Date().toLocaleTimeString("ru-RU", {
-            hour: "2-digit",
-            minute: "2-digit",
-            second: "2-digit",
-          })
-          setLoadHistory((prev) => [
-            ...prev.slice(-9),
-            { time: now, cpu: data.cpu_percent, ram: data.ram_percent },
-          ])
+        .then(acceptHealth)
+        .catch((err) => {
+          setHealthError(err?.message || "Ошибка опроса состояния сервера")
         })
-        .catch(() => {})
     }, 15000)
 
     return () => clearInterval(timer)
-  }, [loadData])
+  }, [loadData, acceptHealth])
 
   const handleCreateBackup = async () => {
     try {
@@ -198,6 +204,20 @@ export default function AdminDashboardPage() {
       </div>
 
       {/* Notifications */}
+      {healthError && (
+        <div className="bg-amber-50 border border-amber-300 rounded-xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-amber-900 animate-in fade-in">
+          <div className="flex items-center gap-3">
+            <AlertTriangle className="w-5 h-5 text-amber-600 shrink-0" />
+            <div className="text-sm font-medium">{healthError}</div>
+          </div>
+          {lastSuccessTime && (
+            <div className="text-xs text-amber-700 font-medium shrink-0">
+              Последний успешный опрос: {lastSuccessTime}
+            </div>
+          )}
+        </div>
+      )}
+
       {backupSuccessMessage && (
         <div className="bg-emerald-50 border border-emerald-300 rounded-xl p-4 flex items-center gap-3 text-emerald-800 animate-in fade-in">
           <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0" />
@@ -221,13 +241,19 @@ export default function AdminDashboardPage() {
             <Cpu className="w-4 h-4 text-purple-600" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-black text-slate-900">{health.cpu_percent.toFixed(1)}%</div>
+            <div className="text-2xl font-black text-slate-900">
+              {health ? `${health.cpu_percent.toFixed(1)}%` : "—"}
+            </div>
             <Progress
-              value={health.cpu_percent}
+              value={health ? health.cpu_percent : 0}
               className="h-2 mt-3"
             />
             <p className="text-xs text-slate-500 mt-2">
-              {health.cpu_percent < 70 ? "Нормальная нагрузка" : "Повышенная нагрузка"}
+              {!health
+                ? "Данные не получены"
+                : health.cpu_percent < 70
+                ? "Нормальная нагрузка"
+                : "Повышенная нагрузка"}
             </p>
           </CardContent>
         </Card>
@@ -239,13 +265,19 @@ export default function AdminDashboardPage() {
             <HardDrive className="w-4 h-4 text-blue-600" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-black text-slate-900">{health.ram_percent.toFixed(1)}%</div>
+            <div className="text-2xl font-black text-slate-900">
+              {health ? `${health.ram_percent.toFixed(1)}%` : "—"}
+            </div>
             <Progress
-              value={health.ram_percent}
+              value={health ? health.ram_percent : 0}
               className="h-2 mt-3"
             />
             <p className="text-xs text-slate-500 mt-2">
-              {health.ram_percent < 80 ? "Достаточно памяти" : "Требуется оптимизация"}
+              {!health
+                ? "Данные не получены"
+                : health.ram_percent < 80
+                ? "Достаточно памяти"
+                : "Требуется оптимизация"}
             </p>
           </CardContent>
         </Card>
@@ -259,21 +291,38 @@ export default function AdminDashboardPage() {
           <CardContent>
             <div className="flex items-center gap-2">
               <span className="text-2xl font-black text-slate-900">
-                {health.db_status === "ok" ? "Подключена" : "Ошибка"}
+                {!health
+                  ? "—"
+                  : health.db_status === "ok"
+                  ? "Подключена"
+                  : "Ошибка"}
               </span>
               <Badge
                 className={
-                  health.db_status === "ok"
+                  !health
+                    ? "bg-slate-100 text-slate-700 border-slate-300"
+                    : health.db_status === "ok"
                     ? "bg-emerald-100 text-emerald-800 border-emerald-300"
                     : "bg-red-100 text-red-800 border-red-300"
                 }
               >
-                {health.db_status === "ok" ? "Active" : "Down"}
+                {!health ? "Нет данных" : health.db_status === "ok" ? "Active" : "Down"}
               </Badge>
             </div>
             <div className="flex items-center gap-1 text-xs text-slate-500 mt-3">
-              <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
-              <span>PostgreSQL Connection OK</span>
+              {!health ? (
+                <span>Статус БД неизвестен</span>
+              ) : health.db_status === "ok" ? (
+                <>
+                  <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
+                  <span>PostgreSQL Connection OK</span>
+                </>
+              ) : (
+                <>
+                  <AlertTriangle className="w-3.5 h-3.5 text-red-600" />
+                  <span>PostgreSQL Connection Error</span>
+                </>
+              )}
             </div>
           </CardContent>
         </Card>
@@ -367,11 +416,15 @@ export default function AdminDashboardPage() {
             <div className="flex items-center justify-center gap-6 mt-4 text-xs font-semibold">
               <div className="flex items-center gap-2">
                 <span className="w-3 h-3 rounded-full bg-purple-600 inline-block" />
-                <span className="text-slate-600">CPU: {health.cpu_percent.toFixed(1)}%</span>
+                <span className="text-slate-600">
+                  CPU: {health ? `${health.cpu_percent.toFixed(1)}%` : "—"}
+                </span>
               </div>
               <div className="flex items-center gap-2">
                 <span className="w-3 h-3 rounded-full bg-blue-600 inline-block" />
-                <span className="text-slate-600">RAM: {health.ram_percent.toFixed(1)}%</span>
+                <span className="text-slate-600">
+                  RAM: {health ? `${health.ram_percent.toFixed(1)}%` : "—"}
+                </span>
               </div>
             </div>
           </CardContent>

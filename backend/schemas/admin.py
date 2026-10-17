@@ -26,3 +26,19 @@ class BackupItem(BaseModel):
 
 class BackupsListResponse(BaseModel):
     backups: list[BackupItem]
+
+
+class IntegrityDeviationSchema(BaseModel):
+    path: str
+    reason: str
+    details: Optional[str] = None
+
+
+class IntegrityCheckResponse(BaseModel):
+    status: str
+    checked_at: str
+    manifest_digest: Optional[str] = None
+    checked_files_count: int
+    deviations: list[IntegrityDeviationSchema] = []
+    scope_summary: Optional[str] = None
+    error: Optional[str] = None

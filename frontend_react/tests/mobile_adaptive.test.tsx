@@ -31,6 +31,10 @@ vi.mock('next/navigation', () => ({
   }),
 }));
 
+vi.mock('@/components/auth/RequireAuth', () => ({
+  default: ({ children }: any) => <>{children}</>,
+}));
+
 beforeEach(() => {
   vi.clearAllMocks();
   localStorage.clear();
