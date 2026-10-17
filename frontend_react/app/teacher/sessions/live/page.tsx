@@ -245,16 +245,17 @@ export default function LiveDashboardPage(props: LiveDashboardProps = {}) {
   )
 
   // Polling: every 3s if active or waiting, every 10s if completed
+  const isCompletedStatus = stats?.status === "COMPLETED"
   useEffect(() => {
     fetchStats(true)
 
-    const intervalMs = stats?.status === "COMPLETED" ? 10000 : 3000
+    const intervalMs = isCompletedStatus ? 10000 : 3000
     const intervalId = setInterval(() => {
       fetchStats(false)
     }, intervalMs)
 
     return () => clearInterval(intervalId)
-  }, [fetchStats, stats?.status])
+  }, [fetchStats, isCompletedStatus])
 
   // Start lesson handler
   const handleStartLesson = async () => {

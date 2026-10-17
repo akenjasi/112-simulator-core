@@ -67,6 +67,11 @@ RUN chmod +x \
 # Fix Windows CRLF issues in shell scripts
 RUN find . -type f -name "*.sh" -exec sed -i -e 's/\r$//' {} +
 
+# ─── Integrity manifest generation ───────────────────────────────────────────
+# Generate SHA-256 manifest of all backend python files, scripts, and native binaries.
+RUN python -m backend.core.integrity generate --root /app --output /app/backend_manifest.json \
+    && chmod 0644 /app/backend_manifest.json
+
 
 
 # ─── Runtime: shared library search path ─────────────────────────────────────

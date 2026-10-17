@@ -1,7 +1,7 @@
 import React from 'react';
 import { render, screen, waitFor, fireEvent, act } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import LiveDashboardPage from '@/app/teacher/sessions/[id]/live/page';
+import LiveDashboardPage from '@/app/teacher/sessions/live/page';
 
 describe('27.4: Live Dashboard', () => {
   const mockStats = {
@@ -64,16 +64,16 @@ describe('27.4: Live Dashboard', () => {
   });
 
   afterEach(() => {
+    vi.useRealTimers();
     vi.restoreAllMocks();
   });
 
   it('should render live statistics', async () => {
     render(<LiveDashboardPage sessionId="sess-101" />);
 
-    expect(screen.getByText(/Live Мониторинг сессии/i)).toBeInTheDocument();
-    expect(screen.getByText(/В эфире/i)).toBeInTheDocument();
-
     await waitFor(() => {
+      expect(screen.getByText(/Live Мониторинг сессии/i)).toBeInTheDocument();
+      expect(screen.getByText(/В эфире/i)).toBeInTheDocument();
       expect(screen.getByText('Иван Иванов')).toBeInTheDocument();
       expect(screen.getByText('Петр Петров')).toBeInTheDocument();
     });

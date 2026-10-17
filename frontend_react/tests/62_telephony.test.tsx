@@ -10,9 +10,26 @@ vi.mock('next/navigation', () => ({
   useRouter: () => ({ push: pushMock, replace: vi.fn(), back: vi.fn() }),
 }))
 
+class MockWebSocket {
+  readyState = 1
+  send = vi.fn()
+  close = vi.fn()
+  onopen: any = null
+  onclose: any = null
+  onerror: any = null
+  onmessage: any = null
+}
+
+const originalWebSocket = global.WebSocket
+
 describe('ТЗ 62: Архитектура VoIP и Телефонии (useTelephony hook)', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    global.WebSocket = MockWebSocket as any
+  })
+
+  afterEach(() => {
+    global.WebSocket = originalWebSocket
   })
 
   it('1.1. useTelephony имеет начальный статус IDLE и дефолтный номер 1002', () => {

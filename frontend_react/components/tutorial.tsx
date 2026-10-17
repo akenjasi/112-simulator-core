@@ -1,6 +1,6 @@
 "use client"
 
-import { Joyride, Step, CallBackProps, STATUS } from "react-joyride"
+import { Joyride, Step, EventData, STATUS } from "react-joyride"
 
 type Props = {
   run: boolean
@@ -13,7 +13,7 @@ export function Tutorial({ run, onFinish }: Props) {
       target: "body",
       content: "Добро пожаловать в тренажер ДДС! Это краткое обучение познакомит вас с рабочим местом диспетчера.",
       placement: "center",
-      disableBeacon: true,
+      skipBeacon: true,
     },
     {
       target: "#tour-topbar",
@@ -42,11 +42,9 @@ export function Tutorial({ run, onFinish }: Props) {
     }
   ]
 
-  const handleJoyrideCallback = (data: CallBackProps) => {
+  const handleJoyrideCallback = (data: EventData) => {
     const { status } = data
-    const finishedStatuses: string[] = [STATUS.FINISHED, STATUS.SKIPPED]
-
-    if (finishedStatuses.includes(status)) {
+    if (status === STATUS.FINISHED || status === STATUS.SKIPPED) {
       onFinish()
     }
   }
@@ -56,16 +54,16 @@ export function Tutorial({ run, onFinish }: Props) {
       steps={steps}
       run={run}
       continuous
-      showSkipButton
-      showProgress
-      disableOverlayClose
-      callback={handleJoyrideCallback}
+      onEvent={handleJoyrideCallback}
+      options={{
+        primaryColor: "#157dbd",
+        textColor: "#303335",
+        zIndex: 1000,
+        showProgress: true,
+        buttons: ["back", "primary", "skip"],
+        overlayClickAction: false,
+      }}
       styles={{
-        options: {
-          primaryColor: "#157dbd",
-          textColor: "#303335",
-          zIndex: 1000,
-        },
         buttonClose: {
           display: "none",
         }

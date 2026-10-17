@@ -22,6 +22,18 @@ export function useTelephony({
   autoStart = false,
 }: UseTelephonyOptions = {}) {
   const [callStatus, setCallStatus] = useState<CallStatus>("IDLE")
+  const callStatusRef = useRef<CallStatus>("IDLE")
+  const reconnectTimeoutRef = useRef<any>(null)
+
+  const updateCallStatus = useCallback((status: CallStatus) => {
+    callStatusRef.current = status
+    setCallStatus(status)
+  }, [])
+
+  useEffect(() => {
+    callStatusRef.current = callStatus
+  }, [callStatus])
+
   const [callId, setCallId] = useState<string | null>(null)
   const [activeExt, setActiveExt] = useState<string>(operatorExt)
   const [isConnected, setIsConnected] = useState(false)
@@ -163,8 +175,16 @@ export function useTelephony({
             const data = JSON.parse(event.data)
             if (data.type === "CALL_STATUS") {
               if (data.status) {
-                setCallStatus(data.status)
+                updateCallStatus(data.status)
                 useCallStore.setState({ callStatus: data.status })
+                if (data.status === "HANGUP") {
+                  if (reconnectTimeoutRef.current) {
+                    clearTimeout(reconnectTimeoutRef.current)
+                    reconnectTimeoutRef.current = null
+                  }
+                  setIsReconnecting(false)
+                  useCallStore.setState({ isReconnecting: false })
+                }
               }
               if (data.call_id) {
                 setCallId(data.call_id)
@@ -176,7 +196,7 @@ export function useTelephony({
               }
             } else if (data.type === "CONNECTED") {
               if (data.status && data.status !== "IDLE") {
-                setCallStatus(data.status)
+                updateCallStatus(data.status)
                 useCallStore.setState({ callStatus: data.status })
               }
             } else if (data.type === "CHAT_MESSAGE" || data.type === "MESSAGE") {
@@ -199,13 +219,17 @@ export function useTelephony({
           useCallStore.setState({ isConnected: false })
 
           // Reconnect with exponential backoff if not closed manually and call is still active
-          if (!isManualClose && callStatus !== "HANGUP") {
+          if (!isManualClose && callStatusRef.current !== "HANGUP") {
             setIsReconnecting(true)
             useCallStore.setState({ isReconnecting: true })
             reconnectAttempts += 1
             const delay = Math.min(1000 * Math.pow(2, reconnectAttempts - 1), 30000)
-            reconnectTimeout = setTimeout(() => {
-              if (isSubscribed && !isManualClose && callStatus !== "HANGUP") {
+            if (reconnectTimeoutRef.current) {
+              clearTimeout(reconnectTimeoutRef.current)
+            }
+            reconnectTimeoutRef.current = setTimeout(() => {
+              reconnectTimeoutRef.current = null
+              if (isSubscribed && !isManualClose && callStatusRef.current !== "HANGUP") {
                 connect()
               }
             }, delay)
@@ -226,8 +250,9 @@ export function useTelephony({
     return () => {
       isSubscribed = false
       isManualClose = true
-      if (reconnectTimeout) {
-        clearTimeout(reconnectTimeout)
+      if (reconnectTimeoutRef.current) {
+        clearTimeout(reconnectTimeoutRef.current)
+        reconnectTimeoutRef.current = null
       }
       if (wsRef.current) {
         wsRef.current.close()
@@ -235,7 +260,7 @@ export function useTelephony({
       }
       // NOTE: Do NOT close asrWsRef here — its lifecycle is managed by startCall/hangupCall
     }
-  }, [sessionId, ticketId, callStatus])
+  }, [sessionId, ticketId])
 
   const mediaRecorderRef = useRef<MediaRecorder | null>(null)
   const mediaStreamRef = useRef<MediaStream | null>(null)
@@ -341,7 +366,7 @@ export function useTelephony({
         }
 
         const data = await res.json()
-        setCallStatus(data.status || "ANSWERED")
+        updateCallStatus(data.status || "ANSWERED")
         if (data.call_id) setCallId(data.call_id)
         if (data.operator_ext) setActiveExt(data.operator_ext)
         return data
@@ -349,16 +374,22 @@ export function useTelephony({
         console.error("startCall error:", err)
         setError(err.message || "Failed to start call")
         // If start_call fails or mock delay is done, keep status as answered for fallback
-        setCallStatus("ANSWERED")
+        updateCallStatus("ANSWERED")
         return null
       }
     },
-    [ticketId, sessionId, activeExt]
+    [ticketId, sessionId, activeExt, updateCallStatus]
   )
 
   const hangupCall = useCallback(
     async (reason = "operator_hangup") => {
-      setCallStatus("HANGUP")
+      updateCallStatus("HANGUP")
+      setIsReconnecting(false)
+      useCallStore.setState({ isReconnecting: false, callStatus: "HANGUP" })
+      if (reconnectTimeoutRef.current) {
+        clearTimeout(reconnectTimeoutRef.current)
+        reconnectTimeoutRef.current = null
+      }
       stopRingAudio()
       
       if (asrWsRef.current) {
@@ -394,7 +425,7 @@ export function useTelephony({
         console.error("hangupCall error:", err)
       }
     },
-    [callId, sessionId, ticketId, stopRingAudio]
+    [callId, sessionId, ticketId, stopRingAudio, updateCallStatus]
   )
 
   const playAudio = useCallback(
@@ -428,7 +459,7 @@ export function useTelephony({
 
   return {
     callStatus,
-    setCallStatus,
+    setCallStatus: updateCallStatus,
     callId,
     operatorExt: activeExt,
     isConnected,
