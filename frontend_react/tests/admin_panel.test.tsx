@@ -105,6 +105,15 @@ beforeEach(() => {
       );
     }
 
+    if (urlString.includes('/api/admin/backups')) {
+      return Promise.resolve(
+        new Response(JSON.stringify({ backups: [] }), {
+          status: 200,
+          headers: { 'Content-Type': 'application/json' },
+        })
+      );
+    }
+
     if (urlString.includes('/api/admin/backup')) {
       return Promise.resolve(
         new Response(

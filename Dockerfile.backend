@@ -36,6 +36,20 @@ COPY requirements.lock ./
 RUN pip install --upgrade pip && pip install torch torchaudio --index-url https://download.pytorch.org/whl/cpu \
     && pip install -r requirements.lock
 
+# ─── PostgreSQL client (pg_dump, psql) ─────────────────────────────────────────
+# Match the PostgreSQL 15 server: newer pg_dump can emit SQL that 15 cannot restore.
+# Use the signed upstream repository without invalidating the torch pip cache.
+RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates \
+    && install -d /usr/share/postgresql-common/pgdg \
+    && curl --fail --show-error --silent \
+        https://www.postgresql.org/media/keys/ACCC4CF8.asc \
+        -o /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc \
+    && . /etc/os-release \
+    && printf 'Types: deb\nURIs: https://apt.postgresql.org/pub/repos/apt\nSuites: %s-pgdg\nComponents: main\nSigned-By: /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc\n' \
+        "$VERSION_CODENAME" > /etc/apt/sources.list.d/pgdg.sources \
+    && apt-get update && apt-get install -y --no-install-recommends postgresql-client-15 \
+    && rm -rf /var/lib/apt/lists/*
+
 # ─── Application source ───────────────────────────────────────────────────────
 # Heavy binary files (*.so, qwen-tts, transcribe-cli) are in the repo under
 # backend/bin/ and backend/core/qwen_tts/ — they are COPY-ed here.
