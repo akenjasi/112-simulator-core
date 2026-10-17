@@ -291,8 +291,56 @@ async def seed_cadet_sessions(session):
     )
     session.add(tr2)
 
+    # ── Session 3: DDS Incident card actions ──
+    sess3_id = str(uuid.uuid4())
+    card3_id = str(uuid.uuid4())
+    s3 = ExamSession(
+        session_id=sess3_id,
+        session_type="CARD_ACTIONS",
+        cadet_id=cadet.user_id,
+        status="COMPLETED",
+        categories=["ДТП"],
+        start_time=now - timedelta(minutes=45),
+        end_time=now - timedelta(minutes=43, seconds=50),
+    )
+    session.add(s3)
+
+    c3 = IncidentCard(
+        card_id=card3_id,
+        session_id=sess3_id,
+        operator_id=cadet.user_id,
+        card_origin="DDS",
+        filled_data={"address": "ул. Гагарина, д. 5", "category": "ДТП", "services": ["01", "03"]},
+        assigned_services={"01": "dispatched", "03": "dispatched"},
+        status="closed"
+    )
+    session.add(c3)
+
+    ev3 = EvaluationResult(
+        evaluation_id=str(uuid.uuid4()),
+        card_id=card3_id,
+        session_id=sess3_id,
+        scores={"overall": 88, "speed": 90, "routing": 86},
+        errors_list=[
+            "Задержка передачи карточки в службу 03"
+        ],
+        expert_comment="Четкие действия при распределении служб экстренного реагирования."
+    )
+    session.add(ev3)
+
+    tr3 = TicketResult(
+        result_id=str(uuid.uuid4()),
+        session_id=sess3_id,
+        is_passed=True,
+        score_total=88.0,
+        status="COMPLETED",
+        errors_count=1,
+        error_details={"category": "Маршрутизация", "description": "Задержка передачи карточки в службу 03"}
+    )
+    session.add(tr3)
+
     await session.commit()
-    print(f"  ✅ Seeded 2 training sessions with dialogue logs and evaluations for '{cadet.username}'")
+    print(f"  ✅ Seeded 3 training sessions (Call & DDS) with dialogue logs and evaluations for '{cadet.username}'")
 
 
 async def seed_classifier(session):

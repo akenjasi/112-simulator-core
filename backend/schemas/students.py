@@ -34,8 +34,8 @@ class StudentStatsResponse(BaseModel):
     average_processing_time_seconds: int = 0
     time_trend: int = 0
     service_accuracy_percent: float = 0.0
-    student_id: Optional[str] = "СМ1-12"
-    full_name: Optional[str] = "Иванов Иван Иванович"
+    student_id: Optional[str] = None
+    full_name: Optional[str] = None
 
     model_config = ConfigDict(from_attributes=True)
 

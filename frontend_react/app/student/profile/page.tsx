@@ -41,6 +41,7 @@ import {
   Target,
   Sparkles,
   Bot,
+  Activity,
 } from "lucide-react"
 import { getStoredToken } from "@/lib/auth-session"
 
@@ -159,21 +160,21 @@ const REFERENCE_DOCS: ReferenceDoc[] = [
 ]
 
 const DEFAULT_CATEGORIES: CompetenceItem[] = [
-  { category: "ДТП", score: 85 },
-  { category: "Пожары", score: 78 },
-  { category: "ЖКХ", score: 92 },
-  { category: "Медицина", score: 65 },
-  { category: "Правопорядок", score: 88 },
-  { category: "Газ / Взрывы", score: 70 },
+  { category: "ДТП", score: 0 },
+  { category: "Пожары", score: 0 },
+  { category: "ЖКХ", score: 0 },
+  { category: "Медицина", score: 0 },
+  { category: "Правопорядок", score: 0 },
+  { category: "Газ / Взрывы", score: 0 },
 ]
 
 export default function StudentProfilePage() {
   const role = "DISPATCHER_DDS" as const
   const [activeTab, setActiveTab] = useState<"lessons" | "docs" | "ai_advice">("lessons")
   const [userProfile, setUserProfile] = useState<UserProfile>({
-    username: "cadet@system112.ru",
-    full_name: "Иванов Иван Иванович",
-    student_id: "СМ1-12",
+    username: "",
+    full_name: "",
+    student_id: "",
     role: "CADET",
   })
 
@@ -186,39 +187,18 @@ export default function StudentProfilePage() {
   const [aiSuccessMessage, setAiSuccessMessage] = useState<string | null>(null)
 
   const [stats, setStats] = useState<StudentStats>({
-    average_score: 84.5,
-    average_score_week: 86.0,
-    average_score_all_time: 84.5,
-    average_score_7_days: 86.0,
-    score_trend: 3.2,
-    average_processing_time_seconds: 68,
-    time_trend: -15,
-    service_accuracy_percent: 94.8,
-    cards_solved: 28,
-    lessons_completed: 12,
-    competence_matrix: DEFAULT_CATEGORIES,
-    top_errors: [
-      {
-        text: "Задержка передачи карточки в службу 03 более 45 сек",
-        frequency_percent: 85,
-        is_fatal: true,
-      },
-      {
-        text: "Не уточнено наличие пострадавших и угрозы жизни",
-        frequency_percent: 72,
-        is_fatal: true,
-      },
-      {
-        text: "Не уточнен точный номер подъезда / этаж",
-        frequency_percent: 45,
-        is_fatal: false,
-      },
-      {
-        text: "Не продублирован номер телефона заявителя",
-        frequency_percent: 28,
-        is_fatal: false,
-      },
-    ],
+    average_score: 0,
+    average_score_week: 0,
+    average_score_all_time: 0,
+    average_score_7_days: 0,
+    score_trend: 0,
+    average_processing_time_seconds: 0,
+    time_trend: 0,
+    service_accuracy_percent: 0,
+    cards_solved: 0,
+    lessons_completed: 0,
+    competence_matrix: [],
+    top_errors: [],
   })
 
   const [lessons, setLessons] = useState<HistoryLesson[]>([])
@@ -381,9 +361,9 @@ export default function StudentProfilePage() {
         setUserProfile((prev) => ({
           ...prev,
           user_id: data.user_id,
-          student_id: data.student_id || prev.student_id || "СМ1-12",
+          student_id: data.student_id || prev.student_id || "",
           username: data.username || prev.username,
-          full_name: data.full_name || prev.full_name,
+          full_name: data.full_name || prev.full_name || data.username || "Курсант",
           role: data.role || prev.role,
         }))
         if (data.user_id) {
@@ -391,7 +371,7 @@ export default function StudentProfilePage() {
         }
       }
     } catch {
-      // Fallback defaults remain
+      // Keep state
     }
   }, [loadAiAdvice])
 
@@ -423,30 +403,16 @@ export default function StudentProfilePage() {
           average_score_7_days:
             data.average_score_7_days ?? data.average_score_week ?? data.average_score ?? 0,
           score_trend: data.score_trend ?? 0,
-          average_processing_time_seconds: data.average_processing_time_seconds ?? 68,
-          time_trend: data.time_trend ?? -15,
-          service_accuracy_percent: data.service_accuracy_percent ?? 94.0,
+          average_processing_time_seconds: data.average_processing_time_seconds ?? 0,
+          time_trend: data.time_trend ?? 0,
+          service_accuracy_percent: data.service_accuracy_percent ?? 0,
           cards_solved: data.cards_solved ?? 0,
           lessons_completed: data.lessons_completed ?? 0,
           competence_matrix:
             data.competence_matrix && data.competence_matrix.length > 0
               ? data.competence_matrix
-              : DEFAULT_CATEGORIES,
-          top_errors:
-            formattedErrors.length > 0
-              ? formattedErrors
-              : [
-                  {
-                    text: "Задержка передачи карточки в службу 03 более 45 сек",
-                    frequency_percent: 85,
-                    is_fatal: true,
-                  },
-                  {
-                    text: "Не уточнен номер квартиры / подъезда",
-                    frequency_percent: 45,
-                    is_fatal: false,
-                  },
-                ],
+              : [],
+          top_errors: formattedErrors,
           student_id: data.student_id,
           full_name: data.full_name,
         })
@@ -526,14 +492,16 @@ export default function StudentProfilePage() {
             </div>
             <div className="flex items-center gap-2 truncate">
               <span className="font-bold text-sm text-foreground truncate">
-                {userProfile.full_name || "Иванов Иван Иванович"}
+                {userProfile.full_name || userProfile.username || "Курсант"}
               </span>
-              <Badge
-                variant="outline"
-                className="font-mono text-[11px] font-bold px-2 py-0 border-primary/30 text-primary shrink-0 bg-primary/5"
-              >
-                ID: {userProfile.student_id || "СМ1-12"}
-              </Badge>
+              {userProfile.student_id ? (
+                <Badge
+                  variant="outline"
+                  className="font-mono text-[11px] font-bold px-2 py-0 border-primary/30 text-primary shrink-0 bg-primary/5"
+                >
+                  ID: {userProfile.student_id}
+                </Badge>
+              ) : null}
               <span className="hidden md:inline-block text-xs text-muted-foreground">• Личный кабинет курсанта</span>
             </div>
           </div>
@@ -585,8 +553,8 @@ export default function StudentProfilePage() {
             </div>
             <div className="mt-1">
               <div className="text-2xl font-black text-foreground">
-                {stats.average_score_all_time.toFixed(1)}
-                <span className="text-xs font-normal text-muted-foreground"> / 100</span>
+                {stats.cards_solved === 0 ? "—" : stats.average_score_all_time.toFixed(1)}
+                {stats.cards_solved > 0 && <span className="text-xs font-normal text-muted-foreground"> / 100</span>}
               </div>
               <p className="text-[11px] text-muted-foreground mt-0.5">Общая успеваемость за курс</p>
             </div>
@@ -599,7 +567,9 @@ export default function StudentProfilePage() {
                 За 7 дней
               </span>
               <div className="flex items-center gap-1 font-mono text-xs font-bold">
-                {stats.score_trend >= 0 ? (
+                {stats.cards_solved === 0 ? (
+                  <span className="text-muted-foreground font-normal">—</span>
+                ) : stats.score_trend >= 0 ? (
                   <span className="text-emerald-600 dark:text-emerald-400 flex items-center">
                     <TrendingUp className="h-3.5 w-3.5 mr-0.5 inline" />
                     +{stats.score_trend > 0 ? stats.score_trend : 0}%
@@ -614,8 +584,8 @@ export default function StudentProfilePage() {
             </div>
             <div className="mt-1">
               <div className="text-2xl font-black text-foreground">
-                {stats.average_score_7_days.toFixed(1)}
-                <span className="text-xs font-normal text-muted-foreground"> / 100</span>
+                {stats.cards_solved === 0 ? "—" : stats.average_score_7_days.toFixed(1)}
+                {stats.cards_solved > 0 && <span className="text-xs font-normal text-muted-foreground"> / 100</span>}
               </div>
               <p className="text-[11px] text-muted-foreground mt-0.5">Текущий недельный срез</p>
             </div>
@@ -644,7 +614,9 @@ export default function StudentProfilePage() {
                 Время обработки
               </span>
               <div className="flex items-center gap-1 font-mono text-xs font-bold">
-                {stats.time_trend <= 0 ? (
+                {stats.cards_solved === 0 || stats.average_processing_time_seconds === 0 ? (
+                  <span className="text-muted-foreground font-normal">—</span>
+                ) : stats.time_trend <= 0 ? (
                   <span className="text-emerald-600 dark:text-emerald-400 flex items-center">
                     <TrendingDown className="h-3.5 w-3.5 mr-0.5 inline" />
                     {stats.time_trend} сек
@@ -659,8 +631,14 @@ export default function StudentProfilePage() {
             </div>
             <div className="mt-1">
               <div className="text-2xl font-black text-foreground">
-                {stats.average_processing_time_seconds}{" "}
-                <span className="text-xs font-normal text-muted-foreground">сек</span>
+                {stats.cards_solved === 0 || stats.average_processing_time_seconds === 0 ? (
+                  "—"
+                ) : (
+                  <>
+                    {stats.average_processing_time_seconds}{" "}
+                    <span className="text-xs font-normal text-muted-foreground">сек</span>
+                  </>
+                )}
               </div>
               <p className="text-[11px] text-muted-foreground mt-0.5">В среднем на карточку</p>
             </div>
@@ -688,8 +666,14 @@ export default function StudentProfilePage() {
               </div>
             </CardHeader>
 
-            <CardContent className="h-[250px] w-full flex items-center justify-center p-2">
-              {stats.competence_matrix && stats.competence_matrix.length > 0 ? (
+            <CardContent
+              className="h-[250px] w-full flex items-center justify-center p-2"
+              data-testid="radar-container"
+            >
+              {stats.cards_solved > 0 &&
+              stats.competence_matrix &&
+              stats.competence_matrix.length > 0 &&
+              stats.competence_matrix.some((c) => c.score > 0) ? (
                 <ResponsiveContainer width="100%" height="100%">
                   <RadarChart cx="50%" cy="50%" outerRadius="75%" data={stats.competence_matrix}>
                     <PolarGrid stroke="#94a3b8" strokeDasharray="3 3" opacity={0.35} />
@@ -727,8 +711,12 @@ export default function StudentProfilePage() {
                   </RadarChart>
                 </ResponsiveContainer>
               ) : (
-                <div className="text-center text-muted-foreground text-xs py-8">
-                  Нет данных для построения матрицы компетенций
+                <div className="flex flex-col items-center justify-center text-center text-muted-foreground text-xs py-8 gap-2">
+                  <Activity className="h-8 w-8 text-muted-foreground/30" />
+                  <span className="font-semibold text-foreground">Нет данных для построения матрицы компетенций</span>
+                  <span className="text-[11px] text-muted-foreground max-w-xs">
+                    Матрица сформируется автоматически после решения первых тренировочных заданий
+                  </span>
                 </div>
               )}
             </CardContent>
@@ -828,8 +816,14 @@ export default function StudentProfilePage() {
                   </div>
                 </div>
               ) : (
-                <div className="text-center py-8 text-muted-foreground text-xs">
-                  Замечаний не зафиксировано
+                <div className="flex flex-col items-center justify-center text-center text-muted-foreground text-xs py-10 gap-2">
+                  <CheckCircle2 className="h-8 w-8 text-emerald-500/70" />
+                  <span className="font-semibold text-foreground">Замечаний и ошибок нет</span>
+                  <span className="text-[11px] text-muted-foreground max-w-xs">
+                    {stats.cards_solved === 0
+                      ? "Пройдите тренировочные билеты для формирования персональной статистики."
+                      : "Все нормативы и регламенты выполнены без нарушений."}
+                  </span>
                 </div>
               )}
             </CardContent>
