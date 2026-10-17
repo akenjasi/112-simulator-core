@@ -45,6 +45,17 @@ sessions_router = APIRouter(
 )
 
 
+async def _is_assigned_dds_session(db: AsyncSession, session: ExamSession) -> bool:
+    if (session.dynamic_state or {}).get("dds"):
+        return True
+    if session.session_type == "CARD_ACTIONS" and session.assignment_id:
+        stmt = select(Assignment).where(Assignment.assignment_id == session.assignment_id)
+        assign = (await db.execute(stmt)).scalar_one_or_none()
+        if assign and assign.target_role == "DISPATCHER_DDS":
+            return True
+    return False
+
+
 @sessions_router.post(
     "/assignments/{assignment_id}/sessions/start",
     response_model=SessionStartResponse,
@@ -62,6 +73,12 @@ async def start_session(
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Assignment not found",
+        )
+
+    if assignment.target_role == "DISPATCHER_DDS":
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="DDS assignments must be started via /api/v1/lessons/{id}/start",
         )
 
     exam_session = ExamSession(
@@ -83,6 +100,7 @@ async def start_session(
 )
 async def get_session_state(
     session_id: str,
+    current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     stmt = select(ExamSession).where(ExamSession.session_id == session_id)
@@ -93,6 +111,21 @@ async def get_session_state(
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Session not found",
+        )
+
+    if current_user.role == "CADET" and session.cadet_id != current_user.user_id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied")
+
+    if current_user.role == "TEACHER" and session.assignment_id:
+        stmt_a = select(Assignment).where(Assignment.assignment_id == session.assignment_id)
+        assign = (await db.execute(stmt_a)).scalar_one_or_none()
+        if assign and assign.assigned_by != current_user.user_id:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied")
+
+    if await _is_assigned_dds_session(db, session):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Assigned DDS sessions must use /api/dds/sessions/{session_id}",
         )
 
     return session
@@ -115,6 +148,12 @@ async def post_session_message(
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Session not found",
+        )
+
+    if await _is_assigned_dds_session(db, session):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="DDS sessions cannot receive legacy dialogue messages",
         )
 
     log = list(session.dialogue_log or [])
@@ -181,6 +220,12 @@ async def submit_card(
             detail="Session not found",
         )
 
+    if await _is_assigned_dds_session(db, session):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="DDS sessions must be submitted via /api/dds/sessions/{id}/finish",
+        )
+
     session.status = "COMPLETED"
     session.end_time = datetime.datetime.now(datetime.timezone.utc)
 
@@ -226,6 +271,15 @@ async def appeal_ticket_result(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Ticket result not found",
         )
+
+    if ticket_result.session_id:
+        stmt_s = select(ExamSession).where(ExamSession.session_id == ticket_result.session_id)
+        sess = (await db.execute(stmt_s)).scalar_one_or_none()
+        if sess and await _is_assigned_dds_session(db, sess):
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="Appeals for assigned DDS sessions are not supported",
+            )
 
     ticket_result.is_passed = req.is_passed
     ticket_result.teacher_comment = req.teacher_comment
@@ -577,6 +631,12 @@ async def evaluate_session_card(
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Session not found",
+        )
+
+    if await _is_assigned_dds_session(db, exam_session):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Assigned DDS sessions cannot be evaluated via legacy evaluate endpoint",
         )
 
     ticket_id = req.ticket_id or getattr(exam_session, "ticket_id", None)

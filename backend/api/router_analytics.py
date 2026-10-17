@@ -6,7 +6,7 @@ Provides endpoints for heatmaps, progress trends, and group leaderboards.
 import json
 import logging
 from typing import Any, Dict, List, Optional, Set
-from fastapi import APIRouter, Depends, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -583,6 +583,14 @@ async def appeal_analytics_record(
 
     is_passed = (req.status == "passed")
     if tr:
+        if tr.session_id:
+            sess = await db.get(ExamSession, tr.session_id)
+            if sess and (sess.dynamic_state or {}).get("dds"):
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail="Appeals for assigned DDS sessions are not allowed in A-06",
+                )
+
         old_is_passed = tr.is_passed
         tr.is_passed = is_passed
         tr.teacher_comment = req.comment
