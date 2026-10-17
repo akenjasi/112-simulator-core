@@ -47,18 +47,15 @@ describe('27.4: Live Dashboard', () => {
       'fetch',
       vi.fn((url: string) => {
         const urlStr = url.toString();
-        if (urlStr.includes('/api/v1/sessions/') && urlStr.endsWith('/stats')) {
+        // The DDS dashboard reads the lesson API; /sessions/:id/stats is the legacy 112 contract.
+        if (urlStr === '/api/v1/lessons/sess-101') {
           return Promise.resolve({
             ok: true,
             status: 200,
             json: async () => mockStats,
           });
         }
-        return Promise.resolve({
-          ok: true,
-          status: 200,
-          json: async () => ({}),
-        });
+        throw new Error(`Unexpected dashboard request: ${urlStr}`);
       })
     );
   });
