@@ -72,6 +72,9 @@ export interface DDSSessionState {
 export interface DDSTicketSummary {
   ticket_id: string
   title: string
+  category?: string
+  subcategory?: string
+  complexity?: number
 }
 
 export function getSafeHttpErrorMessage(status: number): string {
@@ -312,7 +315,7 @@ export function validateDDSTicketSummaryList(raw: unknown): DDSTicketSummary[] {
   if (!Array.isArray(raw)) {
     throw new Error("Некорректный ответ сервера: ожидается список билетов")
   }
-  return raw.map((item) => {
+  return raw.map((item: any) => {
     if (
       !item ||
       typeof item !== "object" ||
@@ -326,6 +329,9 @@ export function validateDDSTicketSummaryList(raw: unknown): DDSTicketSummary[] {
     return {
       ticket_id: item.ticket_id,
       title: item.title,
+      category: typeof item.category === "string" ? item.category : undefined,
+      subcategory: typeof item.subcategory === "string" ? item.subcategory : undefined,
+      complexity: typeof item.complexity === "number" ? item.complexity : undefined,
     }
   })
 }
@@ -486,15 +492,43 @@ export async function finishDDSSession(
   return validateDDSSessionState(data, sessionId)
 }
 
-export async function fetchPreparedDDSTickets(signal?: AbortSignal): Promise<DDSTicketSummary[]> {
+export interface FetchDDSTicketsFilters {
+  category?: string
+  subcategory?: string
+  complexity?: number | null
+}
+
+export async function fetchPreparedDDSTickets(
+  filtersOrSignal?: FetchDDSTicketsFilters | AbortSignal,
+  optionalSignal?: AbortSignal
+): Promise<DDSTicketSummary[]> {
   const token = getStoredToken()
   if (!token) {
     throw new Error("Требуется авторизация для просмотра билетов. Пожалуйста, выполните вход.")
   }
 
+  let filters: FetchDDSTicketsFilters | undefined
+  let signal: AbortSignal | undefined
+
+  if (filtersOrSignal instanceof AbortSignal || (filtersOrSignal && "aborted" in filtersOrSignal)) {
+    signal = filtersOrSignal as AbortSignal
+  } else {
+    filters = filtersOrSignal as FetchDDSTicketsFilters | undefined
+    signal = optionalSignal
+  }
+
+  const params = new URLSearchParams()
+  if (filters?.category) params.append("category", filters.category)
+  if (filters?.subcategory) params.append("subcategory", filters.subcategory)
+  if (filters?.complexity !== undefined && filters?.complexity !== null) {
+    params.append("complexity", String(filters.complexity))
+  }
+  const qs = params.toString()
+  const url = qs ? `/api/dds/tickets?${qs}` : "/api/dds/tickets"
+
   let res: Response
   try {
-    res = await fetch("/api/dds/tickets", {
+    res = await fetch(url, {
       method: "GET",
       headers: {
         Authorization: `Bearer ${token}`,

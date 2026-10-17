@@ -53,6 +53,83 @@ def is_suitable_dds_ticket(ticket: Optional[ScenarioTicket]) -> bool:
         return False
 
 
+def extract_dds_ticket_metadata(ticket: ScenarioTicket) -> tuple[str, str, int, str]:
+    """Extract (category, subcategory, complexity, display_title) from a DDS suitable ScenarioTicket."""
+    settings = getattr(ticket, "settings", None) or {}
+    content = getattr(ticket, "content", None) or {}
+    card = content.get("incoming_card") if isinstance(content, dict) and "incoming_card" in content else content
+    if not isinstance(card, dict):
+        card = {}
+    clf = card.get("classification") or {}
+    if not isinstance(clf, dict):
+        clf = {}
+
+    cat = (
+        getattr(ticket, "category", None)
+        or settings.get("category")
+        or clf.get("section")
+        or (content.get("category") if isinstance(content, dict) else None)
+        or "Общее"
+    )
+
+    subcat = (
+        settings.get("subcategory")
+        or clf.get("title")
+        or clf.get("class")
+        or (content.get("subcategory") if isinstance(content, dict) else None)
+        or ""
+    )
+
+    comp = (
+        settings.get("complexity")
+        or getattr(ticket, "complexity", None)
+        or (content.get("complexity") if isinstance(content, dict) else None)
+        or 1
+    )
+    try:
+        comp_int = int(comp)
+    except (ValueError, TypeError):
+        comp_int = 1
+
+    title = getattr(ticket, "title", None) or settings.get("title")
+    if not title or not str(title).strip():
+        if subcat and cat != "Общее":
+            title = f"{cat} — {subcat}"
+        elif cat and cat != "Общее":
+            title = str(cat)
+        elif card.get("description"):
+            desc = str(card.get("description")).strip()
+            title = desc[:60] + "..." if len(desc) > 60 else desc
+        else:
+            title = f"Билет #{ticket.scenario_id[:8]}"
+
+    return str(cat).strip(), str(subcat).strip(), comp_int, str(title).strip()
+
+
+def matches_dds_ticket_filters(
+    ticket: ScenarioTicket,
+    category: Optional[str] = None,
+    subcategory: Optional[str] = None,
+    complexity: Optional[int] = None,
+) -> bool:
+    """Check if a suitable DDS ticket matches category, subcategory and complexity filters."""
+    cat, subcat, comp, _ = extract_dds_ticket_metadata(ticket)
+
+    # Complexity filter: None means adaptive / any level
+    if complexity is not None:
+        if comp != complexity:
+            return False
+
+    # Compare canonical metadata, never substrings: an absent value cannot
+    # match an arbitrary requested classification.
+    if category and category.strip().casefold() != cat.casefold():
+        return False
+    if subcategory and subcategory.strip().casefold() != subcat.casefold():
+        return False
+
+    return True
+
+
 def get_session_score(
     evals: List[EvaluationResult],
     trs: List[TicketResult],

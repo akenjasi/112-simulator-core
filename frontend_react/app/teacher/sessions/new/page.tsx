@@ -2,7 +2,7 @@
 
 import { apiFetch as fetch } from "@/lib/api-fetch"
 
-import React, { useState, useEffect, useCallback } from "react"
+import React, { useState, useEffect, useCallback, useRef } from "react"
 import { useRouter } from "next/navigation"
 import { useForm, Controller } from "react-hook-form"
 import {
@@ -61,7 +61,7 @@ import {
   HelpCircle,
 } from "lucide-react"
 import { getStoredToken } from "@/lib/auth-session"
-import { fetchPreparedDDSTickets, type DDSTicketSummary } from "@/lib/dds-cycle"
+import { type DDSTicketSummary } from "@/lib/dds-cycle"
 
 export interface StudentGroup {
   group_id: string
@@ -165,6 +165,7 @@ export default function SessionSetupPage() {
 
   const selectedGroupId = watch("group_id")
   const selectedComplexity = watch("complexity")
+  const selectedTargetRole = watch("target_role")
 
   const COMPLEXITY_LEVEL_MAP: Record<string, number | null> = {
     level_1: 1,
@@ -192,34 +193,71 @@ export default function SessionSetupPage() {
   const [isLoadingDdsTickets, setIsLoadingDdsTickets] = useState<boolean>(false)
   const [ddsTicketsError, setDdsTicketsError] = useState<string | null>(null)
 
-  const loadDdsTickets = useCallback(async () => {
-    try {
-      setIsLoadingDdsTickets(true)
-      setDdsTicketsError(null)
-      const res = await fetch("/api/dds/tickets", {
-        headers: getAuthHeaders(),
-      })
-      if (res.ok) {
-        const data = await res.json()
-        if (Array.isArray(data)) {
-          setDdsTickets(data)
-          if (data.length > 0) {
-            setSelectedDdsTicketId((prev) => (prev && data.some((t: any) => t.ticket_id === prev) ? prev : data[0].ticket_id))
+  // Filters for DDS tickets
+  const [ddsFilterCategory, setDdsFilterCategory] = useState<string>("")
+  const [ddsFilterSubcategory, setDdsFilterSubcategory] = useState<string>("")
+  const [ddsSubcategories, setDdsSubcategories] = useState<string[]>([])
+  const [isLoadingDdsSubcategories, setIsLoadingDdsSubcategories] = useState<boolean>(false)
+  const ddsReqIdRef = useRef<number>(0)
+
+  const loadDdsTickets = useCallback(
+    async (
+      cat = ddsFilterCategory,
+      subcat = ddsFilterSubcategory,
+      comp = selectedComplexity
+    ) => {
+      const currentReqId = ++ddsReqIdRef.current
+      try {
+        setIsLoadingDdsTickets(true)
+        setDdsTicketsError(null)
+
+        const compLevel = COMPLEXITY_LEVEL_MAP[comp] ?? null
+        const params = new URLSearchParams()
+        if (cat) params.append("category", cat)
+        if (subcat) params.append("subcategory", subcat)
+        if (compLevel !== null) params.append("complexity", String(compLevel))
+
+        const url = `/api/dds/tickets${params.toString() ? `?${params.toString()}` : ""}`
+        const res = await fetch(url, {
+          headers: getAuthHeaders(),
+        })
+
+        // Race condition protection: ignore stale responses
+        if (currentReqId !== ddsReqIdRef.current) return
+
+        if (res.ok) {
+          const data = await res.json()
+          if (currentReqId !== ddsReqIdRef.current) return
+          if (Array.isArray(data)) {
+            setDdsTickets(data)
+            // If the previously selected ticket is no longer in the filtered list, reset selection (Requirement 6)
+            setSelectedDdsTicketId((prev) => {
+              if (!prev) return ""
+              const exists = data.some((t: any) => t.ticket_id === prev)
+              return exists ? prev : ""
+            })
+          } else {
+            setDdsTickets([])
+            setSelectedDdsTicketId("")
           }
         } else {
+          setDdsTicketsError(`Ошибка загрузки билетов ДДС (${res.status})`)
           setDdsTickets([])
+          setSelectedDdsTicketId("")
         }
-      } else {
-        setDdsTicketsError(`Ошибка загрузки билетов ДДС (${res.status})`)
+      } catch (e: any) {
+        if (currentReqId !== ddsReqIdRef.current) return
+        setDdsTicketsError("Не удалось загрузить билеты ДДС")
         setDdsTickets([])
+        setSelectedDdsTicketId("")
+      } finally {
+        if (currentReqId === ddsReqIdRef.current) {
+          setIsLoadingDdsTickets(false)
+        }
       }
-    } catch (e: any) {
-      setDdsTicketsError("Не удалось загрузить билеты ДДС")
-      setDdsTickets([])
-    } finally {
-      setIsLoadingDdsTickets(false)
-    }
-  }, [getAuthHeaders])
+    },
+    [ddsFilterCategory, ddsFilterSubcategory, selectedComplexity, getAuthHeaders]
+  )
 
   // Load groups from backend (Do not auto-select first group per ТЗ 41)
   const loadGroups = useCallback(async () => {
@@ -253,13 +291,16 @@ export default function SessionSetupPage() {
         : []
       const normalizedRoles = roles.includes("DISPATCHER_DDS") ? roles : ["DISPATCHER_DDS"]
       setAvailableRoles(normalizedRoles)
-      if (!normalizedRoles.includes("OPERATOR_112")) setValue("target_role", "DISPATCHER_DDS")
+      const currentRole = watch("target_role")
+      if (!normalizedRoles.includes(currentRole)) {
+        setValue("target_role", normalizedRoles[0])
+      }
     } catch (e) {
       console.error("Failed to load available lesson roles", e)
       setAvailableRoles(["DISPATCHER_DDS"])
       setValue("target_role", "DISPATCHER_DDS")
     }
-  }, [setValue, getAuthHeaders])
+  }, [setValue, watch, getAuthHeaders])
 
   // Load classifier incident categories in strictly alphabetical order
 
@@ -318,13 +359,57 @@ export default function SessionSetupPage() {
     loadGroups()
     loadAvailableRoles()
     loadCategories()
-    loadDdsTickets()
-  }, [loadGroups, loadAvailableRoles, loadCategories, loadDdsTickets])
+  }, [loadGroups, loadAvailableRoles, loadCategories])
 
   useEffect(() => {
     const compNum = COMPLEXITY_LEVEL_MAP[selectedComplexity] ?? null
     loadTicketCounts(compNum)
   }, [selectedComplexity, loadTicketCounts])
+
+  // DDS Subcategory loader when category filter changes
+  useEffect(() => {
+    if (!ddsFilterCategory) {
+      setDdsSubcategories([])
+      setDdsFilterSubcategory("")
+      setIsLoadingDdsSubcategories(false)
+      return
+    }
+    let cancelled = false
+    setIsLoadingDdsSubcategories(true)
+    fetch(`/api/classifier/subcategories?category=${encodeURIComponent(ddsFilterCategory)}`, {
+      headers: getAuthHeaders(),
+    })
+      .then((res) => (res.ok ? res.json() : []))
+      .then((data) => {
+        if (!cancelled) {
+          const list = Array.isArray(data) ? [...data].sort((a, b) => a.localeCompare(b, "ru")) : []
+          setDdsSubcategories(list)
+        }
+      })
+      .catch(() => {
+        if (!cancelled) setDdsSubcategories([])
+      })
+      .finally(() => {
+        if (!cancelled) setIsLoadingDdsSubcategories(false)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [ddsFilterCategory, getAuthHeaders])
+
+  // Re-fetch DDS tickets when DDS filters or complexity change
+  useEffect(() => {
+    if (selectedTargetRole === "DISPATCHER_DDS") {
+      loadDdsTickets(ddsFilterCategory, ddsFilterSubcategory, selectedComplexity)
+    }
+    return () => { ddsReqIdRef.current += 1 }
+  }, [selectedTargetRole, ddsFilterCategory, ddsFilterSubcategory, selectedComplexity, loadDdsTickets])
+
+  const handleResetDdsFilters = () => {
+    setDdsFilterCategory("")
+    setDdsFilterSubcategory("")
+    setValue("complexity", "adaptive")
+  }
 
   // Fetch subcategories for a given category (strictly alphabetical sort)
   const fetchSubcategories = useCallback(async (cat: string) => {
@@ -450,7 +535,7 @@ export default function SessionSetupPage() {
       }
 
       if (data.target_role === "DISPATCHER_DDS") {
-        if (!selectedDdsTicketId) {
+        if (isLoadingDdsTickets || ddsTicketsError || !selectedDdsTicketId || !ddsTickets.some((ticket) => ticket.ticket_id === selectedDdsTicketId)) {
           setErrorMessage("Пожалуйста, выберите подготовленный билет ДДС")
           return
         }
@@ -587,14 +672,14 @@ export default function SessionSetupPage() {
     : 0
   const isDdsRole = watch("target_role") === "DISPATCHER_DDS"
   const isCategoriesInvalid = isDdsRole
-    ? !selectedDdsTicketId
+    ? isLoadingDdsTickets || Boolean(ddsTicketsError) || !ddsTickets.some((ticket) => ticket.ticket_id === selectedDdsTicketId)
     : !isAllCategoriesSelected && selectedMainCategories.length === 0
   const totalAvailableTickets = isDdsRole
     ? (selectedDdsTicketId ? 1 : ddsTickets.length)
     : getTotalAvailableTickets()
   const isNoTickets = isDdsRole
     ? ddsTickets.length === 0
-    : (ticketCounts.length > 0 || !isAllCategoriesSelected) && totalAvailableTickets === 0
+    : Boolean((ticketCounts.length > 0 || !isAllCategoriesSelected) && totalAvailableTickets === 0)
 
   const isSubmitDisabled =
     isSubmitting ||
@@ -761,17 +846,13 @@ export default function SessionSetupPage() {
                           activeAccent: "border-rose-600 bg-rose-500/10 ring-1 ring-rose-600 text-foreground font-semibold",
                           dotClass: "bg-rose-500",
                         },
-                        ...(watch("target_role") === "DISPATCHER_DDS"
-                          ? []
-                          : [
-                              {
-                                value: "adaptive",
-                                title: "Адаптивный",
-                                accent: "border-blue-500/40 bg-blue-500/5 hover:border-blue-500 text-muted-foreground",
-                                activeAccent: "border-blue-600 bg-blue-500/10 ring-1 ring-blue-600 text-foreground font-semibold",
-                                dotClass: "bg-blue-500",
-                              },
-                            ]),
+                        {
+                          value: "adaptive",
+                          title: "Адаптивный",
+                          accent: "border-blue-500/40 bg-blue-500/5 hover:border-blue-500 text-muted-foreground",
+                          activeAccent: "border-blue-600 bg-blue-500/10 ring-1 ring-blue-600 text-foreground font-semibold",
+                          dotClass: "bg-blue-500",
+                        },
                       ].map((item) => {
                         const isSelected = field.value === item.value
                         return (
@@ -799,7 +880,7 @@ export default function SessionSetupPage() {
                 />
                 <div className="text-[11px] text-muted-foreground leading-tight">
                   {watch("target_role") === "DISPATCHER_DDS"
-                    ? "Для роли «Диспетчер ДДС» оценивание и адаптивный режим не настроены; карточка задаётся подготовленным билетом."
+                    ? "Уровень сложности фильтрует подготовленные билеты ДДС (выбор всех уровней охватывает любые сценарии)."
                     : `Допустимое количество ошибок рассчитывается на основе сложности (по умолчанию: ${defaultErrors})`}
                 </div>
               </div>
@@ -918,26 +999,123 @@ export default function SessionSetupPage() {
               </div>
             </div>
 
-            {/* РЯД 3: Для ДДС — выбор подготовленного билета, для Оператора 112 — категории */}
+            {/* РЯД 3: Для ДДС — выбор подготовленного билета с фильтрами, для Оператора 112 — категории */}
             {watch("target_role") === "DISPATCHER_DDS" ? (
-              <div className="space-y-3 p-4 border rounded-xl bg-card shadow-xs">
-                <div className="flex items-center justify-between border-b pb-2">
+              <div className="space-y-3.5 p-4 border rounded-xl bg-card shadow-xs">
+                {/* Заголовок, счётчик и кнопка сброса */}
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b pb-2.5">
                   <Label htmlFor="dds_ticket_select" className="font-semibold text-foreground text-sm flex items-center gap-2">
                     <Radio className="h-4 w-4 text-primary" />
                     <span>Подготовленный билет ДДС <span className="text-destructive">*</span></span>
                   </Label>
-                  <Badge variant="outline" className="text-xs">
-                    {ddsTickets.length} билетов
-                  </Badge>
+                  <div className="flex items-center gap-2">
+                    <Badge variant="outline" className="text-xs">
+                      {isLoadingDdsTickets ? (
+                        <span className="flex items-center gap-1">
+                          <Loader2 className="h-3 w-3 animate-spin" /> Загрузка...
+                        </span>
+                      ) : (
+                        `${ddsTickets.length} билетов`
+                      )}
+                    </Badge>
+                    {(ddsFilterCategory || ddsFilterSubcategory || selectedComplexity !== "adaptive") && (
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={handleResetDdsFilters}
+                        className="h-6 text-xs text-muted-foreground hover:text-foreground px-2 flex items-center gap-1 border-dashed hover:border-primary/50 transition-colors"
+                      >
+                        <RotateCcw className="h-3 w-3" />
+                        <span>Сбросить фильтры</span>
+                      </Button>
+                    )}
+                  </div>
                 </div>
 
-                {ddsTicketsError ? (
-                  <div role="alert" className="p-3 text-xs rounded bg-destructive/10 text-destructive border border-destructive/20">
-                    {ddsTicketsError}
+                {/* Панель фильтров: Категория и Подкатегория */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 bg-muted/20 p-3 rounded-lg border border-border/60">
+                  {/* Фильтр Категории */}
+                  <div className="space-y-1.5">
+                    <Label htmlFor="dds-filter-category" className="text-xs font-medium text-muted-foreground">
+                      Категория происшествия
+                    </Label>
+                    <Select
+                      id="dds-filter-category"
+                      name="ddsFilterCategory"
+                      aria-label="Фильтр категории ДДС"
+                      value={ddsFilterCategory}
+                      onChange={(e) => {
+                        setDdsFilterCategory(e.target.value)
+                        setDdsFilterSubcategory("")
+                      }}
+                      className="h-8 text-xs bg-background"
+                    >
+                      <SelectItem value="">Все категории</SelectItem>
+                      {classifierCategories.map((cat) => (
+                        <SelectItem key={cat} value={cat}>
+                          {cat}
+                        </SelectItem>
+                      ))}
+                    </Select>
                   </div>
-                ) : !isLoadingDdsTickets && ddsTickets.length === 0 ? (
-                  <div role="alert" className="p-4 text-xs text-center rounded border border-dashed text-muted-foreground bg-muted/20">
-                    Нет доступных подготовленных билетов ДДС. Создание занятия невозможно без подготовленного билета.
+
+                  {/* Фильтр Подкатегории */}
+                  <div className="space-y-1.5">
+                    <Label htmlFor="dds-filter-subcategory" className="text-xs font-medium text-muted-foreground">
+                      Подкатегория происшествия
+                    </Label>
+                    <Select
+                      id="dds-filter-subcategory"
+                      name="ddsFilterSubcategory"
+                      aria-label="Фильтр подкатегории ДДС"
+                      value={ddsFilterSubcategory}
+                      onChange={(e) => setDdsFilterSubcategory(e.target.value)}
+                      disabled={!ddsFilterCategory || isLoadingDdsSubcategories}
+                      className="h-8 text-xs bg-background disabled:opacity-50"
+                    >
+                      <SelectItem value="">Все подкатегории</SelectItem>
+                      {ddsSubcategories.map((sub) => (
+                        <SelectItem key={sub} value={sub}>
+                          {sub}
+                        </SelectItem>
+                      ))}
+                    </Select>
+                  </div>
+                </div>
+
+                {/* Пояснение расхождения каталогов */}
+                <div className="text-[11px] text-muted-foreground bg-primary/5 border border-primary/10 rounded-md p-2 flex items-start gap-2">
+                  <Info className="h-4 w-4 text-primary shrink-0 mt-0.5" />
+                  <span>
+                    В каталоге ДДС отображаются подготовленные билеты с заполненной карточкой происшествия (DispatcherData). Сценарии исключительно голосового контура 112 в этом каталоге не отображаются.
+                  </span>
+                </div>
+
+                {/* Состояния: Загрузка, Ошибка с повтором, Пустой результат, Выбор билета */}
+                {isLoadingDdsTickets ? (
+                  <div className="flex items-center justify-center p-6 text-xs text-muted-foreground gap-2">
+                    <Loader2 className="h-4 w-4 animate-spin text-primary" />
+                    <span>Загрузка подготовленных билетов ДДС...</span>
+                  </div>
+                ) : ddsTicketsError ? (
+                  <div role="alert" className="p-3 text-xs rounded bg-destructive/10 text-destructive border border-destructive/20 flex items-center justify-between gap-2">
+                    <span>{ddsTicketsError}</span>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => loadDdsTickets()}
+                      className="h-7 text-xs border-destructive/30 hover:bg-destructive/10"
+                    >
+                      <RotateCcw className="h-3 w-3 mr-1" />
+                      Повторить
+                    </Button>
+                  </div>
+                ) : ddsTickets.length === 0 ? (
+                  <div role="alert" className="p-4 text-xs text-center rounded border border-dashed text-muted-foreground bg-muted/20 space-y-2">
+                    <p>Нет доступных подготовленных билетов ДДС по заданным фильтрам.</p>
+
                   </div>
                 ) : (
                   <div className="space-y-2">
@@ -948,9 +1126,12 @@ export default function SessionSetupPage() {
                       onChange={(e) => setSelectedDdsTicketId(e.target.value)}
                       className="w-full h-9 px-3 rounded-md border border-input bg-background text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-ring"
                     >
+                      <option value="">-- Выберите подготовленный билет ДДС --</option>
                       {ddsTickets.map((t) => (
                         <option key={t.ticket_id} value={t.ticket_id}>
-                          {t.title} (ID: {t.ticket_id})
+                          {t.title}
+                          {t.category ? ` • ${t.category}` : ""}
+                          {t.complexity ? ` [Уровень ${t.complexity}]` : ""}
                         </option>
                       ))}
                     </select>

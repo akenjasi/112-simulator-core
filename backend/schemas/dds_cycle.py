@@ -142,6 +142,9 @@ DDSIncomingCard = DispatcherData
 class DDSTicketSummary(BaseModel):
     ticket_id: str
     title: str
+    category: Optional[str] = None
+    subcategory: Optional[str] = None
+    complexity: Optional[int] = None
 
     model_config = ConfigDict(from_attributes=True)
 

@@ -8,18 +8,20 @@ Endpoints:
 - POST /api/dds/sessions/{session_id}/finish  — complete session (CADET owner, ADMIN)
 """
 
-from typing import List
-from fastapi import APIRouter, Body, Depends, HTTPException, status
+from typing import List, Optional
+from fastapi import APIRouter, Body, Depends, HTTPException, Query, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.core.deps import get_current_user, require_role
 from backend.core.dds_cycle import (
     apply_dds_action,
+    extract_dds_ticket_metadata,
     finish_dds_session,
     get_dds_session_state,
     is_suitable_dds_ticket,
     list_cadet_dds_assignments,
+    matches_dds_ticket_filters,
 )
 from backend.database import get_db
 from backend.models.domain_01 import User
@@ -49,6 +51,9 @@ router_dds_cycle = APIRouter(
     dependencies=[Depends(require_role("ADMIN", "TEACHER"))],
 )
 async def get_prepared_dds_tickets(
+    category: Optional[str] = Query(None, description="Категория происшествия"),
+    subcategory: Optional[str] = Query(None, description="Подкатегория происшествия"),
+    complexity: Optional[int] = Query(None, ge=1, le=3, description="Уровень сложности (1-3)"),
     db: AsyncSession = Depends(get_db),
 ) -> List[DDSTicketSummary]:
     """Return prepared scenario tickets suitable for DDS dispatch lessons without exposing etalons."""
@@ -64,12 +69,19 @@ async def get_prepared_dds_tickets(
     suitable: List[DDSTicketSummary] = []
     for t in tickets:
         if is_suitable_dds_ticket(t):
-            suitable.append(
-                DDSTicketSummary(
-                    ticket_id=t.scenario_id,
-                    title=t.title or f"Билет #{t.scenario_id[:8]}",
+            if matches_dds_ticket_filters(
+                t, category=category, subcategory=subcategory, complexity=complexity
+            ):
+                cat, subcat, comp, title = extract_dds_ticket_metadata(t)
+                suitable.append(
+                    DDSTicketSummary(
+                        ticket_id=t.scenario_id,
+                        title=title,
+                        category=cat,
+                        subcategory=subcat,
+                        complexity=comp,
+                    )
                 )
-            )
     return suitable
 
 

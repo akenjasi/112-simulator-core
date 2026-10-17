@@ -10,6 +10,7 @@ class GroupCreate(BaseModel):
 
     group_name: str
     department: Optional[str] = None
+    teacher_id: Optional[str] = None
 
 
 class GroupResponse(BaseModel):
@@ -18,6 +19,7 @@ class GroupResponse(BaseModel):
     group_id: str
     group_name: str
     department: Optional[str] = None
+    teacher_id: Optional[str] = None
     cadet_ids: list[str] = []
     student_count: int = 0
 
