@@ -12,7 +12,8 @@ export default function RequireAuth({
   children,
   allowedRoles,
 }: RequireAuthProps) {
-  const { replace } = useRouter()
+  const router = useRouter()
+  const replace = router.replace
   const [ready, setReady] = useState(false)
 
   const rolesKey = allowedRoles ? allowedRoles.join(",") : ""

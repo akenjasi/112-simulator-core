@@ -60,14 +60,14 @@ export function AddServiceModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
-      <div className="bg-white rounded shadow-2xl max-w-lg w-full flex flex-col overflow-hidden border border-gray-300 animate-in fade-in zoom-in-95 duration-150">
+      <div className="bg-white dark:bg-card rounded shadow-2xl max-w-lg w-full flex flex-col overflow-hidden border border-gray-300 dark:border-border animate-in fade-in zoom-in-95 duration-150">
         {/* 1. Header: Large "Добавьте службы" and close cross */}
         <div className="flex items-center justify-between px-6 pt-5 pb-3">
-          <h2 className="text-xl font-bold text-gray-900">Добавьте службы</h2>
+          <h2 className="text-xl font-bold text-gray-900 dark:text-foreground">Добавьте службы</h2>
           <button
             type="button"
             onClick={onClose}
-            className="text-gray-400 hover:text-gray-700 p-1 rounded-full hover:bg-gray-100 transition cursor-pointer"
+            className="text-gray-400 hover:text-gray-700 dark:hover:text-foreground p-1 rounded-full hover:bg-gray-100 dark:hover:bg-muted transition cursor-pointer"
             aria-label="Закрыть"
           >
             <X size={20} />
@@ -81,12 +81,12 @@ export function AddServiceModal({
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             placeholder="Поиск ..."
-            className="w-full pb-2 pt-1 border-b border-gray-300 text-sm outline-none focus:border-[#ec653b] text-gray-800 placeholder-gray-400 bg-transparent transition-colors"
+            className="w-full pb-2 pt-1 border-b border-gray-300 dark:border-border text-sm outline-none focus:border-[#ec653b] text-gray-800 dark:text-foreground placeholder-gray-400 bg-transparent transition-colors"
           />
         </div>
 
         {/* 3. Vertical List (not a grid!), divide-y, click to select with highlight & checkmark */}
-        <div className="divide-y divide-gray-200 overflow-y-auto max-h-[380px] w-full px-2">
+        <div className="divide-y divide-gray-200 dark:divide-border overflow-y-auto max-h-[380px] w-full px-2">
           {filteredServices.length > 0 ? (
             filteredServices.map((svc) => {
               const isSelected = selectedServices.has(svc)
@@ -104,8 +104,8 @@ export function AddServiceModal({
                   }}
                   className={`w-full flex items-center justify-between px-4 py-3 cursor-pointer transition select-none ${
                     isSelected
-                      ? "bg-orange-50/80 text-[#ec653b] font-medium"
-                      : "text-gray-800 hover:bg-gray-50"
+                      ? "bg-orange-50/80 dark:bg-orange-950/40 text-[#ec653b] font-medium"
+                      : "text-gray-800 dark:text-foreground hover:bg-gray-50 dark:hover:bg-muted/50"
                   }`}
                 >
                   <span className="text-sm leading-snug flex-1 pr-3">{svc}</span>
@@ -123,11 +123,11 @@ export function AddServiceModal({
         </div>
 
         {/* 4. Button: Bottom center "Сохранить и закрыть", white bg, orange border & text */}
-        <div className="p-4 border-t border-gray-100 flex justify-center bg-white">
+        <div className="p-4 border-t border-gray-100 dark:border-border flex justify-center bg-white dark:bg-card">
           <button
             type="button"
             onClick={handleSaveAndClose}
-            className="px-8 py-2.5 bg-white border border-[#ec653b] text-[#ec653b] text-sm font-semibold rounded hover:bg-[#fff5f2] active:scale-95 transition cursor-pointer shadow-xs"
+            className="px-8 py-2.5 bg-white dark:bg-card border border-[#ec653b] text-[#ec653b] text-sm font-semibold rounded hover:bg-[#fff5f2] dark:hover:bg-orange-950/30 active:scale-95 transition cursor-pointer shadow-xs"
           >
             Сохранить и закрыть
           </button>

@@ -373,7 +373,7 @@ function DdsDemoSimulator() {
   const displaySlaTimer = isTutorialRunning ? 30 : slaTimer
 
   return (
-    <div className={`flex h-screen w-full overflow-hidden select-none flex-col bg-[#c9ced1] ${
+    <div className={`flex h-screen w-full overflow-hidden select-none flex-col dispatcher-workspace bg-[#c9ced1] dark:bg-background ${
       slaViolated ? "ring-4 ring-red-600 shadow-2xl shadow-red-500/30" : ""
     }`}>
       
@@ -492,7 +492,7 @@ function DdsDemoSimulator() {
       {/* Protocol Evaluation Modal (Завершение смены) */}
       {showEndShiftModal && (
         <div className="fixed inset-0 z-[120] flex items-center justify-center bg-black/70 backdrop-blur-sm p-4 animate-in fade-in duration-200">
-          <div className="bg-white rounded-lg shadow-2xl max-w-xl w-full flex flex-col text-[#111827] overflow-hidden border border-gray-300">
+          <div className="bg-white dark:bg-card rounded-lg shadow-2xl max-w-xl w-full flex flex-col text-[#111827] dark:text-foreground overflow-hidden border border-gray-300 dark:border-border">
             {/* Modal Header */}
             <div className="bg-[#303335] text-white px-6 py-4 flex items-center justify-between border-b border-gray-700">
               <div className="flex items-center gap-2">
@@ -513,73 +513,73 @@ function DdsDemoSimulator() {
             {/* Checklist Breakdown */}
             <div className="p-6 flex flex-col gap-4 max-h-[75vh] overflow-y-auto">
               {/* Ticket Info Banner */}
-              <div className="bg-gray-50 border border-gray-200 rounded-md p-3 text-xs flex flex-col gap-1">
-                <div className="flex justify-between font-bold text-gray-800 text-sm">
+              <div className="bg-gray-50 dark:bg-muted/40 border border-gray-200 dark:border-border rounded-md p-3 text-xs flex flex-col gap-1">
+                <div className="flex justify-between font-bold text-gray-800 dark:text-foreground text-sm">
                   <span>Билет #{demoIndex + 1}: {currentScenario.ticketNumber}</span>
-                  <span className={currentScenario.isTrick ? "text-amber-700" : "text-blue-700"}>
+                  <span className={currentScenario.isTrick ? "text-amber-700 dark:text-amber-400" : "text-blue-700 dark:text-primary"}>
                     {currentScenario.isTrick ? "⚠️ Билет с подвохом" : "✓ Штатная ситуация"}
                   </span>
                 </div>
-                <p className="text-gray-600 mt-0.5">{currentScenario.explanation}</p>
+                <p className="text-gray-600 dark:text-muted-foreground mt-0.5">{currentScenario.explanation}</p>
               </div>
 
               {/* 4 Deterministic Criteria */}
               <div className="flex flex-col gap-2.5">
                 {/* 1. SLA */}
-                <div className="flex items-start justify-between p-3 rounded border border-gray-200 bg-white">
+                <div className="flex items-start justify-between p-3 rounded border border-gray-200 dark:border-border bg-white dark:bg-card/60">
                   <div className="flex items-start gap-2.5">
                     {scoreResult.slaScore > 0 ? (
-                      <CheckCircle className="h-5 w-5 text-emerald-600 shrink-0 mt-0.5" />
+                      <CheckCircle className="h-5 w-5 text-emerald-600 dark:text-emerald-400 shrink-0 mt-0.5" />
                     ) : (
-                      <XCircle className="h-5 w-5 text-red-600 shrink-0 mt-0.5" />
+                      <XCircle className="h-5 w-5 text-destructive shrink-0 mt-0.5" />
                     )}
                     <div>
                       <div className="font-semibold text-sm">1. Норматив 30 секунд (SLA реагирования)</div>
-                      <div className="text-xs text-gray-500">
+                      <div className="text-xs text-muted-foreground">
                         {scoreResult.slaScore > 0 
                           ? "Решение принято вовремя в пределах регламентного интервала." 
                           : "Нарушен 30-секундный норматив реагирования или решение не принято."}
                       </div>
                     </div>
                   </div>
-                  <span className={`font-mono font-bold text-sm ${scoreResult.slaScore > 0 ? "text-emerald-600" : "text-red-600"}`}>
+                  <span className={`font-mono font-bold text-sm ${scoreResult.slaScore > 0 ? "text-emerald-600 dark:text-emerald-400" : "text-destructive"}`}>
                     +{scoreResult.slaScore} / 20
                   </span>
                 </div>
 
                 {/* 2. Decision */}
-                <div className="flex items-start justify-between p-3 rounded border border-gray-200 bg-white">
+                <div className="flex items-start justify-between p-3 rounded border border-gray-200 dark:border-border bg-white dark:bg-card/60">
                   <div className="flex items-start gap-2.5">
                     {scoreResult.decisionScore > 0 ? (
-                      <CheckCircle className="h-5 w-5 text-emerald-600 shrink-0 mt-0.5" />
+                      <CheckCircle className="h-5 w-5 text-emerald-600 dark:text-emerald-400 shrink-0 mt-0.5" />
                     ) : (
-                      <XCircle className="h-5 w-5 text-red-600 shrink-0 mt-0.5" />
+                      <XCircle className="h-5 w-5 text-destructive shrink-0 mt-0.5" />
                     )}
                     <div>
                       <div className="font-semibold text-sm">2. Корректность решения (Принята / Не принята)</div>
-                      <div className="text-xs text-gray-500">
-                        Эталон: <b className="text-gray-800">{currentScenario.expectedDecision}</b>. Курсант выбрал: <b className="text-gray-800">{userDecision || "Не выбрано"}</b>.
+                      <div className="text-xs text-muted-foreground">
+                        Эталон: <b className="text-foreground">{currentScenario.expectedDecision}</b>. Курсант выбрал: <b className="text-foreground">{userDecision || "Не выбрано"}</b>.
                       </div>
                     </div>
                   </div>
-                  <span className={`font-mono font-bold text-sm ${scoreResult.decisionScore > 0 ? "text-emerald-600" : "text-red-600"}`}>
+                  <span className={`font-mono font-bold text-sm ${scoreResult.decisionScore > 0 ? "text-emerald-600 dark:text-emerald-400" : "text-destructive"}`}>
                     +{scoreResult.decisionScore} / 35
                   </span>
                 </div>
 
                 {/* 3. Justification / Requisites */}
-                <div className="flex items-start justify-between p-3 rounded border border-gray-200 bg-white">
+                <div className="flex items-start justify-between p-3 rounded border border-gray-200 dark:border-border bg-white dark:bg-card/60">
                   <div className="flex items-start gap-2.5">
                     {scoreResult.justificationScore > 0 ? (
-                      <CheckCircle className="h-5 w-5 text-emerald-600 shrink-0 mt-0.5" />
+                      <CheckCircle className="h-5 w-5 text-emerald-600 dark:text-emerald-400 shrink-0 mt-0.5" />
                     ) : (
-                      <XCircle className="h-5 w-5 text-red-600 shrink-0 mt-0.5" />
+                      <XCircle className="h-5 w-5 text-destructive shrink-0 mt-0.5" />
                     )}
                     <div>
                       <div className="font-semibold text-sm">
                         {currentScenario.isTrick ? "3. Обоснование отказа по регламенту" : "3. Регистрация наряда / реквизитов"}
                       </div>
-                      <div className="text-xs text-gray-500">
+                      <div className="text-xs text-muted-foreground">
                         {currentScenario.isTrick 
                           ? userComment.trim().length >= 15
                             ? `Обоснование зафиксировано (${userComment.trim().length} симв.): "${userComment.slice(0, 45)}..."`
@@ -590,22 +590,22 @@ function DdsDemoSimulator() {
                       </div>
                     </div>
                   </div>
-                  <span className={`font-mono font-bold text-sm ${scoreResult.justificationScore > 0 ? "text-emerald-600" : "text-red-600"}`}>
+                  <span className={`font-mono font-bold text-sm ${scoreResult.justificationScore > 0 ? "text-emerald-600 dark:text-emerald-400" : "text-destructive"}`}>
                     +{scoreResult.justificationScore} / 20
                   </span>
                 </div>
 
                 {/* 4. Dispatch Call & Telephony */}
-                <div className="flex items-start justify-between p-3 rounded border border-gray-200 bg-white">
+                <div className="flex items-start justify-between p-3 rounded border border-gray-200 dark:border-border bg-white dark:bg-card/60">
                   <div className="flex items-start gap-2.5">
                     {scoreResult.dispatchScore > 0 ? (
-                      <CheckCircle className="h-5 w-5 text-emerald-600 shrink-0 mt-0.5" />
+                      <CheckCircle className="h-5 w-5 text-emerald-600 dark:text-emerald-400 shrink-0 mt-0.5" />
                     ) : (
-                      <XCircle className="h-5 w-5 text-red-600 shrink-0 mt-0.5" />
+                      <XCircle className="h-5 w-5 text-destructive shrink-0 mt-0.5" />
                     )}
                     <div>
                       <div className="font-semibold text-sm">4. Отработка вызова дежурному (Телефонограмма)</div>
-                      <div className="text-xs text-gray-500">
+                      <div className="text-xs text-muted-foreground">
                         {currentScenario.isTrick
                           ? "Для отклоненной карточки вызов не требуется (зачет автоматом)."
                           : whoAccepted.trim().length > 0 && summary.trim().length > 0
@@ -614,18 +614,18 @@ function DdsDemoSimulator() {
                       </div>
                     </div>
                   </div>
-                  <span className={`font-mono font-bold text-sm ${scoreResult.dispatchScore > 0 ? "text-emerald-600" : "text-red-600"}`}>
+                  <span className={`font-mono font-bold text-sm ${scoreResult.dispatchScore > 0 ? "text-emerald-600 dark:text-emerald-400" : "text-destructive"}`}>
                     +{scoreResult.dispatchScore} / 25
                   </span>
                 </div>
               </div>
 
               {/* Total Score & Grade */}
-              <div className="border-t border-gray-200 pt-4 flex items-center justify-between bg-gray-50 p-4 rounded-md">
+              <div className="border-t border-gray-200 dark:border-border pt-4 flex items-center justify-between bg-gray-50 dark:bg-muted/30 p-4 rounded-md">
                 <div>
-                  <div className="text-xs text-gray-500 font-medium uppercase tracking-wider">Итоговый результат:</div>
+                  <div className="text-xs text-muted-foreground font-medium uppercase tracking-wider">Итоговый результат:</div>
                   <div className={`text-2xl 2xl:text-sm font-extrabold ${
-                    scoreResult.total >= 85 ? "text-emerald-600" : scoreResult.total >= 70 ? "text-amber-600" : "text-red-600"
+                    scoreResult.total >= 85 ? "text-emerald-600 dark:text-emerald-400" : scoreResult.total >= 70 ? "text-amber-600 dark:text-amber-400" : "text-destructive"
                   }`}>
                     {scoreResult.total} из 100 баллов
                   </div>
@@ -633,8 +633,8 @@ function DdsDemoSimulator() {
 
                 <div className={`px-4 py-2 rounded-lg font-bold text-sm text-center ${
                   scoreResult.passed 
-                    ? "bg-emerald-100 text-emerald-800 border border-emerald-300"
-                    : "bg-red-100 text-red-800 border border-red-300"
+                    ? "bg-emerald-100 dark:bg-emerald-500/20 text-emerald-800 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-500/30"
+                    : "bg-destructive/15 text-destructive border border-destructive/30"
                 }`}>
                   {scoreResult.total >= 85 
                     ? "АТТЕСТАЦИЯ ПРОЙДЕНА 🟢" 
@@ -646,12 +646,12 @@ function DdsDemoSimulator() {
             </div>
 
             {/* Modal Footer */}
-            <div className="bg-gray-100 px-6 py-3 border-t border-gray-200 flex items-center justify-between">
+            <div className="bg-gray-100 dark:bg-muted/40 px-6 py-3 border-t border-gray-200 dark:border-border flex items-center justify-between">
               <button 
                 onClick={() => {
                   window.location.href = "/dds/journal"
                 }}
-                className="px-4 py-2 bg-[#157dbd] text-white text-xs 2xl:text-sm font-bold rounded hover:bg-[#136ba3] transition"
+                className="px-4 py-2 bg-primary text-primary-foreground text-xs 2xl:text-sm font-bold rounded hover:bg-primary/90 transition"
               >
                 В журнал (Поиск происшествий) →
               </button>
@@ -659,7 +659,7 @@ function DdsDemoSimulator() {
                 onClick={() => {
                   window.location.href = "/dds/journal"
                 }}
-                className="px-4 py-2 bg-gray-200 text-gray-800 text-xs 2xl:text-sm font-semibold rounded hover:bg-gray-300 transition"
+                className="px-4 py-2 bg-muted text-foreground text-xs 2xl:text-sm font-semibold rounded hover:bg-muted/80 transition"
               >
                 Закрыть протокол
               </button>
@@ -682,24 +682,24 @@ function DdsRoute() {
 
   if (ticketId && !sessionId) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-[#efefef] p-6 text-[#1e2327]">
-        <div className="max-w-md w-full bg-white p-6 rounded-lg border border-[#b4b9bc] shadow-md space-y-4 text-center">
-          <div className="text-amber-600 font-bold text-base">
+      <div className="flex min-h-screen items-center justify-center bg-[#efefef] dark:bg-background p-6 text-[#1e2327] dark:text-foreground">
+        <div className="max-w-md w-full bg-white dark:bg-card p-6 rounded-lg border border-[#b4b9bc] dark:border-border shadow-md space-y-4 text-center">
+          <div className="text-amber-600 dark:text-amber-400 font-bold text-base">
             Необходимо открыть назначенное занятие
           </div>
-          <p className="text-xs text-gray-600">
+          <p className="text-xs text-muted-foreground">
             Прямой доступ к билету вне назначенного занятия не поддерживается. Пожалуйста, перейдите в журнал или лобби для выбора назначенного занятия.
           </p>
           <div className="pt-2 flex justify-center gap-3">
             <Link
               href="/dds/journal"
-              className="px-4 py-2 bg-[#157dbd] text-white text-xs font-bold rounded hover:bg-[#136ba3]"
+              className="px-4 py-2 bg-primary text-primary-foreground text-xs font-bold rounded hover:bg-primary/90"
             >
               В журнал ДДС
             </Link>
             <Link
               href="/student/lobby"
-              className="px-4 py-2 bg-gray-200 text-gray-800 text-xs font-semibold rounded hover:bg-gray-300"
+              className="px-4 py-2 bg-muted text-foreground text-xs font-semibold rounded hover:bg-muted/80"
             >
               В лобби курсанта
             </Link>

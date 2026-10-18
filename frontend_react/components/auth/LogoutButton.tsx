@@ -44,9 +44,9 @@ export function LogoutButton({ className = "", compact = false }: LogoutButtonPr
       aria-label={isLoggingOut ? "Выполняется выход" : "Выйти"}
       className={`${
         compact
-          ? "inline-flex h-8 w-auto shrink-0 items-center justify-center gap-1.5 rounded-lg border border-red-200 bg-white px-2.5 text-xs font-semibold text-red-700"
-          : "w-full rounded-xl border-2 border-red-200 bg-white px-4 py-2.5 text-sm font-bold text-red-700"
-      } transition-colors hover:bg-red-50 focus:outline-none focus:ring-2 focus:ring-red-500 disabled:cursor-wait disabled:opacity-60 ${className}`}
+          ? "inline-flex h-8 w-auto shrink-0 items-center justify-center gap-1.5 rounded-lg border border-destructive/30 bg-destructive/10 px-2.5 text-xs font-semibold text-destructive hover:bg-destructive/20 focus:ring-destructive/30"
+          : "w-full rounded-xl border border-destructive/30 bg-destructive/10 px-4 py-2.5 text-sm font-bold text-destructive hover:bg-destructive/20 focus:ring-destructive/30"
+      } transition-colors focus:outline-none focus:ring-2 disabled:cursor-wait disabled:opacity-60 ${className}`}
     >
       {compact && <LogOut className="h-3.5 w-3.5" aria-hidden="true" />}
       <span className={compact ? "hidden sm:inline" : undefined}>

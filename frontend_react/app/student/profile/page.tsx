@@ -12,6 +12,7 @@ import {
 } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
+import { ThemeSelect } from "@/components/theme-select"
 import { LogoutButton } from "@/components/auth/LogoutButton"
 import {
   Radar,
@@ -537,6 +538,7 @@ export default function StudentProfilePage() {
               </Button>
             </Link>
 
+            <ThemeSelect compact />
             <LogoutButton compact />
           </div>
         </div>

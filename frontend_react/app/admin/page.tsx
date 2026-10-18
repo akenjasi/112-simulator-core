@@ -171,12 +171,12 @@ export default function AdminDashboardPage() {
   return (
     <div className="space-y-6 max-w-7xl mx-auto pb-10">
       {/* Header */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-200 pb-5">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-border pb-5">
         <div>
-          <h1 className="text-2xl sm:text-3xl font-black text-slate-900 tracking-tight">
+          <h1 className="text-2xl sm:text-3xl font-black text-foreground tracking-tight">
             Панель управления системой
           </h1>
-          <p className="text-sm text-slate-500 mt-1">
+          <p className="text-sm text-muted-foreground mt-1">
             Мониторинг нагрузки сервера, управление пользователями и резервным копированием
           </p>
         </div>
@@ -186,7 +186,7 @@ export default function AdminDashboardPage() {
             variant="outline"
             onClick={loadData}
             disabled={isLoading}
-            className="flex items-center gap-2 cursor-pointer bg-white"
+            className="flex items-center gap-2 cursor-pointer"
           >
             <RefreshCw className={`w-4 h-4 ${isLoading ? "animate-spin" : ""}`} />
             <span>Обновить</span>
@@ -195,7 +195,7 @@ export default function AdminDashboardPage() {
           <Button
             onClick={handleCreateBackup}
             disabled={isBackingUp}
-            className="bg-purple-700 hover:bg-purple-800 text-white flex items-center gap-2 cursor-pointer shadow-sm"
+            className="bg-primary hover:bg-primary/90 text-primary-foreground flex items-center gap-2 cursor-pointer shadow-xs"
           >
             <DownloadCloud className={`w-4 h-4 ${isBackingUp ? "animate-bounce" : ""}`} />
             <span>{isBackingUp ? "Создание бэкапа..." : "Создать бэкап"}</span>
@@ -205,13 +205,13 @@ export default function AdminDashboardPage() {
 
       {/* Notifications */}
       {healthError && (
-        <div className="bg-amber-50 border border-amber-300 rounded-xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-amber-900 animate-in fade-in">
+        <div className="bg-amber-500/10 border border-amber-500/30 rounded-xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-amber-700 dark:text-amber-300 animate-in fade-in">
           <div className="flex items-center gap-3">
-            <AlertTriangle className="w-5 h-5 text-amber-600 shrink-0" />
+            <AlertTriangle className="w-5 h-5 text-amber-600 dark:text-amber-400 shrink-0" />
             <div className="text-sm font-medium">{healthError}</div>
           </div>
           {lastSuccessTime && (
-            <div className="text-xs text-amber-700 font-medium shrink-0">
+            <div className="text-xs text-amber-700/80 dark:text-amber-300/80 font-medium shrink-0">
               Последний успешный опрос: {lastSuccessTime}
             </div>
           )}
@@ -219,15 +219,15 @@ export default function AdminDashboardPage() {
       )}
 
       {backupSuccessMessage && (
-        <div className="bg-emerald-50 border border-emerald-300 rounded-xl p-4 flex items-center gap-3 text-emerald-800 animate-in fade-in">
-          <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0" />
+        <div className="bg-emerald-500/10 border border-emerald-500/30 rounded-xl p-4 flex items-center gap-3 text-emerald-700 dark:text-emerald-300 animate-in fade-in">
+          <CheckCircle2 className="w-5 h-5 text-emerald-600 dark:text-emerald-400 shrink-0" />
           <div className="text-sm font-medium">{backupSuccessMessage}</div>
         </div>
       )}
 
       {backupError && (
-        <div className="bg-red-50 border border-red-300 rounded-xl p-4 flex items-center gap-3 text-red-800 animate-in fade-in">
-          <AlertTriangle className="w-5 h-5 text-red-600 shrink-0" />
+        <div className="bg-red-500/10 border border-red-500/30 rounded-xl p-4 flex items-center gap-3 text-red-700 dark:text-red-300 animate-in fade-in">
+          <AlertTriangle className="w-5 h-5 text-red-600 dark:text-red-400 shrink-0" />
           <div className="text-sm font-medium">{backupError}</div>
         </div>
       )}
@@ -235,20 +235,20 @@ export default function AdminDashboardPage() {
       {/* Metrics Row */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         {/* CPU */}
-        <Card className="bg-white border-slate-200 shadow-sm">
+        <Card className="shadow-xs">
           <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium text-slate-600">Нагрузка CPU</CardTitle>
-            <Cpu className="w-4 h-4 text-purple-600" />
+            <CardTitle className="text-sm font-medium text-muted-foreground">Нагрузка CPU</CardTitle>
+            <Cpu className="w-4 h-4 text-primary" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-black text-slate-900">
+            <div className="text-2xl font-black text-foreground">
               {health ? `${health.cpu_percent.toFixed(1)}%` : "—"}
             </div>
             <Progress
               value={health ? health.cpu_percent : 0}
               className="h-2 mt-3"
             />
-            <p className="text-xs text-slate-500 mt-2">
+            <p className="text-xs text-muted-foreground mt-2">
               {!health
                 ? "Данные не получены"
                 : health.cpu_percent < 70
@@ -259,20 +259,20 @@ export default function AdminDashboardPage() {
         </Card>
 
         {/* RAM */}
-        <Card className="bg-white border-slate-200 shadow-sm">
+        <Card className="shadow-xs">
           <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium text-slate-600">Оперативная память RAM</CardTitle>
-            <HardDrive className="w-4 h-4 text-blue-600" />
+            <CardTitle className="text-sm font-medium text-muted-foreground">Оперативная память RAM</CardTitle>
+            <HardDrive className="w-4 h-4 text-blue-500 dark:text-blue-400" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-black text-slate-900">
+            <div className="text-2xl font-black text-foreground">
               {health ? `${health.ram_percent.toFixed(1)}%` : "—"}
             </div>
             <Progress
               value={health ? health.ram_percent : 0}
               className="h-2 mt-3"
             />
-            <p className="text-xs text-slate-500 mt-2">
+            <p className="text-xs text-muted-foreground mt-2">
               {!health
                 ? "Данные не получены"
                 : health.ram_percent < 80
@@ -283,14 +283,14 @@ export default function AdminDashboardPage() {
         </Card>
 
         {/* DB Status */}
-        <Card className="bg-white border-slate-200 shadow-sm">
+        <Card className="shadow-xs">
           <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium text-slate-600">База данных</CardTitle>
-            <Database className="w-4 h-4 text-emerald-600" />
+            <CardTitle className="text-sm font-medium text-muted-foreground">База данных</CardTitle>
+            <Database className="w-4 h-4 text-emerald-500 dark:text-emerald-400" />
           </CardHeader>
           <CardContent>
             <div className="flex items-center gap-2">
-              <span className="text-2xl font-black text-slate-900">
+              <span className="text-2xl font-black text-foreground">
                 {!health
                   ? "—"
                   : health.db_status === "ok"
@@ -300,26 +300,26 @@ export default function AdminDashboardPage() {
               <Badge
                 className={
                   !health
-                    ? "bg-slate-100 text-slate-700 border-slate-300"
+                    ? "bg-muted text-muted-foreground border-border"
                     : health.db_status === "ok"
-                    ? "bg-emerald-100 text-emerald-800 border-emerald-300"
-                    : "bg-red-100 text-red-800 border-red-300"
+                    ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/30"
+                    : "bg-red-500/10 text-red-600 dark:text-red-400 border-red-500/30"
                 }
               >
                 {!health ? "Нет данных" : health.db_status === "ok" ? "Active" : "Down"}
               </Badge>
             </div>
-            <div className="flex items-center gap-1 text-xs text-slate-500 mt-3">
+            <div className="flex items-center gap-1 text-xs text-muted-foreground mt-3">
               {!health ? (
                 <span>Статус БД неизвестен</span>
               ) : health.db_status === "ok" ? (
                 <>
-                  <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" />
+                  <ShieldCheck className="w-3.5 h-3.5 text-emerald-500 dark:text-emerald-400" />
                   <span>PostgreSQL Connection OK</span>
                 </>
               ) : (
                 <>
-                  <AlertTriangle className="w-3.5 h-3.5 text-red-600" />
+                  <AlertTriangle className="w-3.5 h-3.5 text-destructive" />
                   <span>PostgreSQL Connection Error</span>
                 </>
               )}
@@ -328,22 +328,22 @@ export default function AdminDashboardPage() {
         </Card>
 
         {/* Users Count */}
-        <Card className="bg-white border-slate-200 shadow-sm">
+        <Card className="shadow-xs">
           <CardHeader className="flex flex-row items-center justify-between pb-2">
-            <CardTitle className="text-sm font-medium text-slate-600">Пользователи</CardTitle>
-            <Users className="w-4 h-4 text-indigo-600" />
+            <CardTitle className="text-sm font-medium text-muted-foreground">Пользователи</CardTitle>
+            <Users className="w-4 h-4 text-primary" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-black text-slate-900">{totalUsers}</div>
-            <div className="flex items-center gap-2 mt-2 text-xs text-slate-500">
-              <span className="text-emerald-600 font-semibold">{activeCount} активных</span>
+            <div className="text-2xl font-black text-foreground">{totalUsers}</div>
+            <div className="flex items-center gap-2 mt-2 text-xs text-muted-foreground">
+              <span className="text-emerald-500 dark:text-emerald-400 font-semibold">{activeCount} активных</span>
               {blockedCount > 0 && (
-                <span className="text-red-500 font-semibold">• {blockedCount} заблок.</span>
+                <span className="text-destructive font-semibold">• {blockedCount} заблок.</span>
               )}
             </div>
             <Link
               href="/admin/users"
-              className="inline-flex items-center gap-1 text-xs font-semibold text-purple-700 hover:text-purple-900 mt-2"
+              className="inline-flex items-center gap-1 text-xs font-semibold text-primary hover:underline mt-2"
             >
               <span>Управление</span>
               <ArrowRight className="w-3 h-3" />
@@ -355,12 +355,12 @@ export default function AdminDashboardPage() {
       {/* Charts Section */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Load History Chart (AreaChart) */}
-        <Card className="lg:col-span-2 bg-white border-slate-200 shadow-sm min-w-0 overflow-hidden">
+        <Card className="lg:col-span-2 shadow-xs min-w-0 overflow-hidden">
           <CardHeader>
-            <CardTitle className="text-base font-bold text-slate-900">
+            <CardTitle className="text-base font-bold text-foreground">
               График нагрузки сервера (CPU и RAM)
             </CardTitle>
-            <CardDescription className="text-xs text-slate-500">
+            <CardDescription className="text-xs text-muted-foreground">
               Динамика использования ресурсов в реальном времени (%)
             </CardDescription>
           </CardHeader>
@@ -373,30 +373,33 @@ export default function AdminDashboardPage() {
                 >
                   <defs>
                     <linearGradient id="colorCpu" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#8b5cf6" stopOpacity={0.8} />
-                      <stop offset="95%" stopColor="#8b5cf6" stopOpacity={0} />
+                      <stop offset="5%" stopColor="#7CA8DC" stopOpacity={0.35} />
+                      <stop offset="95%" stopColor="#7CA8DC" stopOpacity={0} />
                     </linearGradient>
                     <linearGradient id="colorRam" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.8} />
-                      <stop offset="95%" stopColor="#3b82f6" stopOpacity={0} />
+                      <stop offset="5%" stopColor="#60A5FA" stopOpacity={0.35} />
+                      <stop offset="95%" stopColor="#60A5FA" stopOpacity={0} />
                     </linearGradient>
                   </defs>
-                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
-                  <XAxis dataKey="time" stroke="#94a3b8" fontSize={11} />
-                  <YAxis domain={[0, 100]} stroke="#94a3b8" fontSize={11} />
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--border)" />
+                  <XAxis dataKey="time" stroke="var(--muted-foreground)" fontSize={11} />
+                  <YAxis domain={[0, 100]} stroke="var(--muted-foreground)" fontSize={11} />
                   <Tooltip
                     contentStyle={{
-                      backgroundColor: "#ffffff",
+                      backgroundColor: "var(--card)",
                       borderRadius: "8px",
-                      border: "1px solid #cbd5e1",
+                      border: "1px solid var(--border)",
+                      color: "var(--foreground)",
                       fontSize: "12px",
                     }}
+                    itemStyle={{ color: "var(--foreground)" }}
+                    labelStyle={{ color: "var(--foreground)", fontWeight: 600 }}
                   />
                   <Area
                     type="monotone"
                     dataKey="cpu"
                     name="CPU (%)"
-                    stroke="#8b5cf6"
+                    stroke="#7CA8DC"
                     strokeWidth={2}
                     fillOpacity={1}
                     fill="url(#colorCpu)"
@@ -405,7 +408,7 @@ export default function AdminDashboardPage() {
                     type="monotone"
                     dataKey="ram"
                     name="RAM (%)"
-                    stroke="#3b82f6"
+                    stroke="#60A5FA"
                     strokeWidth={2}
                     fillOpacity={1}
                     fill="url(#colorRam)"
@@ -415,14 +418,14 @@ export default function AdminDashboardPage() {
             </div>
             <div className="flex items-center justify-center gap-6 mt-4 text-xs font-semibold">
               <div className="flex items-center gap-2">
-                <span className="w-3 h-3 rounded-full bg-purple-600 inline-block" />
-                <span className="text-slate-600">
+                <span className="w-3 h-3 rounded-full bg-[#7CA8DC] inline-block" />
+                <span className="text-muted-foreground">
                   CPU: {health ? `${health.cpu_percent.toFixed(1)}%` : "—"}
                 </span>
               </div>
               <div className="flex items-center gap-2">
-                <span className="w-3 h-3 rounded-full bg-blue-600 inline-block" />
-                <span className="text-slate-600">
+                <span className="w-3 h-3 rounded-full bg-[#60A5FA] inline-block" />
+                <span className="text-muted-foreground">
                   RAM: {health ? `${health.ram_percent.toFixed(1)}%` : "—"}
                 </span>
               </div>
@@ -431,12 +434,12 @@ export default function AdminDashboardPage() {
         </Card>
 
         {/* Roles Distribution Bar Chart */}
-        <Card className="bg-white border-slate-200 shadow-sm flex flex-col justify-between min-w-0 overflow-hidden">
+        <Card className="shadow-xs flex flex-col justify-between min-w-0 overflow-hidden">
           <CardHeader>
-            <CardTitle className="text-base font-bold text-slate-900">
+            <CardTitle className="text-base font-bold text-foreground">
               Распределение пользователей
             </CardTitle>
-            <CardDescription className="text-xs text-slate-500">
+            <CardDescription className="text-xs text-muted-foreground">
               Структура учетных записей по ролям
             </CardDescription>
           </CardHeader>
@@ -444,34 +447,37 @@ export default function AdminDashboardPage() {
             <div className="h-48 w-full min-w-0">
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={roleDistributionData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
-                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" />
-                  <XAxis dataKey="role" stroke="#94a3b8" fontSize={11} />
-                  <YAxis allowDecimals={false} stroke="#94a3b8" fontSize={11} />
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--border)" />
+                  <XAxis dataKey="role" stroke="var(--muted-foreground)" fontSize={11} />
+                  <YAxis allowDecimals={false} stroke="var(--muted-foreground)" fontSize={11} />
                   <Tooltip
                     contentStyle={{
-                      backgroundColor: "#ffffff",
+                      backgroundColor: "var(--card)",
                       borderRadius: "8px",
-                      border: "1px solid #cbd5e1",
+                      border: "1px solid var(--border)",
+                      color: "var(--foreground)",
                       fontSize: "12px",
                     }}
+                    itemStyle={{ color: "var(--foreground)" }}
+                    labelStyle={{ color: "var(--foreground)", fontWeight: 600 }}
                   />
-                  <Bar dataKey="count" name="Пользователей" radius={[4, 4, 0, 0]} />
+                  <Bar dataKey="count" name="Пользователей" fill="#7CA8DC" radius={[4, 4, 0, 0]} />
                 </BarChart>
               </ResponsiveContainer>
             </div>
 
-            <div className="mt-4 pt-3 border-t border-slate-100 flex justify-around text-center">
+            <div className="mt-4 pt-3 border-t border-border flex justify-around text-center">
               <div>
-                <p className="text-xs text-slate-500">Курсантов</p>
-                <p className="text-base font-bold text-emerald-600">{cadetsCount}</p>
+                <p className="text-xs text-muted-foreground">Курсантов</p>
+                <p className="text-base font-bold text-emerald-500 dark:text-emerald-400">{cadetsCount}</p>
               </div>
               <div>
-                <p className="text-xs text-slate-500">Преподавателей</p>
-                <p className="text-base font-bold text-blue-600">{teachersCount}</p>
+                <p className="text-xs text-muted-foreground">Преподавателей</p>
+                <p className="text-base font-bold text-blue-500 dark:text-blue-400">{teachersCount}</p>
               </div>
               <div>
-                <p className="text-xs text-slate-500">Администраторов</p>
-                <p className="text-base font-bold text-purple-600">{adminsCount}</p>
+                <p className="text-xs text-muted-foreground">Администраторов</p>
+                <p className="text-base font-bold text-primary">{adminsCount}</p>
               </div>
             </div>
           </CardContent>
@@ -483,46 +489,46 @@ export default function AdminDashboardPage() {
         {/* User Management Tile */}
         <Link
           href="/admin/users"
-          className="group block p-6 bg-white border border-slate-200 hover:border-purple-500 rounded-2xl shadow-sm hover:shadow-md transition-all cursor-pointer"
+          className="group block p-6 bg-card border border-border hover:border-primary/50 rounded-2xl shadow-xs hover:shadow-sm transition-all cursor-pointer"
         >
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <div className="p-3 bg-purple-100 text-purple-700 rounded-xl group-hover:scale-105 transition-transform">
+              <div className="p-3 bg-primary/10 text-primary rounded-xl group-hover:scale-105 transition-transform">
                 <Users className="w-6 h-6" />
               </div>
               <div>
-                <h3 className="text-lg font-bold text-slate-900 group-hover:text-purple-700 transition-colors">
+                <h3 className="text-lg font-bold text-foreground group-hover:text-primary transition-colors">
                   Управление учениками и пользователями
                 </h3>
-                <p className="text-xs text-slate-500 mt-0.5">
+                <p className="text-xs text-muted-foreground mt-0.5">
                   Смена ролей, сброс паролей, блокировка и регистрация новых курсантов
                 </p>
               </div>
             </div>
-            <ArrowRight className="w-5 h-5 text-slate-400 group-hover:text-purple-600 group-hover:translate-x-1 transition-all" />
+            <ArrowRight className="w-5 h-5 text-muted-foreground group-hover:text-primary group-hover:translate-x-1 transition-all" />
           </div>
         </Link>
 
         {/* System & Backup Tile */}
         <Link
           href="/admin/system"
-          className="group block p-6 bg-white border border-slate-200 hover:border-purple-500 rounded-2xl shadow-sm hover:shadow-md transition-all cursor-pointer"
+          className="group block p-6 bg-card border border-border hover:border-primary/50 rounded-2xl shadow-xs hover:shadow-sm transition-all cursor-pointer"
         >
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <div className="p-3 bg-blue-100 text-blue-700 rounded-xl group-hover:scale-105 transition-transform">
+              <div className="p-3 bg-primary/10 text-primary rounded-xl group-hover:scale-105 transition-transform">
                 <Database className="w-6 h-6" />
               </div>
               <div>
-                <h3 className="text-lg font-bold text-slate-900 group-hover:text-blue-700 transition-colors">
+                <h3 className="text-lg font-bold text-foreground group-hover:text-primary transition-colors">
                   Резервное копирование и статус системы
                 </h3>
-                <p className="text-xs text-slate-500 mt-0.5">
+                <p className="text-xs text-muted-foreground mt-0.5">
                   Создание дампов PostgreSQL, диагностика соединений и журналы бэкапов
                 </p>
               </div>
             </div>
-            <ArrowRight className="w-5 h-5 text-slate-400 group-hover:text-blue-600 group-hover:translate-x-1 transition-all" />
+            <ArrowRight className="w-5 h-5 text-muted-foreground group-hover:text-primary group-hover:translate-x-1 transition-all" />
           </div>
         </Link>
       </div>

@@ -1,5 +1,7 @@
 "use client"
 
+import { ThemeSelect } from "@/components/theme-select"
+
 import React, { useState } from "react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
@@ -134,7 +136,8 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-slate-50 to-slate-100 dark:from-slate-950 dark:to-slate-900 flex flex-col justify-center items-center p-4">
+    <div className="min-h-screen bg-background flex flex-col justify-center items-center p-4">
+      <div className="mb-6 flex w-full max-w-md justify-end"><ThemeSelect compact /></div>
       {/* Brand header */}
       <div className="mb-8 text-center flex flex-col items-center">
         <Link href="/" className="inline-flex items-center gap-3 group">
@@ -142,7 +145,7 @@ export default function LoginPage() {
             112
           </div>
           <div className="text-left">
-            <span className="font-extrabold tracking-tight text-xl block text-slate-900 dark:text-slate-50">
+            <span className="font-extrabold tracking-tight text-xl block text-foreground">
               Система-112
             </span>
             <span className="text-xs text-muted-foreground block -mt-1">

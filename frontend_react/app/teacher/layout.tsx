@@ -4,6 +4,7 @@ import React, { useState, useEffect } from "react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 import RequireAuth from "@/components/auth/RequireAuth"
+import { ThemeSelect } from "@/components/theme-select"
 import { LogoutButton } from "@/components/auth/LogoutButton"
 import {
   Home,
@@ -85,18 +86,18 @@ export default function TeacherLayout({
 
   return (
     <RequireAuth allowedRoles={["TEACHER"]}>
-      <div className="flex flex-col md:flex-row min-h-screen bg-gray-100 text-[#49555d] font-sans teacher-workspace">
+      <div className="flex flex-col md:flex-row min-h-screen bg-background text-foreground font-sans teacher-workspace">
       {/* Mobile Top Header */}
-      <header className="md:hidden flex items-center justify-between px-4 py-3 bg-white border-b-2 border-[#c9ced1] sticky top-0 z-30 shadow-xs">
+      <header className="md:hidden flex items-center justify-between px-4 py-3 bg-sidebar border-b border-sidebar-border sticky top-0 z-30 shadow-xs">
         <div className="flex items-center gap-2.5">
-          <div className="p-2 bg-[#157dbd] text-white rounded-lg shadow-sm">
+          <div className="p-2 bg-primary text-primary-foreground rounded-lg shadow-sm">
             <GraduationCap className="w-5 h-5" />
           </div>
           <div>
-            <span className="text-base font-extrabold text-[#49555d] leading-tight block">
+            <span className="text-base font-extrabold text-sidebar-foreground leading-tight block">
               Тренажер 112: Преподаватель
             </span>
-            <p className="text-[10px] font-semibold text-[#157dbd] uppercase tracking-wider">
+            <p className="text-[10px] font-semibold text-primary uppercase tracking-wider">
               Панель управления
             </p>
           </div>
@@ -106,7 +107,7 @@ export default function TeacherLayout({
           onClick={() => setIsMobileMenuOpen((prev) => !prev)}
           aria-label={isMobileMenuOpen ? "Закрыть меню" : "Открыть меню"}
           data-testid="teacher-mobile-menu-toggle"
-          className="p-2 rounded-lg text-[#49555d] hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-[#157dbd] cursor-pointer"
+          className="p-2 rounded-lg text-sidebar-foreground/80 hover:text-sidebar-foreground hover:bg-sidebar-accent focus:outline-none focus:ring-2 focus:ring-primary cursor-pointer"
         >
           {isMobileMenuOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
         </button>
@@ -123,19 +124,19 @@ export default function TeacherLayout({
           />
           <aside
             aria-label="Мобильное меню преподавателя"
-            className="fixed inset-y-0 left-0 w-72 max-w-[85vw] bg-white border-r-2 border-[#c9ced1] z-50 flex flex-col justify-between shadow-2xl md:hidden animate-in slide-in-from-left duration-200"
+            className="fixed inset-y-0 left-0 w-72 max-w-[85vw] bg-sidebar border-r border-sidebar-border z-50 flex flex-col justify-between shadow-2xl md:hidden animate-in slide-in-from-left duration-200"
           >
             <div>
-              <div className="p-4 border-b-2 border-[#c9ced1] bg-[#fbfdfe] flex items-center justify-between">
+              <div className="p-4 border-b border-sidebar-border bg-sidebar flex items-center justify-between">
                 <div className="flex items-center gap-2.5">
-                  <div className="p-2 bg-[#157dbd] text-white rounded-xl shadow">
+                  <div className="p-2 bg-primary text-primary-foreground rounded-xl shadow">
                     <GraduationCap className="w-6 h-6" />
                   </div>
                   <div>
-                    <h2 className="text-sm font-extrabold text-[#49555d] leading-tight">
+                    <h2 className="text-sm font-extrabold text-sidebar-foreground leading-tight">
                       Кабинет преподавателя
                     </h2>
-                    <p className="text-[10px] font-semibold text-[#49555d]/80 uppercase tracking-wider">
+                    <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider">
                       Тренажер 112
                     </p>
                   </div>
@@ -145,7 +146,7 @@ export default function TeacherLayout({
                   onClick={() => setIsMobileMenuOpen(false)}
                   aria-label="Закрыть панель"
                   data-testid="teacher-drawer-close"
-                  className="p-1.5 rounded-lg text-slate-500 hover:text-slate-800 hover:bg-slate-100 cursor-pointer"
+                  className="p-1.5 rounded-lg text-sidebar-foreground/70 hover:text-sidebar-foreground hover:bg-sidebar-accent cursor-pointer"
                 >
                   <X className="w-5 h-5" />
                 </button>
@@ -164,14 +165,14 @@ export default function TeacherLayout({
                       key={`mobile-${item.href}`}
                       href={item.href}
                       onClick={() => setIsMobileMenuOpen(false)}
-                      className={`flex items-center gap-3.5 px-4 py-3 rounded-xl font-bold text-base transition-all duration-150 outline-none focus:ring-2 focus:ring-[#157dbd] ${
+                      className={`flex items-center gap-3.5 px-4 py-3 rounded-xl font-bold text-base transition-all duration-150 outline-none focus:ring-2 focus:ring-primary ${
                         isActive
-                          ? "bg-[#157dbd] text-white shadow-md font-extrabold"
-                          : "text-[#49555d] hover:bg-slate-200/80 active:bg-slate-300"
+                          ? "bg-primary text-primary-foreground shadow-sm font-extrabold"
+                          : "text-sidebar-foreground/75 hover:text-sidebar-foreground hover:bg-sidebar-accent active:bg-sidebar-accent"
                       }`}
                       aria-current={isActive ? "page" : undefined}
                     >
-                      <Icon className={`w-6 h-6 shrink-0 ${isActive ? "text-white" : "text-[#49555d]"}`} />
+                      <Icon className={`w-6 h-6 shrink-0 ${isActive ? "text-primary-foreground" : "text-sidebar-foreground/75"}`} />
                       <span className="truncate">{item.name}</span>
                     </Link>
                   )
@@ -179,8 +180,9 @@ export default function TeacherLayout({
               </nav>
             </div>
 
-            <div className="p-4 border-t-2 border-[#c9ced1] bg-[#fbfdfe]">
+            <div className="p-4 border-t border-sidebar-border bg-sidebar">
               <SystemStatus status={systemStatus} variant="teacher" />
+              <div className="mt-3"><ThemeSelect /></div>
               <LogoutButton className="mt-3" />
             </div>
           </aside>
@@ -190,20 +192,20 @@ export default function TeacherLayout({
       {/* Persistent Left Sidebar - Never collapses to hamburger on desktop */}
       <aside
         aria-label="Боковое меню преподавателя"
-        className="hidden md:flex w-72 shrink-0 bg-white border-r-2 border-[#c9ced1] flex-col justify-between shadow-md z-30 sticky top-0 h-screen"
+        className="hidden md:flex w-72 shrink-0 bg-sidebar border-r border-sidebar-border flex-col justify-between shadow-md z-30 sticky top-0 h-screen"
       >
         <div>
           {/* Header / Brand */}
-          <div className="p-5 border-b-2 border-[#c9ced1] bg-[#fbfdfe]">
+          <div className="p-5 border-b border-sidebar-border bg-sidebar">
             <div className="flex items-center gap-3">
-              <div className="p-2.5 bg-[#157dbd] text-white rounded-xl shadow">
+              <div className="p-2.5 bg-primary text-primary-foreground rounded-xl shadow">
                 <GraduationCap className="w-7 h-7" />
               </div>
               <div>
-                <h1 className="text-lg font-extrabold text-[#49555d] leading-tight">
+                <h1 className="text-lg font-extrabold text-sidebar-foreground leading-tight">
                   Кабинет преподавателя
                 </h1>
-                <p className="text-sm font-semibold text-[#49555d]/80">
+                <p className="text-sm font-semibold text-muted-foreground">
                   Тренажер 112
                 </p>
               </div>
@@ -223,14 +225,14 @@ export default function TeacherLayout({
                 <Link
                   key={item.href}
                   href={item.href}
-                  className={`flex items-center gap-3.5 px-4 py-3.5 rounded-xl font-bold text-base transition-all duration-150 outline-none focus:ring-2 focus:ring-[#157dbd] ${
+                  className={`flex items-center gap-3.5 px-4 py-3.5 rounded-xl font-bold text-base transition-all duration-150 outline-none focus:ring-2 focus:ring-primary ${
                     isActive
-                      ? "bg-[#157dbd] text-white shadow-md font-extrabold"
-                      : "text-[#49555d] hover:bg-slate-200/80 active:bg-slate-300"
+                      ? "bg-primary text-primary-foreground shadow-sm font-extrabold"
+                      : "text-sidebar-foreground/75 hover:text-sidebar-foreground hover:bg-sidebar-accent active:bg-sidebar-accent"
                   }`}
                   aria-current={isActive ? "page" : undefined}
                 >
-                  <Icon className={`w-6 h-6 shrink-0 ${isActive ? "text-white" : "text-[#49555d]"}`} />
+                  <Icon className={`w-6 h-6 shrink-0 ${isActive ? "text-primary-foreground" : "text-sidebar-foreground/75"}`} />
                   <span className="truncate">{item.name}</span>
                 </Link>
               )
@@ -239,14 +241,15 @@ export default function TeacherLayout({
         </div>
 
         {/* Footer / System Status */}
-        <div className="p-4 border-t-2 border-[#c9ced1] bg-[#fbfdfe]">
+        <div className="p-4 border-t border-sidebar-border bg-sidebar">
           <SystemStatus status={systemStatus} variant="teacher" />
-          <LogoutButton className="mt-3" />
+          <div className="mt-3"><ThemeSelect /></div>
+              <LogoutButton className="mt-3" />
         </div>
       </aside>
 
       {/* Main Content Area */}
-      <main className="flex-1 min-w-0 bg-white text-[#49555d] p-4 sm:p-6 md:p-8 overflow-y-auto min-h-screen">
+      <main className="flex-1 min-w-0 bg-background text-foreground p-4 sm:p-6 md:p-8 overflow-y-auto min-h-screen">
         {children}
       </main>
       </div>

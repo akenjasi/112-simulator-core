@@ -9,6 +9,7 @@ import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter }
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { DDSAssignments } from "@/components/dispatcher/dds-assignments"
+import { ThemeSelect } from "@/components/theme-select"
 import { LogoutButton } from "@/components/auth/LogoutButton"
 import {
   Headphones,
@@ -403,7 +404,7 @@ export default function StudentLobbyPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-slate-50 via-background to-slate-100 dark:from-slate-950 dark:via-background dark:to-slate-900 flex flex-col justify-between p-4 md:p-8">
+    <div className="min-h-screen bg-background flex flex-col justify-between p-4 md:p-8">
       {/* Top Header */}
       <header className="max-w-4xl w-full mx-auto flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b pb-4">
         <div className="flex items-center gap-3 min-w-0">
@@ -436,6 +437,7 @@ export default function StudentLobbyPage() {
             <span>Сервер подключен</span>
           </Badge>
 
+          <ThemeSelect compact />
           <LogoutButton compact />
         </div>
       </header>
@@ -449,7 +451,7 @@ export default function StudentLobbyPage() {
 
         <Card className="border-2 border-primary/20 shadow-xl overflow-hidden backdrop-blur-xs bg-card/95">
           {/* Top Strict Solid Line (no gradient) */}
-          <div className="h-1.5 bg-[#1f2b31] dark:bg-slate-700" />
+          <div className="h-1.5 bg-primary/80" />
 
           <CardHeader className="text-center pt-7 pb-3 space-y-3">
             {/* Pulsing Sonar / Radar Animation */}
@@ -566,7 +568,7 @@ export default function StudentLobbyPage() {
         <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-xs flex items-center justify-center p-4 animate-in fade-in duration-150">
           <Card className="max-w-lg w-full border border-border/80 shadow-2xl overflow-hidden bg-card">
             {/* Strict solid top line */}
-            <div className="h-1.5 bg-[#1f2b31] dark:bg-slate-700" />
+            <div className="h-1.5 bg-primary/80" />
 
             <CardHeader className="pt-5 pb-3 px-6 flex flex-row items-start justify-between space-y-0">
               <div>
@@ -697,7 +699,7 @@ export default function StudentLobbyPage() {
                     <span>Уровень громкости (реальный вход):</span>
                     <span className="font-mono font-bold text-foreground">{realVolume}%</span>
                   </div>
-                  <div className="h-10 w-full bg-slate-100 dark:bg-slate-900/80 rounded-lg p-2 border border-slate-200 dark:border-slate-800 flex items-end gap-1 overflow-hidden">
+                  <div className="h-10 w-full bg-muted/50 rounded-lg p-2 border border-border flex items-end gap-1 overflow-hidden">
                     {realBars.map((height, i) => (
                       <div
                         key={i}
@@ -783,13 +785,13 @@ export default function StudentLobbyPage() {
 
       {/* Evaluation Result Toast */}
       {evaluationToast && (
-        <div className="fixed bottom-8 right-8 z-50 bg-slate-900 text-white text-xs px-4 py-3 rounded-lg shadow-2xl border border-emerald-500/50 flex items-center gap-3 animate-in fade-in slide-in-from-bottom-2 duration-200 max-w-md">
-          <span className="h-2.5 w-2.5 rounded-full bg-emerald-400 shrink-0" />
+        <div className="fixed bottom-8 right-8 z-50 bg-card text-card-foreground text-xs px-4 py-3 rounded-lg shadow-2xl border border-emerald-500/50 flex items-center gap-3 animate-in fade-in slide-in-from-bottom-2 duration-200 max-w-md">
+          <span className="h-2.5 w-2.5 rounded-full bg-emerald-500 shrink-0" />
           <div className="flex-1 font-medium">{evaluationToast}</div>
           <button
             type="button"
             onClick={() => setEvaluationToast(null)}
-            className="text-slate-400 hover:text-white cursor-pointer ml-2"
+            className="text-muted-foreground hover:text-foreground cursor-pointer ml-2"
           >
             ✕
           </button>
