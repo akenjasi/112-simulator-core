@@ -12,7 +12,7 @@ from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm.attributes import flag_modified
 
-from backend.core.gradebook_records import build_attempt_records, historical_record_snapshot, latest_evaluation, resolve_attempt_score_and_status
+from backend.core.gradebook_records import build_attempt_records, dds_state_for_card, historical_record_snapshot, latest_evaluation, resolve_attempt_score_and_status
 from backend.core.analytics_engine import build_error_heatmap, calculate_trends
 from backend.core.deps import get_current_user, require_role
 from backend.database import get_db
@@ -632,7 +632,7 @@ async def get_record_detail(
         expert_score = float(tr.score_total)
 
     # DDS Actions & Etalon Evaluation Context
-    dds_state_raw = (exam_session.dynamic_state or {}).get("dds", {}) if (exam_session and isinstance(exam_session.dynamic_state, dict)) else {}
+    dds_state_raw = dds_state_for_card(exam_session, card.card_id if card else None)
     dds_card_id = dds_state_raw.get("card_id")
     card_matches_dds = True
     if card and dds_card_id and str(dds_card_id) != str(card.card_id):
@@ -1251,8 +1251,8 @@ async def override_record_grade(
         is_tr_active = (tr is not None and (tr.status or "").upper() in ("ACTIVE", "IN_PROGRESS"))
         has_dds = isinstance(exam_session.dynamic_state, dict) and "dds" in exam_session.dynamic_state
         if has_dds:
-            dds_state = exam_session.dynamic_state.get("dds", {})
-            is_submitted = bool(dds_state.get("submitted_at"))
+            dds_state = dds_state_for_card(exam_session, card.card_id if card else None)
+            is_submitted = bool(dds_state.get("card_submitted_at") or dds_state.get("submitted_at"))
         elif tr is not None:
             is_submitted = not is_tr_active and (tr.score_total is not None or (tr.status or "").upper() in ("COMPLETED", "EVALUATED", "FINISHED", "PASSED", "FAILED"))
         else:

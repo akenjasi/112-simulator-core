@@ -4,6 +4,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest"
 import StudentProfilePage from "@/app/student/profile/page"
 import StudentLobbyPage from "@/app/student/lobby/page"
 import DdsPage from "@/app/dds/page"
+import { dispatcherData } from "@/lib/dispatcher-data"
 
 const pushMock = vi.fn()
 vi.mock("next/navigation", () => ({
@@ -126,6 +127,18 @@ describe("ТЗ 48: Личный кабинет ученика и Лобби (Ф�
 
         if (urlStr === "/api/dds/assignments") {
           return Promise.resolve({ok: true, status: 200, json: async () => []})
+        }
+        if (urlStr === "/api/dds/training/tickets") {
+          return Promise.resolve({ok: true, status: 200, json: async () => [
+            {ticket_id: "ticket-demo-888", title: "Учебная карточка ДДС", category: "ДТП", complexity: 1},
+          ]})
+        }
+        if (urlStr === "/api/dds/training" && init?.method === "POST") {
+          return Promise.resolve({ok: true, status: 200, json: async () => ({
+            session_id: "sess-demo-777", ticket_id: "ticket-demo-888", lesson_id: "training-1", card_id: "card-1",
+            session_status: "ACTIVE", lesson_status: "ACTIVE", incoming_card: {...structuredClone(dispatcherData), description: "Учебное происшествие"},
+            actions: [], submitted_at: null, score: null,
+          })})
         }
         if (urlStr.startsWith("/api/dds/sessions/")) {
           return Promise.resolve({ok: false, status: 404, json: async () => ({detail: "missing assigned session"})})
@@ -316,34 +329,36 @@ describe("ТЗ 48: Личный кабинет ученика и Лобби (Ф�
 
       expect(await screen.findByText("Нет назначенных занятий ДДС")).toBeInTheDocument()
       expect(screen.getByText("Назначенные занятия ДДС")).toBeInTheDocument()
-      expect(screen.getByText("Целевая учебная роль:")).toBeInTheDocument()
       expect(screen.queryByRole("button", { name: /Оператор 112/i })).not.toBeInTheDocument()
-      expect(screen.getByText("Диспетчер ДДС")).toBeInTheDocument()
-      expect(screen.getByRole("button", { name: /Демо-запуск/i })).toBeInTheDocument()
+      expect(screen.getByRole("heading", { name: "Самостоятельная тренировка ДДС" })).toBeInTheDocument()
+      expect(screen.getByRole("button", { name: "Начать тренировку" })).toBeInTheDocument()
       expect(screen.getByText("Личный кабинет")).toBeInTheDocument()
     })
 
-    it("ignores a stored legacy operator role and starts a DDS demo", async () => {
+    it("ignores a stored legacy operator role and starts a selected DDS training queue", async () => {
       localStorage.setItem("cadet_role", "OPERATOR_112")
       render(<StudentLobbyPage />)
 
-      const demoBtn = screen.getByRole("button", { name: /Демо-запуск/i })
+      fireEvent.click(await screen.findByRole("checkbox", { name: /Учебная карточка ДДС/ }))
+      const demoBtn = screen.getByRole("button", { name: "Начать тренировку" })
       await act(async () => {
         fireEvent.click(demoBtn)
       })
 
       await waitFor(() => {
         expect(global.fetch).toHaveBeenCalledWith(
-          "/api/v1/sessions/demo",
+          "/api/dds/training",
           expect.objectContaining({
             method: "POST",
-            body: JSON.stringify({ target_role: "DISPATCHER_DDS" }),
+            body: expect.any(String),
           })
         )
         expect(pushMock).toHaveBeenCalledWith(
-          "/dds?session_id=sess-demo-777&ticket_id=ticket-demo-888"
+          "/dds/journal?focus_session_id=sess-demo-777&focus_ticket_id=ticket-demo-888"
         )
       })
+      const call = vi.mocked(global.fetch).mock.calls.find(([url, init]) => url === "/api/dds/training" && init?.method === "POST")!
+      expect(JSON.parse(String(call[1]?.body))).toEqual({request_id: expect.any(String), ticket_ids: ["ticket-demo-888"]})
     })
 
   })

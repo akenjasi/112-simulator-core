@@ -17,6 +17,7 @@ tests/27_teacher/27_06_knowledge.test.tsx
 tests/27_teacher/dds-lesson-report.test.tsx
 tests/27_teacher/dds-lesson-report.acceptance.test.tsx
 tests/dds-cycle/dds-cycle-validation.test.ts
+tests/dds-cycle/dds-queue-ui.test.tsx
 tests/dds-cycle/dds-cycle.acceptance.test.tsx
 tests/dds-cycle/dds-route.acceptance.test.tsx
 tests/dds-cycle/teacher-history.acceptance.test.tsx

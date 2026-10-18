@@ -54,10 +54,29 @@ def build_attempt_records(results, cards, evaluations):
 
 def historical_record_snapshot(session, scenario_id):
     state = session.dynamic_state if session and isinstance(session.dynamic_state, dict) else {}
+    snapshots = state.get("_gradebook_snapshots")
+    if isinstance(snapshots, dict):
+        snapshot = snapshots.get(scenario_id)
+        if isinstance(snapshot, dict) and snapshot.get("ticket_id") == scenario_id:
+            return snapshot
     snapshot = state.get("_gradebook_snapshot")
     if isinstance(snapshot, dict) and snapshot.get("ticket_id") == scenario_id:
         return snapshot
     return None
+
+
+def dds_state_for_card(session, card_id):
+    """Project only the selected card, including completed queue entries."""
+    state = session.dynamic_state if session and isinstance(session.dynamic_state, dict) else {}
+    dds = state.get("dds", {})
+    if not isinstance(dds, dict):
+        return {}
+    if card_id and dds.get("card_id") and str(dds["card_id"]) != str(card_id):
+        for item in dds.get("completed_cards", []):
+            if isinstance(item, dict) and str(item.get("card_id")) == str(card_id):
+                return {**item, "submitted_at": item.get("card_submitted_at")}
+        return {}
+    return dds
 
 
 def _score(value):

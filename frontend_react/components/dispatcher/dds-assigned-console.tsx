@@ -2,15 +2,9 @@
 
 import React, { useState, useEffect, useCallback, useRef } from "react"
 import Link from "next/link"
-import {
-  fetchDDSSessionState,
-  postDDSAction,
-  finishDDSSession,
-  getStoredToken,
-  type DDSSessionState,
-  type DDSActionPayload,
-  type DDSFinishPayload,
-} from "@/lib/dds-cycle"
+import {fetchDDSSessionState, fetchDDSCard, postDDSAction, finishDDSSession, completeDDSCard,
+  DDSRequestError, ddsBlockerMessage, getStoredToken,
+  type DDSSessionState, type DDSActionPayload, type DDSFinishPayload} from "@/lib/dds-cycle"
 import { TopBar } from "@/components/dispatcher/top-bar"
 import { CallerPanel } from "@/components/dispatcher/caller-panel"
 import { IncidentPanel } from "@/components/dispatcher/incident-panel"
@@ -19,311 +13,129 @@ import { getDDSServiceResponse } from "@/lib/dds-service-response"
 import { DispatchPanel } from "@/components/dispatcher/dispatch-panel"
 import { getDDSWorkingCard } from "@/lib/dds-working-card"
 
-interface Props {
-  sessionId: string
-  ticketId?: string
-}
-
+interface Props { sessionId: string; ticketId?: string; cardId?: string }
 type PendingMutation =
   | { type: "action"; payload: DDSActionPayload }
   | { type: "finish"; payload: DDSFinishPayload }
+  | { type: "complete"; cardId: string; payload: {request_id: string} }
 
-export function DDSAssignedConsole({ sessionId, ticketId }: Props) {
+export function DDSAssignedConsole({sessionId, ticketId, cardId}: Props) {
   const [sessionState, setSessionState] = useState<DDSSessionState | null>(null)
-  const [isLoading, setIsLoading] = useState<boolean>(true)
+  const [isLoading, setIsLoading] = useState(true)
   const [loadError, setLoadError] = useState<string | null>(null)
   const [actionError, setActionError] = useState<string | null>(null)
-  const [isSaving, setIsSaving] = useState<boolean>(false)
-  const isSavingRef = useRef<boolean>(false)
-
-  // Action form state
-  const [selectedService, setSelectedService] = useState<string>("")
-  const [whoAccepted, setWhoAccepted] = useState<string>("")
-  const [summary, setSummary] = useState<string>("")
+  const [isSaving, setIsSaving] = useState(false)
+  const isSavingRef = useRef(false)
+  const [selectedService, setSelectedService] = useState("")
+  const [whoAccepted, setWhoAccepted] = useState("")
+  const [summary, setSummary] = useState("")
   const [now, setNow] = useState(() => Date.now())
-
-  useEffect(() => {
-    const timer = setInterval(() => setNow(Date.now()), 1000)
-    return () => clearInterval(timer)
-  }, [])
-
-  // Pending mutation for retry
   const [pendingMutation, setPendingMutation] = useState<PendingMutation | null>(null)
   const pendingRef = useRef<PendingMutation | null>(null)
-
-  const epochRef = useRef<number>(0)
+  const epochRef = useRef(0)
+  const lastCardRef = useRef<string | null>(null)
+  const ticketRef = useRef(ticketId)
+  ticketRef.current = ticketId
   const getControllerRef = useRef<AbortController | null>(null)
   const postControllerRef = useRef<AbortController | null>(null)
 
-  // Load session state
+  useEffect(() => { const timer = setInterval(() => setNow(Date.now()), 1000); return () => clearInterval(timer) }, [])
+
+  const acceptState = useCallback((state: DDSSessionState) => {
+    if (lastCardRef.current !== state.card_id) {
+      setWhoAccepted(""); setSummary("")
+      setSelectedService(state.incoming_card.services[0]?.name || "")
+      lastCardRef.current = state.card_id
+    }
+    setSessionState(state)
+    // Next.js supports native history updates; preserve the session while the server advances its card.
+    if (typeof window !== "undefined" && window.location.pathname.replace(/\/$/, "") === "/dds") {
+      const params = new URLSearchParams({session_id: state.session_id, ticket_id: state.ticket_id})
+      if (cardId) params.set("card_id", state.card_id)
+      window.history.replaceState(null, "", `/dds?${params}`)
+    }
+  }, [cardId])
+
   const loadState = useCallback(async () => {
     const epoch = ++epochRef.current
-    if (getControllerRef.current) {
-      getControllerRef.current.abort()
-    }
+    getControllerRef.current?.abort()
     const controller = new AbortController()
     getControllerRef.current = controller
-
-    const token = getStoredToken()
-    if (!token) {
+    if (!getStoredToken()) {
       setLoadError("Требуется авторизация для доступа к занятию. Пожалуйста, выполните вход.")
-      setIsLoading(false)
-      return
+      setIsLoading(false); return
     }
-
-    setIsLoading(true)
-    setLoadError(null)
-
+    setIsLoading(true); setLoadError(null)
     try {
-      const state = await fetchDDSSessionState(sessionId, ticketId, controller.signal)
-      if (epochRef.current === epoch) {
-        setSessionState(state)
-        setLoadError(null)
-        if (state.incoming_card?.services?.length > 0) {
-          setSelectedService((prev) => prev || state.incoming_card.services[0].name)
-        }
-      }
-    } catch (err: any) {
-      if (controller.signal.aborted || epochRef.current !== epoch) {
-        return
-      }
-      setLoadError(err.message || "Ошибка загрузки данных занятия")
-      setSessionState(null)
-    } finally {
-      if (epochRef.current === epoch) {
-        setIsLoading(false)
-      }
-    }
-  }, [sessionId, ticketId])
+      const state = cardId ? await fetchDDSCard(sessionId, cardId, controller.signal)
+        : await fetchDDSSessionState(sessionId, ticketRef.current, controller.signal)
+      if (epochRef.current === epoch) { acceptState(state); setLoadError(null) }
+    } catch (error: any) {
+      if (controller.signal.aborted || epochRef.current !== epoch) return
+      setLoadError(error.message || "Ошибка загрузки данных занятия"); setSessionState(null)
+    } finally { if (epochRef.current === epoch) setIsLoading(false) }
+  }, [sessionId, cardId, acceptState])
 
   useEffect(() => {
-    // Reset state & abort in-flight requests on session change or unmount
-    epochRef.current++
-    if (getControllerRef.current) {
-      getControllerRef.current.abort()
-    }
-    if (postControllerRef.current) {
-      postControllerRef.current.abort()
-    }
-    isSavingRef.current = false
-    setIsSaving(false)
-    pendingRef.current = null
-    setPendingMutation(null)
-    setSessionState(null)
-    setActionError(null)
-    setLoadError(null)
-    setSelectedService("")
-    setWhoAccepted("")
-    setSummary("")
-
+    epochRef.current++; getControllerRef.current?.abort(); postControllerRef.current?.abort()
+    isSavingRef.current = false; setIsSaving(false)
+    pendingRef.current = null; setPendingMutation(null); setSessionState(null)
+    setActionError(null); setLoadError(null); setSelectedService(""); setWhoAccepted(""); setSummary("")
+    lastCardRef.current = null
     loadState()
+    return () => { epochRef.current++; getControllerRef.current?.abort(); postControllerRef.current?.abort(); isSavingRef.current = false }
+  }, [sessionId, cardId, loadState])
 
-    return () => {
-      epochRef.current++
-      if (getControllerRef.current) {
-        getControllerRef.current.abort()
-      }
-      if (postControllerRef.current) {
-        postControllerRef.current.abort()
-      }
-      isSavingRef.current = false
-    }
-  }, [sessionId, ticketId, loadState])
-
-  // Set default selected service if loaded
-  useEffect(() => {
-    if (sessionState?.incoming_card?.services?.length && !selectedService) {
-      setSelectedService(sessionState.incoming_card.services[0].name)
-    }
-  }, [sessionState, selectedService])
-
-  const isCompleted =
-    sessionState?.session_status === "COMPLETED" ||
-    sessionState?.lesson_status === "COMPLETED"
-
+  const isCompleted = sessionState?.session_status === "COMPLETED" || sessionState?.lesson_status === "COMPLETED"
+  const isReadOnly = isCompleted || sessionState?.readonly === true
   const hasPending = pendingMutation !== null
 
-  // Save status action
+  const sendMutation = async (mutation: PendingMutation): Promise<boolean> => {
+    if (isSavingRef.current || !sessionState) return false
+    isSavingRef.current = true; setIsSaving(true); setActionError(null)
+    const epoch = epochRef.current
+    postControllerRef.current?.abort()
+    const controller = new AbortController(); postControllerRef.current = controller
+    try {
+      const updated = mutation.type === "action" ? await postDDSAction(sessionId, mutation.payload, controller.signal)
+        : mutation.type === "complete" ? await completeDDSCard(sessionId, mutation.cardId, mutation.payload, controller.signal)
+        : await finishDDSSession(sessionId, mutation.payload, controller.signal)
+      if (epochRef.current !== epoch) return false
+      acceptState(updated); setActionError(null); setPendingMutation(null); pendingRef.current = null
+      if (mutation.type === "action" && mutation.payload.kind === "dispatch") {setWhoAccepted(""); setSummary("")}
+      return true
+    } catch (error: any) {
+      if (epochRef.current !== epoch || controller.signal.aborted) return false
+      setActionError(error.message || "Не удалось сохранить действие")
+      // A definitive rejection is correctable; an uncertain network/server result needs the same request ID.
+      if (!(error instanceof DDSRequestError) || error.retryable) {
+        setPendingMutation(mutation); pendingRef.current = mutation
+      } else {setPendingMutation(null); pendingRef.current = null}
+      return false
+    } finally {if (epochRef.current === epoch) {isSavingRef.current = false; setIsSaving(false)}}
+  }
+
+  const blocked = () => isSavingRef.current || pendingRef.current || isReadOnly || !sessionState
   const handleSaveStatus = async (draft: {serviceName: string; status: string; comment: string; orderNumber: string}) => {
-    if (isSavingRef.current || hasPending || pendingRef.current || isCompleted || !sessionState) return false
-    isSavingRef.current = true
-    setIsSaving(true)
-    setActionError(null)
-
-    const epoch = epochRef.current
-    if (postControllerRef.current) {
-      postControllerRef.current.abort()
-    }
-    const controller = new AbortController()
-    postControllerRef.current = controller
-
-    const payload: DDSActionPayload = {
-      request_id: crypto.randomUUID(),
-      kind: "status",
-      service_name: draft.serviceName,
-      status: draft.status,
-    }
-    if (draft.comment.trim()) {
-      payload.comment = draft.comment.trim()
-    }
-    if (draft.orderNumber.trim()) {
-      payload.order_number = draft.orderNumber.trim()
-    }
-
-    try {
-      const updated = await postDDSAction(sessionId, payload, controller.signal)
-      if (epochRef.current !== epoch) return false
-      setSessionState(updated)
-      setActionError(null)
-      setPendingMutation(null)
-      pendingRef.current = null
-      setSelectedService(draft.serviceName)
-      return true
-    } catch (err: any) {
-      if (epochRef.current !== epoch || controller.signal.aborted) return false
-      setActionError(err.message || "Не удалось сохранить статус")
-      setPendingMutation({ type: "action", payload })
-      pendingRef.current = { type: "action", payload }
-      return false
-    } finally {
-      if (epochRef.current === epoch) {
-        isSavingRef.current = false
-        setIsSaving(false)
-      }
-    }
+    if (blocked() || !sessionState) return false
+    return sendMutation({type: "action", payload: {request_id: crypto.randomUUID(), card_id: sessionState.card_id,
+      kind: "status", service_name: draft.serviceName, status: draft.status,
+      ...(draft.comment.trim() ? {comment: draft.comment.trim()} : {}),
+      ...(draft.orderNumber.trim() ? {order_number: draft.orderNumber.trim()} : {})}})
   }
-
-  // Save dispatch action
   const handleSaveDispatch = async (serviceName: string, receiver: string, message: string) => {
-    if (isSavingRef.current || hasPending || pendingRef.current || isCompleted || !sessionState) return false
-    isSavingRef.current = true
-    setIsSaving(true)
-    setActionError(null)
-
-    const epoch = epochRef.current
-    if (postControllerRef.current) {
-      postControllerRef.current.abort()
-    }
-    const controller = new AbortController()
-    postControllerRef.current = controller
-
-    const payload: DDSActionPayload = {
-      request_id: crypto.randomUUID(),
-      kind: "dispatch",
-      service_name: serviceName,
-      who_accepted: receiver.trim(),
-      summary: message.trim(),
-    }
-
-    try {
-      const updated = await postDDSAction(sessionId, payload, controller.signal)
-      if (epochRef.current !== epoch) return false
-      setSessionState(updated)
-      setActionError(null)
-      setPendingMutation(null)
-      pendingRef.current = null
-      setWhoAccepted("")
-      setSummary("")
-      return true
-    } catch (err: any) {
-      if (epochRef.current !== epoch || controller.signal.aborted) return false
-      setActionError(err.message || "Не удалось сохранить направление")
-      setPendingMutation({ type: "action", payload })
-      pendingRef.current = { type: "action", payload }
-      return false
-    } finally {
-      if (epochRef.current === epoch) {
-        isSavingRef.current = false
-        setIsSaving(false)
-      }
-    }
+    if (blocked() || !sessionState) return false
+    return sendMutation({type: "action", payload: {request_id: crypto.randomUUID(), card_id: sessionState.card_id,
+      kind: "dispatch", service_name: serviceName, who_accepted: receiver.trim(), summary: message.trim()}})
   }
-
-  // Finish session
-  const handleFinish = async () => {
-    if (isSavingRef.current || hasPending || pendingRef.current || isCompleted || !sessionState) return
-    isSavingRef.current = true
-    setIsSaving(true)
-    setActionError(null)
-
-    const epoch = epochRef.current
-    if (postControllerRef.current) {
-      postControllerRef.current.abort()
-    }
-    const controller = new AbortController()
-    postControllerRef.current = controller
-
-    const payload: DDSFinishPayload = {}
-
-    try {
-      const updated = await finishDDSSession(sessionId, payload, controller.signal)
-      if (epochRef.current !== epoch) return
-      setSessionState(updated)
-      setActionError(null)
-      setPendingMutation(null)
-      pendingRef.current = null
-    } catch (err: any) {
-      if (epochRef.current !== epoch || controller.signal.aborted) return
-      setActionError(err.message || "Не удалось завершить занятие")
-      setPendingMutation({ type: "finish", payload })
-      pendingRef.current = { type: "finish", payload }
-    } finally {
-      if (epochRef.current === epoch) {
-        isSavingRef.current = false
-        setIsSaving(false)
-      }
-    }
+  const handleFinish = () => {if (!blocked()) void sendMutation({type: "finish", payload: {}})}
+  const handleComplete = () => {
+    if (!blocked() && sessionState?.can_complete) void sendMutation({type: "complete", cardId: sessionState.card_id, payload: {request_id: crypto.randomUUID()}})
   }
-
-  // Retry pending mutation
-  const handleRetry = async () => {
-    if (isSavingRef.current || !pendingMutation || !sessionState) return
-    isSavingRef.current = true
-    setIsSaving(true)
-    setActionError(null)
-
-    const epoch = epochRef.current
-    if (postControllerRef.current) {
-      postControllerRef.current.abort()
-    }
-    const controller = new AbortController()
-    postControllerRef.current = controller
-
-    const currentPending = pendingMutation
-
-    try {
-      let updated: DDSSessionState
-      if (currentPending.type === "action") {
-        updated = await postDDSAction(sessionId, currentPending.payload, controller.signal)
-      } else {
-        updated = await finishDDSSession(sessionId, currentPending.payload, controller.signal)
-      }
-      if (epochRef.current !== epoch) return
-      setSessionState(updated)
-      setActionError(null)
-      setPendingMutation(null)
-      pendingRef.current = null
-      if (currentPending.type === "action") {
-        setWhoAccepted("")
-        setSummary("")
-      }
-    } catch (err: any) {
-      if (epochRef.current !== epoch || controller.signal.aborted) return
-      setActionError(err.message || "Ошибка при повторной отправке")
-    } finally {
-      if (epochRef.current === epoch) {
-        isSavingRef.current = false
-        setIsSaving(false)
-      }
-    }
-  }
-
-  // Refresh session state and clear pending
+  const handleRetry = () => {if (!isSavingRef.current && pendingRef.current) void sendMutation(pendingRef.current)}
   const handleRefresh = () => {
-    setPendingMutation(null)
-    pendingRef.current = null
-    setActionError(null)
-    loadState()
+    if (isSavingRef.current) return
+    setPendingMutation(null); pendingRef.current = null; setActionError(null); void loadState()
   }
 
   // If fatal load error and no state
@@ -372,8 +184,10 @@ export function DDSAssignedConsole({ sessionId, ticketId }: Props) {
   const responseService = selectedService || workingCard.services[0]?.name || ""
   const response = getDDSServiceResponse(sessionState, responseService, now)
   const remaining = response.remaining
-  const mutationDisabled = isSaving || isCompleted || hasPending
-  const completionNotice = isCompleted
+  const mutationDisabled = isSaving || isReadOnly || hasPending
+  const historyIndex = sessionState.cards?.findIndex(item => item.card_id === sessionState.card_id) ?? -1
+  const displayedIndex = historyIndex >= 0 ? historyIndex : sessionState.current_index ?? 0
+  const completionNotice = sessionState.readonly && !isCompleted ? "Карточка завершена: просмотр истории" : isCompleted
     ? sessionState.submitted_at
       ? `Выполнено. ${sessionState.score == null ? "Нет оценки" : `Оценка: ${sessionState.score}`}`
       : "Занятие завершено. Выполнение не завершено. Нет оценки"
@@ -388,12 +202,13 @@ export function DDSAssignedConsole({ sessionId, ticketId }: Props) {
             {isCompleted ? "Смена завершена (ДДС-112)" : "Смена активна (ДДС-112)"}
           </span>
           <div aria-label={`Норматив принятия: ${responseService}`} className={`flex items-center gap-1.5 px-2 py-0.5 rounded font-mono font-bold text-xs border ml-2 ${response.overdue ? "bg-red-600 text-white border-red-500" : "bg-emerald-900/40 text-emerald-400 border-emerald-500/50"}`}
-            title={`${responseService}: ${response.responded ? "Первичное решение сохранено; время дальнейших работ не относится к нормативу принятия" : remaining === null ? "Время начала не получено от сервера" : "30 секунд от начала сессии до решения этой службы"}`}>
+            title={`${responseService}: ${response.responded ? "Первичное решение сохранено; время дальнейших работ не относится к нормативу принятия" : remaining === null ? "Время начала не получено от сервера" : "30 секунд от получения карточки до решения этой службы"}`}>
             <span className="uppercase tracking-wider opacity-90 text-[10px]">SLA 30С:</span>
             <span className="text-sm">{response.responded ? "Решение принято" : remaining === null ? "—" : remaining === 0 ? "Просрочено" : `${remaining} сек`}</span>
           </div>
         </div>
         <div className="flex items-center gap-2">
+          <span className="text-xs">Карточка {displayedIndex + 1} из {sessionState.total_cards ?? 1} · Закрыто: {sessionState.completed_cards ?? 0}</span>
           <Link href="/student/lobby" className="px-3 py-1.5 text-xs bg-slate-700 hover:bg-slate-600 text-white rounded font-medium">← В Лобби</Link>
           <button type="button" onClick={handleFinish} disabled={mutationDisabled}
             className="px-4 py-1.5 text-xs 2xl:text-sm bg-red-600 hover:bg-red-700 text-white rounded font-bold transition shadow disabled:opacity-50">
@@ -413,7 +228,7 @@ export function DDSAssignedConsole({ sessionId, ticketId }: Props) {
         <div className="flex flex-1 min-w-0 flex-col gap-2 overflow-y-auto pr-2 pb-2">
           <IncidentPanel data={card} />
           <DispatchPanel
-            key={`${sessionId}-${ticketId || ""}`}
+            key={`${sessionId}-${sessionState.card_id}`}
             isCardAccepted={acceptedServices.length > 0}
             acceptedServices={acceptedServices}
             disabled={mutationDisabled}
@@ -427,12 +242,14 @@ export function DDSAssignedConsole({ sessionId, ticketId }: Props) {
         </div>
       </div>
       <div className="shrink-0 z-50 w-full">
-        <ServicesBar key={`${sessionId}-${ticketId || ""}`} data={workingCard} disabled={mutationDisabled}
+        <ServicesBar key={`${sessionId}-${sessionState.card_id}`} data={workingCard} disabled={mutationDisabled}
           allowedStatuses={sessionState.allowed_service_statuses}
           closeHref="/dds/journal"
           disabledReason={isCompleted ? "Занятие завершено: доступен только просмотр" : "Дождитесь сохранения действия или повторите неудавшийся запрос"}
           onStatusChange={(serviceName, status, comment, orderNumber) => handleSaveStatus({serviceName, status, comment, orderNumber})}
-          onNextCard={handleFinish}/>
+          completionDisabled={!sessionState.can_complete}
+          completionReason={(sessionState.completion_blockers || []).map(ddsBlockerMessage).join("; ") || undefined}
+          onNextCard={handleComplete}/>
       </div>
     </div>
   )

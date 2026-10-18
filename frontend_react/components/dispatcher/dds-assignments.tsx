@@ -53,7 +53,9 @@ export function DDSAssignments() {
 
   useEffect(() => {
     loadAssignments()
+    const timer = setInterval(() => {if (document.visibilityState === "visible") void loadAssignments()}, 5000)
     return () => {
+      clearInterval(timer)
       epochRef.current++
       if (controllerRef.current) {
         controllerRef.current.abort()
@@ -139,6 +141,7 @@ export function DDSAssignments() {
                       {scoreLabel}
                     </span>
                   </div>
+                  <p className="text-xs text-muted-foreground">Закрыто карточек: {item.completed_cards ?? 0} из {item.total_cards ?? 1}</p>
                   <p className="text-xs text-muted-foreground truncate max-w-xl">
                     {desc}
                   </p>

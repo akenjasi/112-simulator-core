@@ -22,8 +22,7 @@ export function getDDSWorkingCard(state: DDSSessionState): DispatcherData {
           working.isRejected = ['Не принята', 'Отказ от выполнения работ'].includes(action.status)
         }
         working.history.push({
-          // The API supplies an internal actor ID, not an operator's display name.
-          op: '',
+          op: action.actor_name || '',
           time,
           status: action.kind === 'dispatch' ? 'Направление' : action.status || '',
           orderNumber: action.order_number || undefined,

@@ -29,6 +29,7 @@ class StudentStatsResponse(BaseModel):
     top_errors: List[TopErrorItem] = Field(default_factory=list)
 
     cards_solved: int = 0
+    graded_cards: Optional[int] = None
     average_score_7_days: float = 0.0
     score_trend: float = 0.0
     average_processing_time_seconds: int = 0
@@ -42,6 +43,7 @@ class StudentStatsResponse(BaseModel):
 
 class StudentLessonHistoryTicket(BaseModel):
     ticket_id: str
+    card_id: Optional[str] = None
     title: str
     category: Optional[str] = None
     status: str = "passed"

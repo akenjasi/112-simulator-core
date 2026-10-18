@@ -3,7 +3,7 @@
 import { apiFetch as fetch } from "@/lib/api-fetch"
 
 import { useState, useEffect, useRef, Suspense } from "react"
-import { useSearchParams } from "next/navigation"
+import { useSearchParams, useRouter } from "next/navigation"
 import Link from "next/link"
 import { dispatcherData as initialData, emptyDispatcherData, type DispatcherData } from "@/lib/dispatcher-data"
 import { ddsScenarios, type DdsScenario } from "@/lib/dds-scenarios"
@@ -656,11 +656,15 @@ function DdsDemoSimulator() {
 
 function DdsRoute() {
   const searchParams = useSearchParams()
+  const router = useRouter()
   const sessionId = searchParams ? searchParams.get("session_id") : null
   const ticketId = searchParams ? searchParams.get("ticket_id") : null
 
+  const cardId = searchParams?.get("card_id")
+  useEffect(() => { if (!sessionId && !ticketId) router.replace("/dds/journal") }, [sessionId, ticketId, router])
+
   if (sessionId) {
-    return <DDSAssignedConsole sessionId={sessionId} ticketId={ticketId || undefined} />
+    return <DDSAssignedConsole sessionId={sessionId} ticketId={ticketId || undefined} cardId={cardId || undefined} />
   }
 
   if (ticketId && !sessionId) {
@@ -692,7 +696,7 @@ function DdsRoute() {
     )
   }
 
-  return <DdsDemoSimulator />
+  return <div className="p-6">Открываем список происшествий…</div>
 }
 
 export default function Page() {

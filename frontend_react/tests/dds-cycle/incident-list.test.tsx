@@ -41,7 +41,7 @@ it('restores the full-width original table with real sessions and direct workpla
   expect(screen.getByText('Список происшествий').closest('.max-w-5xl')).toBeNull()
   expect(document.body.textContent).not.toContain('Назначенные занятия ДДС')
   expect(document.body.textContent).not.toContain('38260204')
-  expect(network.mock.calls[0][0]).toBe('/api/dds/assignments')
+  expect(network.mock.calls[0][0]).toBe('/api/dds/assignments?include_history=true')
   expect(new Headers(network.mock.calls[0][1].headers).get('Authorization')).toBe('Bearer test')
   fireEvent.click(screen.getByRole('button',{name:'Взять карточку в обработку'}))
   expect(push).toHaveBeenCalledWith('/dds?session_id=s1&ticket_id=t1')

@@ -22,6 +22,7 @@ tests/test_dds_report_llm_acceptance.py
 tests/test_dds_report_llm_unit.py
 tests/test_dds_service_policy.py
 tests/test_dds_saved_tickets.py
+tests/test_dds_queue.py
 tests/test_student_dds_demo_flow.py
 tests/test_integrity.py
 tests/test_integrity_review.py

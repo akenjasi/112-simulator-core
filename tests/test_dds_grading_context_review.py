@@ -207,7 +207,7 @@ async def test_editing_etalon_alone_does_not_rebuild_or_erase_original_card_fact
         assert saved_card["caller"]["address"] == "Точный адрес"
 
 
-async def test_real_lesson_start_snapshots_etalon_and_hides_it_from_cadet():
+async def test_real_lesson_start_snapshots_context_and_hides_teacher_data_from_cadet():
     from tests.test_dds_cycle_acceptance import setup_group, start, request as cycle_request
     group = await setup_group()
     original = {"service_name": "Аварийная служба", "expected_decision": "Принята",
@@ -223,9 +223,10 @@ async def test_real_lesson_start_snapshots_etalon_and_hides_it_from_cadet():
     assert original["decision_rationale"] not in cadet_response.text
     async with AsyncSessionLocal() as db:
         session = await db.get(ExamSession, session_id)
-        assert session.dynamic_state["_gradebook_snapshot"]["dds_etalon"] == original
+        snapshot = deepcopy(session.dynamic_state["_gradebook_snapshots"][group["ticket_id"]])
+        assert snapshot["incoming_card"] == session.dynamic_state["dds"]["incoming_card"]
         ticket = await db.get(ScenarioTicket, group["ticket_id"])
         ticket.settings = {"dds_etalon": {"expected_decision": "Не принята"}}
         await db.commit()
         await db.refresh(session)
-        assert session.dynamic_state["_gradebook_snapshot"]["dds_etalon"] == original
+        assert session.dynamic_state["_gradebook_snapshots"][group["ticket_id"]] == snapshot

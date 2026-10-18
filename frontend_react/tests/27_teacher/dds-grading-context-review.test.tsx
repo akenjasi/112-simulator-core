@@ -38,7 +38,8 @@ it('does not leave raw legacy keys and CSS values in the DDS etalon', () => {
     etalon: { fio: 'Исходный заявитель', caller_status: 'Очевидец', visclass: 'bg-red-500',
               connection: 'Установлено', emergency: { cs: false, cp: false } },
   })} />)
-  const text = screen.getByTestId('etalon-column').textContent
+  expect(screen.queryByTestId('etalon-column')).not.toBeInTheDocument()
+  const text = document.body.textContent
   expect(text).not.toMatch(/fio|caller_status|visclass|bg-red-500|connection|emergency/)
 })
 
@@ -69,5 +70,6 @@ it('does not replace an unspecified historical time requirement with thirty seco
       comment: { required_points: [], actual_comments: [], actual_messages: [] },
     } as any,
   })} />)
-  expect(within(screen.getByTestId('etalon-column')).queryByText(/^30 сек\.$/)).not.toBeInTheDocument()
+  expect(screen.queryByTestId('etalon-column')).not.toBeInTheDocument()
+  expect(screen.queryByText(/^30 сек\.$/)).not.toBeInTheDocument()
 })

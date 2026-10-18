@@ -24,6 +24,7 @@ const EMPTY_CALLED_SERVICES: string[] = []
 
 export function DispatchPanel({ isCardAccepted, whoAccepted, setWhoAccepted, summary, setSummary, services = EMPTY_SERVICES, calledServices = EMPTY_CALLED_SERVICES, onServiceSaved, disabled = false, acceptedServices, selectedServiceName, onServiceChange, savedDispatches }: Props) {
   const [callState, setCallState] = useState<"idle" | "dialing" | "speaking" | "connected">("idle")
+  const [callError, setCallError] = useState<string | null>(null)
   const [inputsUnlocked, setInputsUnlocked] = useState(false)
   const [savedRequisites, setSavedRequisites] = useState(false)
   const [localService, setLocalService] = useState(services && services.length > 0 ? services[0].name : "Аварийная служба")
@@ -79,6 +80,7 @@ export function DispatchPanel({ isCardAccepted, whoAccepted, setWhoAccepted, sum
     }
 
     setCallState("idle")
+    setCallError(null)
     setInputsUnlocked(false)
     setWhoAccepted("")
     setSummary("")
@@ -133,6 +135,7 @@ export function DispatchPanel({ isCardAccepted, whoAccepted, setWhoAccepted, sum
   const handleCall = () => {
     if (disabled || saving || !accepted) return
     if (callState !== "idle" && callState !== "connected") return
+    setCallError(null)
     setCallState("dialing")
     setInputsUnlocked(false)
 
@@ -181,17 +184,22 @@ export function DispatchPanel({ isCardAccepted, whoAccepted, setWhoAccepted, sum
       audioRef.current = audio
       
       audio.onended = finishCall
-      audio.onerror = () => {
-        console.warn("Failed to play static TTS, falling back to finishCall")
-        finishCall()
+      const failCall = () => {
+        if (finished) return
+        finished = true
+        if (fallbackTimeoutRef.current) clearTimeout(fallbackTimeoutRef.current)
+        audio.pause()
+        setCallState("idle")
+        setCallError("Учебная аудиореплика недоступна. Повторите вызов; приём сообщения не подтверждён.")
       }
+      audio.onerror = failCall
       
       audio.play().catch(e => {
         console.warn("Auto-play prevented or error", e)
-        finishCall()
+        failCall()
       })
       
-      fallbackTimeoutRef.current = setTimeout(finishCall, 8000)
+      fallbackTimeoutRef.current = setTimeout(failCall, 15000)
     }, 1300)
   }
 
@@ -268,6 +276,7 @@ export function DispatchPanel({ isCardAccepted, whoAccepted, setWhoAccepted, sum
           </button>
         </div>
 
+        {callError && <p role="status" className="text-xs text-red-800">{callError}</p>}
         {/* Status Call Feedback Notification */}
         {callState === "speaking" && (
           <div className="bg-amber-50 border border-amber-300 px-4 py-2 rounded text-xs text-amber-900 flex items-center gap-2 animate-pulse">
@@ -289,7 +298,7 @@ export function DispatchPanel({ isCardAccepted, whoAccepted, setWhoAccepted, sum
         {callState === "connected" && (
           <div className="bg-emerald-50 border border-emerald-300 px-4 py-1.5 rounded text-xs text-emerald-900 flex items-center gap-2">
             <span>✓</span>
-            <span className="font-semibold">Телефонограмма передана. Заполните реквизиты приема ниже:</span>
+            <span className="font-semibold">Учебная реплика воспроизведена. Заполните реквизиты приёма ниже:</span>
           </div>
         )}
 
