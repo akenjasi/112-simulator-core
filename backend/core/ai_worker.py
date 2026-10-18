@@ -278,40 +278,73 @@ async def collect_group_session_data(
     db: AsyncSession,
     target_date: Optional[datetime] = None,
 ) -> Dict[str, Any]:
-    """Collect aggregate performance data for a student group."""
+    """Collect aggregate performance data for a student group based on real evaluations."""
     # 1. Group info
     stmt_group = select(StudentGroup).where(StudentGroup.group_id == group_id)
     res_group = await db.execute(stmt_group)
     group = res_group.scalar_one_or_none()
     group_name = (getattr(group, "group_name", None) or getattr(group, "name", None)) if group else f"Группа {group_id}"
 
-    # 2. Get students in group
+    # 2. Get students strictly belonging to this group
+    group_cadet_ids = set()
+    if group:
+        if group.cadet_ids:
+            group_cadet_ids.update(group.cadet_ids)
+        if group.students:
+            group_cadet_ids.update(u.user_id for u in group.students if getattr(u, "user_id", None))
+
     stmt_users = select(User).where(User.role.in_(["CADET", "STUDENT"]))
     res_users = await db.execute(stmt_users)
     all_users = res_users.scalars().all()
-    group_cadets = [u for u in all_users if group_id in (u.group_ids or []) or (group and u.user_id in (group.cadet_ids or []))]
+    for u in all_users:
+        if group_id in (u.group_ids or []):
+            group_cadet_ids.add(u.user_id)
 
-    if not group_cadets:
-        group_cadets = all_users[:10]
+    group_cadets = [u for u in all_users if u.user_id in group_cadet_ids]
+    cadet_ids = list(group_cadet_ids)
 
-    cadet_ids = [u.user_id for u in group_cadets]
+    # 3. Collect sessions strictly for these cadets
+    sessions = []
+    evals = []
+    common_errors = []
+    if cadet_ids:
+        stmt_sessions = (
+            select(ExamSession)
+            .where(ExamSession.cadet_id.in_(cadet_ids))
+            .order_by(ExamSession.start_time.desc())
+            .limit(50)
+        )
+        res_sess = await db.execute(stmt_sessions)
+        sessions = res_sess.scalars().all()
 
-    # 3. Collect sessions for these cadets
-    stmt_sessions = select(ExamSession).where(ExamSession.cadet_id.in_(cadet_ids)).limit(50)
-    res_sess = await db.execute(stmt_sessions)
-    sessions = res_sess.scalars().all()
+        session_ids = [s.session_id for s in sessions if s.session_id]
+        if session_ids:
+            # Collect real EvaluationResults
+            stmt_evals = select(EvaluationResult).where(EvaluationResult.session_id.in_(session_ids))
+            res_evals = await db.execute(stmt_evals)
+            evals = res_evals.scalars().all()
+            for ev in evals:
+                if isinstance(ev.errors_list, list):
+                    for err in ev.errors_list:
+                        err_str = str(err).strip()
+                        if err_str and err_str not in common_errors:
+                            common_errors.append(err_str)
 
-    # 4. Collect errors
-    stmt_results = select(TicketResult).limit(100)
-    res_tr = await db.execute(stmt_results)
-    all_results = res_tr.scalars().all()
-    common_errors = [tr.error_details for tr in all_results if tr.error_details]
+            # Collect real TicketResults for these sessions
+            stmt_results = select(TicketResult).where(TicketResult.session_id.in_(session_ids))
+            res_tr = await db.execute(stmt_results)
+            for tr in res_tr.scalars().all():
+                if tr.error_details:
+                    err_str = str(tr.error_details).strip()
+                    if err_str and err_str not in common_errors:
+                        common_errors.append(err_str)
 
     return {
         "group_id": group_id,
         "group_name": group_name,
         "cadet_count": len(group_cadets),
         "total_sessions": len(sessions),
+        "evaluation_count": len(evals),
         "sample_errors": common_errors[:15],
     }
 
@@ -321,14 +354,23 @@ def build_group_prompt(group_data: Dict[str, Any]) -> str:
     group_name = group_data.get("group_name", "Учебная группа")
     cadet_count = group_data.get("cadet_count", 0)
     total_sessions = group_data.get("total_sessions", 0)
+    evaluation_count = group_data.get("evaluation_count", 0)
     errors = group_data.get("sample_errors", [])
+
+    if total_sessions == 0 or (evaluation_count == 0 and not errors):
+        return (
+            f"Ты — старший методист кафедры Системы-112.\n"
+            f"Учебная группа: «{group_name}».\n"
+            f"Количество курсантов: {cadet_count}. Завершенных оцененных практических занятий пока нет.\n\n"
+            f"Сформируй вводные методические рекомендации по подготовке группы к первым практическим занятиям в роли диспетчера ДДС."
+        )
 
     prompt = (
         f"Ты — старший методист и преподаватель кафедры информационных технологий и связи Системы-112.\n"
         f"Проанализируй сводные результаты учебной группы: «{group_name}».\n\n"
         f"Параметры потока:\n"
         f"- Количество курсантов в группе: {cadet_count}\n"
-        f"- Пройдено занятий и сессий: {total_sessions}\n"
+        f"- Пройдено занятий и сессий: {total_sessions} (оценено: {evaluation_count})\n"
         f"- Характерные ошибки курсантов: {errors}\n\n"
         f"Сформируй отчет для преподавателя:\n"
         f"1. Общий уровень готовности группы к дежурству.\n"

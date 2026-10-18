@@ -26,11 +26,22 @@ async def test_get_groups_returns_student_count(auth_client: AsyncClient, db_ses
     assert isinstance(target_group["student_count"], int)
     assert target_group["student_count"] == 0
 
-    # 3. Добавление курсанта в группу
+    # 3. Create the account explicitly, then link the existing cadet.
+    from backend.core.security import hash_password
+    from backend.models.domain_01 import User
+    import uuid
+    cadet = User(
+        username=f"smirnov_{uuid.uuid4().hex[:8]}@test.local",
+        password_hash=hash_password("test_pass_123"),
+        role="CADET",
+        full_name="Смирнов Алексей",
+    )
+    db_session.add(cadet)
+    await db_session.commit()
+    await db_session.refresh(cadet)
+
     student_res = await auth_client.post(f"/api/v1/groups/{group_id}/students/single", json={
-        "first_name": "Алексей",
-        "last_name": "Смирнов",
-        "email": "smirnov@test.local",
+        "user_id": cadet.user_id,
     })
     assert student_res.status_code == 200
 

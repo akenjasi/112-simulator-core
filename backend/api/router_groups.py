@@ -2,8 +2,8 @@ import io
 import random
 from collections import Counter
 from datetime import datetime, timezone, timedelta
-from typing import Optional, List
-from fastapi import APIRouter, Depends, UploadFile, File, HTTPException, Response, Query, status
+from typing import Optional, List, Union
+from fastapi import APIRouter, Depends, UploadFile, File, HTTPException, Response, Query, status, Body
 from sqlalchemy import select
 from sqlalchemy.orm import selectinload
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -21,6 +21,8 @@ from backend.schemas.groups import (
     GroupResponse,
     SingleStudentAddRequest,
     StudentResponse,
+    StudentBulkLinkRequest,
+    BulkLinkItemResult,
 )
 from backend.schemas.students import (
     StudentStatsResponse,
@@ -80,14 +82,28 @@ async def get_csv_template():
 @students_v1_router.get("", response_model=list[StudentResponse])
 @students_v1_router.get("/", response_model=list[StudentResponse], include_in_schema=False)
 async def list_all_students(
-    role: Optional[str] = "CADET",
+    role: Optional[str] = Query(None),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(require_role("ADMIN", "TEACHER")),
 ):
-    # Keep legacy aliases under the same access rules as the user directory.
-    from backend.api.router_users import get_users
+    stmt = (
+        select(User)
+        .options(selectinload(User.groups))
+    )
+    allowed_roles = ["CADET", "STUDENT"]
+    if role:
+        if role.upper() in allowed_roles:
+            stmt = stmt.where(User.role == role.upper())
+        else:
+            return []
+    else:
+        stmt = stmt.where(User.role.in_(allowed_roles))
+    if current_user.role == "TEACHER":
+        stmt = stmt.where(User.is_active.is_(True))
 
-    cadets = await get_users(role=role or "CADET", current_user=current_user, db=db)
+    res = await db.execute(stmt)
+    cadets = res.scalars().all()
+
     return [
         StudentResponse(
             user_id=s.user_id,
@@ -111,6 +127,34 @@ def _check_group_access(group: StudentGroup, current_user: User) -> None:
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Доступ запрещен: вы не являетесь преподавателем этой группы",
         )
+
+
+async def _repair_group_membership(group: StudentGroup, db: AsyncSession) -> list[User]:
+    """Normalize legacy cadet_ids and the M2M/user group lists on group reads."""
+    students = [s for s in group.students if s.role.upper() in {"CADET", "STUDENT"}]
+    known_ids = {s.user_id for s in students}
+    missing_ids = [uid for uid in (group.cadet_ids or []) if uid not in known_ids]
+    if missing_ids:
+        result = await db.execute(select(User).where(User.user_id.in_(missing_ids)))
+        for user in result.scalars().all():
+            if user.role.upper() in {"CADET", "STUDENT"} and user.user_id not in known_ids:
+                group.students.append(user)
+                students.append(user)
+                known_ids.add(user.user_id)
+
+    changed = False
+    normalized_ids = list(dict.fromkeys(user.user_id for user in students))
+    if list(group.cadet_ids or []) != normalized_ids:
+        group.cadet_ids = normalized_ids
+        changed = True
+    for user in students:
+        user_groups = list(user.group_ids or [])
+        if group.group_id not in user_groups:
+            user.group_ids = [*user_groups, group.group_id]
+            changed = True
+    if changed:
+        await db.commit()
+    return students
 
 
 # ─── Groups List & Create ─────────────────────────────────────────────────────
@@ -158,6 +202,59 @@ async def create_group(
     return group
 
 
+# ─── Group Details ────────────────────────────────────────────────────────────
+@api_groups_router.get("/{group_id}")
+@api_groups_router.get("/{group_id}/", include_in_schema=False)
+@groups_v1_router.get("/{group_id}")
+@groups_v1_router.get("/{group_id}/", include_in_schema=False)
+@groups_router.get("/{group_id}")
+@groups_router.get("/{group_id}/", include_in_schema=False)
+async def get_group_details(
+    group_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    stmt = (
+        select(StudentGroup)
+        .options(selectinload(StudentGroup.students))
+        .where(StudentGroup.group_id == group_id)
+    )
+    result = await db.execute(stmt)
+    group = result.scalar_one_or_none()
+    if not group:
+        raise HTTPException(status_code=404, detail="Группа не найдена")
+
+    _check_group_access(group, current_user)
+
+    students = await _repair_group_membership(group, db)
+
+    student_responses = [
+        StudentResponse(
+            user_id=s.user_id,
+            id=s.user_id,
+            username=s.username,
+            email=s.username,
+            full_name=s.full_name,
+            role=s.role,
+            groups=[group.group_name],
+            is_active=s.is_active,
+            created_at=s.created_at.isoformat() if s.created_at else None,
+        )
+        for s in students
+    ]
+
+    return {
+        "group_id": group.group_id,
+        "group_name": group.group_name,
+        "department": group.department,
+        "teacher_id": group.teacher_id,
+        "cadet_ids": [s.user_id for s in students],
+        "student_count": len(students),
+        "students": student_responses,
+        "cadets": student_responses,
+    }
+
+
 # ─── Group Students List ──────────────────────────────────────────────────────
 @api_groups_router.get("/{group_id}/students", response_model=list[StudentResponse])
 @api_groups_router.get("/{group_id}/students/", response_model=list[StudentResponse], include_in_schema=False)
@@ -182,17 +279,7 @@ async def get_group_students(
 
     _check_group_access(group, current_user)
 
-    students = list(group.students)
-    existing_ids = {s.user_id for s in students}
-    missing_ids = [uid for uid in (group.cadet_ids or []) if uid not in existing_ids]
-    if missing_ids:
-        missing_res = await db.execute(select(User).where(User.user_id.in_(missing_ids)))
-        missing_users = missing_res.scalars().all()
-        for u in missing_users:
-            if u not in group.students:
-                group.students.append(u)
-            students.append(u)
-        await db.commit()
+    students = await _repair_group_membership(group, db)
 
     return [
         StudentResponse(
@@ -210,6 +297,7 @@ async def get_group_students(
     ]
 
 
+# ─── Add Single Student to Group ──────────────────────────────────────────────
 # ─── Add Single Student to Group ──────────────────────────────────────────────
 @api_groups_router.post("/{group_id}/students/single")
 @api_groups_router.post("/{group_id}/students/single/", include_in_schema=False)
@@ -244,40 +332,36 @@ async def add_single_student_to_group(
         if not user:
             user_stmt = select(User).where(User.username == target_id)
             user = (await db.execute(user_stmt)).scalar_one_or_none()
+        if not user:
+            raise HTTPException(status_code=404, detail="Курсант с указанным ID не найден")
 
-    if not user and target_email:
+    elif target_email:
         user_stmt = select(User).where(User.username == target_email)
         user = (await db.execute(user_stmt)).scalar_one_or_none()
+        if not user:
+            raise HTTPException(status_code=404, detail="Курсант не найден")
+    else:
+        raise HTTPException(status_code=400, detail="Не указан email или ID курсанта")
 
-    if not user:
-        username = target_email or target_id
-        if not username:
-            raise HTTPException(status_code=400, detail="Не указан email или ID курсанта")
-
-        full_name_parts = [p for p in [student_in.last_name, student_in.first_name, student_in.middle_name] if p and p.strip()]
-        full_name = " ".join(full_name_parts) if full_name_parts else None
-
-        user = User(
-            username=username,
-            password_hash=hash_password("cadet123"),
-            role="CADET",
-            full_name=full_name,
-            group_ids=[group_id],
+    if user.role.upper() not in ["CADET", "STUDENT"]:
+        raise HTTPException(
+            status_code=400,
+            detail="В группу могут быть добавлены только пользователи с ролью CADET или STUDENT",
         )
-        db.add(user)
-        await db.flush()
+    if not user.is_active:
+        raise HTTPException(status_code=404, detail="Курсант не найден")
 
-    # Link user to group via M2M relationship
+    # Link user to group via M2M relationship (idempotent)
     if user not in group.students:
         group.students.append(user)
 
-    # Sync cadet_ids
+    # Sync cadet_ids (idempotent)
     cadet_ids = list(group.cadet_ids or [])
     if user.user_id not in cadet_ids:
         cadet_ids.append(user.user_id)
         group.cadet_ids = cadet_ids
 
-    # Sync user.group_ids
+    # Sync user.group_ids (idempotent)
     user_groups = list(user.group_ids or [])
     if group_id not in user_groups:
         user_groups.append(group_id)
@@ -298,6 +382,186 @@ async def add_single_student_to_group(
         "role": user.role,
         "students_count": len(group.students),
     }
+
+
+# ─── Link Existing Student to Group ───────────────────────────────────────────
+@api_groups_router.post("/{group_id}/students/link")
+@api_groups_router.post("/{group_id}/students/link/", include_in_schema=False)
+@groups_v1_router.post("/{group_id}/students/link")
+@groups_v1_router.post("/{group_id}/students/link/", include_in_schema=False)
+@groups_router.post("/{group_id}/students/link")
+@groups_router.post("/{group_id}/students/link/", include_in_schema=False)
+async def link_student_to_group(
+    group_id: str,
+    student_in: SingleStudentAddRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    stmt = (
+        select(StudentGroup)
+        .options(selectinload(StudentGroup.students))
+        .where(StudentGroup.group_id == group_id)
+    )
+    result = await db.execute(stmt)
+    group = result.scalar_one_or_none()
+    if not group:
+        raise HTTPException(status_code=404, detail="Группа не найдена")
+
+    _check_group_access(group, current_user)
+
+    target_id = (student_in.user_id or student_in.id or "").strip()
+    target_email = (str(student_in.email).strip() if student_in.email else (student_in.username or "").strip())
+
+    user = None
+    if target_id:
+        user = await db.get(User, target_id)
+        if not user:
+            user = (await db.execute(select(User).where(User.username == target_id))).scalar_one_or_none()
+    elif target_email:
+        user = (await db.execute(select(User).where(User.username == target_email))).scalar_one_or_none()
+
+    if not user:
+        raise HTTPException(status_code=404, detail="Курсант не найден")
+
+    if user.role.upper() not in ["CADET", "STUDENT"]:
+        raise HTTPException(
+            status_code=400,
+            detail="В группу могут быть добавлены только пользователи с ролью CADET или STUDENT",
+        )
+    if not user.is_active:
+        raise HTTPException(status_code=404, detail="Курсант не найден")
+
+    if user not in group.students:
+        group.students.append(user)
+
+    cadet_ids = list(group.cadet_ids or [])
+    if user.user_id not in cadet_ids:
+        cadet_ids.append(user.user_id)
+        group.cadet_ids = cadet_ids
+
+    user_groups = list(user.group_ids or [])
+    if group_id not in user_groups:
+        user_groups.append(group_id)
+        user.group_ids = user_groups
+
+    await db.commit()
+    await db.refresh(group)
+    await db.refresh(user)
+
+    return {
+        "message": "Курсант успешно привязан к группе",
+        "group_id": group_id,
+        "user_id": user.user_id,
+        "id": user.user_id,
+        "username": user.username,
+        "email": user.username,
+        "full_name": user.full_name,
+        "role": user.role,
+        "students_count": len(group.students),
+    }
+
+
+# ─── Bulk Link Students to Group ──────────────────────────────────────────────
+@api_groups_router.post("/{group_id}/students/bulk-link")
+@api_groups_router.post("/{group_id}/students/bulk-link/", include_in_schema=False)
+@groups_v1_router.post("/{group_id}/students/bulk-link")
+@groups_v1_router.post("/{group_id}/students/bulk-link/", include_in_schema=False)
+@groups_router.post("/{group_id}/students/bulk-link")
+@groups_router.post("/{group_id}/students/bulk-link/", include_in_schema=False)
+async def bulk_link_students(
+    group_id: str,
+    payload: Union[StudentBulkLinkRequest, list[str], dict] = Body(...),
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    stmt = (
+        select(StudentGroup)
+        .options(selectinload(StudentGroup.students))
+        .where(StudentGroup.group_id == group_id)
+    )
+    result = await db.execute(stmt)
+    group = result.scalar_one_or_none()
+    if not group:
+        raise HTTPException(status_code=404, detail="Группа не найдена")
+
+    _check_group_access(group, current_user)
+
+    raw_ids = []
+    if isinstance(payload, list):
+        raw_ids = payload
+    elif isinstance(payload, dict):
+        raw_ids = payload.get("user_ids", [])
+    elif hasattr(payload, "user_ids"):
+        raw_ids = payload.user_ids
+
+    cadet_ids = list(group.cadet_ids or [])
+    existing_ids = {s.user_id for s in group.students}
+    results = []
+    changed = False
+
+    for uid in raw_ids:
+        uid_str = str(uid).strip()
+        if not uid_str:
+            continue
+        user = await db.get(User, uid_str)
+        if not user:
+            user = (await db.execute(select(User).where(User.username == uid_str))).scalar_one_or_none()
+
+        if not user:
+            results.append({
+                "user_id": uid_str,
+                "status": "error",
+                "error": "Пользователь не найден",
+            })
+            continue
+
+        if user.role.upper() not in ["CADET", "STUDENT"]:
+            results.append({
+                "user_id": user.user_id,
+                "status": "error",
+                "error": "В группу могут быть добавлены только пользователи с ролью CADET или STUDENT",
+            })
+            continue
+
+        if not user.is_active:
+            results.append({
+                "user_id": user.user_id,
+                "status": "error",
+                "error": "Курсант не активен",
+            })
+            continue
+
+        if user.user_id in existing_ids or user in group.students:
+            results.append({
+                "user_id": user.user_id,
+                "status": "already_in_group",
+                "error": None,
+            })
+            continue
+
+        group.students.append(user)
+        existing_ids.add(user.user_id)
+        if user.user_id not in cadet_ids:
+            cadet_ids.append(user.user_id)
+
+        user_groups = list(user.group_ids or [])
+        if group_id not in user_groups:
+            user_groups.append(group_id)
+            user.group_ids = user_groups
+
+        changed = True
+        results.append({
+            "user_id": user.user_id,
+            "status": "success",
+            "error": None,
+        })
+
+    if changed:
+        group.cadet_ids = cadet_ids
+        await db.commit()
+        await db.refresh(group)
+
+    return results
 
 
 # ─── Remove Student from Group ────────────────────────────────────────────────
@@ -334,8 +598,8 @@ async def remove_student_from_group(
     if not user:
         raise HTTPException(status_code=404, detail="Курсант не найден")
 
-    if user in group.students:
-        group.students.remove(user)
+    # Unlink student without deleting user or user history/sessions
+    group.students = [s for s in group.students if s.user_id != user.user_id]
 
     cadet_ids = [uid for uid in (group.cadet_ids or []) if uid != user.user_id]
     group.cadet_ids = cadet_ids
@@ -376,11 +640,21 @@ async def upload_students_csv(
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
 
+    # Resolve and validate every row before changing anything. Teachers can only
+    # link existing cadets; CSV must never create a password known to the caller.
+    usernames = {student.email for student in students}
+    existing_res = await db.execute(select(User).where(User.username.in_(usernames))) if usernames else None
+    existing_users = {u.username: u for u in existing_res.scalars().all()} if existing_res else {}
+    for student in students:
+        user = existing_users.get(student.email)
+        if user and (user.role.upper() not in {"CADET", "STUDENT"} or not user.is_active):
+            raise HTTPException(status_code=400, detail=f"Пользователь {student.email} не является курсантом")
+        if not user and current_user.role == "TEACHER":
+            raise HTTPException(status_code=404, detail=f"Курсант {student.email} не найден")
+
     cadet_ids = list(group.cadet_ids or [])
     for student in students:
-        user_stmt = select(User).where(User.username == student.email)
-        user_res = await db.execute(user_stmt)
-        user = user_res.scalar_one_or_none()
+        user = existing_users.get(student.email)
         if not user:
             name_parts = [p for p in [student.last_name, student.first_name, student.middle_name] if p and p.strip()]
             full_name = " ".join(name_parts) if name_parts else None
@@ -393,6 +667,7 @@ async def upload_students_csv(
             )
             db.add(user)
             await db.flush()
+            existing_users[student.email] = user
         else:
             current_groups = list(user.group_ids or [])
             if group_id not in current_groups:
@@ -423,8 +698,14 @@ async def upload_students_csv(
 async def reset_group_passwords(
     group_id: str,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
+    current_user: User = Depends(require_role("ADMIN")),
 ):
+    if current_user.role == "TEACHER":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Преподавателям запрещен сброс паролей учеников",
+        )
+
     stmt = (
         select(StudentGroup)
         .options(selectinload(StudentGroup.students))
@@ -435,14 +716,12 @@ async def reset_group_passwords(
     if not group:
         raise HTTPException(status_code=404, detail="Группа не найдена")
 
-    _check_group_access(group, current_user)
-
-    students = list(group.students)
+    students = [s for s in group.students if s.role.upper() in {"CADET", "STUDENT"}]
     existing_ids = {s.user_id for s in students}
     missing_ids = [uid for uid in (group.cadet_ids or []) if uid not in existing_ids]
     if missing_ids:
         missing_res = await db.execute(select(User).where(User.user_id.in_(missing_ids)))
-        missing_users = missing_res.scalars().all()
+        missing_users = [u for u in missing_res.scalars().all() if u.role.upper() in {"CADET", "STUDENT"}]
         for u in missing_users:
             if u not in group.students:
                 group.students.append(u)
@@ -453,6 +732,8 @@ async def reset_group_passwords(
         new_pin = str(random.randint(10000, 99999))
         student.password_hash = hash_password(new_pin)
         student.password_changed_at = datetime.now(timezone.utc)
+        student.failed_login_attempts = 0
+        student.locked_until = None
         await revoke_all_user_sessions(db, user_id=student.user_id)
         results.append({
             "user_id": student.user_id,

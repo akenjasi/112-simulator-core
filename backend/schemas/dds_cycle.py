@@ -195,5 +195,10 @@ class DDSSessionStateResponse(BaseModel):
     actions: List[Dict[str, Any]] = Field(default_factory=list)
     submitted_at: Optional[str] = None
     score: Optional[float] = None
+    time_limit_seconds: Optional[int] = 30
+    time_remaining_seconds: Optional[int] = None
+    is_expired: Optional[bool] = False
+    start_time: Optional[str] = None
+    error_limit: Optional[int] = None
 
     model_config = ConfigDict(from_attributes=True)

@@ -47,7 +47,7 @@ async def setup_group(n=2):
                              cadet_ids=[u.user_id for u in users[:n]])
         # Overlapping membership must be deduplicated, not treated as two separate rosters.
         group.students = users[:1]
-        ticket = ScenarioTicket(title=f"Авария {tag}", content={"incoming_card": deepcopy(INCOMING)},
+        ticket = ScenarioTicket(workflow_state={"status": "APPROVED"}, title=f"Авария {tag}", content={"incoming_card": deepcopy(INCOMING)},
                                 ground_truth={"SECRET_ETALON": "must not reach cadet"})
         bad = ScenarioTicket(title=f"Неполный {tag}", content={})
         db.add_all([group, ticket, bad]); await db.commit()
@@ -267,7 +267,15 @@ async def test_ticket_catalog_and_creation_are_protected_and_missing_ticket_star
     assert (await request("GET", "/api/dds/tickets", d["cadets"][0])).status_code == 403
     payload = {"group_id":d["group_id"],"target_role":"DISPATCHER_DDS","ticket_id":d["ticket_id"]}
     assert (await request("POST", "/api/v1/lessons", d["other"], json=payload)).status_code == 403
-    lesson = await create(d, ticket=False)
+    # Public creation rejects missing tickets. A legacy incomplete WAITING row
+    # must still fail atomically when someone tries to start it.
+    missing = await request("POST", "/api/v1/lessons", d["teacher"], json={"group_id":d["group_id"],"target_role":"DISPATCHER_DDS"})
+    assert missing.status_code == 422
+    async with AsyncSessionLocal() as db:
+        incomplete = Assignment(group_id=d["group_id"], assigned_by=d["teacher"][0], target_role="DISPATCHER_DDS", session_type="CARD_ACTIONS", status="WAITING")
+        db.add(incomplete)
+        await db.commit()
+        lesson = incomplete.assignment_id
     r = await request("POST", f"/api/v1/lessons/{lesson}/start", d["teacher"])
     assert r.status_code in (409,422), r.text
     async with AsyncSessionLocal() as db:

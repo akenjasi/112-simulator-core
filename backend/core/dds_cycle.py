@@ -10,7 +10,7 @@ Handles:
 
 import math
 from copy import deepcopy
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from typing import Any, Dict, List, Optional
 
 from fastapi import HTTPException, status
@@ -39,6 +39,143 @@ def sanitize_incoming_card(content: Any) -> Dict[str, Any]:
         raise ValueError("Ticket content must contain 'incoming_card' dictionary")
 
     validated = DispatcherData.model_validate(raw_card)
+    return validated.model_dump(by_alias=True)
+
+
+def build_incoming_card(
+    category: Optional[str] = None,
+    subcategory: Optional[str] = None,
+    plot: Optional[str] = None,
+    ground_truth: Optional[Dict[str, Any]] = None,
+    etalon_services: Optional[List[Any]] = None,
+    seq: Optional[Any] = None,
+    now: Optional[datetime] = None,
+    caller_role: str = "очевидец",
+) -> Dict[str, Any]:
+    """Construct a full incoming_card passing strict DispatcherData validation.
+
+    Requirements:
+    - connection = "Установлено"
+    - phones = {"aon": phone, "provided": phone, "onSite": ""}
+    - incident = {"number": f"A{seq}-112", "savedAt": now, "operator": "112"}
+    - caller = {"name": fio, "role": caller_role, "address": address}
+    - description = plot (non-empty!)
+    - statuses = {"injured": "нет", "ambulanceRefusal": "нет", "blocked": "нет"}
+    - emergency = {"cs": False, "cp": False}
+    - classification = {"section": category, "title": subcategory, "class": subcategory, "visClass": ""}
+    - services = non-empty list of services from etalon_services / ground_truth / default.
+    """
+    gt = ground_truth if isinstance(ground_truth, dict) else {}
+    now_dt = now or datetime.now(timezone.utc)
+    now_str = now_dt.strftime("%d.%m.%Y %H:%M")
+    now_time = now_dt.strftime("%H:%M")
+
+    seq_str = str(seq).strip() if seq is not None and str(seq).strip() else "001"
+    incident_number = f"A{seq_str}-112"
+
+    # Missing source data stays unknown; a shared fallback phone would make
+    # unrelated incidents appear to come from the same caller.
+    phone = str(gt.get("phone") or "").strip()
+    fio = str(gt.get("fio") or "").strip()
+
+    if gt.get("address"):
+        address = str(gt["address"]).strip()
+    else:
+        addr_parts = []
+        street = gt.get("street")
+        if street and str(street).strip().lower() not in ("none", "null", ""):
+            st = str(street).strip()
+            if not any(st.lower().startswith(p) for p in ["ул", "пер", "пр", "ш", "б-р"]):
+                addr_parts.append(f"ул. {st}")
+            else:
+                addr_parts.append(st)
+        house = gt.get("house")
+        if house and str(house).strip().lower() not in ("none", "null", ""):
+            hs = str(house).strip()
+            if not hs.lower().startswith("д"):
+                addr_parts.append(f"д. {hs}")
+            else:
+                addr_parts.append(hs)
+        apartment = gt.get("apartment")
+        if apartment and str(apartment).strip().lower() not in ("none", "null", ""):
+            ap = str(apartment).strip()
+            if not ap.lower().startswith("кв"):
+                addr_parts.append(f"кв. {ap}")
+            else:
+                addr_parts.append(ap)
+        address = ", ".join(addr_parts)
+
+    desc = (plot or "").strip()
+    if not desc:
+        raise ValueError("description/plot cannot be empty for DispatcherData")
+
+    injured = str(gt.get("injured") or "нет").strip()
+    ambulance_refusal = str(gt.get("ambulanceRefusal") or "нет").strip()
+    blocked = str(gt.get("blocked") or "нет").strip()
+
+    cat_name = (category or "").strip() or "Общее"
+    subcat_name = (subcategory or "").strip() or cat_name
+
+    raw_services = etalon_services or gt.get("services") or gt.get("etalon_services") or []
+    names = []
+    for s in raw_services:
+        if isinstance(s, dict):
+            s_name = str(s.get("name") or "").strip()
+        else:
+            s_name = str(s).strip()
+        if s_name and s_name not in names:
+            names.append(s_name)
+
+    if not names:
+        lower_cat = cat_name.lower()
+        if "пожар" in lower_cat:
+            names.append("01 Пожарные")
+        elif "газ" in lower_cat:
+            names.append("04 Газ")
+        elif "медиц" in lower_cat or "скор" in lower_cat:
+            names.append("03 Скорая")
+        elif "дтп" in lower_cat:
+            names.extend(["01 Пожарные", "02 Полиция", "03 Скорая"])
+        elif "прав" in lower_cat:
+            names.append("02 Полиция")
+        else:
+            names.append("01 Пожарные")
+
+    unique_names = []
+    for n in names:
+        if n not in unique_names:
+            unique_names.append(n)
+
+    services_list = [
+        {
+            "id": f"srv-{idx + 1}",
+            "name": n,
+            "time": now_time,
+            "status": "Получена службой",
+            "isRejected": False,
+            "history": [],
+        }
+        for idx, n in enumerate(unique_names)
+    ]
+
+    card_dict = {
+        "connection": "Установлено",
+        "phones": {"aon": phone, "provided": phone, "onSite": ""},
+        "incident": {"number": incident_number, "savedAt": now_str, "operator": "112"},
+        "caller": {"name": fio, "role": caller_role or "очевидец", "address": address},
+        "description": desc,
+        "statuses": {"injured": injured, "ambulanceRefusal": ambulance_refusal, "blocked": blocked},
+        "emergency": {"cs": False, "cp": False},
+        "classification": {
+            "section": cat_name,
+            "title": subcat_name,
+            "class": subcat_name,
+            "visClass": "",
+        },
+        "services": services_list,
+    }
+
+    validated = DispatcherData.model_validate(card_dict)
     return validated.model_dump(by_alias=True)
 
 
@@ -130,51 +267,27 @@ def matches_dds_ticket_filters(
     return True
 
 
-def get_session_score(
-    evals: List[EvaluationResult],
-    trs: List[TicketResult],
-) -> Optional[float]:
+def _resolve_session_grade(evals, trs):
     """Extract actual finite score (0..100) from saved EvaluationResult or TicketResult.
 
     Deterministic selection by evaluation/result timestamps/IDs.
     Preserves 0.0 as a valid score; returns None only if un-evaluated.
     Does not infer or synthesize a rubric. Does not treat bool or NaN as valid.
     """
-    sorted_evals = sorted(
-        evals,
-        key=lambda e: (e.evaluated_at or datetime.min, e.evaluation_id or ""),
-        reverse=True,
-    )
-    sorted_trs = sorted(
-        trs,
-        key=lambda t: (t.created_at or datetime.min, t.result_id or ""),
-        reverse=True,
-    )
+    from backend.core.gradebook_records import latest_evaluation, resolve_attempt_score_and_status
 
-    # 1. Check EvaluationResult scores dictionary (final_score or total)
-    for ev in sorted_evals:
-        if isinstance(ev.scores, dict):
-            for key in ("final_score", "total"):
-                val = ev.scores.get(key)
-                if val is not None and not isinstance(val, bool):
-                    try:
-                        f_val = float(val)
-                        if math.isfinite(f_val) and 0.0 <= f_val <= 100.0:
-                            return f_val
-                    except (ValueError, TypeError):
-                        pass
+    def result_order(result):
+        stamp = result.updated_at or result.created_at or datetime.min.replace(tzinfo=timezone.utc)
+        if stamp.tzinfo is None:
+            stamp = stamp.replace(tzinfo=timezone.utc)
+        return bool(result.is_appealed), stamp, result.result_id or ""
 
-    # 2. Check TicketResult score_total
-    for tr in sorted_trs:
-        if tr.score_total is not None and not isinstance(tr.score_total, bool):
-            try:
-                f_val = float(tr.score_total)
-                if math.isfinite(f_val) and 0.0 <= f_val <= 100.0:
-                    return f_val
-            except (ValueError, TypeError):
-                pass
+    result = max(trs, key=result_order, default=None)
+    return resolve_attempt_score_and_status(None, result, latest_evaluation(evals))
 
-    return None
+
+def get_session_score(evals: List[EvaluationResult], trs: List[TicketResult]) -> Optional[float]:
+    return _resolve_session_grade(evals, trs)[0]
 
 
 async def lock_assignment(db: AsyncSession, assignment_id: str) -> None:
@@ -195,7 +308,7 @@ def build_session_state_dict(
     """Construct the standardized state dictionary for DDS assignments/sessions."""
     dds_data = (session.dynamic_state or {}).get("dds", {}) if isinstance(session.dynamic_state, dict) else {}
 
-    incoming_card = dds_data.get("incoming_card")
+    incoming_card = dds_data.get("scenario_snapshot") or dds_data.get("incoming_card")
     if not incoming_card and card:
         incoming_card = card.filled_data or {}
     if not incoming_card:
@@ -205,6 +318,49 @@ def build_session_state_dict(
     actions = dds_data.get("actions", [])
     submitted_at = dds_data.get("submitted_at")
     score = get_session_score(evals, trs)
+
+    # Time calculations
+    start_dt = session.start_time
+    if start_dt is not None and start_dt.tzinfo is None:
+        start_dt = start_dt.replace(tzinfo=timezone.utc)
+
+    end_dt = None
+    if submitted_at:
+        if isinstance(submitted_at, str):
+            try:
+                end_dt = datetime.fromisoformat(submitted_at)
+                if end_dt.tzinfo is None:
+                    end_dt = end_dt.replace(tzinfo=timezone.utc)
+            except Exception:
+                end_dt = None
+        elif isinstance(submitted_at, datetime):
+            end_dt = submitted_at if submitted_at.tzinfo else submitted_at.replace(tzinfo=timezone.utc)
+
+    if end_dt is None:
+        if session.end_time:
+            end_dt = session.end_time if session.end_time.tzinfo else session.end_time.replace(tzinfo=timezone.utc)
+        else:
+            end_dt = datetime.now(timezone.utc)
+
+    if start_dt is not None:
+        elapsed_seconds = max(0, int((end_dt - start_dt).total_seconds()))
+    else:
+        elapsed_seconds = 0
+
+    limit = (
+        session.time_limit_seconds
+        if (session.time_limit_seconds and session.time_limit_seconds > 0)
+        else (
+            lesson.time_limit_seconds
+            if (lesson and lesson.time_limit_seconds and lesson.time_limit_seconds > 0)
+            else 30
+        )
+    )
+    time_limit_seconds = limit
+    time_remaining_seconds = max(0, time_limit_seconds - elapsed_seconds)
+    is_expired = bool(dds_data.get("timed_out") or elapsed_seconds > time_limit_seconds)
+    start_time_iso = start_dt.isoformat() if start_dt is not None else None
+    error_limit = session.error_limit if session.error_limit is not None else (lesson.error_limit if lesson else None)
 
     return {
         "session_id": session.session_id,
@@ -217,6 +373,11 @@ def build_session_state_dict(
         "actions": actions,
         "submitted_at": submitted_at,
         "score": score,
+        "time_limit_seconds": time_limit_seconds,
+        "time_remaining_seconds": time_remaining_seconds,
+        "is_expired": is_expired,
+        "start_time": start_time_iso,
+        "error_limit": error_limit,
     }
 
 
@@ -323,6 +484,42 @@ async def apply_dds_action(
             status_code=status.HTTP_409_CONFLICT,
             detail="Lesson is not in ACTIVE state; action rejected",
         )
+
+    # Server timer check
+    limit = (
+        session.time_limit_seconds
+        if (session.time_limit_seconds and session.time_limit_seconds > 0)
+        else (
+            lesson.time_limit_seconds
+            if (lesson and lesson.time_limit_seconds and lesson.time_limit_seconds > 0)
+            else 30
+        )
+    )
+    now_dt = datetime.now(timezone.utc)
+    start_dt = session.start_time
+    if start_dt is not None:
+        if start_dt.tzinfo is None:
+            start_dt = start_dt.replace(tzinfo=timezone.utc)
+    else:
+        start_dt = now_dt
+
+    is_time_exceeded = now_dt > (start_dt + timedelta(seconds=limit))
+    if is_time_exceeded:
+        time_exceeded_seconds = max(1, int((now_dt - (start_dt + timedelta(seconds=limit))).total_seconds()))
+        dds_data["timed_out"] = True
+        dds_data["time_exceeded_seconds"] = time_exceeded_seconds
+
+        state_copy = deepcopy(session.dynamic_state or {})
+        state_copy["dds"] = dds_data
+        session.dynamic_state = state_copy
+        flag_modified(session, "dynamic_state")
+
+        if (lesson.mode or "").upper() == "EXAM":
+            await db.commit()
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="Время выполнения экзамена истекло",
+            )
 
     # 6. Fetch IncidentCard
     card_id = dds_data.get("card_id")
@@ -505,8 +702,31 @@ async def finish_dds_session(
             detail="Cannot finish session without valid incident card",
         )
 
-    # 6. Mark COMPLETED atomically
+    # 6. Check time limit
+    limit = (
+        session.time_limit_seconds
+        if (session.time_limit_seconds and session.time_limit_seconds > 0)
+        else (
+            lesson.time_limit_seconds
+            if (lesson and lesson.time_limit_seconds and lesson.time_limit_seconds > 0)
+            else 30
+        )
+    )
     now_dt = datetime.now(timezone.utc)
+    start_dt = session.start_time
+    if start_dt is not None:
+        if start_dt.tzinfo is None:
+            start_dt = start_dt.replace(tzinfo=timezone.utc)
+    else:
+        start_dt = now_dt
+
+    is_time_exceeded = now_dt > (start_dt + timedelta(seconds=limit))
+    if is_time_exceeded:
+        time_exceeded_seconds = max(1, int((now_dt - (start_dt + timedelta(seconds=limit))).total_seconds()))
+        dds_data["timed_out"] = True
+        dds_data["time_exceeded_seconds"] = time_exceeded_seconds
+
+    # 7. Mark COMPLETED atomically
     session.status = "COMPLETED"
     session.end_time = now_dt
 
@@ -642,7 +862,10 @@ async def build_dds_cadet_stats(
 ) -> tuple[List[CadetLessonStats], int, int, int, int]:
     """Collect honest cadet stats and aggregate counters for a DDS lesson without faking scores/tickets."""
     # 1. Fetch sessions linked to this lesson
-    stmt_sess = select(ExamSession).where(ExamSession.assignment_id == lesson.assignment_id).order_by(ExamSession.start_time.asc(), ExamSession.session_id.asc())
+    stmt_sess = select(ExamSession).where(ExamSession.assignment_id == lesson.assignment_id)
+    if lesson.cadet_id:
+        stmt_sess = stmt_sess.where(ExamSession.cadet_id == lesson.cadet_id)
+    stmt_sess = stmt_sess.order_by(ExamSession.start_time.asc(), ExamSession.session_id.asc())
     sessions = list((await db.scalars(stmt_sess)).all())
     session_by_cadet = {s.cadet_id: s for s in sessions if s.cadet_id}
 
@@ -663,7 +886,9 @@ async def build_dds_cadet_stats(
             group_students = []
     else:
         cadet_ids_set = set()
-        if group:
+        if lesson.cadet_id:
+            cadet_ids_set.add(lesson.cadet_id)
+        elif group:
             if group.cadet_ids:
                 cadet_ids_set.update(group.cadet_ids)
             if group.students:
@@ -688,6 +913,14 @@ async def build_dds_cadet_stats(
             seen_ids.add(st.user_id)
             dedup_students.append(st)
     group_students = dedup_students
+
+    if lesson.cadet_id:
+        group_students = [st for st in group_students if st.user_id == lesson.cadet_id]
+        if not group_students:
+            res_one = await db.execute(select(User).where(User.user_id == lesson.cadet_id))
+            target_cadet = res_one.scalar_one_or_none()
+            if target_cadet:
+                group_students = [target_cadet]
 
     # 3. Fetch cards, evals, trs
     session_ids = [s.session_id for s in sessions]
@@ -788,15 +1021,10 @@ async def build_dds_cadet_stats(
             c_stats.status = s_status or "WAITING"
             c_stats.progress = 0
 
-        # passed/failed strictly from explicit status completed/evaluated TicketResult, not threshold
-        is_passed = any(
-            tr.is_passed for tr in session_trs
-            if (tr.status or "").lower() in ("completed", "evaluated")
-        )
-        is_failed = any(
-            (not tr.is_passed) for tr in session_trs
-            if (tr.status or "").lower() in ("completed", "evaluated")
-        )
+        # A default false is_passed flag is not a failed evaluation.
+        resolved_score, resolved_passed, *_ = _resolve_session_grade(session_evals, session_trs)
+        is_passed = resolved_score is not None and resolved_passed is True
+        is_failed = resolved_score is not None and resolved_passed is False
         if is_passed:
             c_stats.passed = 1
             c_stats.failed = 0
@@ -817,7 +1045,9 @@ async def build_dds_cadet_stats(
             card = session_cards[0] if session_cards else None
             card_id = (card.card_id if card else None) or dds_data.get("card_id")
             t_id = s.ticket_id or (card.scenario_id if card else None) or lesson.scenario_id or card_id
-            title = scenario_map.get(t_id) or (f"Билет #{t_id[:8]}" if t_id else "Карточка")
+            from backend.core.gradebook_records import historical_record_snapshot
+            saved_scenario = historical_record_snapshot(s, t_id)
+            title = (saved_scenario.get("title") if saved_scenario else None) or (f"Билет #{t_id[:8]}" if t_id else "Карточка")
             t_score = get_session_score(session_evals, session_trs)
 
             # Error details strictly from associated results, deduplicated
@@ -932,8 +1162,9 @@ async def build_dds_cadet_stats(
                             if msg not in card_errors:
                                 card_errors.append(msg)
 
-                card_is_passed = any(tr.is_passed for tr in card_trs if (tr.status or "").lower() in ("completed", "evaluated"))
-                card_is_failed = any((not tr.is_passed) for tr in card_trs if (tr.status or "").lower() in ("completed", "evaluated"))
+                _, card_passed, *_ = _resolve_session_grade(card_evals, card_trs)
+                card_is_passed = card_score is not None and card_passed is True
+                card_is_failed = card_score is not None and card_passed is False
 
                 if card_is_passed:
                     t_status = "passed"
@@ -1008,8 +1239,9 @@ async def build_dds_cadet_stats(
 
                 has_completed = any((tr.status or "").lower() in ("completed", "evaluated") for tr in sorted_trs)
                 if has_completed:
-                    tr_is_passed = any(tr.is_passed for tr in sorted_trs if (tr.status or "").lower() in ("completed", "evaluated"))
-                    tr_is_failed = any((not tr.is_passed) for tr in sorted_trs if (tr.status or "").lower() in ("completed", "evaluated"))
+                    _, saved_passed, *_ = _resolve_session_grade(session_evals, sorted_trs)
+                    tr_is_passed = tr_score is not None and saved_passed is True
+                    tr_is_failed = tr_score is not None and saved_passed is False
                     if tr_is_passed:
                         t_status = "passed"
                     elif tr_is_failed:

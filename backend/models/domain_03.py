@@ -141,7 +141,7 @@ class Assignment(Base):
                 kwargs["session_type"] = "CALL_SIMULATION"
         if "categories" not in kwargs:
             kwargs["categories"] = []
-        if "time_limit_seconds" not in kwargs:
+        if "time_limit_seconds" not in kwargs or not kwargs["time_limit_seconds"] or kwargs["time_limit_seconds"] <= 0:
             kwargs["time_limit_seconds"] = 30
         if "teacher_notes" not in kwargs:
             kwargs["teacher_notes"] = ""
@@ -218,7 +218,7 @@ class ExamSession(Base):
             kwargs["offline_buffer"] = []
         if "categories" not in kwargs:
             kwargs["categories"] = []
-        if "time_limit_seconds" not in kwargs:
+        if "time_limit_seconds" not in kwargs or not kwargs["time_limit_seconds"] or kwargs["time_limit_seconds"] <= 0:
             kwargs["time_limit_seconds"] = 30
         super().__init__(**kwargs)
 

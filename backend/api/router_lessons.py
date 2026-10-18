@@ -1,3 +1,4 @@
+from copy import deepcopy
 from datetime import datetime, timezone
 from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -11,6 +12,7 @@ from backend.core.dds_cycle import (
     lock_assignment,
     sanitize_incoming_card,
 )
+from backend.core.ticket_lifecycle import is_approved_dds_ticket
 from backend.core.deps import require_role, get_current_user
 from backend.database import get_db
 from backend.models.domain_01 import SecurityPolicy, User, StudentGroup
@@ -60,278 +62,12 @@ async def _build_cadet_stats(
     group: Optional[StudentGroup],
     db: AsyncSession,
 ) -> tuple[List[CadetLessonStats], int, int, int, int]:
-    """Helper to collect cadet stats and aggregate counters for a lesson."""
-    if lesson.target_role == "DISPATCHER_DDS":
-        return await build_dds_cadet_stats(lesson, group, db)
+    """Build history from saved sessions and results for every lesson role.
 
-    cadets_list: List[CadetLessonStats] = []
-    
-    # 1. Fetch group members
-    group_students: List[User] = []
-    if group:
-        if group.students:
-            group_students = list(group.students)
-        elif group.cadet_ids:
-            stmt = select(User).where(User.user_id.in_(group.cadet_ids))
-            res = await db.execute(stmt)
-            group_students = list(res.scalars().all())
-
-    # 2. Fetch all exam sessions linked to this lesson
-    stmt_sessions = select(ExamSession).where(ExamSession.assignment_id == lesson.assignment_id)
-    res_sessions = await db.execute(stmt_sessions)
-    sessions = list(res_sessions.scalars().all())
-    session_by_cadet = {s.cadet_id: s for s in sessions if s.cadet_id}
-
-    # Fetch evaluation results and ticket results for these sessions
-    session_ids = [s.session_id for s in sessions]
-    evals_by_session: dict[str, list[EvaluationResult]] = {}
-    ticket_results_by_session: dict[str, list[TicketResult]] = {}
-
-    if session_ids:
-        stmt_evals = select(EvaluationResult).where(EvaluationResult.session_id.in_(session_ids))
-        res_evals = await db.execute(stmt_evals)
-        for ev in res_evals.scalars().all():
-            evals_by_session.setdefault(ev.session_id, []).append(ev)
-
-        stmt_tr = select(TicketResult).where(TicketResult.session_id.in_(session_ids))
-        res_tr = await db.execute(stmt_tr)
-        for tr in res_tr.scalars().all():
-            ticket_results_by_session.setdefault(tr.session_id, []).append(tr)
-
-    # Fetch scenario titles for user-friendly ticket naming
-    scenario_map: dict[str, str] = {}
-    try:
-        stmt_sc = select(ScenarioTicket)
-        res_sc = await db.execute(stmt_sc)
-        for sc in res_sc.scalars().all():
-            scenario_map[sc.scenario_id] = sc.title
-    except Exception:
-        pass
-
-    total_in_progress = 0
-    total_passed = 0
-    total_failed = 0
-    progress_sum = 0
-
-    if not group_students and sessions:
-        # Fallback to cadet_ids from sessions
-        cadet_ids = [s.cadet_id for s in sessions if s.cadet_id]
-        if cadet_ids:
-            res_u = await db.execute(select(User).where(User.user_id.in_(cadet_ids)))
-            group_students = list(res_u.scalars().all())
-
-    for student in group_students:
-        s = session_by_cadet.get(student.user_id)
-        c_stats = CadetLessonStats(
-            cadet_id=student.user_id,
-            cadet_name=student.full_name or student.username,
-            status="WAITING" if lesson.status == "WAITING" else "IDLE",
-        )
-
-        cadet_tickets: List[CadetTicketDetail] = []
-
-        if s:
-            c_stats.session_id = s.session_id
-            evals = evals_by_session.get(s.session_id, [])
-            trs = ticket_results_by_session.get(s.session_id, [])
-
-            passed_c = 0
-            failed_c = 0
-            score_acc = []
-
-            # 1. Process explicit TicketResult items
-            for tr in trs:
-                t_id = tr.ticket_id or tr.result_id
-                title = scenario_map.get(t_id) or f"Билет #{t_id[:8] if len(t_id) > 8 else t_id}"
-                errors = []
-                if isinstance(tr.error_details, list):
-                    for err in tr.error_details:
-                        if isinstance(err, dict):
-                            errors.append(err.get("message") or str(err))
-                        else:
-                            errors.append(str(err))
-                elif isinstance(tr.error_details, dict):
-                    for k, v in tr.error_details.items():
-                        if isinstance(v, (str, int, float)):
-                            errors.append(f"{k}: {v}")
-                        elif isinstance(v, dict) and "message" in v:
-                            errors.append(str(v["message"]))
-
-                sc = 100.0 if tr.is_passed else max(0.0, 100.0 - tr.errors_count * 25.0)
-                status_str = "passed" if tr.is_passed else "failed"
-                if tr.is_passed:
-                    passed_c += 1
-                else:
-                    failed_c += 1
-                score_acc.append(sc)
-
-                cadet_tickets.append(
-                    CadetTicketDetail(
-                        ticket_id=t_id,
-                        title=title,
-                        status=status_str,
-                        score=round(sc, 1),
-                        errors_count=tr.errors_count,
-                        errors=errors,
-                        completed_at=tr.created_at,
-                    )
-                )
-
-            # 2. Process EvaluationResult items if not already covered
-            for ev in evals:
-                t_id = ev.card_id or ev.evaluation_id
-                # Avoid duplicate ticket if already added from TicketResult
-                if any(t.ticket_id == t_id for t in cadet_tickets):
-                    continue
-
-                title = scenario_map.get(t_id) or f"Карточка #{t_id[:8] if len(t_id) > 8 else t_id}"
-                ev_errors = []
-                if ev.errors_list:
-                    for err in ev.errors_list:
-                        if isinstance(err, dict):
-                            ev_errors.append(err.get("message") or str(err))
-                        else:
-                            ev_errors.append(str(err))
-
-                sc = ev.scores.get("final_score") if isinstance(ev.scores, dict) else None
-                if sc is not None:
-                    sc = float(sc)
-                    score_acc.append(sc)
-                    if sc >= 70:
-                        status_str = "passed"
-                        passed_c += 1
-                    else:
-                        status_str = "failed"
-                        failed_c += 1
-                elif ev_errors and len(ev_errors) > 2:
-                    status_str = "failed"
-                    failed_c += 1
-                    sc = 50.0
-                    score_acc.append(sc)
-                else:
-                    status_str = "passed"
-                    passed_c += 1
-                    sc = 90.0
-                    score_acc.append(sc)
-
-                cadet_tickets.append(
-                    CadetTicketDetail(
-                        ticket_id=t_id,
-                        title=title,
-                        status=status_str,
-                        score=round(sc, 1) if sc is not None else 85.0,
-                        errors_count=len(ev_errors),
-                        errors=ev_errors,
-                        completed_at=ev.evaluated_at,
-                    )
-                )
-
-            c_stats.passed = passed_c
-            c_stats.failed = failed_c
-            
-            s_status = (s.status or "").upper()
-            if s_status in ("ACTIVE", "IN_PROGRESS"):
-                c_stats.in_progress = 1
-                c_stats.status = "IN_PROGRESS"
-                c_stats.progress = 50 if (passed_c + failed_c == 0) else min(90, (passed_c + failed_c) * 35)
-                c_stats.current_ticket = "Билет #1 (В процессе выполнения)"
-                total_in_progress += 1
-            elif s_status in ("COMPLETED", "FINISHED"):
-                c_stats.in_progress = 0
-                c_stats.progress = 100
-                if failed_c > 0 and failed_c >= passed_c:
-                    c_stats.status = "FAILED"
-                    total_failed += 1
-                else:
-                    c_stats.status = "PASSED"
-                    total_passed += 1
-                c_stats.current_ticket = "Билет #1 (Завершено)"
-            else:
-                c_stats.status = s_status or "WAITING"
-                c_stats.progress = 0
-                c_stats.current_ticket = "Ожидание билета"
-
-            if score_acc:
-                c_stats.score = int(sum(score_acc) / len(score_acc))
-            elif c_stats.status == "PASSED":
-                c_stats.score = 90
-            elif c_stats.status == "FAILED":
-                c_stats.score = 55
-            else:
-                c_stats.score = None
-
-            c_stats.last_activity = "В сети"
-        else:
-            if lesson.status == "ACTIVE":
-                c_stats.status = "IN_PROGRESS"
-                c_stats.current_ticket = "Билет #1"
-                c_stats.in_progress = 1
-                c_stats.progress = 10
-                total_in_progress += 1
-            elif lesson.status == "COMPLETED":
-                c_stats.status = "PASSED"
-                c_stats.progress = 100
-                c_stats.passed = 1
-                c_stats.score = 85
-                c_stats.current_ticket = "Завершено"
-                total_passed += 1
-            else:
-                c_stats.status = "WAITING"
-                c_stats.current_ticket = "Ожидание запуска"
-
-        # 3. Fallback tickets generation if session was completed or active without stored TicketResult
-        if not cadet_tickets:
-            if c_stats.passed > 0 or c_stats.failed > 0 or lesson.status == "COMPLETED" or (s and (s.status or "").upper() in ("COMPLETED", "FINISHED")):
-                p_cnt = c_stats.passed if c_stats.passed > 0 else (1 if lesson.status == "COMPLETED" or c_stats.status == "PASSED" else 0)
-                f_cnt = c_stats.failed if c_stats.failed > 0 else (1 if c_stats.status == "FAILED" else 0)
-                for idx in range(p_cnt):
-                    cadet_tickets.append(
-                        CadetTicketDetail(
-                            ticket_id=f"ticket-p-{idx+1}",
-                            title=f"Билет #{idx+1}: Пожар в жилом секторе" if idx == 0 else f"Билет #{idx+1}: Запах бытового газа в подъезде",
-                            status="passed",
-                            score=float(c_stats.score or 92),
-                            errors_count=0,
-                            errors=[],
-                            completed_at=lesson.completed_at or lesson.created_at,
-                        )
-                    )
-                for idx in range(f_cnt):
-                    cadet_tickets.append(
-                        CadetTicketDetail(
-                            ticket_id=f"ticket-f-{idx+1}",
-                            title=f"Билет #{p_cnt + idx + 1}: ДТП с пострадавшими на перекрестке",
-                            status="failed",
-                            score=50.0,
-                            errors_count=2,
-                            errors=[
-                                "Неверно определена очередность экстренных служб",
-                                "Превышено нормативное время опроса заявителя",
-                            ],
-                            completed_at=lesson.completed_at or lesson.created_at,
-                        )
-                    )
-            elif c_stats.in_progress > 0 or lesson.status == "ACTIVE" or (s and (s.status or "").upper() in ("ACTIVE", "IN_PROGRESS")):
-                cadet_tickets.append(
-                    CadetTicketDetail(
-                        ticket_id="ticket-active",
-                        title=c_stats.current_ticket or "Билет #1: Прием экстренного вызова (В процессе)",
-                        status="in_progress",
-                        score=None,
-                        errors_count=0,
-                        errors=[],
-                        completed_at=None,
-                    )
-                )
-
-        c_stats.tickets = cadet_tickets
-        progress_sum += c_stats.progress
-        cadets_list.append(c_stats)
-
-    total_cadets = len(cadets_list)
-    overall_progress = round(progress_sum / max(total_cadets, 1))
-
-    return cadets_list, total_cadets, total_in_progress, total_passed, total_failed
+    Legacy lessons use the same honest collector; completion alone cannot
+    manufacture tickets, participant progress or grades.
+    """
+    return await build_dds_cadet_stats(lesson, group, db)
 
 
 @lessons_router.post(
@@ -370,7 +106,37 @@ async def create_lesson(
             detail=f"Group with ID {payload.group_id} not found",
         )
 
+    if current_user.role != "ADMIN" and group.teacher_id != current_user.user_id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Занятие можно назначить только своей группе")
+
+    if payload.cadet_id:
+        target_cadet = await db.get(User, payload.cadet_id)
+        if not target_cadet:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Cadet with ID {payload.cadet_id} not found",
+            )
+        if target_cadet.role not in ("CADET", "STUDENT") or not target_cadet.is_active:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Specified cadet is not an active cadet/student",
+            )
+        group_cadet_ids = set(group.cadet_ids or [])
+        if group.students:
+            group_cadet_ids.update(u.user_id for u in group.students if getattr(u, "user_id", None))
+        user_group_ids = set(target_cadet.group_ids or [])
+        if hasattr(target_cadet, "groups") and target_cadet.groups:
+            user_group_ids.update(g.group_id for g in target_cadet.groups)
+
+        if target_cadet.user_id not in group_cadet_ids and payload.group_id not in user_group_ids:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Cadet {payload.cadet_id} does not belong to group {payload.group_id}",
+            )
+
     if payload.target_role == "DISPATCHER_DDS":
+        if not payload.ticket_id:
+            raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Выберите утверждённый билет ДДС")
         if current_user.role != "ADMIN" and group.teacher_id != current_user.user_id:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
@@ -378,27 +144,30 @@ async def create_lesson(
             )
         if payload.ticket_id:
             ticket = await db.get(ScenarioTicket, payload.ticket_id)
-            if not is_suitable_dds_ticket(ticket):
+            if not is_suitable_dds_ticket(ticket) or not is_approved_dds_ticket(ticket):
                 raise HTTPException(
                     status_code=status.HTTP_409_CONFLICT,
-                    detail="Выбранный билет некорректен или не существует",
+                    detail="Выбранный билет не утверждён, некорректен или не существует",
                 )
 
     session_type = (
         "CARD_ACTIONS" if payload.target_role == "DISPATCHER_DDS" else "CALL_SIMULATION"
     )
 
+    time_limit = payload.time_limit_seconds if (payload.time_limit_seconds and payload.time_limit_seconds > 0) else 30
+
     lesson = Lesson(
         group_id=payload.group_id,
+        cadet_id=payload.cadet_id,
         assigned_by=current_user.user_id,
         target_role=payload.target_role or "OPERATOR_112",
         session_type=session_type,
         scenario_id=payload.ticket_id if payload.target_role == "DISPATCHER_DDS" else None,
-        mode="TRAINING",
+        mode=payload.mode,
         status="WAITING",
         categories=payload.categories or [],
         complexity=payload.complexity or "level_1",
-        time_limit_seconds=payload.time_limit_seconds or 30,
+        time_limit_seconds=time_limit,
         error_limit=payload.error_limit,
         teacher_notes="",
     )
@@ -413,9 +182,11 @@ async def create_lesson(
     return LessonDetailResponse(
         id=lesson.id,
         group_id=lesson.group_id,
+        cadet_id=lesson.cadet_id,
         group_name=group.group_name,
         teacher_id=lesson.assigned_by,
         target_role=lesson.target_role,
+        mode=lesson.mode,
         status=lesson.status,
         categories=lesson.categories or [],
         complexity=lesson.complexity,
@@ -482,8 +253,10 @@ async def list_lessons(
             LessonSummaryResponse(
                 id=l.id,
                 group_id=l.group_id,
+                cadet_id=l.cadet_id,
                 group_name=grp.group_name if grp else "Не указана",
                 target_role=l.target_role or "OPERATOR_112",
+                mode=l.mode,
                 status=l.status,
                 complexity=l.complexity,
                 categories=l.categories or [],
@@ -530,6 +303,8 @@ async def get_lesson_detail(
     if current_user.role == "CADET":
         if lesson.target_role == "DISPATCHER_DDS":
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied")
+        if lesson.cadet_id and current_user.user_id != lesson.cadet_id:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied")
         user_group_ids = set(current_user.group_ids or [])
         if hasattr(current_user, "groups") and current_user.groups:
             user_group_ids.update(g.group_id for g in current_user.groups)
@@ -553,9 +328,11 @@ async def get_lesson_detail(
     return LessonDetailResponse(
         id=lesson.id,
         group_id=lesson.group_id,
+        cadet_id=lesson.cadet_id,
         group_name=group.group_name if group else None,
         teacher_id=lesson.assigned_by,
         target_role=lesson.target_role or "OPERATOR_112",
+        mode=lesson.mode,
         status=lesson.status,
         categories=lesson.categories or [],
         complexity=lesson.complexity,
@@ -617,9 +394,11 @@ async def start_lesson(
             return LessonDetailResponse(
                 id=lesson.id,
                 group_id=lesson.group_id,
+                cadet_id=lesson.cadet_id,
                 group_name=group.group_name if group else None,
                 teacher_id=lesson.assigned_by,
                 target_role=lesson.target_role,
+        mode=lesson.mode,
                 status=lesson.status,
                 categories=lesson.categories or [],
                 complexity=lesson.complexity,
@@ -641,28 +420,35 @@ async def start_lesson(
         if not lesson.scenario_id:
             raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="No scenario ticket chosen for DDS lesson")
         ticket = await db.get(ScenarioTicket, lesson.scenario_id)
-        if not is_suitable_dds_ticket(ticket):
-            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Scenario ticket is invalid or deleted")
+        if not is_suitable_dds_ticket(ticket) or not is_approved_dds_ticket(ticket):
+            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Scenario ticket must be approved, valid and not deleted")
         sanitized_incoming = sanitize_incoming_card(ticket.content)
 
-        cadet_user_ids = set(group.cadet_ids or []) if group else set()
-        if group and group.students:
-            cadet_user_ids.update(u.user_id for u in group.students if getattr(u, "user_id", None))
-        if not cadet_user_ids:
-            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Group has no cadets assigned")
+        if lesson.cadet_id:
+            target_cadet = await db.get(User, lesson.cadet_id)
+            if not target_cadet or not target_cadet.is_active or target_cadet.role not in ("CADET", "STUDENT"):
+                raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Assigned cadet is not active")
+            active_cadets = [target_cadet]
+        else:
+            cadet_user_ids = set(group.cadet_ids or []) if group else set()
+            if group and group.students:
+                cadet_user_ids.update(u.user_id for u in group.students if getattr(u, "user_id", None))
+            if not cadet_user_ids:
+                raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Group has no cadets assigned")
 
-        res_cadets = await db.execute(
-            select(User).where(User.user_id.in_(list(cadet_user_ids)), User.role == "CADET", User.is_active == True)  # noqa: E712
-        )
-        active_cadets = list(res_cadets.scalars().all())
-        if not active_cadets:
-            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Group has no active cadets")
+            res_cadets = await db.execute(
+                select(User).where(User.user_id.in_(list(cadet_user_ids)), User.role.in_(["CADET", "STUDENT"]), User.is_active == True)  # noqa: E712
+            )
+            active_cadets = list(res_cadets.scalars().all())
+            if not active_cadets:
+                raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Group has no active cadets")
 
         now_dt = datetime.now(timezone.utc)
         lesson.status = "ACTIVE"
         lesson.started_at = now_dt
+        lesson.card_pool_ids = [deepcopy(sanitized_incoming)]
+        flag_modified(lesson, "card_pool_ids")
 
-        from copy import deepcopy
         for student in active_cadets:
             cadet_session = ExamSession(
                 session_type="CARD_ACTIONS",
@@ -674,7 +460,7 @@ async def start_lesson(
                 categories=lesson.categories or [],
                 complexity=lesson.complexity,
                 error_limit=lesson.error_limit,
-                time_limit_seconds=lesson.time_limit_seconds,
+                time_limit_seconds=lesson.time_limit_seconds or 30,
             )
             db.add(cadet_session)
             await db.flush()
@@ -708,11 +494,21 @@ async def start_lesson(
             await db.flush()
 
             cadet_session.dynamic_state = {
+                # Kept outside the cadet-facing DDS state; only the teacher's
+                # gradebook reads this immutable answer key.
+                "_gradebook_snapshot": {
+                    "ticket_id": ticket.scenario_id,
+                    "title": ticket.title or (ticket.settings or {}).get("title") or f"Билет #{ticket.scenario_id[:8]}",
+                    "etalon": deepcopy(ticket.ground_truth or {}),
+                },
                 "dds": {
                     "incoming_card": deepcopy(sanitized_incoming),
+                    "scenario_snapshot": deepcopy(sanitized_incoming),
                     "card_id": card.card_id,
                     "actions": [],
                     "submitted_at": None,
+                    "error_limit": lesson.error_limit,
+                    "time_limit_seconds": lesson.time_limit_seconds or 30,
                 }
             }
             flag_modified(cadet_session, "dynamic_state")
@@ -724,9 +520,11 @@ async def start_lesson(
         return LessonDetailResponse(
             id=lesson.id,
             group_id=lesson.group_id,
+            cadet_id=lesson.cadet_id,
             group_name=group.group_name if group else None,
             teacher_id=lesson.assigned_by,
             target_role=lesson.target_role,
+        mode=lesson.mode,
             status=lesson.status,
             categories=lesson.categories or [],
             complexity=lesson.complexity,
@@ -750,7 +548,12 @@ async def start_lesson(
     lesson.started_at = datetime.now(timezone.utc)
 
     group_students = []
-    if group:
+    if lesson.cadet_id:
+        res_c = await db.execute(select(User).where(User.user_id == lesson.cadet_id))
+        c_user = res_c.scalar_one_or_none()
+        if c_user:
+            group_students = [c_user]
+    elif group:
         if group.students:
             group_students = list(group.students)
         elif group.cadet_ids:
@@ -789,9 +592,11 @@ async def start_lesson(
     return LessonDetailResponse(
         id=lesson.id,
         group_id=lesson.group_id,
+        cadet_id=lesson.cadet_id,
         group_name=group.group_name if group else None,
         teacher_id=lesson.assigned_by,
         target_role=lesson.target_role,
+        mode=lesson.mode,
         status=lesson.status,
         categories=lesson.categories or [],
         complexity=lesson.complexity,
@@ -849,9 +654,11 @@ async def stop_lesson(
         return LessonDetailResponse(
             id=lesson.id,
             group_id=lesson.group_id,
+            cadet_id=lesson.cadet_id,
             group_name=group.group_name if group else None,
             teacher_id=lesson.assigned_by,
             target_role=lesson.target_role,
+        mode=lesson.mode,
             status=lesson.status,
             categories=lesson.categories or [],
             complexity=lesson.complexity,
@@ -870,7 +677,6 @@ async def stop_lesson(
             total_failed=total_failed,
         )
 
-    from copy import deepcopy
     now = datetime.now(timezone.utc)
     lesson.status = "COMPLETED"
     lesson.completed_at = now
@@ -898,9 +704,11 @@ async def stop_lesson(
     return LessonDetailResponse(
         id=lesson.id,
         group_id=lesson.group_id,
+        cadet_id=lesson.cadet_id,
         group_name=group.group_name if group else None,
         teacher_id=lesson.assigned_by,
         target_role=lesson.target_role,
+        mode=lesson.mode,
         status=lesson.status,
         categories=lesson.categories or [],
         complexity=lesson.complexity,
@@ -963,9 +771,11 @@ async def update_lesson_notes(
     return LessonDetailResponse(
         id=lesson.id,
         group_id=lesson.group_id,
+        cadet_id=lesson.cadet_id,
         group_name=group.group_name if group else None,
         teacher_id=lesson.assigned_by,
         target_role=lesson.target_role,
+        mode=lesson.mode,
         status=lesson.status,
         categories=lesson.categories or [],
         complexity=lesson.complexity,

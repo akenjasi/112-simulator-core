@@ -12,18 +12,22 @@ from fastapi import APIRouter, BackgroundTasks, Depends, File, HTTPException, Qu
 from pydantic import BaseModel
 from sqlalchemy import desc, func, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
+from copy import deepcopy
+from datetime import datetime, timezone
 import openpyxl
 from openpyxl.styles import Alignment, Font, PatternFill
 from openpyxl.utils import get_column_letter
+from sqlalchemy.orm.attributes import flag_modified
 
-from backend.core.bricks_compiler import compile_ticket
-from backend.core.dds_cycle import extract_dds_ticket_metadata, matches_dds_ticket_filters
+from backend.core.dds_cycle import build_incoming_card, extract_dds_ticket_metadata, is_suitable_dds_ticket, matches_dds_ticket_filters
 from backend.core.deps import require_role
 from backend.core.faker import FakeDataGenerator
 from backend.core.text_normalization import expand_address_for_tts, format_phone_for_tts, expand_address
+from backend.core.ticket_lifecycle import is_approved_dds_ticket
 from backend.core.ticket_generator import generate_tickets
 from backend.core.tts_v2 import tts_engine_v2
 from backend.database import AsyncSessionLocal, get_db
+from backend.models.domain_01 import User
 from backend.models.domain_02 import GeneratedTicket, ScenarioTicket
 from backend.schemas.domain_02 import (
     TicketUpdate,
@@ -257,21 +261,7 @@ async def generate_tickets_background_task(
             generated_list = await asyncio.to_thread(generate_tickets, classifier_row=classifier_row, count=1, faker=faker)
             
             for t in generated_list:
-                # 1. GENERATE AUDIO FIRST!
-                try:
-                    matrix = await asyncio.to_thread(compile_ticket, t)
-                    for brick in matrix.bricks:
-                        if brick.text:
-                            try:
-                                await asyncio.to_thread(tts_engine_v2.synthesize, brick.text)
-                            except Exception as e:
-                                logger.warning("TTS synthesize error for text '%s': %s", brick.text[:30], e)
-                    # Cache preview audio
-                    await asyncio.to_thread(_generate_preview_audio_for_ticket, t.plot or "", t.ground_truth or {})
-                except Exception as e:
-                    logger.warning("Error compiling bricks for ticket %s: %s", t.ticket_id, e)
-                
-                # 2. SAVE TO DB (Only after audio is ready!)
+                # SAVE TO DB directly without heavy sound model or TTS synthesis
                 async with AsyncSessionLocal() as session:
                     await session.execute(
                         text("CREATE TABLE IF NOT EXISTS sys_sequences (name VARCHAR PRIMARY KEY, last_val INTEGER NOT NULL DEFAULT 0)")
@@ -300,11 +290,25 @@ async def generate_tickets_background_task(
                         ground_truth=t.ground_truth,
                         etalon_services=t.etalon_services,
                         sequence_number=current_seq,
+                        status="UNDER_REVIEW",
                     )
                     session.add(gen_ticket)
 
+                    card = build_incoming_card(
+                        category=cur_cat,
+                        subcategory=ticket_sub,
+                        plot=t.plot or "",
+                        ground_truth=t.ground_truth or {},
+                        etalon_services=t.etalon_services or [],
+                        seq=current_seq,
+                    )
+
                     scenario_ticket = ScenarioTicket(
                         scenario_id=t.ticket_id,
+                        title=ticket_sub or cur_cat,
+                        category=cur_cat,
+                        complexity=t.complexity,
+                        content={"incoming_card": card},
                         settings={
                             "complexity": t.complexity,
                             "etalon_services": t.etalon_services,
@@ -318,7 +322,9 @@ async def generate_tickets_background_task(
                             "factoids": t.factoids,
                             "plot": t.plot,
                         },
-                        workflow_state={"status": "active"},
+                        workflow_state={
+                            "status": "UNDER_REVIEW",
+                        },
                     )
                     session.add(scenario_ticket)
 
@@ -438,7 +444,7 @@ async def get_ticket(
             factoids=ticket.factoids or {},
             ground_truth=ticket.ground_truth or {},
             etalon_services=ticket.etalon_services or [],
-            status="active",
+            status=ticket.status or "active",
             created_at=ticket.created_at,
         )
     
@@ -521,7 +527,7 @@ async def list_tickets(
                 factoids=r.factoids or {},
                 ground_truth=r.ground_truth or {},
                 etalon_services=r.etalon_services or [],
-                status="active",
+                status=r.status or "active",
                 created_at=r.created_at,
             )
         )
@@ -875,7 +881,7 @@ async def upload_tickets_import(
             ground_truth=ground_truth,
             etalon_services=extracted_services,
             sequence_number=current_seq,
-            status="active",
+            status="UNDER_REVIEW",
         )
         db.add(gen_ticket)
 
@@ -903,7 +909,7 @@ async def upload_tickets_import(
                 "factoids": factoids_dict,
                 "plot": plot,
             },
-            workflow_state={"status": "active"},
+            workflow_state={"status": "UNDER_REVIEW"},
         )
         db.add(scenario_ticket)
         success_count += 1
@@ -1113,13 +1119,16 @@ async def update_ticket(
     scenario_ticket = await db.get(ScenarioTicket, ticket_id)
     if not ticket and not scenario_ticket:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Билет не найден")
-    
+
     update_data = ticket_in.model_dump(exclude_unset=True)
+    substantial_keys = {"plot", "category", "subcategory", "complexity", "etalon_services", "ground_truth", "factoids", "content"}
+    is_substantial = bool(substantial_keys.intersection(update_data.keys()))
+
     if ticket:
         for field, value in update_data.items():
             setattr(ticket, field, value)
-        await db.commit()
-        await db.refresh(ticket)
+        if is_substantial:
+            ticket.status = "UNDER_REVIEW"
         seq = ticket.sequence_number or 0
         display_id = f"{make_abbr(ticket.category)}_{make_abbr(ticket.subcategory)}_{seq}"
         res_cat = ticket.category
@@ -1130,6 +1139,7 @@ async def update_ticket(
         res_gt = ticket.ground_truth
         res_serv = ticket.etalon_services
         res_created = ticket.created_at
+        res_status = ticket.status or "active"
     else:
         # Fallback if only scenario_ticket exists
         seq = (scenario_ticket.settings or {}).get("sequence_number", 0)
@@ -1142,21 +1152,77 @@ async def update_ticket(
         res_gt = update_data.get("ground_truth", scenario_ticket.ground_truth or {})
         res_serv = update_data.get("etalon_services", (scenario_ticket.settings or {}).get("etalon_services", []))
         res_created = scenario_ticket.created_at
+        res_status = (scenario_ticket.workflow_state or {}).get("status", "active")
 
     if scenario_ticket:
+        if is_substantial:
+            history_list = list(scenario_ticket.version_history or [])
+            prev_snapshot = {
+                "version": len(history_list) + 1,
+                "saved_at": datetime.now(timezone.utc).isoformat(),
+                "modified_by": getattr(_teacher, "user_id", None),
+                "previous_status": (scenario_ticket.workflow_state or {}).get("status", "APPROVED"),
+                "settings": deepcopy(scenario_ticket.settings or {}),
+                "content": deepcopy(scenario_ticket.content or {}),
+                "ground_truth": deepcopy(scenario_ticket.ground_truth or {}),
+                "ai_content": deepcopy(scenario_ticket.ai_content or {}),
+            }
+            history_list.append(prev_snapshot)
+            scenario_ticket.version_history = history_list
+            flag_modified(scenario_ticket, "version_history")
+
+            wf = dict(scenario_ticket.workflow_state or {})
+            wf["status"] = "UNDER_REVIEW"
+            wf["updated_at"] = datetime.now(timezone.utc).isoformat()
+            scenario_ticket.workflow_state = wf
+            flag_modified(scenario_ticket, "workflow_state")
+            res_status = "UNDER_REVIEW"
+
         settings = dict(scenario_ticket.settings or {})
         for field in ["category", "subcategory", "complexity", "plot", "etalon_services"]:
             if field in update_data:
                 settings[field] = update_data[field]
         scenario_ticket.settings = settings
+        if "category" in update_data:
+            scenario_ticket.category = update_data["category"]
+        if "complexity" in update_data:
+            scenario_ticket.complexity = update_data["complexity"]
+        if "subcategory" in update_data:
+            scenario_ticket.title = update_data["subcategory"]
         if "ground_truth" in update_data:
             scenario_ticket.ground_truth = update_data["ground_truth"]
-        if "plot" in update_data:
+        if "plot" in update_data or "factoids" in update_data:
             ai_content = dict(scenario_ticket.ai_content or {})
-            ai_content["plot"] = update_data["plot"]
+            if "plot" in update_data:
+                ai_content["plot"] = update_data["plot"]
+            if "factoids" in update_data:
+                ai_content["factoids"] = update_data["factoids"]
             scenario_ticket.ai_content = ai_content
+
+        if res_plot:
+            try:
+                card = build_incoming_card(
+                    category=res_cat,
+                    subcategory=res_sub,
+                    plot=res_plot,
+                    ground_truth=res_gt,
+                    etalon_services=res_serv,
+                    seq=seq,
+                )
+                content = dict(scenario_ticket.content or {})
+                content["incoming_card"] = card
+                scenario_ticket.content = content
+                flag_modified(scenario_ticket, "content")
+            except Exception as e:
+                logger.warning("Could not rebuild incoming card on update ticket %s: %s", ticket_id, e)
+
         await db.commit()
-    
+
+    elif ticket:
+        # Keep the two ticket representations in one transaction even when
+        # the legacy ScenarioTicket row is absent.
+        await db.commit()
+
     return TicketResponse(
         id=ticket_id,
         ticket_id=ticket_id,
@@ -1169,9 +1235,137 @@ async def update_ticket(
         factoids=res_facts,
         ground_truth=res_gt,
         etalon_services=res_serv,
-        status="active",
+        status=res_status,
         created_at=res_created,
     )
+
+
+@api_tickets_router.post("/{ticket_id}/approve", response_model=TicketResponse)
+@api_tickets_router.post("/{ticket_id}/approve/", response_model=TicketResponse, include_in_schema=False)
+@tickets_router.post("/{ticket_id}/approve", response_model=TicketResponse)
+@tickets_router.post("/{ticket_id}/approve/", response_model=TicketResponse, include_in_schema=False)
+async def approve_ticket(
+    ticket_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(require_role("TEACHER")),
+) -> TicketResponse:
+    """Утверждение билета преподавателем: workflow_state.status = 'APPROVED'."""
+    ticket = await db.get(GeneratedTicket, ticket_id)
+    scenario_ticket = await db.get(ScenarioTicket, ticket_id)
+    if not ticket and not scenario_ticket:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Билет не найден")
+
+    now_iso = datetime.now(timezone.utc).isoformat()
+
+    if not scenario_ticket and ticket:
+        card = build_incoming_card(
+            category=ticket.category,
+            subcategory=ticket.subcategory,
+            plot=ticket.plot,
+            ground_truth=ticket.ground_truth,
+            etalon_services=ticket.etalon_services,
+            seq=ticket.sequence_number,
+        )
+        scenario_ticket = ScenarioTicket(
+            scenario_id=ticket.id,
+            title=ticket.subcategory or ticket.category,
+            category=ticket.category,
+            complexity=ticket.complexity,
+            content={"incoming_card": card},
+            settings={
+                "complexity": ticket.complexity,
+                "etalon_services": ticket.etalon_services,
+                "plot": ticket.plot,
+                "category": ticket.category,
+                "subcategory": ticket.subcategory,
+                "sequence_number": ticket.sequence_number,
+            },
+            ground_truth=ticket.ground_truth,
+            ai_content={
+                "factoids": ticket.factoids,
+                "plot": ticket.plot,
+            },
+            workflow_state={
+                "status": "APPROVED",
+                "approved_by": current_user.user_id,
+                "approved_at": now_iso,
+            },
+        )
+        db.add(scenario_ticket)
+    elif scenario_ticket:
+        if not is_suitable_dds_ticket(scenario_ticket):
+            settings = scenario_ticket.settings or {}
+            ai = scenario_ticket.ai_content or {}
+            gt = scenario_ticket.ground_truth or {}
+            cat, sub, comp, _ = extract_dds_ticket_metadata(scenario_ticket)
+            plot_val = settings.get("plot") or ai.get("plot") or (ticket.plot if ticket else "")
+            serv_val = settings.get("etalon_services") or (ticket.etalon_services if ticket else [])
+            seq_val = settings.get("sequence_number") or (ticket.sequence_number if ticket else 1)
+            card = build_incoming_card(
+                category=cat,
+                subcategory=sub,
+                plot=plot_val,
+                ground_truth=gt,
+                etalon_services=serv_val,
+                seq=seq_val,
+            )
+            content = dict(scenario_ticket.content or {})
+            content["incoming_card"] = card
+            scenario_ticket.content = content
+            flag_modified(scenario_ticket, "content")
+
+        wf = dict(scenario_ticket.workflow_state or {})
+        wf["status"] = "APPROVED"
+        wf["approved_by"] = current_user.user_id
+        wf["approved_at"] = now_iso
+        scenario_ticket.workflow_state = wf
+        flag_modified(scenario_ticket, "workflow_state")
+
+    if ticket:
+        ticket.status = "APPROVED"
+
+    await db.commit()
+
+    if ticket:
+        seq = ticket.sequence_number or 0
+        display_id = f"{make_abbr(ticket.category)}_{make_abbr(ticket.subcategory)}_{seq}"
+        return TicketResponse(
+            id=ticket.id,
+            ticket_id=ticket.id,
+            display_id=display_id,
+            sequence_number=ticket.sequence_number,
+            category=ticket.category,
+            subcategory=ticket.subcategory,
+            complexity=ticket.complexity,
+            plot=ticket.plot,
+            factoids=ticket.factoids or {},
+            ground_truth=ticket.ground_truth or {},
+            etalon_services=ticket.etalon_services or [],
+            status="APPROVED",
+            created_at=ticket.created_at,
+        )
+    else:
+        cat, sub, comp, _ = extract_dds_ticket_metadata(scenario_ticket)
+        settings = scenario_ticket.settings or {}
+        ai = scenario_ticket.ai_content or {}
+        seq = settings.get("sequence_number", 0)
+        display_id = f"{make_abbr(cat)}_{make_abbr(sub)}_{seq}"
+        return TicketResponse(
+            id=scenario_ticket.scenario_id,
+            ticket_id=scenario_ticket.scenario_id,
+            display_id=display_id,
+            sequence_number=seq,
+            category=cat,
+            subcategory=sub,
+            complexity=comp,
+            plot=settings.get("plot") or ai.get("plot", ""),
+            factoids=ai.get("factoids", {}),
+            ground_truth=scenario_ticket.ground_truth or {},
+            etalon_services=settings.get("etalon_services", []),
+            status="APPROVED",
+            created_at=scenario_ticket.created_at,
+        )
+
 
 @api_tickets_router.delete("/{ticket_id}", status_code=status.HTTP_200_OK)
 @api_tickets_router.delete("/{ticket_id}/", status_code=status.HTTP_200_OK, include_in_schema=False)
@@ -1182,7 +1376,7 @@ async def delete_ticket(
     db: AsyncSession = Depends(get_db),
     _teacher=Depends(require_role("TEACHER")),
 ) -> Dict[str, Any]:
-    """Удаление билета по ID из GeneratedTicket и ScenarioTicket."""
+    """Мягкое удаление / архивирование билета по ID."""
     gen_ticket = await db.get(GeneratedTicket, ticket_id)
     scenario_ticket = await db.get(ScenarioTicket, ticket_id)
 
@@ -1192,10 +1386,17 @@ async def delete_ticket(
             detail="Билет не найден",
         )
 
+    now_iso = datetime.now(timezone.utc).isoformat()
     if gen_ticket:
         gen_ticket.is_deleted = True
+        gen_ticket.status = "ARCHIVED"
     if scenario_ticket:
         scenario_ticket.is_deleted = True
+        wf = dict(scenario_ticket.workflow_state or {})
+        wf["status"] = "ARCHIVED"
+        wf["archived_at"] = now_iso
+        scenario_ticket.workflow_state = wf
+        flag_modified(scenario_ticket, "workflow_state")
 
     await db.commit()
     return {"status": "ok", "message": f"Билет {ticket_id} успешно удален", "id": ticket_id}

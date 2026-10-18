@@ -5,12 +5,43 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator, model_valida
 
 class LessonCreate(BaseModel):
     group_id: str = Field(..., description="ID учебной группы")
+    cadet_id: Optional[str] = Field(None, description="ID конкретного курсанта для индивидуального назначения")
+    student_id: Optional[str] = Field(None, description="ID конкретного курсанта (алиас для cadet_id)")
     ticket_id: Optional[str] = Field(None, description="ID подготовленного билета сценария")
+    mode: str = Field("TRAINING", description="Режим занятия: TRAINING или EXAM")
     target_role: Optional[str] = Field("DISPATCHER_DDS", description="Целевая роль (OPERATOR_112 или DISPATCHER_DDS)")
     categories: Optional[List[str]] = Field(default_factory=list, description="Список категорий происшествий")
     complexity: Optional[str] = Field("adaptive", description="Сложность (level_1, level_2, level_3, adaptive, mixed)")
     time_limit_seconds: Optional[int] = Field(30, description="Лимит времени на вызов в секундах")
     error_limit: Optional[int] = Field(None, description="Допустимое количество ошибок")
+
+    @model_validator(mode="before")
+    @classmethod
+    def resolve_cadet_id_alias(cls, data: object) -> object:
+        if isinstance(data, dict):
+            data = dict(data)
+            if "mode" not in data and "distribution_mode" in data:
+                data["mode"] = data["distribution_mode"]
+            if not data.get("cadet_id") and data.get("student_id"):
+                data["cadet_id"] = data["student_id"]
+        return data
+
+    @field_validator("mode", mode="before")
+    @classmethod
+    def validate_mode(cls, value: str) -> str:
+        aliases = {"TRAINING": "TRAINING", "LIVE_STREAM": "TRAINING", "EXAM": "EXAM"}
+        mode = aliases.get(str(value).strip().upper())
+        if mode is None:
+            raise ValueError("mode must be TRAINING or EXAM")
+        return mode
+
+    @field_validator("cadet_id")
+    @classmethod
+    def validate_cadet_id(cls, v: Optional[str]) -> Optional[str]:
+        if v is not None:
+            v = v.strip()
+            return v if v else None
+        return None
 
     @field_validator("group_id")
     @classmethod
@@ -93,9 +124,11 @@ class LessonDetailResponse(BaseModel):
     assignment_id: Optional[str] = None
     session_id: Optional[str] = None
     group_id: str
+    cadet_id: Optional[str] = None
     group_name: Optional[str] = None
     teacher_id: Optional[str] = None
     target_role: str = "OPERATOR_112"
+    mode: str = "TRAINING"
     status: str = "WAITING"
     categories: List[str] = Field(default_factory=list)
     complexity: Optional[str] = "level_1"
@@ -127,8 +160,10 @@ class LessonDetailResponse(BaseModel):
 class LessonSummaryResponse(BaseModel):
     id: str
     group_id: str
+    cadet_id: Optional[str] = None
     group_name: Optional[str] = None
     target_role: str = "OPERATOR_112"
+    mode: str = "TRAINING"
     status: str = "WAITING"
     complexity: Optional[str] = None
     categories: List[str] = Field(default_factory=list)

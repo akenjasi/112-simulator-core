@@ -125,6 +125,8 @@ async def test_reset_user_password_endpoint(auth_client):
 @pytest.mark.asyncio
 async def test_reset_group_passwords_endpoint(auth_client):
     from backend.database import AsyncSessionLocal
+    from backend.core.security import hash_password
+    import uuid
 
     # 1. Create group and add students
     res_grp = await auth_client.post("/api/admin/groups", json={
@@ -134,19 +136,21 @@ async def test_reset_group_passwords_endpoint(auth_client):
     assert res_grp.status_code == 200
     group_id = res_grp.json()["group_id"]
 
-    # Add 2 students
-    await auth_client.post(f"/api/groups/{group_id}/students/single", json={
-        "last_name": "Кузнецов",
-        "first_name": "Алексей",
-        "middle_name": "Сергеевич",
-        "email": "kuznetsov@test.com",
-    })
-    await auth_client.post(f"/api/groups/{group_id}/students/single", json={
-        "last_name": "Попов",
-        "first_name": "Дмитрий",
-        "middle_name": "Андреевич",
-        "email": "popov@test.com",
-    })
+    # Create accounts explicitly, then link the existing students.
+    student_ids = []
+    async with AsyncSessionLocal() as session:
+        for username, full_name in [
+            (f"kuznetsov_{uuid.uuid4().hex[:8]}@test.com", "Кузнецов Алексей Сергеевич"),
+            (f"popov_{uuid.uuid4().hex[:8]}@test.com", "Попов Дмитрий Андреевич"),
+        ]:
+            student = User(username=username, password_hash=hash_password("test_pass_123"), role="CADET", full_name=full_name)
+            session.add(student)
+            await session.flush()
+            student_ids.append((student.user_id, username))
+        await session.commit()
+    for user_id, _ in student_ids:
+        linked = await auth_client.post(f"/api/groups/{group_id}/students/single", json={"user_id": user_id})
+        assert linked.status_code == 200, linked.text
 
     # 2. Call reset-passwords for the group
     res_reset = await auth_client.post(f"/api/groups/{group_id}/reset-passwords")

@@ -444,8 +444,10 @@ async def seed_analytics_data(
             total_tickets += 1
 
     # Batch add
-    # Batch add
-    pass
+    db.add_all(sessions_to_add)
+    db.add_all(cards_to_add)
+    db.add_all(evals_to_add)
+    db.add_all(tickets_to_add)
     await db.commit()
 
 

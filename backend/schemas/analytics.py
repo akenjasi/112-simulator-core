@@ -123,24 +123,27 @@ class RecordSummary(BaseModel):
     is_appealed: bool = False
     errors_count: Optional[int] = 0
     teacher_comment: Optional[str] = None
+    evaluation_source: Optional[str] = None
 
 
 class CadetAnalyticsSummary(BaseModel):
     cadet_id: str
     cadet_name: str
-    success_rate: float
+    success_rate: Optional[float] = None
     records: List[RecordSummary] = Field(default_factory=list)
 
 
 class SessionAnalyticsResponse(BaseModel):
     session_id: str
     title: str
+    status: Optional[str] = None
     created_at: Optional[str] = None
     cadets: List[CadetAnalyticsSummary] = Field(default_factory=list)
 
 
 class RecordDetailResponse(BaseModel):
     record_id: str
+    session_id: Optional[str] = None
     cadet_id: Optional[str] = None
     cadet_name: Optional[str] = None
     ticket_id: Optional[str] = None
@@ -149,19 +152,41 @@ class RecordDetailResponse(BaseModel):
     score: Optional[float] = None
     is_appealed: bool = False
     teacher_comment: Optional[str] = None
+    evaluation_source: Optional[str] = None
+    expert_modified_at: Optional[str] = None
+    expert_modified_by: Optional[str] = None
     etalon: Dict[str, Any] = Field(default_factory=dict)
     student_answer: Dict[str, Any] = Field(default_factory=dict)
     error_details: Any = Field(default_factory=list)
+    snapshot_missing: bool = False
 
 
 class DailyDynamicsPoint(BaseModel):
     """Daily aggregated score point for dynamics chart."""
     date: str = Field(..., description="Дата (YYYY-MM-DD)")
-    avg_score: float = Field(..., description="Средний балл за день")
-    total_sessions: int = Field(default=0, description="Всего сессий за день")
-    passed_count: int = Field(default=0, description="Успешно пройденных сессий")
-    failed_count: int = Field(default=0, description="Не пройденных сессий")
-    pass_rate: float = Field(default=0.0, description="Процент успешных с первой попытки (%)")
+    avg_score: Optional[float] = Field(default=None, description="Средний балл по оценённым попыткам за день (null если нет оценок)")
+    total_sessions: int = Field(default=0, description="Всего сессий/попыток за день")
+    graded_count: int = Field(default=0, description="Количество фактически оценённых попыток")
+    pending_count: int = Field(default=0, description="Количество активных или неоценённых попыток")
+    passed_count: int = Field(default=0, description="Успешно сданных оценённых попыток")
+    failed_count: int = Field(default=0, description="Несданных оценённых попыток")
+    pass_rate: Optional[float] = Field(default=None, description="Процент успешных сдач от оценённых попыток (%) или null")
+
+
+class AnalyticsOverviewResponse(BaseModel):
+    """Overall summary statistics for teacher dashboard header metrics."""
+    total_sessions: int = Field(default=0, description="Всего сессий за выбранный период")
+    total_attempts: int = Field(default=0, description="Всего попыток (билетов) за выбранный период")
+    graded_attempts: int = Field(default=0, description="Количество фактически оценённых попыток")
+    pending_attempts: int = Field(default=0, description="Количество неоценённых или активных попыток")
+    avg_score: Optional[float] = Field(default=None, description="Средний балл по фактически оценённым попыткам (null если нет оценок)")
+    passed_count: int = Field(default=0, description="Количество успешно сданных попыток")
+    failed_count: int = Field(default=0, description="Количество несданных оценённых попыток")
+    pass_rate: Optional[float] = Field(default=None, description="Доля успешных сдач от оценённых попыток в % (null если нет оценок)")
+    total_errors: int = Field(default=0, description="Общее число зафиксированных ошибок")
+    active_cadets_count: int = Field(default=0, description="Количество уникальных курсантов в выборке")
+    trend_direction: Optional[str] = Field(default=None, description="Направление тренда ('positive', 'negative', 'stable' или null)")
+    daily_dynamics: List[DailyDynamicsPoint] = Field(default_factory=list, description="Посуточная динамика за период")
 
 
 class GroupComparisonItem(BaseModel):
@@ -197,5 +222,22 @@ class ErrorHeatmapResponse(BaseModel):
     error_types: List[ErrorTypeInfo] = Field(default_factory=list)
     entities: List[EntityErrorInfo] = Field(default_factory=list)
     totals_by_error: Dict[str, int] = Field(default_factory=dict)
+
+
+class GradeOverrideRequest(BaseModel):
+    score: float = Field(..., ge=0.0, le=100.0, description="Новая оценка от 0 до 100")
+    reason: str = Field(..., min_length=1, description="Обязательная причина пересмотра оценки")
+    comment: Optional[str] = Field(default=None, description="Дополнительный комментарий преподавателя")
+
+
+class GradeOverrideResponse(BaseModel):
+    status: str = "ok"
+    session_id: Optional[str] = None
+    record_id: Optional[str] = None
+    old_score: Optional[float] = None
+    new_score: float
+    reason: str
+    teacher_id: Optional[str] = None
+    updated_at: str
 
 
