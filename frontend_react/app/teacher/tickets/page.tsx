@@ -63,6 +63,18 @@ export interface GroundTruth {
   [key: string]: any
 }
 
+export interface DDSEtalonItem {
+  service_name?: string | null
+  expected_decision?: string | null
+  decision_rationale?: string | null
+  decision_alternatives?: string | null
+  expected_stages?: string[]
+  expected_result?: string | null
+  required_comment_points?: string[]
+  sample_comment?: string | null
+  confirmation_time_limit_seconds?: number | null
+}
+
 export interface TicketItem {
   id?: string
   ticket_id: string
@@ -75,6 +87,7 @@ export interface TicketItem {
   etalon_services?: string[]
   factoids?: Record<string, any>
   ground_truth?: GroundTruth
+  dds_etalon?: DDSEtalonItem | null
   status?: string
   workflow_state?: {
     status?: string
@@ -199,6 +212,7 @@ export default function TicketsPage() {
   const [editIntercom, setEditIntercom] = useState<string>("")
   const [editExtraAddress, setEditExtraAddress] = useState<Record<string, any>>({})
   const [isGeneratingAddress, setIsGeneratingAddress] = useState<boolean>(false)
+
 
   // Classifier options (ТЗ 37.1, ТЗ 37.4, ТЗ 39.1)
   const [classifierCategories, setClassifierCategories] = useState<string[]>([])
@@ -2487,6 +2501,8 @@ export default function TicketsPage() {
                   </div>
                 )}
               </div>
+
+
 
               {/* Factoids block COMPLETELY REMOVED per ТЗ 36.2 */}
             </div>

@@ -280,6 +280,11 @@ async def generate_tickets_background_task(
                     current_seq = seq_res.scalar() or 0
                     current_seq += 1
 
+                    gen_gt = dict(t.ground_truth or {})
+                    dds_et = getattr(t, "dds_etalon", None)
+                    if dds_et:
+                        gen_gt["dds_etalon"] = dds_et
+
                     gen_ticket = GeneratedTicket(
                         id=t.ticket_id,
                         category=cur_cat,
@@ -287,7 +292,7 @@ async def generate_tickets_background_task(
                         complexity=t.complexity,
                         plot=t.plot,
                         factoids=t.factoids,
-                        ground_truth=t.ground_truth,
+                        ground_truth=gen_gt,
                         etalon_services=t.etalon_services,
                         sequence_number=current_seq,
                         status="UNDER_REVIEW",
@@ -303,21 +308,25 @@ async def generate_tickets_background_task(
                         seq=current_seq,
                     )
 
+                    scenario_settings = {
+                        "complexity": t.complexity,
+                        "etalon_services": t.etalon_services,
+                        "plot": t.plot,
+                        "category": cur_cat,
+                        "subcategory": ticket_sub,
+                        "sequence_number": current_seq,
+                    }
+                    if dds_et:
+                        scenario_settings["dds_etalon"] = dds_et
+
                     scenario_ticket = ScenarioTicket(
                         scenario_id=t.ticket_id,
                         title=ticket_sub or cur_cat,
                         category=cur_cat,
                         complexity=t.complexity,
                         content={"incoming_card": card},
-                        settings={
-                            "complexity": t.complexity,
-                            "etalon_services": t.etalon_services,
-                            "plot": t.plot,
-                            "category": cur_cat,
-                            "subcategory": ticket_sub,
-                            "sequence_number": current_seq,
-                        },
-                        ground_truth=t.ground_truth,
+                        settings=scenario_settings,
+                        ground_truth=gen_gt,
                         ai_content={
                             "factoids": t.factoids,
                             "plot": t.plot,
@@ -432,6 +441,7 @@ async def get_ticket(
     if ticket:
         seq = ticket.sequence_number if ticket.sequence_number is not None else 0
         display_id = f"{make_abbr(ticket.category)}_{make_abbr(ticket.subcategory)}_{seq}"
+        dds_et = (ticket.ground_truth or {}).get("dds_etalon") if isinstance(ticket.ground_truth, dict) else None
         return TicketResponse(
             id=ticket.id,
             ticket_id=ticket.id,
@@ -446,6 +456,7 @@ async def get_ticket(
             etalon_services=ticket.etalon_services or [],
             status=ticket.status or "active",
             created_at=ticket.created_at,
+            dds_etalon=dds_et,
         )
     
     # Try ScenarioTicket
@@ -457,6 +468,7 @@ async def get_ticket(
         cat, sub, level, _ = extract_dds_ticket_metadata(scenario)
         seq = settings.get("sequence_number", 0)
         display_id = f"{make_abbr(cat)}_{make_abbr(sub)}_{seq}"
+        dds_et = settings.get("dds_etalon") or (gt.get("dds_etalon") if isinstance(gt, dict) else None)
         return TicketResponse(
             id=scenario.scenario_id,
             ticket_id=scenario.scenario_id,
@@ -471,6 +483,7 @@ async def get_ticket(
             etalon_services=settings.get("etalon_services", []),
             status=scenario.workflow_state.get("status", "active") if scenario.workflow_state else "active",
             created_at=scenario.created_at,
+            dds_etalon=dds_et,
         )
         
     raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Билет не найден")
@@ -514,6 +527,7 @@ async def list_tickets(
     for r in records:
         seq = r.sequence_number if r.sequence_number is not None else 0
         display_id = f"{make_abbr(r.category)}_{make_abbr(r.subcategory)}_{seq}"
+        dds_et = (r.ground_truth or {}).get("dds_etalon") if isinstance(r.ground_truth, dict) else None
         output.append(
             TicketResponse(
                 id=r.id,
@@ -529,6 +543,7 @@ async def list_tickets(
                 etalon_services=r.etalon_services or [],
                 status=r.status or "active",
                 created_at=r.created_at,
+                dds_etalon=dds_et,
             )
         )
 
@@ -554,6 +569,7 @@ async def list_tickets(
 
         seq = settings.get("sequence_number", 0)
         display_id = f"{make_abbr(cat)}_{make_abbr(sub)}_{seq}"
+        dds_et = settings.get("dds_etalon") or (gt.get("dds_etalon") if isinstance(gt, dict) else None)
         output.append(
             TicketResponse(
                 id=r.scenario_id,
@@ -569,6 +585,7 @@ async def list_tickets(
                 etalon_services=settings.get("etalon_services", []),
                 status=r.workflow_state.get("status", "active") if r.workflow_state else "active",
                 created_at=r.created_at,
+                dds_etalon=dds_et,
             )
         )
 
@@ -1121,12 +1138,24 @@ async def update_ticket(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Билет не найден")
 
     update_data = ticket_in.model_dump(exclude_unset=True)
-    substantial_keys = {"plot", "category", "subcategory", "complexity", "etalon_services", "ground_truth", "factoids", "content"}
+    substantial_keys = {"plot", "category", "subcategory", "complexity", "etalon_services", "ground_truth", "factoids", "content", "dds_etalon"}
     is_substantial = bool(substantial_keys.intersection(update_data.keys()))
+    
+    dds_etalon_explicit = "dds_etalon" in ticket_in.model_fields_set
+    dds_et_val = ticket_in.dds_etalon.model_dump(exclude_unset=False) if ticket_in.dds_etalon is not None else None
+    update_data.pop("dds_etalon", None)
 
     if ticket:
         for field, value in update_data.items():
             setattr(ticket, field, value)
+        if dds_etalon_explicit:
+            gt_copy = dict(ticket.ground_truth or {})
+            if dds_et_val is not None:
+                gt_copy["dds_etalon"] = dds_et_val
+            else:
+                gt_copy.pop("dds_etalon", None)
+            ticket.ground_truth = gt_copy
+            flag_modified(ticket, "ground_truth")
         if is_substantial:
             ticket.status = "UNDER_REVIEW"
         seq = ticket.sequence_number or 0
@@ -1182,7 +1211,14 @@ async def update_ticket(
         for field in ["category", "subcategory", "complexity", "plot", "etalon_services"]:
             if field in update_data:
                 settings[field] = update_data[field]
+        if dds_etalon_explicit:
+            if dds_et_val is not None:
+                settings["dds_etalon"] = dds_et_val
+            else:
+                settings.pop("dds_etalon", None)
         scenario_ticket.settings = settings
+        flag_modified(scenario_ticket, "settings")
+
         if "category" in update_data:
             scenario_ticket.category = update_data["category"]
         if "complexity" in update_data:
@@ -1191,6 +1227,15 @@ async def update_ticket(
             scenario_ticket.title = update_data["subcategory"]
         if "ground_truth" in update_data:
             scenario_ticket.ground_truth = update_data["ground_truth"]
+        if dds_etalon_explicit and isinstance(scenario_ticket.ground_truth, dict):
+            gt_sc_copy = dict(scenario_ticket.ground_truth)
+            if dds_et_val is not None:
+                gt_sc_copy["dds_etalon"] = dds_et_val
+            else:
+                gt_sc_copy.pop("dds_etalon", None)
+            scenario_ticket.ground_truth = gt_sc_copy
+            flag_modified(scenario_ticket, "ground_truth")
+
         if "plot" in update_data or "factoids" in update_data:
             ai_content = dict(scenario_ticket.ai_content or {})
             if "plot" in update_data:
@@ -1199,7 +1244,10 @@ async def update_ticket(
                 ai_content["factoids"] = update_data["factoids"]
             scenario_ticket.ai_content = ai_content
 
-        if res_plot:
+        card_rebuild_keys = {"plot", "category", "subcategory", "ground_truth", "etalon_services"}
+        facts_updated = bool(card_rebuild_keys.intersection(update_data.keys()))
+        current_incoming = (scenario_ticket.content or {}).get("incoming_card")
+        if res_plot and (facts_updated or not current_incoming):
             try:
                 card = build_incoming_card(
                     category=res_cat,
@@ -1223,6 +1271,15 @@ async def update_ticket(
         # the legacy ScenarioTicket row is absent.
         await db.commit()
 
+    if dds_etalon_explicit:
+        res_dds_etalon = dds_et_val
+    else:
+        res_dds_etalon = None
+        if ticket and isinstance(ticket.ground_truth, dict):
+            res_dds_etalon = ticket.ground_truth.get("dds_etalon")
+        elif scenario_ticket:
+            res_dds_etalon = (scenario_ticket.settings or {}).get("dds_etalon") or (scenario_ticket.ground_truth or {}).get("dds_etalon")
+
     return TicketResponse(
         id=ticket_id,
         ticket_id=ticket_id,
@@ -1237,6 +1294,7 @@ async def update_ticket(
         etalon_services=res_serv,
         status=res_status,
         created_at=res_created,
+        dds_etalon=res_dds_etalon,
     )
 
 
@@ -1329,6 +1387,7 @@ async def approve_ticket(
     if ticket:
         seq = ticket.sequence_number or 0
         display_id = f"{make_abbr(ticket.category)}_{make_abbr(ticket.subcategory)}_{seq}"
+        dds_et = (ticket.ground_truth or {}).get("dds_etalon") if isinstance(ticket.ground_truth, dict) else None
         return TicketResponse(
             id=ticket.id,
             ticket_id=ticket.id,
@@ -1343,6 +1402,7 @@ async def approve_ticket(
             etalon_services=ticket.etalon_services or [],
             status="APPROVED",
             created_at=ticket.created_at,
+            dds_etalon=dds_et,
         )
     else:
         cat, sub, comp, _ = extract_dds_ticket_metadata(scenario_ticket)
@@ -1350,6 +1410,7 @@ async def approve_ticket(
         ai = scenario_ticket.ai_content or {}
         seq = settings.get("sequence_number", 0)
         display_id = f"{make_abbr(cat)}_{make_abbr(sub)}_{seq}"
+        dds_et = settings.get("dds_etalon") or ((scenario_ticket.ground_truth or {}).get("dds_etalon") if isinstance(scenario_ticket.ground_truth, dict) else None)
         return TicketResponse(
             id=scenario_ticket.scenario_id,
             ticket_id=scenario_ticket.scenario_id,
@@ -1364,6 +1425,7 @@ async def approve_ticket(
             etalon_services=settings.get("etalon_services", []),
             status="APPROVED",
             created_at=scenario_ticket.created_at,
+            dds_etalon=dds_et,
         )
 
 

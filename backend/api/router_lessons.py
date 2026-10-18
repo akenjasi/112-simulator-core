@@ -493,6 +493,11 @@ async def start_lesson(
             db.add(card)
             await db.flush()
 
+            dds_etalon_data = (
+                (ticket.settings or {}).get("dds_etalon")
+                or (ticket.ground_truth or {}).get("dds_etalon")
+                or (ticket.content or {}).get("dds_etalon")
+            )
             cadet_session.dynamic_state = {
                 # Kept outside the cadet-facing DDS state; only the teacher's
                 # gradebook reads this immutable answer key.
@@ -500,6 +505,8 @@ async def start_lesson(
                     "ticket_id": ticket.scenario_id,
                     "title": ticket.title or (ticket.settings or {}).get("title") or f"Билет #{ticket.scenario_id[:8]}",
                     "etalon": deepcopy(ticket.ground_truth or {}),
+                    "dds_etalon": deepcopy(dds_etalon_data) if dds_etalon_data else None,
+                    "incoming_card": deepcopy(sanitized_incoming),
                 },
                 "dds": {
                     "incoming_card": deepcopy(sanitized_incoming),

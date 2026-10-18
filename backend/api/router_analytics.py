@@ -29,6 +29,7 @@ from backend.schemas.analytics import (
     ErrorHeatmapResponse,
     ErrorTypeInfo,
     GradeOverrideRequest,
+    RecordGradeOverrideRequest,
     GradeOverrideResponse,
     GroupComparisonItem,
     HeatmapResponse,
@@ -40,7 +41,15 @@ from backend.schemas.analytics import (
     SessionAnalyticsResponse,
     TrendPoint,
     TrendResponse,
+    DDSActionItem,
+    IncidentContext,
+    CriteriaDecision,
+    CriteriaTimeliness,
+    CriteriaProgression,
+    CriteriaComment,
+    DDSCriteriaComparison,
 )
+from backend.schemas.domain_02 import DDSEtalon
 
 logger = logging.getLogger(__name__)
 
@@ -555,13 +564,16 @@ async def get_record_detail(
     ev = latest_evaluation(list(ev_res.scalars().all()))
     if not tr and not card and not ev:
         raise HTTPException(status_code=404, detail=f"Запись результата {record_id} не найдена")
-    session_id = tr.session_id if tr else (card.session_id if card else ev.session_id)
+    session_id = tr.session_id if tr else (card.session_id if card else (ev.session_id if ev else None))
     await _verify_record_access(db, current_user, session_id)
     exam_session = await db.get(ExamSession, session_id) if session_id else None
     if exam_session:
         results = list((await db.scalars(select(TicketResult).where(TicketResult.session_id == session_id))).all())
         cards = list((await db.scalars(select(IncidentCard).where(IncidentCard.session_id == session_id))).all())
-        evaluations = list((await db.scalars(select(EvaluationResult).where(EvaluationResult.session_id == session_id))).all())
+        eval_conditions = [EvaluationResult.session_id == session_id]
+        if card:
+            eval_conditions.append(EvaluationResult.card_id == card.card_id)
+        evaluations = list((await db.scalars(select(EvaluationResult).where(or_(*eval_conditions)))).all())
         for attempt_tr, attempt_card, attempt_ev in build_attempt_records(results, cards, evaluations):
             if ((attempt_tr and attempt_tr.result_id == record_id) or
                 (attempt_card and attempt_card.card_id == record_id) or
@@ -582,15 +594,291 @@ async def get_record_detail(
 
     score, is_passed, status_str, err_cnt, source = resolve_attempt_score_and_status(exam_session, tr, ev)
 
+    automatic_score = None
+    expert_score = None
+    is_tr_expert = bool(tr and tr.is_appealed and tr.score_total is not None)
+    is_ev_expert = bool(ev and (ev.expert_modified_at or ev.is_appealed))
+
+    if ev:
+        ev_scores = ev.scores if isinstance(ev.scores, dict) else {}
+        if is_ev_expert or is_tr_expert:
+            exp_val = ev_scores.get("expert_score")
+            if "expert_score" not in ev_scores:
+                if is_tr_expert:
+                    exp_val = tr.score_total
+                if exp_val is None:
+                    exp_val = ev_scores.get("final_score") if ev_scores.get("final_score") is not None else ev_scores.get("total")
+            expert_score = float(exp_val) if exp_val is not None else None
+
+            if "automatic_score" in ev_scores:
+                auto_val = ev_scores.get("automatic_score")
+                automatic_score = float(auto_val) if auto_val is not None else None
+            elif not is_ev_expert:
+                # A manual TicketResult does not overwrite the separate AI
+                # evaluation. Its original score is still known.
+                auto_val = ev_scores.get("final_score") if ev_scores.get("final_score") is not None else ev_scores.get("total")
+                automatic_score = float(auto_val) if auto_val is not None else None
+            else:
+                automatic_score = None
+        else:
+            expert_score = None
+            if "automatic_score" in ev_scores:
+                auto_val = ev_scores.get("automatic_score")
+                automatic_score = float(auto_val) if auto_val is not None else None
+            else:
+                auto_val = ev_scores.get("final_score") if ev_scores.get("final_score") is not None else ev_scores.get("total")
+                automatic_score = float(auto_val) if auto_val is not None else None
+    elif is_tr_expert:
+        expert_score = float(tr.score_total)
+
+    # DDS Actions & Etalon Evaluation Context
+    dds_state_raw = (exam_session.dynamic_state or {}).get("dds", {}) if (exam_session and isinstance(exam_session.dynamic_state, dict)) else {}
+    dds_card_id = dds_state_raw.get("card_id")
+    card_matches_dds = True
+    if card and dds_card_id and str(dds_card_id) != str(card.card_id):
+        card_matches_dds = False
+
+    dds_state = dds_state_raw if card_matches_dds else {}
+    raw_actions = dds_state.get("actions", [])
+    cadet_actions_list: List[DDSActionItem] = []
+    
+    start_dt = exam_session.start_time if exam_session else None
+    if start_dt and start_dt.tzinfo is None:
+        start_dt = start_dt.replace(tzinfo=timezone.utc)
+
+    for a in raw_actions:
+        if not isinstance(a, dict):
+            continue
+        # Skip automatic system statuses
+        if a.get("status") in ("Добавлена", "Получена службой"):
+            continue
+        comment_text = str(a.get("comment") or "")
+        if "автоматическ" in comment_text.lower() or "автор отсутствует" in comment_text.lower():
+            continue
+        # Only actions authored by the cadet are valid cadet actions
+        actor = a.get("actor_id")
+        if not actor:
+            continue
+        if cadet_id and str(actor) != str(cadet_id):
+            continue
+        
+        at_str = a.get("at")
+        secs = None
+        if start_dt and at_str:
+            try:
+                at_dt = datetime.fromisoformat(at_str)
+                if at_dt.tzinfo is None:
+                    at_dt = at_dt.replace(tzinfo=timezone.utc)
+                secs = max(0, int((at_dt - start_dt).total_seconds()))
+            except Exception:
+                secs = None
+
+        cadet_actions_list.append(DDSActionItem(
+            request_id=a.get("request_id"),
+            kind=a.get("kind"),
+            service_name=a.get("service_name"),
+            actor_id=a.get("actor_id"),
+            at=at_str,
+            seconds_from_start=secs,
+            status=a.get("status"),
+            comment=a.get("comment"),
+            order_number=a.get("order_number"),
+            who_accepted=a.get("who_accepted"),
+            summary=a.get("summary"),
+        ))
+
+    # Historical DDS Etalon
+    snapshot_ticket_id = snapshot.get("ticket_id") if snapshot else None
+    snapshot_matches_card = True
+    if card and snapshot_ticket_id and card.scenario_id and str(snapshot_ticket_id) != str(card.scenario_id):
+        snapshot_matches_card = False
+
+    snapshot_dds_etalon_raw = None
+    if snapshot and snapshot_matches_card:
+        snapshot_dds_etalon_raw = snapshot.get("dds_etalon")
+        if not snapshot_dds_etalon_raw and isinstance(snapshot.get("etalon"), dict):
+            snapshot_dds_etalon_raw = snapshot["etalon"].get("dds_etalon")
+
+    has_dds_etalon = False
+    dds_etalon_obj: Optional[DDSEtalon] = None
+    if isinstance(snapshot_dds_etalon_raw, dict):
+        try:
+            cand = DDSEtalon.model_validate(snapshot_dds_etalon_raw)
+            if any(
+                getattr(cand, k) is not None and getattr(cand, k) != [] and getattr(cand, k) != ""
+                for k in ("service_name", "expected_decision", "decision_rationale", "decision_alternatives", "expected_stages", "expected_result", "required_comment_points", "sample_comment", "confirmation_time_limit_seconds")
+            ):
+                dds_etalon_obj = cand
+                has_dds_etalon = True
+        except Exception:
+            dds_etalon_obj = None
+            has_dds_etalon = False
+
+    # Incident Context (Caller and incident card details without voice/CSS/raw tags)
+    inc_card = {}
+    if snapshot_matches_card and snapshot and isinstance(snapshot.get("incoming_card"), dict):
+        inc_card = snapshot["incoming_card"]
+    elif card and isinstance(card.filled_data, dict):
+        inc_card = card.filled_data
+    elif snapshot_matches_card and dds_state and isinstance(dds_state.get("incoming_card"), dict):
+        inc_card = dds_state["incoming_card"]
+    
+    clf = inc_card.get("classification") if isinstance(inc_card.get("classification"), dict) else {}
+    caller = inc_card.get("caller") if isinstance(inc_card.get("caller"), dict) else {}
+    phones = inc_card.get("phones") if isinstance(inc_card.get("phones"), dict) else {}
+    statuses = inc_card.get("statuses") if isinstance(inc_card.get("statuses"), dict) else {}
+
+    signs: Dict[str, str] = {}
+    for k, label in [("injured", "Пострадавшие"), ("blocked", "Блокировано"), ("ambulanceRefusal", "Отказ от скорой")]:
+        v = statuses.get(k)
+        if v and str(v).lower() not in ("неизвестно", "none", "false", ""):
+            signs[label] = str(v)
+
+    addr = caller.get("address")
+    if not addr:
+        addr_parts = [
+            inc_card.get("street") or ((snapshot.get("etalon", {}) if snapshot_matches_card and snapshot else {}).get("street")),
+            inc_card.get("house") or ((snapshot.get("etalon", {}) if snapshot_matches_card and snapshot else {}).get("house")),
+        ]
+        addr = ", ".join(str(p) for p in addr_parts if p)
+
+    # Assigned service must come from explicit task / etalon / saved cadet role, NEVER from notification order
+    assigned_svc = None
+    if dds_etalon_obj and dds_etalon_obj.service_name:
+        assigned_svc = dds_etalon_obj.service_name
+    elif snapshot_matches_card and snapshot and isinstance(snapshot.get("assigned_service"), str):
+        assigned_svc = snapshot["assigned_service"]
+    elif snapshot_matches_card and snapshot and isinstance(snapshot.get("dds_etalon"), dict) and snapshot["dds_etalon"].get("service_name"):
+        assigned_svc = snapshot["dds_etalon"]["service_name"]
+    elif snapshot_matches_card and snapshot and isinstance(snapshot.get("etalon"), dict) and snapshot["etalon"].get("service_name"):
+        assigned_svc = snapshot["etalon"]["service_name"]
+    elif card and getattr(card, "operator_service", None):
+        assigned_svc = card.operator_service
+
+    incident_ctx = IncidentContext(
+        category=clf.get("section") or ((snapshot.get("category") if snapshot_matches_card and snapshot else None)) or inc_card.get("category"),
+        subcategory=clf.get("title") or ((snapshot.get("subcategory") if snapshot_matches_card and snapshot else None)) or inc_card.get("subcategory"),
+        address=addr or None,
+        description=inc_card.get("description") or ((snapshot.get("plot") if snapshot_matches_card and snapshot else None)),
+        caller_name=caller.get("name") or ((snapshot.get("etalon", {}) if snapshot_matches_card and snapshot else {}).get("fio")) or None,
+        caller_phone=phones.get("aon") or ((snapshot.get("etalon", {}) if snapshot_matches_card and snapshot else {}).get("phone")) or None,
+        caller_role=caller.get("role") or ((snapshot.get("etalon", {}) if snapshot_matches_card and snapshot else {}).get("caller_status")) or None,
+        signs=signs,
+        assigned_service=assigned_svc,
+    )
+
+    # 4 Criteria Comparison
+    if assigned_svc:
+        decision_act = next(
+            (a for a in cadet_actions_list if a.service_name == assigned_svc and a.status in ("Принята", "Не принята", "Отказ от выполнения работ")),
+            next((a for a in cadet_actions_list if a.service_name == assigned_svc), None)
+        )
+    else:
+        decision_act = next(
+            (a for a in cadet_actions_list if a.status in ("Принята", "Не принята", "Отказ от выполнения работ")),
+            cadet_actions_list[0] if cadet_actions_list else None,
+        )
+
+    crit_decision = CriteriaDecision(
+        expected_decision=dds_etalon_obj.expected_decision if dds_etalon_obj else None,
+        rationale=dds_etalon_obj.decision_rationale if dds_etalon_obj else None,
+        alternatives=dds_etalon_obj.decision_alternatives if dds_etalon_obj else None,
+        actual_decision=decision_act.status if decision_act else None,
+        actual_service=decision_act.service_name if decision_act else (assigned_svc if assigned_svc else None),
+        actual_comment=decision_act.comment if decision_act else None,
+        actual_at=decision_act.at if decision_act else None,
+    )
+
+    conf_act = None
+    if assigned_svc:
+        conf_act = next((a for a in cadet_actions_list if a.service_name == assigned_svc and a.status in ("Принята", "Не принята")), None)
+    if not conf_act:
+        conf_act = next((a for a in cadet_actions_list if a.status in ("Принята", "Не принята")), None)
+
+    delivery_recorded = bool(dds_state.get("directed_at") or (card and getattr(card, "directed_at", None)))
+    directed_dt_val = dds_state.get("directed_at") or (card.directed_at.isoformat() if (card and getattr(card, "directed_at", None)) else None)
+
+    norm_secs = dds_etalon_obj.confirmation_time_limit_seconds if dds_etalon_obj else None
+
+    crit_timeliness = CriteriaTimeliness(
+        normative_seconds=norm_secs,
+        actual_seconds=conf_act.seconds_from_start if (conf_act and delivery_recorded) else None,
+        directed_at=directed_dt_val,
+        confirmed_at=conf_act.at if conf_act else None,
+        is_recorded=bool(delivery_recorded and conf_act),
+        note=None if (delivery_recorded and conf_act) else (
+            "Подтверждение не выполнено" if not conf_act else "Время направления карточки не зафиксировано"
+        ),
+    )
+
+    stages_list = []
+    for a in cadet_actions_list:
+        if a.status:
+            stages_list.append({
+                "status": a.status,
+                "service_name": a.service_name,
+                "at": a.at,
+                "seconds_from_start": a.seconds_from_start,
+                "comment": a.comment,
+            })
+    if assigned_svc:
+        svc_stages = [s for s in stages_list if s.get("service_name") == assigned_svc]
+        last_status = svc_stages[-1]["status"] if svc_stages else (stages_list[-1]["status"] if stages_list else None)
+    else:
+        last_status = stages_list[-1]["status"] if stages_list else None
+
+    crit_progression = CriteriaProgression(
+        expected_stages=dds_etalon_obj.expected_stages if dds_etalon_obj else [],
+        expected_result=dds_etalon_obj.expected_result if dds_etalon_obj else None,
+        actual_stages=stages_list,
+        final_status=last_status,
+    )
+
+    actual_comms = [a.comment for a in cadet_actions_list if a.comment]
+    actual_msgs = []
+    for a in cadet_actions_list:
+        if a.who_accepted or a.order_number or a.summary:
+            actual_msgs.append({
+                "who_accepted": a.who_accepted,
+                "order_number": a.order_number,
+                "summary": a.summary,
+                "at": a.at,
+            })
+    crit_comment = CriteriaComment(
+        required_points=dds_etalon_obj.required_comment_points if dds_etalon_obj else [],
+        sample_comment=dds_etalon_obj.sample_comment if dds_etalon_obj else None,
+        actual_comments=actual_comms,
+        actual_messages=actual_msgs,
+    )
+
+    dds_comparison_obj = DDSCriteriaComparison(
+        decision=crit_decision,
+        timeliness=crit_timeliness,
+        progression=crit_progression,
+        comment=crit_comment,
+        has_dds_etalon=has_dds_etalon,
+        has_cadet_actions=bool(cadet_actions_list),
+    )
+
+    is_dds = bool(card and card.card_origin == "DDS") or bool(exam_session and isinstance(exam_session.dynamic_state, dict) and "dds" in exam_session.dynamic_state)
     student_answer: Dict[str, Any] = {}
-    if card and card.filled_data:
-        student_answer = dict(card.filled_data)
-        if card.assigned_services:
-            student_answer["assigned_services"] = card.assigned_services
-    elif exam_session and isinstance(exam_session.dynamic_state, dict) and "dds" in exam_session.dynamic_state:
-        student_answer = exam_session.dynamic_state["dds"]
-    elif tr and isinstance(tr.error_details, dict) and tr.error_details:
-        student_answer = {"details": tr.error_details}
+    if is_dds:
+        if cadet_actions_list:
+            student_answer = {
+                "decision": crit_decision.actual_decision,
+                "actions": [a.model_dump() for a in cadet_actions_list],
+                "comments": actual_comms,
+                "messages": actual_msgs,
+            }
+        else:
+            student_answer = {}
+    else:
+        if card and card.filled_data:
+            student_answer = dict(card.filled_data)
+            if card.assigned_services:
+                student_answer["assigned_services"] = card.assigned_services
+        elif tr and isinstance(tr.error_details, dict) and tr.error_details:
+            student_answer = {"details": tr.error_details}
 
     # Current scenario data and the student's answer are never historical etalons.
     snapshot_missing = not snapshot or not isinstance(snapshot.get("etalon"), dict)
@@ -606,7 +894,23 @@ async def get_record_detail(
     teacher_comment = (tr.teacher_comment if tr else None) or (ev.teacher_comment if ev else None)
     is_appealed = bool((tr and tr.is_appealed) or (ev and ev.is_appealed))
     expert_modified_at = ev.expert_modified_at.isoformat() if (ev and ev.expert_modified_at) else None
+    if not expert_modified_at and is_tr_expert and tr.updated_at:
+        expert_modified_at = tr.updated_at.isoformat()
     expert_modified_by = ev.expert_modified_by if ev else None
+    if not expert_modified_by and (is_tr_expert or is_ev_expert):
+        candidate_ids = [record_id]
+        if tr:
+            candidate_ids.append(tr.result_id)
+        if card:
+            candidate_ids.append(card.card_id)
+        if ev:
+            candidate_ids.append(ev.evaluation_id)
+        log_res = await db.scalars(
+            select(UserActionLog.user_id)
+            .where(UserActionLog.target_id.in_(candidate_ids))
+            .order_by(UserActionLog.timestamp.desc())
+        )
+        expert_modified_by = log_res.first()
 
     return RecordDetailResponse(
         record_id=record_id,
@@ -616,7 +920,9 @@ async def get_record_detail(
         ticket_id=scenario_id,
         title=title,
         status=status_str,
-        score=round(score, 1) if score is not None else None,
+        score=float(score) if score is not None else None,
+        automatic_score=automatic_score,
+        expert_score=expert_score,
         is_appealed=is_appealed,
         teacher_comment=teacher_comment,
         evaluation_source=source,
@@ -626,6 +932,11 @@ async def get_record_detail(
         student_answer=student_answer,
         error_details=error_details,
         snapshot_missing=snapshot_missing,
+        incident_context=incident_ctx,
+        dds_etalon=dds_etalon_obj,
+        cadet_actions=cadet_actions_list,
+        dds_comparison=dds_comparison_obj,
+        has_dds_etalon=has_dds_etalon,
     )
 
 
@@ -877,71 +1188,159 @@ async def override_session_grade(
 )
 async def override_record_grade(
     record_id: str,
-    req: GradeOverrideRequest,
+    req: RecordGradeOverrideRequest,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
     """Override ticket record grade with audit logging in UserActionLog."""
     now_dt = datetime.now(timezone.utc)
     old_score = None
-    session_id = None
 
     tr_res = await db.execute(select(TicketResult).where(TicketResult.result_id == record_id))
     tr = tr_res.scalar_one_or_none()
 
-    if tr:
-        old_score = tr.score_total
-        session_id = tr.session_id
-        tr.score_total = req.score
-        tr.is_passed = req.score >= 60.0
-        tr.teacher_comment = req.comment or req.reason
-        tr.is_appealed = True
-        tr.updated_at = now_dt
+    ev_res = await db.execute(select(EvaluationResult).where(EvaluationResult.evaluation_id == record_id))
+    ev = ev_res.scalar_one_or_none()
 
-    stmt_ev = (
-        select(EvaluationResult)
-        .where(EvaluationResult.evaluation_id == record_id)
-        .order_by(EvaluationResult.evaluated_at.desc(), EvaluationResult.evaluation_id.asc())
-    )
-    ev = (await db.execute(stmt_ev)).scalar_one_or_none()
+    card_res = await db.execute(select(IncidentCard).where(IncidentCard.card_id == record_id))
+    card = card_res.scalar_one_or_none()
+
+    if not ev and card:
+        ev_card_res = await db.execute(
+            select(EvaluationResult)
+            .where(EvaluationResult.card_id == card.card_id)
+            .order_by(EvaluationResult.evaluated_at.desc(), EvaluationResult.evaluation_id.asc())
+        )
+        ev = ev_card_res.scalars().first()
+
+    if not card and ev and ev.card_id:
+        card = await db.get(IncidentCard, ev.card_id)
+
+    if not tr and not ev and not card:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Запись результата {record_id} не найдена",
+        )
+
+    session_id = tr.session_id if tr else (card.session_id if card else (ev.session_id if ev else None))
+    await _verify_record_access(db, current_user, session_id)
+
+    exam_session = await db.get(ExamSession, session_id) if session_id else None
+    if exam_session:
+        results = list((await db.scalars(select(TicketResult).where(TicketResult.session_id == session_id))).all())
+        cards = list((await db.scalars(select(IncidentCard).where(IncidentCard.session_id == session_id))).all())
+        eval_conditions = [EvaluationResult.session_id == session_id]
+        if card:
+            eval_conditions.append(EvaluationResult.card_id == card.card_id)
+        if ev and ev.card_id:
+            eval_conditions.append(EvaluationResult.card_id == ev.card_id)
+        evaluations = list((await db.scalars(select(EvaluationResult).where(or_(*eval_conditions)))).all())
+
+        for attempt_tr, attempt_card, attempt_ev in build_attempt_records(results, cards, evaluations):
+            if ((attempt_tr and attempt_tr.result_id == record_id) or
+                (attempt_card and attempt_card.card_id == record_id) or
+                (attempt_ev and attempt_ev.evaluation_id == record_id) or
+                (ev and attempt_ev and attempt_ev.evaluation_id == ev.evaluation_id) or
+                (tr and attempt_tr and attempt_tr.result_id == tr.result_id) or
+                (card and attempt_card and attempt_card.card_id == card.card_id)):
+                tr, card, ev = attempt_tr, attempt_card, attempt_ev
+                break
+
+    if exam_session:
+        is_session_active = (exam_session.status or "").upper() in ("ACTIVE", "IN_PROGRESS", "INITIALIZED")
+        is_tr_active = (tr is not None and (tr.status or "").upper() in ("ACTIVE", "IN_PROGRESS"))
+        has_dds = isinstance(exam_session.dynamic_state, dict) and "dds" in exam_session.dynamic_state
+        if has_dds:
+            dds_state = exam_session.dynamic_state.get("dds", {})
+            is_submitted = bool(dds_state.get("submitted_at"))
+        elif tr is not None:
+            is_submitted = not is_tr_active and (tr.score_total is not None or (tr.status or "").upper() in ("COMPLETED", "EVALUATED", "FINISHED", "PASSED", "FAILED"))
+        else:
+            is_submitted = bool(exam_session.end_time is not None or not is_session_active)
+
+        if not is_submitted:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="Попытка ещё не сдана (работа не отправлена или сессия активна)",
+            )
+
+    curr_score, curr_passed, curr_status, curr_err_cnt, curr_source = resolve_attempt_score_and_status(exam_session, tr, ev)
+    old_score = curr_score
+    new_score = req.score if req.score is not None else curr_score
+    new_passed = req.status == "passed" if req.status is not None else curr_passed
+
+    is_evaluation_already_expert = bool(ev and (ev.is_appealed or ev.expert_modified_at))
+    is_result_already_expert = bool(tr and tr.is_appealed and tr.score_total is not None)
+
     if ev:
-        session_id = ev.session_id or session_id
-        if old_score is None:
-            old_score = (ev.scores or {}).get("final_score")
-            if old_score is None:
-                old_score = (ev.scores or {}).get("total")
-        new_scores = dict(ev.scores or {})
-        new_scores["final_score"] = req.score
-        new_scores["total"] = req.score
-        ev.scores = new_scores
+        if not isinstance(ev.scores, dict):
+            ev.scores = {}
+        if "automatic_score" not in ev.scores:
+            if is_evaluation_already_expert:
+                ev.scores["automatic_score"] = None
+            else:
+                original_ai = (ev.scores or {}).get("final_score") if (ev.scores or {}).get("final_score") is not None else (ev.scores or {}).get("total")
+                ev.scores["automatic_score"] = float(original_ai) if original_ai is not None else None
+
+        if req.score is not None:
+            ev.scores["final_score"] = req.score
+            ev.scores["total"] = req.score
+            ev.scores["expert_score"] = req.score
+        elif "expert_score" not in ev.scores:
+            # A status-only revision is not a new expert numeric score.
+            ev.scores["expert_score"] = curr_score if (is_evaluation_already_expert or is_result_already_expert) else None
+        if req.status is not None:
+            ev.scores["is_passed"] = new_passed
         ev.teacher_comment = req.comment or req.reason
         ev.is_appealed = True
         ev.expert_modified_at = now_dt
         ev.expert_modified_by = current_user.user_id
         flag_modified(ev, "scores")
 
-    if not tr and not ev:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"Запись результата {record_id} не найдена",
-        )
+    if tr:
+        if req.score is not None:
+            tr.score_total = req.score
+        if req.status is not None:
+            tr.is_passed = new_passed
+        tr.teacher_comment = req.comment or req.reason
+        tr.is_appealed = True
+        tr.updated_at = now_dt
 
-    await _verify_record_access(db, current_user, session_id)
+    if not ev and card:
+        ev = EvaluationResult(
+            card_id=card.card_id,
+            session_id=card.session_id,
+            scores={
+                "final_score": req.score,
+                "total": req.score,
+                "expert_score": req.score if req.score is not None else (curr_score if is_result_already_expert else None),
+                "automatic_score": None,
+                **({"is_passed": new_passed} if req.status is not None else {}),
+            },
+            teacher_comment=req.comment or req.reason,
+            is_appealed=True,
+            expert_modified_at=now_dt,
+            expert_modified_by=current_user.user_id,
+            evaluated_at=now_dt,
+        )
+        db.add(ev)
 
     endpoint_path = f"/api/v1/analytics/records/{record_id}/grade-override"
     audit_log = UserActionLog(
         user_id=current_user.user_id,
         role=current_user.role,
         action="GRADE_OVERRIDE",
-        target_entity="ticket_results",
+        target_entity="evaluation_results" if ev else "ticket_results",
         target_id=record_id,
         endpoint=endpoint_path,
         details=json.dumps(
             {
                 "record_id": record_id,
                 "session_id": session_id,
-                "old_score": old_score,
-                "new_score": req.score,
+                "old_score": float(old_score) if old_score is not None else None,
+                "new_score": float(new_score) if new_score is not None else None,
+                "old_is_passed": curr_passed,
+                "new_is_passed": new_passed,
                 "reason": req.reason,
                 "comment": req.comment,
             },
@@ -956,7 +1355,7 @@ async def override_record_grade(
         session_id=session_id,
         record_id=record_id,
         old_score=float(old_score) if old_score is not None else None,
-        new_score=float(req.score),
+        new_score=float(new_score) if new_score is not None else None,
         reason=req.reason,
         teacher_id=current_user.user_id,
         updated_at=now_dt.isoformat(),
@@ -1110,28 +1509,31 @@ async def _calculate_analytics_summary(
                     "passed": 0,
                     "failed": 0,
                     "pending": 0,
+                    "graded": 0,
                 }
 
             if score is not None:
                 all_graded_scores.append(score)
                 buckets[date_str]["scores"].append(score)
-                if is_passed:
-                    total_passed += 1
-                    buckets[date_str]["passed"] += 1
-                elif is_passed is False:
-                    total_failed += 1
-                    buckets[date_str]["failed"] += 1
+            if score is not None or isinstance(is_passed, bool):
+                buckets[date_str]["graded"] += 1
             else:
                 total_pending += 1
                 buckets[date_str]["pending"] += 1
+            if is_passed is True:
+                total_passed += 1
+                buckets[date_str]["passed"] += 1
+            elif is_passed is False:
+                total_failed += 1
+                buckets[date_str]["failed"] += 1
 
     daily_points: List[DailyDynamicsPoint] = []
     for d_str in sorted(buckets.keys()):
         b = buckets[d_str]
-        graded = len(b["scores"])
+        graded = b["graded"]
         pending = b["pending"]
         day_total = graded + pending
-        day_avg = round(sum(b["scores"]) / graded, 1) if graded > 0 else None
+        day_avg = round(sum(b["scores"]) / len(b["scores"]), 1) if b["scores"] else None
         day_pass_rate = round((b["passed"] / graded) * 100.0, 1) if graded > 0 and b["passed"] + b["failed"] == graded else None
 
         daily_points.append(
@@ -1147,8 +1549,8 @@ async def _calculate_analytics_summary(
             )
         )
 
-    total_graded = len(all_graded_scores)
-    overall_avg = round(sum(all_graded_scores) / total_graded, 1) if total_graded > 0 else None
+    total_graded = total_attempts - total_pending
+    overall_avg = round(sum(all_graded_scores) / len(all_graded_scores), 1) if all_graded_scores else None
     overall_pass_rate = round((total_passed / total_graded) * 100.0, 1) if total_graded > 0 and total_passed + total_failed == total_graded else None
 
     trend_direction = None

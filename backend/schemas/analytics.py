@@ -1,7 +1,7 @@
 """Pydantic schemas for Aggregated Analytics API."""
 
-from typing import Any, Dict, List, Optional, Union
-from pydantic import BaseModel, Field, RootModel
+from typing import Any, Dict, List, Literal, Optional, Union
+from pydantic import BaseModel, Field, RootModel, field_validator, model_validator
 
 
 class HeatmapResponse(RootModel[Dict[str, Dict[str, int]]]):
@@ -141,6 +141,77 @@ class SessionAnalyticsResponse(BaseModel):
     cadets: List[CadetAnalyticsSummary] = Field(default_factory=list)
 
 
+from backend.schemas.domain_02 import DDSEtalon
+
+
+class DDSActionItem(BaseModel):
+    request_id: Optional[str] = None
+    kind: Optional[str] = None
+    service_name: Optional[str] = None
+    actor_id: Optional[str] = None
+    at: Optional[str] = None
+    seconds_from_start: Optional[int] = None
+    status: Optional[str] = None
+    comment: Optional[str] = None
+    order_number: Optional[str] = None
+    who_accepted: Optional[str] = None
+    summary: Optional[str] = None
+
+
+class IncidentContext(BaseModel):
+    category: Optional[str] = None
+    subcategory: Optional[str] = None
+    address: Optional[str] = None
+    description: Optional[str] = None
+    caller_name: Optional[str] = None
+    caller_phone: Optional[str] = None
+    caller_role: Optional[str] = None
+    signs: Dict[str, str] = Field(default_factory=dict)
+    assigned_service: Optional[str] = None
+
+
+class CriteriaDecision(BaseModel):
+    expected_decision: Optional[str] = None
+    rationale: Optional[str] = None
+    alternatives: Optional[str] = None
+    actual_decision: Optional[str] = None
+    actual_service: Optional[str] = None
+    actual_comment: Optional[str] = None
+    actual_at: Optional[str] = None
+
+
+class CriteriaTimeliness(BaseModel):
+    normative_seconds: Optional[int] = 30
+    actual_seconds: Optional[int] = None
+    directed_at: Optional[str] = None
+    confirmed_at: Optional[str] = None
+    is_recorded: bool = False
+    note: Optional[str] = None
+
+
+class CriteriaProgression(BaseModel):
+    expected_stages: List[str] = Field(default_factory=list)
+    expected_result: Optional[str] = None
+    actual_stages: List[Dict[str, Any]] = Field(default_factory=list)
+    final_status: Optional[str] = None
+
+
+class CriteriaComment(BaseModel):
+    required_points: List[str] = Field(default_factory=list)
+    sample_comment: Optional[str] = None
+    actual_comments: List[str] = Field(default_factory=list)
+    actual_messages: List[Dict[str, Any]] = Field(default_factory=list)
+
+
+class DDSCriteriaComparison(BaseModel):
+    decision: CriteriaDecision = Field(default_factory=CriteriaDecision)
+    timeliness: CriteriaTimeliness = Field(default_factory=CriteriaTimeliness)
+    progression: CriteriaProgression = Field(default_factory=CriteriaProgression)
+    comment: CriteriaComment = Field(default_factory=CriteriaComment)
+    has_dds_etalon: bool = False
+    has_cadet_actions: bool = False
+
+
 class RecordDetailResponse(BaseModel):
     record_id: str
     session_id: Optional[str] = None
@@ -150,6 +221,8 @@ class RecordDetailResponse(BaseModel):
     title: Optional[str] = None
     status: str
     score: Optional[float] = None
+    automatic_score: Optional[float] = None
+    expert_score: Optional[float] = None
     is_appealed: bool = False
     teacher_comment: Optional[str] = None
     evaluation_source: Optional[str] = None
@@ -159,6 +232,14 @@ class RecordDetailResponse(BaseModel):
     student_answer: Dict[str, Any] = Field(default_factory=dict)
     error_details: Any = Field(default_factory=list)
     snapshot_missing: bool = False
+
+    # Rich DDS evaluation context
+    incident_context: Optional[IncidentContext] = None
+    dds_etalon: Optional[DDSEtalon] = None
+    cadet_actions: List[DDSActionItem] = Field(default_factory=list)
+    dds_comparison: Optional[DDSCriteriaComparison] = None
+    has_dds_etalon: bool = False
+
 
 
 class DailyDynamicsPoint(BaseModel):
@@ -229,13 +310,31 @@ class GradeOverrideRequest(BaseModel):
     reason: str = Field(..., min_length=1, description="Обязательная причина пересмотра оценки")
     comment: Optional[str] = Field(default=None, description="Дополнительный комментарий преподавателя")
 
+    @field_validator("reason")
+    @classmethod
+    def validate_reason(cls, v: str) -> str:
+        if not isinstance(v, str) or not v.strip():
+            raise ValueError("Причина пересмотра оценки не может быть пустой")
+        return v.strip()
+
+
+class RecordGradeOverrideRequest(GradeOverrideRequest):
+    score: Optional[float] = Field(default=None, ge=0.0, le=100.0)
+    status: Optional[Literal["passed", "failed"]] = None
+
+    @model_validator(mode="after")
+    def require_grade_change(self):
+        if self.score is None and self.status is None:
+            raise ValueError("Укажите балл или зачёт/незачёт")
+        return self
+
 
 class GradeOverrideResponse(BaseModel):
     status: str = "ok"
     session_id: Optional[str] = None
     record_id: Optional[str] = None
     old_score: Optional[float] = None
-    new_score: float
+    new_score: Optional[float] = None
     reason: str
     teacher_id: Optional[str] = None
     updated_at: str

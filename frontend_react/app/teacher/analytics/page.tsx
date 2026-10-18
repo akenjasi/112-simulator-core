@@ -23,6 +23,7 @@ import {
   ErrorDetailItem,
 } from "@/components/teacher/split-screen"
 import { DDSLessonReport } from "@/components/teacher/dds-lesson-report"
+import { GradeDialog } from "@/components/teacher/grade-dialog"
 import { getStoredToken } from "@/lib/auth-session"
 import {
   Users,
@@ -182,10 +183,14 @@ export interface CadetTicketSummary {
   title: string
   status: "passed" | "failed" | "in_progress" | "completed" | "incomplete" | string
   score?: number | null
+  record_id?: string
+  card_id?: string
+  automatic_score?: number | null
+  expert_score?: number | null
+  teacher_comment?: string | null
   errors_count: number
   errors?: string[]
   completed_at?: string | null
-  card_id?: string
   actions?: CadetTicketAction[]
 }
 
@@ -321,6 +326,23 @@ export default function AnalyticsPage({ initialTab = "split" }: AnalyticsPagePro
   const [editingNotesText, setEditingNotesText] = useState<string>("")
   const [isSavingNotes, setIsSavingNotes] = useState<boolean>(false)
   const [lessonsAuthError, setLessonsAuthError] = useState<string | null>(null)
+  const [gradingState, setGradingState] = useState<{
+    isOpen: boolean
+    recordId: string
+    cadetName: string
+    ticketTitle: string
+    isEdit: boolean
+    initialScore?: number | null
+    initialComment?: string | null
+    initialAutomaticScore?: number | null
+    initialExpertScore?: number | null
+  }>({
+    isOpen: false,
+    recordId: "",
+    cadetName: "",
+    ticketTitle: "",
+    isEdit: false,
+  })
 
   // Charts & Dashboards state (ТЗ 75 & Verified Analytics)
   const [isMounted, setIsMounted] = useState<boolean>(false)
@@ -582,34 +604,8 @@ export default function AnalyticsPage({ initialTab = "split" }: AnalyticsPagePro
     fetchLessonsHistory()
   }, [fetchLessonsHistory])
 
-  // Save updated teacher notes for a lesson
-  const handleSaveLessonNotes = async (lessonId: string) => {
-    try {
-      setIsSavingNotes(true)
-      const token = getStoredToken()
-      const res = await fetch(`/api/v1/lessons/${lessonId}/notes`, {
-        method: "PATCH",
-        headers: {
-          "Content-Type": "application/json",
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
-        },
-        body: JSON.stringify({ teacher_notes: editingNotesText }),
-      })
-      if (res.ok) {
-        setLessonsList((prev) =>
-          prev.map((l) => (l.id === lessonId ? { ...l, teacher_notes: editingNotesText } : l))
-        )
-        setEditingNotesId(null)
-      }
-    } catch (err) {
-      console.error("Error saving lesson notes", err)
-    } finally {
-      setIsSavingNotes(false)
-    }
-  }
-
   // Load single record details
-  const loadRecordDetail = async (recordId: string, cadetName?: string) => {
+  const loadRecordDetail = useCallback(async (recordId: string, cadetName?: string) => {
     try {
       setIsLoadingRecord(true)
       const token = getStoredToken()
@@ -642,51 +638,99 @@ export default function AnalyticsPage({ initialTab = "split" }: AnalyticsPagePro
     } finally {
       setIsLoadingRecord(false)
     }
+  }, [sessionData])
+
+  const handleSelectRecord = loadRecordDetail
+
+  const handleGradingSuccess = useCallback(async () => {
+    await fetchLessonsHistory()
+    if (sessionId) {
+      await fetchSessionAnalytics(sessionId)
+    }
+    await fetchChartsData()
+    if (selectedRecord?.record_id) {
+      await handleSelectRecord(selectedRecord.record_id, selectedRecord.cadet_name)
+    }
+  }, [fetchLessonsHistory, sessionId, fetchSessionAnalytics, fetchChartsData, selectedRecord, handleSelectRecord])
+
+  // Save updated teacher notes for a lesson
+  const handleSaveLessonNotes = async (lessonId: string) => {
+    try {
+      setIsSavingNotes(true)
+      const token = getStoredToken()
+      const res = await fetch(`/api/v1/lessons/${lessonId}/notes`, {
+        method: "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({ teacher_notes: editingNotesText }),
+      })
+      if (res.ok) {
+        setLessonsList((prev) =>
+          prev.map((l) => (l.id === lessonId ? { ...l, teacher_notes: editingNotesText } : l))
+        )
+        setEditingNotesId(null)
+      }
+    } catch (err) {
+      console.error("Error saving lesson notes", err)
+    } finally {
+      setIsSavingNotes(false)
+    }
   }
 
   // Handle appeal submission
-  const handleAppeal = async (recordId: string, payload: { status: string; comment: string }) => {
+  const handleAppeal = async (
+    recordId: string,
+    payload: { status: string; comment: string; score?: number; reason?: string }
+  ) => {
     const token = getStoredToken()
     const headers: Record<string, string> = { "Content-Type": "application/json" }
     if (token) {
       headers["Authorization"] = `Bearer ${token}`
     }
 
-    let res = await fetch(`/api/v1/analytics/records/${encodeURIComponent(recordId)}/appeal`, {
-      method: "PATCH",
+    const res = await fetch(`/api/v1/analytics/records/${encodeURIComponent(recordId)}/grade-override`, {
+      method: "POST",
       headers,
-      body: JSON.stringify(payload),
+      body: JSON.stringify({
+        status: payload.status,
+        ...(payload.score !== undefined ? { score: payload.score } : {}),
+        reason: payload.reason || payload.comment || "Пересмотр оценки преподавателем",
+        comment: payload.comment,
+      }),
     })
-
-    if (!res.ok && res.status === 409) {
-      // Fallback to grade-override endpoint for assigned DDS sessions with audit logging
-      res = await fetch(`/api/v1/analytics/records/${encodeURIComponent(recordId)}/grade-override`, {
-        method: "POST",
-        headers,
-        body: JSON.stringify({
-          score: payload.status === "passed" ? 100 : 0,
-          reason: payload.comment || "Пересмотр оценки преподавателем",
-          comment: payload.comment,
-        }),
-      })
-    }
 
     if (!res.ok) {
       throw new Error(`Ошибка при отправке апелляции (${res.status})`)
     }
 
     const updatedData = await res.json().catch(() => null)
+    const effectiveScore = updatedData?.new_score !== undefined ? updatedData.new_score : payload.score
 
     setSelectedRecord((prev) => {
       if (!prev) return null
       return {
         ...prev,
-        status: payload.status,
-        teacher_comment: payload.comment,
+        score: effectiveScore !== undefined ? effectiveScore : prev.score,
+        expert_score: payload.score !== undefined ? payload.score : prev.expert_score,
+        teacher_comment: payload.comment || prev.teacher_comment,
         is_appealed: true,
-        ...(updatedData && typeof updatedData === "object" ? updatedData : {}),
       }
     })
+
+    // Re-fetch fresh record details from server for real consistency
+    try {
+      const recRes = await fetch(`/api/v1/analytics/records/${encodeURIComponent(recordId)}`, { headers })
+      if (recRes.ok) {
+        const freshRecord = await recRes.json()
+        if (freshRecord) {
+          setSelectedRecord(freshRecord)
+        }
+      }
+    } catch (e) {
+      console.warn("Could not reload record after appeal:", e)
+    }
 
     setSessionData((prev) => {
       const updatedCadets = prev.cadets.map((cadet) => {
@@ -697,6 +741,7 @@ export default function AnalyticsPage({ initialTab = "split" }: AnalyticsPagePro
           if (r.record_id === recordId) {
             return {
               ...r,
+              score: effectiveScore !== undefined ? effectiveScore : r.score,
               status: payload.status,
               is_appealed: true,
               teacher_comment: payload.comment,
@@ -721,6 +766,12 @@ export default function AnalyticsPage({ initialTab = "split" }: AnalyticsPagePro
         cadets: updatedCadets,
       }
     })
+
+    if (sessionId) {
+      await fetchSessionAnalytics(sessionId)
+    }
+    await fetchLessonsHistory()
+    await fetchChartsData()
   }
 
   const [isExportingExcel, setIsExportingExcel] = useState<boolean>(false)
@@ -1988,11 +2039,52 @@ export default function AnalyticsPage({ initialTab = "split" }: AnalyticsPagePro
                                                           })()}
                                                         </div>
 
-                                                        <div className="flex items-center justify-between text-xs pt-1.5 border-t">
-                                                          <span className="text-muted-foreground font-medium">Оценка за билет:</span>
-                                                          <span className="font-bold text-foreground">
-                                                            {t.score !== undefined && t.score !== null ? `${t.score}/100` : "Нет оценки"}
-                                                          </span>
+                                                        <div className="flex items-center justify-between text-xs pt-1.5 border-t gap-2 flex-wrap">
+                                                          <div className="flex items-center gap-1.5">
+                                                            <span className="text-muted-foreground font-medium">Оценка за билет:</span>
+                                                            <span className="font-bold text-foreground">
+                                                              {t.score !== undefined && t.score !== null ? `${t.score}/100` : "Нет оценки"}
+                                                            </span>
+                                                          </div>
+
+                                                          {(() => {
+                                                            const isTicketActiveOrUnsubmitted =
+                                                              t.status?.toLowerCase() === "in_progress" ||
+                                                              t.status?.toLowerCase() === "incomplete" ||
+                                                              student.status?.toUpperCase() === "IN_PROGRESS" ||
+                                                              student.status?.toLowerCase() === "in_progress" ||
+                                                              student.status?.toUpperCase() === "INCOMPLETE" ||
+                                                              student.status?.toLowerCase() === "incomplete"
+                                                            if (isTicketActiveOrUnsubmitted) return null
+
+                                                            const recId = t.record_id || t.card_id
+                                                            if (!recId) return null
+                                                            const isEdit = t.score !== null && t.score !== undefined
+
+                                                            return (
+                                                              <Button
+                                                                type="button"
+                                                                size="sm"
+                                                                variant={isEdit ? "outline" : "default"}
+                                                                onClick={() => {
+                                                                  setGradingState({
+                                                                    isOpen: true,
+                                                                    recordId: recId,
+                                                                    cadetName: student.cadet_name,
+                                                                    ticketTitle: t.title,
+                                                                    isEdit,
+                                                                    initialScore: t.score,
+                                                                    initialComment: t.teacher_comment,
+                                                                    initialAutomaticScore: t.automatic_score,
+                                                                    initialExpertScore: t.expert_score,
+                                                                  })
+                                                                }}
+                                                                className="h-7 text-xs font-semibold"
+                                                              >
+                                                                {isEdit ? "Изменить оценку" : "Выставить оценку"}
+                                                              </Button>
+                                                            )
+                                                          })()}
                                                         </div>
 
                                                         {/* Errors List */}
@@ -2391,6 +2483,25 @@ export default function AnalyticsPage({ initialTab = "split" }: AnalyticsPagePro
           </CardContent>
         </Card>
       )}
+
+      {/* Teacher Grading Dialog */}
+      <GradeDialog
+        isOpen={gradingState.isOpen}
+        onClose={() => setGradingState((prev) => ({ ...prev, isOpen: false }))}
+        onSuccess={handleGradingSuccess}
+        onOpenSplitScreen={(recId) => {
+          setActiveTab("split")
+          handleSelectRecord(recId)
+        }}
+        recordId={gradingState.recordId}
+        cadetName={gradingState.cadetName}
+        ticketTitle={gradingState.ticketTitle}
+        isEdit={gradingState.isEdit}
+        initialScore={gradingState.initialScore}
+        initialComment={gradingState.initialComment}
+        initialAutomaticScore={gradingState.initialAutomaticScore}
+        initialExpertScore={gradingState.initialExpertScore}
+      />
     </div>
   )
 }

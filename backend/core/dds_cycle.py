@@ -14,7 +14,7 @@ from datetime import datetime, timezone, timedelta
 from typing import Any, Dict, List, Optional
 
 from fastapi import HTTPException, status
-from sqlalchemy import select, text
+from sqlalchemy import or_, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm.attributes import flag_modified
 
@@ -981,11 +981,26 @@ async def build_dds_cadet_stats(
         for c in res_cards.scalars().all():
             cards_by_session.setdefault(c.session_id, []).append(c)
 
+        card_ids = [c.card_id for clist in cards_by_session.values() for c in clist]
+        eval_conditions = [EvaluationResult.session_id.in_(session_ids)]
+        if card_ids:
+            eval_conditions.append(EvaluationResult.card_id.in_(card_ids))
         res_evals = await db.execute(
-            select(EvaluationResult).where(EvaluationResult.session_id.in_(session_ids))
+            select(EvaluationResult).where(or_(*eval_conditions))
         )
+        seen_eval_ids = set()
         for ev in res_evals.scalars().all():
-            evals_by_session.setdefault(ev.session_id, []).append(ev)
+            if ev.evaluation_id in seen_eval_ids:
+                continue
+            seen_eval_ids.add(ev.evaluation_id)
+            sid = ev.session_id
+            if not sid and ev.card_id:
+                for sid_k, clist in cards_by_session.items():
+                    if any(c.card_id == ev.card_id for c in clist):
+                        sid = sid_k
+                        break
+            if sid:
+                evals_by_session.setdefault(sid, []).append(ev)
             if ev.card_id:
                 evals_by_card.setdefault(ev.card_id, []).append(ev)
 
@@ -1066,8 +1081,8 @@ async def build_dds_cadet_stats(
 
         # A default false is_passed flag is not a failed evaluation.
         resolved_score, resolved_passed, *_ = _resolve_session_grade(session_evals, session_trs)
-        is_passed = resolved_score is not None and resolved_passed is True
-        is_failed = resolved_score is not None and resolved_passed is False
+        is_passed = resolved_passed is True
+        is_failed = resolved_passed is False
         if is_passed:
             c_stats.passed = 1
             c_stats.failed = 0
@@ -1091,7 +1106,19 @@ async def build_dds_cadet_stats(
             from backend.core.gradebook_records import historical_record_snapshot
             saved_scenario = historical_record_snapshot(s, t_id)
             title = (saved_scenario.get("title") if saved_scenario else None) or (f"Билет #{t_id[:8]}" if t_id else "Карточка")
-            t_score = get_session_score(session_evals, session_trs)
+            card_evals = evals_by_card.get(card.card_id, []) if card else []
+            if not card_evals:
+                card_evals = session_evals
+            card_trs = [tr for tr in session_trs if tr.ticket_id and card and tr.ticket_id == card.scenario_id] if (card and card.scenario_id) else session_trs
+            t_score = get_session_score(card_evals, card_trs if card_trs else session_trs)
+
+            tr = card_trs[0] if card_trs else (session_trs[0] if session_trs else None)
+            if tr:
+                rec_id = tr.result_id
+            elif card or card_id:
+                rec_id = card.card_id if card else card_id
+            else:
+                rec_id = None
 
             # Error details strictly from associated results, deduplicated
             errors: List[str] = []
@@ -1106,9 +1133,9 @@ async def build_dds_cadet_stats(
                             msg = str(err)
                         if msg not in errors:
                             errors.append(msg)
-            for tr in session_trs:
-                if isinstance(tr.error_details, list):
-                    for err in tr.error_details:
+            for tr_item in session_trs:
+                if isinstance(tr_item.error_details, list):
+                    for err in tr_item.error_details:
                         if isinstance(err, str):
                             msg = err
                         elif isinstance(err, dict):
@@ -1117,8 +1144,8 @@ async def build_dds_cadet_stats(
                             msg = str(err)
                         if msg not in errors:
                             errors.append(msg)
-                elif isinstance(tr.error_details, dict):
-                    for k, v in tr.error_details.items():
+                elif isinstance(tr_item.error_details, dict):
+                    for k, v in tr_item.error_details.items():
                         msg = f"{k}: {v}"
                         if msg not in errors:
                             errors.append(msg)
@@ -1141,6 +1168,8 @@ async def build_dds_cadet_stats(
                 title=title,
                 status=t_status,
                 score=t_score,
+                record_id=rec_id,
+                session_id=s.session_id,
                 errors_count=len(errors),
                 errors=errors,
                 completed_at=s.end_time if c_stats.status in ("COMPLETED", "INCOMPLETE") else None,
@@ -1206,8 +1235,8 @@ async def build_dds_cadet_stats(
                                 card_errors.append(msg)
 
                 _, card_passed, *_ = _resolve_session_grade(card_evals, card_trs)
-                card_is_passed = card_score is not None and card_passed is True
-                card_is_failed = card_score is not None and card_passed is False
+                card_is_passed = card_passed is True
+                card_is_failed = card_passed is False
 
                 if card_is_passed:
                     t_status = "passed"
@@ -1222,16 +1251,21 @@ async def build_dds_cadet_stats(
                 else:
                     t_status = "in_progress"
 
+                tr = card_trs[0] if card_trs else None
+                rec_id = tr.result_id if tr else card.card_id
+
                 detail = CadetTicketDetail(
                     ticket_id=t_id,
                     title=title,
                     status=t_status,
                     score=card_score,
+                    record_id=rec_id,
+                    session_id=s.session_id,
                     errors_count=len(card_errors),
                     errors=card_errors,
                     completed_at=s.end_time if c_stats.status in ("COMPLETED", "INCOMPLETE") else None,
                     card_id=card.card_id,
-                    actions=[],
+                    actions=dds_data.get("actions", []),
                 )
                 tickets.append(detail)
         elif session_trs:
@@ -1301,11 +1335,16 @@ async def build_dds_cadet_stats(
                     else:
                         t_status = "in_progress"
 
+                tr = sorted_trs[0] if sorted_trs else None
+                rec_id = tr.result_id if tr else None
+
                 detail = CadetTicketDetail(
                     ticket_id=t_id,
                     title=title,
                     status=t_status,
                     score=tr_score,
+                    record_id=rec_id,
+                    session_id=s.session_id,
                     errors_count=len(tr_errors),
                     errors=tr_errors,
                     completed_at=s.end_time if c_stats.status in ("COMPLETED", "INCOMPLETE") else None,

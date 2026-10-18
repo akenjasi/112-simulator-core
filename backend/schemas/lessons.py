@@ -93,6 +93,8 @@ class CadetTicketDetail(BaseModel):
     title: str
     status: str = "passed"
     score: Optional[float] = None
+    record_id: Optional[str] = None
+    session_id: Optional[str] = None
     errors_count: int = 0
     errors: List[str] = Field(default_factory=list)
     completed_at: Optional[datetime.datetime] = None
