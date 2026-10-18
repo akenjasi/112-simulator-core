@@ -23,8 +23,8 @@ function applyTheme(theme: ThemePreference) {
 }
 
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
-  const [theme, setPreference] = useState<ThemePreference>("system")
-  const currentTheme = useRef<ThemePreference>("system")
+  const [theme, setPreference] = useState<ThemePreference>("light")
+  const currentTheme = useRef<ThemePreference>("light")
 
   const update = useCallback((value: ThemePreference) => {
     currentTheme.current = value
@@ -41,12 +41,12 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     let preference: unknown = document.documentElement.dataset.themePreference
     try { preference = localStorage.getItem(THEME_STORAGE_KEY) ?? preference } catch { /* Storage may be unavailable. */ }
-    update(isTheme(preference) ? preference : "system")
+    update(isTheme(preference) ? preference : "light")
     const media = window.matchMedia?.("(prefers-color-scheme: dark)")
     const systemChanged = () => { if (currentTheme.current === "system") applyTheme("system") }
     const storageChanged = (event: StorageEvent) => {
       if (event.key === THEME_STORAGE_KEY || event.key === null) {
-        update(isTheme(event.newValue) ? event.newValue : "system")
+        update(isTheme(event.newValue) ? event.newValue : "light")
       }
     }
     media?.addEventListener("change", systemChanged)
