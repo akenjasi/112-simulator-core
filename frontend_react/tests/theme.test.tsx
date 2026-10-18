@@ -29,6 +29,16 @@ beforeEach(() => {
 afterEach(() => vi.unstubAllGlobals())
 
 describe("persistent theme selection", () => {
+  it("defaults to light before first paint and after mount on a dark system", () => {
+    dark = true
+    new Function(THEME_INIT_SCRIPT)()
+    expect(document.documentElement).toHaveClass("light")
+    render(<View />)
+    expect(screen.getByRole("combobox", { name: "Тема" })).toHaveValue("light")
+    act(() => listener?.())
+    expect(document.documentElement).not.toHaveClass("dark")
+  })
+
   it("applies the saved choice before first paint even when the system disagrees", () => {
     dark = true
     storage.set(THEME_STORAGE_KEY, "light")
@@ -51,6 +61,7 @@ describe("persistent theme selection", () => {
 
   it("follows system changes only when the user selects system", () => {
     render(<View />)
+    fireEvent.change(screen.getByRole("combobox", { name: "Тема" }), { target: { value: "system" } })
     act(() => { dark = true; listener?.() })
     expect(document.documentElement).toHaveClass("dark")
     fireEvent.change(screen.getByRole("combobox", { name: "Тема" }), { target: { value: "light" } })
@@ -60,7 +71,7 @@ describe("persistent theme selection", () => {
     expect(document.documentElement).toHaveClass("dark")
   })
 
-  it("updates controls across tabs and falls back to system after a cleared setting", () => {
+  it("updates controls across tabs and falls back to light after a cleared setting", () => {
     render(<View />)
     act(() => window.dispatchEvent(new StorageEvent("storage", { key: THEME_STORAGE_KEY, newValue: "dark" })))
     expect(screen.getByRole("combobox", { name: "Тема" })).toHaveValue("dark")
