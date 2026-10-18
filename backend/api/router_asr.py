@@ -80,6 +80,7 @@ class ASRService:
     """Singleton service managing in-memory GigaAM-v3 CTC model session."""
 
     def __init__(self, model_path: Optional[str] = None, pool_size: int = 6):
+        self.enabled = os.getenv("ASR_ENABLED", "true").strip().lower() not in {"false", "0", "no", "off"}
         project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
         self.model_path = model_path or os.getenv(
             "GIGAAM_MODEL_PATH",
@@ -92,6 +93,9 @@ class ASRService:
         self._init_model()
 
     def _init_model(self):
+        if not self.enabled:
+            logger.info("Speech recognition is disabled by configuration")
+            return
         try:
             import transcribe_cpp
 
@@ -114,6 +118,8 @@ class ASRService:
 
     async def transcribe_pcm(self, pcm: np.ndarray) -> str:
         """Transcribes 16kHz mono float32 PCM numpy array."""
+        if not self.enabled:
+            raise RuntimeError("Speech recognition is disabled")
         if len(pcm) == 0:
             return ""
 
@@ -171,7 +177,7 @@ router_asr = APIRouter(prefix="/api/v2/asr", tags=["ASR (Speech Recognition)"])
 async def get_asr_status():
     """Returns ASR service readiness and loaded model info."""
     return {
-        "status": "ready" if asr_service.is_ready() else "not_ready",
+        "status": "disabled" if not asr_service.enabled else "ready" if asr_service.is_ready() else "not_ready",
         "model": "gigaam-v3-ctc-Q8_0",
         "model_path": asr_service.model_path,
         "model_exists": os.path.exists(asr_service.model_path),
@@ -191,6 +197,8 @@ async def transcribe_audio_file(
     converts it to 16000 Hz Mono Float32 WAV/PCM and runs GigaAM-v3 inference.
     Returns: {"text": "распознанный текст"}
     """
+    if not asr_service.enabled:
+        raise HTTPException(status_code=503, detail="Speech recognition is disabled")
     with tempfile.NamedTemporaryFile(delete=False, suffix=f"_{file.filename}") as tmp_file:
         tmp_path = tmp_file.name
 
@@ -235,6 +243,9 @@ async def websocket_asr_stream(websocket: WebSocket, session_id: str, ticket_id:
     updates transcription incrementally without re-loading the model,
     and returns live recognized text on the fly.
     """
+    if not asr_service.enabled:
+        await websocket.close(code=1008, reason="Speech recognition is disabled")
+        return
     await websocket.accept()
     conn_id = str(uuid.uuid4())
     logger.info(f"ASR WebSocket client connected: {conn_id} for session {session_id}, ticket {ticket_id}")

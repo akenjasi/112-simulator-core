@@ -15,7 +15,7 @@ WORKDIR /app
 
 # ─── System dependencies ──────────────────────────────────────────────────────
 # ffmpeg    — audio DSP pipeline (tts_v2.py: highpass/lowpass/amix filters)
-# wget      — model downloader in scripts/init.sh
+# wget      — optional manual model provisioning utility
 # curl      — healthcheck probe
 # libgomp1  — OpenMP runtime for ggml CPU parallel inference
 # libstdc++6— C++ stdlib for native transcribe-cli / qwen-tts ELF binaries
@@ -53,8 +53,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates
 # ─── Application source ───────────────────────────────────────────────────────
 # Heavy binary files (*.so, qwen-tts, transcribe-cli) are in the repo under
 # backend/bin/ and backend/core/qwen_tts/ — they are COPY-ed here.
-# GGUF model weights (~880 MB) are excluded via .dockerignore and downloaded
-# at runtime by scripts/init.sh into the mounted Docker volume.
+# GGUF weights are excluded via .dockerignore and mounted separately.
+# package_offline.sh downloads report Qwen before creating the offline bundle.
 COPY . .
 
 # ─── Executable permissions ───────────────────────────────────────────────────
@@ -88,10 +88,10 @@ ENV LD_LIBRARY_PATH="/app/backend/bin" \
 
 # ─── Persistent data layout ───────────────────────────────────────────────────
 # /app/data/                          → SQLite DB, TTS audio cache, uploads
-# /app/backend/core/qwen_tts/models/  → GGUF weights (downloaded once)
+# /app/backend/core/qwen_tts/models/  → optional externally provisioned TTS weights
 VOLUME ["/app/data", "/app/backend/core/qwen_tts/models"]
 
 EXPOSE 8000
 
-# init.sh: mkdir -p data dirs → idempotent model download → exec uvicorn
+# init.sh: mkdir -p data dirs → exec uvicorn (no model downloads)
 CMD ["/app/scripts/init.sh"]

@@ -20,6 +20,8 @@ tests/test_dds_report_jobs_acceptance.py
 tests/test_dds_report_jobs_unit.py
 tests/test_dds_report_llm_acceptance.py
 tests/test_dds_report_llm_unit.py
+tests/test_offline_llm_routing.py
+tests/test_offline_asr_disabled.py
 tests/test_dds_service_policy.py
 tests/test_dds_saved_tickets.py
 tests/test_dds_queue.py

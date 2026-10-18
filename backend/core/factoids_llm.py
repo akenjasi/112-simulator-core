@@ -1,4 +1,5 @@
 import inspect
+import os
 import re
 import httpx
 from typing import List
@@ -85,15 +86,21 @@ async def call_llm_api(prompt: str) -> str:
     """
     Вызов LLM API через httpx.AsyncClient (формат OpenAI API).
     """
-    url = "http://localhost:11434/v1/chat/completions"
+    base_url = os.getenv("FACTOIDS_LLM_BASE_URL", "http://localhost:11434/v1")
+    url = f"{base_url.rstrip('/')}/chat/completions"
     payload = {
-        "model": "qwen2.5:7b",
+        "model": os.getenv("FACTOIDS_LLM_MODEL", "qwen2.5:7b"),
         "messages": [
             {"role": "user", "content": prompt}
         ]
     }
-    async with httpx.AsyncClient() as client:
-        response = await client.post(url, json=payload, timeout=60.0)
+    if os.getenv("FACTOIDS_LLM_BASE_URL"):
+        # The offline Qwen server shares the DDS report model. Keep its output
+        # bounded and avoid spending CPU on hidden reasoning for four replies.
+        payload["max_tokens"] = 1200
+        payload["chat_template_kwargs"] = {"enable_thinking": False}
+    async with httpx.AsyncClient(trust_env=False) as client:
+        response = await client.post(url, json=payload, timeout=float(os.getenv("FACTOIDS_LLM_TIMEOUT_SECONDS", "60")))
         data = response.json()
         if inspect.isawaitable(data):
             data = await data

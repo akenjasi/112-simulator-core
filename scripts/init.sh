@@ -30,8 +30,8 @@ if [ -d "/app/preseeded_tts_cache" ] && [ "$(ls -A /app/preseeded_tts_cache)" ];
 fi
 
 
-# ─── 2. Models are pre-downloaded in Dockerfile ─────────────────────────────
-echo "🤖 Models are built into the image"
+# ─── 2. GGUF weights are provisioned and mounted externally ────────────────
+echo "🤖 GGUF models use configured local mounts; startup does not download weights"
 
 # ─── 3. Export LD_LIBRARY_PATH for native shared libs ────────────────────────
 export LD_LIBRARY_PATH="/app/backend/bin:${LD_LIBRARY_PATH:-}"
