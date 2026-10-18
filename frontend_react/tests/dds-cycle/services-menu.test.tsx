@@ -18,6 +18,7 @@ describe('DDS service menu', () => {
     let resolve!:(value:boolean)=>void
     render(<ServicesBar data={dispatcherData} onStatusChange={()=>new Promise<boolean>(done=>{resolve=done})}/>)
     fireEvent.click(screen.getAllByRole('button',{name:'Редактировать статус'})[0])
+    fireEvent.change(screen.getByPlaceholderText('Номер наряда'), {target: {value: '17'}})
     fireEvent.click(screen.getByRole('button',{name:'Подтвердить'}))
     const pencils=screen.getAllByRole('button',{name:'Редактировать статус'})
     expect(pencils).toHaveLength(dispatcherData.services.length)

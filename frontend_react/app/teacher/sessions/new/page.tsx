@@ -1202,42 +1202,49 @@ export default function SessionSetupPage() {
                   control={control}
                   rules={{ required: true }}
                   render={({ field }) => (
-                    <RadioGroup
-                      value={field.value}
-                      onValueChange={field.onChange}
-                      className="grid grid-cols-2 gap-2"
-                    >
-                      {[
-                        {
-                          value: "live_stream",
-                          title: "Поток в реальном времени",
-                        },
-                        {
-                          value: "exam",
-                          title: "Экзаменационный режим",
-                        },
-                      ].map((mode) => {
-                        const isSelected = field.value === mode.value
-                        return (
-                          <label
-                            key={mode.value}
-                            htmlFor={`mode-${mode.value}`}
-                            className={`flex items-center p-2 rounded-lg border cursor-pointer transition-all ${
-                              isSelected
-                                ? "border-primary bg-primary/5 ring-1 ring-primary shadow-xs"
-                                : "border-border hover:bg-muted/40 text-muted-foreground"
-                            }`}
-                          >
-                            <div className="flex items-center gap-2 overflow-hidden">
-                              <RadioGroupItem id={`mode-${mode.value}`} value={mode.value} />
-                              <span className="font-medium text-xs text-foreground truncate">
-                                {mode.title}
-                              </span>
-                            </div>
-                          </label>
-                        )
-                      })}
-                    </RadioGroup>
+                    <div>
+                      <RadioGroup
+                        value={field.value}
+                        onValueChange={field.onChange}
+                        className="grid grid-cols-2 gap-2"
+                      >
+                        {[
+                          {
+                            value: "live_stream",
+                            title: "Поток в реальном времени",
+                          },
+                          {
+                            value: "exam",
+                            title: "Экзаменационный режим",
+                          },
+                        ].map((mode) => {
+                          const isSelected = field.value === mode.value
+                          return (
+                            <label
+                              key={mode.value}
+                              htmlFor={`mode-${mode.value}`}
+                              className={`flex items-center p-2 rounded-lg border cursor-pointer transition-all ${
+                                isSelected
+                                  ? "border-primary bg-primary/5 ring-1 ring-primary shadow-xs"
+                                  : "border-border hover:bg-muted/40 text-muted-foreground"
+                              }`}
+                            >
+                              <div className="flex items-center gap-2 overflow-hidden">
+                                <RadioGroupItem id={`mode-${mode.value}`} value={mode.value} />
+                                <span className="font-medium text-xs text-foreground truncate">
+                                  {mode.title}
+                                </span>
+                              </div>
+                            </label>
+                          )
+                        })}
+                      </RadioGroup>
+                      <p className="text-[11px] text-muted-foreground mt-1.5">
+                        {field.value === "exam"
+                          ? "Экзамен: лимит времени действует на всю текущую карточку от серверной выдачи. По истечении лимита редактирование завершается. Норматив первого решения службы (SLA 30 сек) рассчитывается независимо."
+                          : "Поток в реальном времени (обучение): курсант продолжает работу после норматива, система фиксирует факт просрочки."}
+                      </p>
+                    </div>
                   )}
                 />
               </div>
@@ -1779,6 +1786,9 @@ export default function SessionSetupPage() {
                     className="h-8 text-xs"
                     {...register("time_limit_seconds")}
                   />
+                  <p className="text-[11px] text-muted-foreground">
+                    Лимит времени на карточку от момента выдачи. Норматив SLA 30 сек на первичное решение службы действует параллельно в интерфейсе ДДС.
+                  </p>
                 </div>
 
                 <div className="space-y-1">

@@ -311,11 +311,11 @@ def generate_excel_from_data(cadets_data: List[Dict[str, Any]]) -> bytes:
 
         cadet_name = str(c.get("cadet_name") or "—")
         ticket_id = str(c.get("ticket_id") or "—")
-        final_score = int(c.get("final_score", 0))
-        comm_score = int(c.get("comm_score", 0))
-        card_score = int(c.get("card_score", 0))
-        sla_score = int(c.get("sla_score", 0))
-        dispatch_sec = int(c.get("time_to_first_dispatch_sec", 0))
+        final_score = c.get("final_score")
+        comm_score = c.get("comm_score")
+        card_score = c.get("card_score")
+        sla_score = c.get("sla_score")
+        dispatch_sec = c.get("time_to_first_dispatch_sec")
         over_disp = _format_list(c.get("over_dispatched_services"))
         missed_fact = _format_list(c.get("missed_critical_factoids"))
         penalties = _format_list(c.get("penalties_list"))
@@ -338,7 +338,7 @@ def generate_excel_from_data(cadets_data: List[Dict[str, Any]]) -> bytes:
             cell.alignment = align
             cell.border = cell_border
 
-            if flag == "score":
+            if flag == "score" and final_score is not None:
                 if final_score >= 80:
                     cell.font = Font(name="Calibri", size=11, bold=True, color="15803D")
                     cell.fill = PatternFill(start_color="DCFCE7", end_color="DCFCE7", fill_type="solid")
@@ -360,7 +360,8 @@ def generate_excel_from_data(cadets_data: List[Dict[str, Any]]) -> bytes:
     # Summary Row if cadets_data has entries
     if cadets_data:
         ws.row_dimensions[current_row].height = 24
-        avg_score = round(sum(c.get("final_score", 0) for c in cadets_data) / len(cadets_data), 1)
+        graded_scores = [c["final_score"] for c in cadets_data if c.get("final_score") is not None]
+        avg_score = round(sum(graded_scores) / len(graded_scores), 1) if graded_scores else None
         ws.cell(row=current_row, column=1, value="Среднее значение:").font = summary_font
         ws.cell(row=current_row, column=1).alignment = Alignment(horizontal="right", vertical="center")
         ws.cell(row=current_row, column=3, value=avg_score).font = summary_font

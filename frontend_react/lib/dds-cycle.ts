@@ -635,11 +635,23 @@ async function ddsResponseError(res: Response): Promise<DDSRequestError> {
     DDS_SESSION_NOT_ACTIVE: "Занятие уже остановлено. Обновите данные",
     DDS_TICKET_UNAVAILABLE: "Один из выбранных билетов недоступен. Обновите каталог",
     DDS_REQUEST_CONFLICT: "Этот запрос уже использован для другого действия. Обновите данные",
+    DDS_EXAM_TIME_EXPIRED: "Время выполнения экзамена истекло",
+    DDS_ORDER_NUMBER_REQUIRED: "Укажите номер наряда",
   }
-  let code: unknown
-  try { code = (await res.json())?.detail?.code } catch { /* fixed messages only */ }
-  return new DDSRequestError(typeof code === "string" && Object.hasOwn(messages, code)
-    ? messages[code] : getSafeHttpErrorMessage(res.status), res.status)
+  let detail: any
+  try {
+    const json = await res.json()
+    detail = json?.detail
+  } catch { /* fixed messages only */ }
+  const code = typeof detail === "object" && detail !== null ? detail.code : undefined
+  const message = (typeof code === "string" && Object.hasOwn(messages, code))
+    ? messages[code]
+    : (typeof detail === "string" && detail.includes("Время выполнения экзамена истекло"))
+      ? "Время выполнения экзамена истекло"
+      : (typeof detail?.message === "string" && detail?.code === "DDS_EXAM_TIME_EXPIRED")
+        ? detail.message
+        : getSafeHttpErrorMessage(res.status)
+  return new DDSRequestError(message, res.status)
 }
 
 async function ddsRequest(path: string, payload?: unknown, signal?: AbortSignal): Promise<unknown> {

@@ -143,6 +143,22 @@ describe("ТЗ 48: Личный кабинет ученика и Лобби (Ф�
         if (urlStr.startsWith("/api/dds/sessions/")) {
           return Promise.resolve({ok: false, status: 404, json: async () => ({detail: "missing assigned session"})})
         }
+        if (urlStr.includes("/api/v1/knowledge/files")) {
+          return Promise.resolve({
+            ok: true,
+            status: 200,
+            json: async () => [
+              {
+                id: "k-1",
+                name: "Учебное пособие ДДС.pdf",
+                size_bytes: 1048576,
+                size: 1048576,
+                content_type: "application/pdf",
+                url: "/api/v1/knowledge/files/k-1/download",
+              },
+            ],
+          })
+        }
 
         if (urlStr.includes("/api/v1/users/me")) {
           return Promise.resolve({
@@ -249,13 +265,13 @@ describe("ТЗ 48: Личный кабинет ученика и Лобби (Ф�
       })
     })
 
-    it("renders competence matrix (RadarChart) and top errors divided into fatal and minor", async () => {
+    it("shows DDS errors without the operator 112 competence radar", async () => {
       render(<StudentProfilePage />)
 
       await waitFor(() => {
-        expect(screen.getByText("Матрица компетенций")).toBeInTheDocument()
+        expect(screen.queryByText("Матрица компетенций")).not.toBeInTheDocument()
         expect(screen.getByText("Топ частых ошибок")).toBeInTheDocument()
-        expect(screen.getByTestId("radar-container")).toBeInTheDocument()
+        expect(screen.queryByTestId("radar-container")).not.toBeInTheDocument()
       })
 
       // Check fatal and minor error sections and items
@@ -292,10 +308,9 @@ describe("ТЗ 48: Личный кабинет ученика и Лобби (Ф�
         fireEvent.click(docsBtn)
       })
 
-      // Check reference materials stub list
+      // Check reference materials list from API
       await waitFor(() => {
-        expect(screen.getByText("Алгоритм опроса при ДТП.pdf")).toBeInTheDocument()
-        expect(screen.getByText("Памятка по службам.pdf")).toBeInTheDocument()
+        expect(screen.getByText("Учебное пособие ДДС.pdf")).toBeInTheDocument()
       })
 
       // Switch back to lessons tab

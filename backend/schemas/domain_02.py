@@ -73,11 +73,17 @@ GeneratedTicketResponse = TicketResponse
 
 class TicketGenerateAcceptedResponse(BaseModel):
     message: str = "Генерация начата"
+    generation_id: Optional[str] = None
 
 
 class TicketStatusResponse(BaseModel):
     is_generating: bool = False
     remaining_tickets: int = 0
+    generation_id: Optional[str] = None
+    status: Optional[str] = None
+    requested_count: Optional[int] = None
+    generated_count: Optional[int] = None
+    error_code: Optional[str] = None
 
 class TicketUpdate(BaseModel):
     category: Optional[str] = None

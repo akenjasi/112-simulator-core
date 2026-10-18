@@ -223,7 +223,10 @@ export default function AdminUsersPage() {
     }
     setIsSubmitting(true)
     try {
-      const created = await createUser(newUser)
+      const created = await createUser({
+        ...newUser,
+        student_id: newUser.role === "CADET" ? newUser.student_id?.trim() || undefined : undefined,
+      })
       setUsers((prev) => [created, ...prev])
       setIsCreateModalOpen(false)
       setNewUser({
@@ -542,7 +545,7 @@ export default function AdminUsersPage() {
                 </label>
                 <select
                   value={newUser.role}
-                  onChange={(e) => setNewUser({ ...newUser, role: e.target.value })}
+                  onChange={(e) => setNewUser({ ...newUser, role: e.target.value, student_id: "" })}
                   className="w-full h-9 rounded-md border border-input bg-background text-foreground px-3 py-1 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 >
                   <option value="CADET">Курсант (CADET)</option>
@@ -562,16 +565,23 @@ export default function AdminUsersPage() {
                 />
               </div>
 
-              <div>
-                <label className="text-xs font-semibold text-foreground block mb-1">
-                  Номер студенческого билета / группы
-                </label>
-                <Input
-                  placeholder="СМ1-12"
-                  value={newUser.student_id || ""}
-                  onChange={(e) => setNewUser({ ...newUser, student_id: e.target.value })}
-                />
-              </div>
+              {newUser.role === "CADET" && (
+                <div>
+                  <label className="text-xs font-semibold text-foreground block mb-1">
+                    Номер студенческого билета (необязательно)
+                  </label>
+                  <Input
+                    placeholder="Номер документа курсанта"
+                    value={newUser.student_id || ""}
+                    onChange={(e) => setNewUser({ ...newUser, student_id: e.target.value })}
+                  />
+                </div>
+              )}
+
+              <p className="text-xs text-muted-foreground">
+                Учётная запись создаётся без группы. Преподаватель создаёт свои группы
+                в разделе «Ученики» и добавляет в них курсантов. Один преподаватель может вести несколько групп.
+              </p>
 
               <div className="flex justify-end gap-3 pt-4 border-t border-border">
                 <Button

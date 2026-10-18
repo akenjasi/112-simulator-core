@@ -15,15 +15,6 @@ import { Badge } from "@/components/ui/badge"
 import { ThemeSelect } from "@/components/theme-select"
 import { LogoutButton } from "@/components/auth/LogoutButton"
 import {
-  Radar,
-  RadarChart,
-  PolarGrid,
-  PolarAngleAxis,
-  PolarRadiusAxis,
-  ResponsiveContainer,
-  Tooltip,
-} from "recharts"
-import {
   Radio,
   Award,
   AlertTriangle,
@@ -124,44 +115,38 @@ export interface UserProfile {
   role: string
 }
 
-interface ReferenceDoc {
-  id: string
-  title: string
-  size: string
-  tag: string
-  description: string
+export interface KnowledgeFile {
+  id?: string | number
+  file_id?: string
+  name?: string
+  title?: string
+  filename?: string
+  size?: number | string
+  size_bytes?: number
+  uploaded_at?: string
+  created_at?: string
+  content_type?: string
+  url?: string
+  uploaded_by?: string
 }
 
-const REFERENCE_DOCS: ReferenceDoc[] = [
-  {
-    id: "doc-1",
-    title: "Алгоритм опроса при ДТП.pdf",
-    size: "1.8 МБ",
-    tag: "Оператор 112",
-    description: "Пошаговый регламент первичного сбора сведений о пострадавших и перекрытии полос",
-  },
-  {
-    id: "doc-2",
-    title: "Памятка по службам.pdf",
-    size: "840 КБ",
-    tag: "Маршрутизация",
-    description: "Критерии одновременного привлечения 01, 02, 03, 04 и аварийно-спасательных отрядов",
-  },
-  {
-    id: "doc-3",
-    title: "Классификатор происшествий Системы-112.pdf",
-    size: "3.2 МБ",
-    tag: "Справочник",
-    description: "Стандартизированные наименования и категоризация угроз для карточки вызова",
-  },
-  {
-    id: "doc-4",
-    title: "Регламент межведомственного взаимодействия ДДС.pdf",
-    size: "1.4 МБ",
-    tag: "Диспетчер ДДС",
-    description: "Порядок передачи сведений реагирующим бригадам и временные нормативы SLA",
-  },
-]
+export function formatKnowledgeBytes(bytes?: number): string {
+  if (bytes === undefined || bytes === null || isNaN(bytes)) return "0 Б"
+  if (bytes === 0) return "0 Б"
+  const k = 1024
+  const sizes = ["Б", "КБ", "МБ", "ГБ"]
+  const i = Math.floor(Math.log(bytes) / Math.log(k))
+  const formatted = parseFloat((bytes / Math.pow(k, i)).toFixed(1))
+  return `${formatted} ${sizes[i] || "Б"}`
+}
+
+export function getKnowledgeFormat(name: string): "PDF" | "DOCX" | "OTHER" {
+  const lower = (name || "").toLowerCase()
+  if (lower.endsWith(".pdf")) return "PDF"
+  if (lower.endsWith(".docx")) return "DOCX"
+  return "OTHER"
+}
+
 
 const DEFAULT_CATEGORIES: CompetenceItem[] = [
   { category: "ДТП", score: 0 },
@@ -208,6 +193,62 @@ export default function StudentProfilePage() {
   const [lessons, setLessons] = useState<HistoryLesson[]>([])
   const [expandedLessonId, setExpandedLessonId] = useState<string | null>(null)
   const [isLoading, setIsLoading] = useState<boolean>(true)
+
+  // Knowledge base materials for cadet
+  const [knowledgeFiles, setKnowledgeFiles] = useState<KnowledgeFile[]>([])
+  const [isKnowledgeLoading, setIsKnowledgeLoading] = useState<boolean>(false)
+  const [knowledgeError, setKnowledgeError] = useState<string | null>(null)
+  const [downloadingFileId, setDownloadingFileId] = useState<string | number | null>(null)
+
+  const loadKnowledgeFiles = useCallback(async () => {
+    setIsKnowledgeLoading(true)
+    setKnowledgeError(null)
+    try {
+      const res = await fetch("/api/v1/knowledge/files", {
+        headers: getAuthHeaders(),
+      })
+      if (!res.ok) {
+        throw new Error("Не удалось загрузить материалы")
+      }
+      const data = await res.json()
+      setKnowledgeFiles(Array.isArray(data) ? data : [])
+    } catch (err: any) {
+      setKnowledgeError(err.message || "Не удалось загрузить материалы")
+    } finally {
+      setIsKnowledgeLoading(false)
+    }
+  }, [])
+
+  const handleDownloadKnowledgeFile = async (file: KnowledgeFile) => {
+    const fileId = file.id ?? file.file_id ?? file.name
+    if (!file.url || downloadingFileId) return
+    setDownloadingFileId(fileId || null)
+    try {
+      const response = await fetch(file.url, {
+        headers: getAuthHeaders(),
+      })
+      if (!response.ok) {
+        throw new Error("Не удалось скачать документ")
+      }
+      const blob = await response.blob()
+      const objectUrl = URL.createObjectURL(blob)
+      const link = document.createElement("a")
+      link.href = objectUrl
+      link.download = file.name || file.title || "document"
+      link.click()
+      setTimeout(() => {
+        try {
+          URL.revokeObjectURL(objectUrl)
+        } catch {
+          // ignore
+        }
+      }, 1000)
+    } catch (err: any) {
+      alert(err.message || "Не удалось скачать документ")
+    } finally {
+      setDownloadingFileId(null)
+    }
+  }
 
   // Fetch AI advice for cadet
   const loadAiAdvice = useCallback(async (cadetId?: string) => {
@@ -458,10 +499,18 @@ export default function StudentProfilePage() {
   // Initial data load and on role toggle
   useEffect(() => {
     setIsLoading(true)
-    Promise.all([loadProfile(), loadStats(role), loadLessons(role)]).finally(() => {
+    Promise.all([loadProfile(), loadStats(role), loadLessons(role), loadKnowledgeFiles()]).finally(() => {
       setIsLoading(false)
     })
-  }, [role, loadProfile, loadStats, loadLessons])
+  }, [role, loadProfile, loadStats, loadLessons, loadKnowledgeFiles])
+
+  // Reload knowledge files when docs tab is opened
+  useEffect(() => {
+    if (activeTab === "docs") {
+      loadKnowledgeFiles()
+    }
+  }, [activeTab, loadKnowledgeFiles])
+
 
   const toggleLesson = (sessionId: string) => {
     setExpandedLessonId((prev) => (prev === sessionId ? null : sessionId))
@@ -523,7 +572,7 @@ export default function StudentProfilePage() {
               size="sm"
               onClick={() => {
                 setIsLoading(true)
-                Promise.all([loadProfile(), loadStats(role), loadLessons(role)]).finally(() =>
+                Promise.all([loadProfile(), loadStats(role), loadLessons(role), loadKnowledgeFiles()]).finally(() =>
                   setIsLoading(false)
                 )
               }}
@@ -654,88 +703,10 @@ export default function StudentProfilePage() {
 
         </div>
 
-        {/* Section 2: Competence Matrix & Top Errors (Fatal vs Minor) */}
+        {/* Section 2: Top Errors (Fatal vs Minor) */}
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
-          {/* Competence Matrix (RadarChart) */}
-          <Card className="lg:col-span-6 border shadow-xs flex flex-col justify-between">
-            <CardHeader className="py-3 px-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <CardTitle className="text-sm font-bold flex items-center gap-2">
-                    <span>Матрица компетенций</span>
-                    <Badge variant="outline" className="text-[10px] font-normal">
-                      Диспетчер ДДС
-                    </Badge>
-                  </CardTitle>
-                  <CardDescription className="text-xs mt-0.5">
-                    Успеваемость по категориям происшествий (0 – 100 баллов)
-                  </CardDescription>
-                </div>
-              </div>
-            </CardHeader>
-
-            <CardContent
-              className="h-[250px] w-full flex items-center justify-center p-2"
-              data-testid="radar-container"
-            >
-              {stats.cards_solved > 0 &&
-              stats.competence_matrix &&
-              stats.competence_matrix.length > 0 &&
-              stats.competence_matrix.some((c) => c.score > 0) ? (
-                <ResponsiveContainer width="100%" height="100%">
-                  <RadarChart cx="50%" cy="50%" outerRadius="75%" data={stats.competence_matrix}>
-                    <PolarGrid stroke="#94a3b8" strokeDasharray="3 3" opacity={0.35} />
-                    <PolarAngleAxis
-                      dataKey="category"
-                      tick={{ fill: "currentColor", fontSize: 11, fontWeight: 600 }}
-                    />
-                    <PolarRadiusAxis
-                      angle={30}
-                      domain={[0, 100]}
-                      tick={{ fill: "#64748b", fontSize: 9 }}
-                      stroke="#94a3b8"
-                      opacity={0.3}
-                    />
-                    <Tooltip
-                      formatter={(val: any) => [`${val} баллов`, "Успеваемость"]}
-                      contentStyle={{
-                        backgroundColor: "#0f172a",
-                        borderColor: "#334155",
-                        borderRadius: "8px",
-                        color: "#f8fafc",
-                        fontSize: "12px",
-                      }}
-                      itemStyle={{ color: "#38bdf8" }}
-                      labelStyle={{ color: "#f8fafc", fontWeight: 600 }}
-                    />
-                    <Radar
-                      name="Успеваемость"
-                      dataKey="score"
-                      stroke="#2563eb"
-                      fill="#3b82f6"
-                      fillOpacity={0.4}
-                      strokeWidth={2}
-                    />
-                  </RadarChart>
-                </ResponsiveContainer>
-              ) : (
-                <div className="flex flex-col items-center justify-center text-center text-muted-foreground text-xs py-8 gap-2">
-                  <Activity className="h-8 w-8 text-muted-foreground/30" />
-                  <span className="font-semibold text-foreground">Нет данных для построения матрицы компетенций</span>
-                  <span className="text-[11px] text-muted-foreground max-w-xs">
-                    Матрица сформируется автоматически после решения первых тренировочных заданий
-                  </span>
-                </div>
-              )}
-            </CardContent>
-            <CardFooter className="border-t py-1.5 px-4 bg-muted/20 text-[11px] text-muted-foreground flex justify-between">
-              <span>Норматив: не менее 75 баллов</span>
-              <span>Формируется по результатам сданных билетов</span>
-            </CardFooter>
-          </Card>
-
           {/* Top Errors: Split into Fatal and Minor */}
-          <Card className="lg:col-span-6 border shadow-xs flex flex-col justify-between">
+          <Card className="lg:col-span-12 border shadow-xs flex flex-col justify-between">
             <CardHeader className="py-3 px-4">
               <div className="flex items-center justify-between">
                 <CardTitle className="text-sm font-bold flex items-center gap-2 text-foreground">
@@ -875,7 +846,7 @@ export default function StudentProfilePage() {
                   <BookOpen className="h-3.5 w-3.5" />
                   <span>Справочные материалы</span>
                   <Badge variant="secondary" className="text-[10px] px-1.5 py-0">
-                    {REFERENCE_DOCS.length}
+                    {knowledgeFiles.length}
                   </Badge>
                 </button>
 
@@ -1087,48 +1058,111 @@ export default function StudentProfilePage() {
               </div>
             )}
 
-            {/* Tab 2: Reference Materials (Stub Section) */}
+            {/* Tab 2: Reference Materials */}
             {activeTab === "docs" && (
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                {REFERENCE_DOCS.map((doc) => (
-                  <div
-                    key={doc.id}
-                    className="p-3 rounded-xl border bg-card hover:border-primary/50 transition-colors flex items-start justify-between gap-3 shadow-2xs group"
-                  >
-                    <div className="flex items-start gap-3">
-                      <div className="h-10 w-10 rounded-lg bg-red-500/10 text-red-600 dark:text-red-400 flex items-center justify-center shrink-0">
-                        <FileText className="h-5 w-5" />
-                      </div>
-                      <div>
-                        <div className="font-bold text-xs sm:text-sm text-foreground group-hover:text-primary transition-colors">
-                          {doc.title}
-                        </div>
-                        <p className="text-[11px] text-muted-foreground mt-0.5 leading-snug">
-                          {doc.description}
-                        </p>
-                        <div className="flex items-center gap-2 mt-2">
-                          <Badge variant="outline" className="text-[10px] py-0 font-normal">
-                            {doc.tag}
-                          </Badge>
-                          <span className="text-[10px] text-muted-foreground font-mono">
-                            {doc.size}
-                          </span>
-                        </div>
-                      </div>
+              <div className="space-y-4">
+                {isKnowledgeLoading && knowledgeFiles.length === 0 ? (
+                  <div className="flex items-center justify-center py-12 text-muted-foreground text-sm gap-2">
+                    <RefreshCw className="h-4 w-4 animate-spin" />
+                    <span>Загрузка справочных материалов...</span>
+                  </div>
+                ) : knowledgeError ? (
+                  <div className="p-6 rounded-xl border border-destructive/20 bg-destructive/5 text-center space-y-3">
+                    <AlertTriangle className="h-8 w-8 text-destructive mx-auto" />
+                    <div className="font-semibold text-sm text-destructive">
+                      Не удалось загрузить материалы
                     </div>
-
+                    <p className="text-xs text-muted-foreground max-w-md mx-auto">
+                      Проверьте подключение к серверу или попробуйте обновить список
+                    </p>
                     <Button
-                      variant="ghost"
+                      variant="outline"
                       size="sm"
-                      className="h-8 px-2 text-xs shrink-0 text-muted-foreground hover:text-foreground gap-1"
-                      onClick={() => alert(`Загрузка документа: ${doc.title}`)}
-                      title="Скачать документ"
+                      onClick={loadKnowledgeFiles}
+                      className="text-xs gap-1.5"
                     >
-                      <Download className="h-3.5 w-3.5" />
-                      <span className="hidden sm:inline">Открыть</span>
+                      <RefreshCw className="h-3.5 w-3.5" />
+                      Повторить попытку
                     </Button>
                   </div>
-                ))}
+                ) : knowledgeFiles.length === 0 ? (
+                  <div className="p-8 rounded-xl border border-dashed text-center space-y-2">
+                    <BookOpen className="h-8 w-8 text-muted-foreground mx-auto" />
+                    <div className="font-semibold text-sm text-foreground">
+                      Материалов пока нет
+                    </div>
+                    <p className="text-xs text-muted-foreground max-w-sm mx-auto">
+                      Преподаватели ещё не загрузили справочные регламенты и нормативные документы.
+                    </p>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    {knowledgeFiles.map((doc) => {
+                      const docId = doc.id ?? doc.file_id ?? doc.name
+                      const docName = doc.name || doc.title || doc.filename || "Документ"
+                      const format = getKnowledgeFormat(docName)
+                      const sizeStr =
+                        typeof doc.size === "string"
+                          ? doc.size
+                          : formatKnowledgeBytes(doc.size_bytes ?? (typeof doc.size === "number" ? doc.size : undefined))
+                      const isPdf = format === "PDF"
+                      const isDocx = format === "DOCX"
+
+                      return (
+                        <div
+                          key={docId}
+                          className="p-3 rounded-xl border bg-card hover:border-primary/50 transition-colors flex items-start justify-between gap-3 shadow-2xs group"
+                        >
+                          <div className="flex items-start gap-3 min-w-0">
+                            <div
+                              className={`h-10 w-10 rounded-lg flex items-center justify-center shrink-0 ${
+                                isPdf
+                                  ? "bg-red-500/10 text-red-600 dark:text-red-400"
+                                  : isDocx
+                                  ? "bg-blue-500/10 text-blue-600 dark:text-blue-400"
+                                  : "bg-muted text-muted-foreground"
+                              }`}
+                            >
+                              <FileText className="h-5 w-5" />
+                            </div>
+                            <div className="min-w-0">
+                              <div
+                                className="font-bold text-xs sm:text-sm text-foreground group-hover:text-primary transition-colors truncate"
+                                title={docName}
+                              >
+                                {docName}
+                              </div>
+                              <div className="flex items-center gap-2 mt-2">
+                                <Badge variant="outline" className="text-[10px] py-0 font-normal">
+                                  {format}
+                                </Badge>
+                                <span className="text-[10px] text-muted-foreground font-mono">
+                                  {sizeStr}
+                                </span>
+                              </div>
+                            </div>
+                          </div>
+
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-8 px-2 text-xs shrink-0 text-muted-foreground hover:text-foreground gap-1"
+                            onClick={() => handleDownloadKnowledgeFile(doc)}
+                            disabled={downloadingFileId === docId}
+                            title="Скачать документ"
+                          >
+                            {downloadingFileId === docId ? (
+                              <RefreshCw className="h-3.5 w-3.5 animate-spin" />
+                            ) : (
+                              <Download className="h-3.5 w-3.5" />
+                            )}
+                            <span className="hidden sm:inline">Открыть</span>
+                          </Button>
+                        </div>
+                      )
+                    })}
+                  </div>
+                )}
               </div>
             )}
 

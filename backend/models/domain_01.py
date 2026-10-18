@@ -49,7 +49,7 @@ class User(Base):
     password_hash: Mapped[str] = mapped_column(String, nullable=False)
     role: Mapped[str] = mapped_column(String, nullable=False)
     full_name: Mapped[Optional[str]] = mapped_column(String, nullable=True)
-    student_id: Mapped[Optional[str]] = mapped_column(String, nullable=True, default="СМ1-12")
+    student_id: Mapped[Optional[str]] = mapped_column(String, nullable=True)
     specialization: Mapped[Optional[str]] = mapped_column(String, nullable=True)
     group_ids: Mapped[list] = mapped_column(JSON, default=list)
     last_login: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
@@ -92,7 +92,6 @@ class User(Base):
         kwargs.setdefault("is_2fa_enabled", False)
         if kwargs.get("role") == "CADET":
             kwargs.setdefault("full_name", "Иванов Иван Иванович")
-            kwargs.setdefault("student_id", "СМ1-12")
         super().__init__(**kwargs)
 
 

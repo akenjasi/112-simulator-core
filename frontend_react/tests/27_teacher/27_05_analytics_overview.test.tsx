@@ -15,7 +15,6 @@ function response(body: unknown, status = 200) {
 
 function ancillaryFetch(url: string) {
   if (url.includes('groups-comparison')) return Promise.resolve(response([]))
-  if (url.includes('errors-heatmap')) return Promise.resolve(response({ error_types: [], entities: [], totals_by_error: {} }))
   return Promise.resolve(response({}))
 }
 

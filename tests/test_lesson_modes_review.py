@@ -1,4 +1,5 @@
 """Exercise lesson configuration through the public API, not DB mode patches."""
+from copy import deepcopy
 from datetime import datetime, timedelta, timezone
 
 import pytest
@@ -29,7 +30,8 @@ async def test_public_lesson_mode_is_persisted_and_returned(field, value, expect
 
 
 @pytest.mark.asyncio
-async def test_exam_chosen_by_teacher_enforces_server_timer():
+@pytest.mark.parametrize("expire_current_card", [False, True])
+async def test_exam_chosen_by_teacher_uses_current_card_timer(expire_current_card):
     env = await setup_test_environment(n_cadets=1)
     response = await api_request("POST", "/api/v1/lessons", env["teacher"], json={
         "group_id": env["group_id"], "ticket_id": env["ticket_id"],
@@ -42,12 +44,24 @@ async def test_exam_chosen_by_teacher_enforces_server_timer():
     assert started.json()["mode"] == "EXAM"
     async with AsyncSessionLocal() as db:
         session = (await db.scalars(select(ExamSession).where(ExamSession.assignment_id == lesson_id))).one()
-        session.start_time = datetime.now(timezone.utc) - timedelta(seconds=60)
+        old_time = datetime.now(timezone.utc) - timedelta(seconds=60)
+        session.start_time = old_time
+        # Queue v2 grants each received card its own time budget. An old session
+        # alone must not expire a newly received card; age the actual card clock
+        # to exercise the server-side exam rejection.
+        if expire_current_card:
+            state = deepcopy(session.dynamic_state)
+            state["dds"]["received_at"] = old_time.isoformat()
+            session.dynamic_state = state
         await db.commit()
         session_id = session.session_id
     action = await api_request("POST", f"/api/dds/sessions/{session_id}/actions", env["cadets"][0], json=make_action())
-    assert action.status_code == 409, action.text
-    assert "истекло" in action.text
+    if expire_current_card:
+        assert action.status_code == 409, action.text
+        assert "истекло" in action.text
+    else:
+        assert action.status_code == 200, action.text
+        assert action.json()["is_expired"] is False
 
 
 @pytest.mark.asyncio

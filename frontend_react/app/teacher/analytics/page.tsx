@@ -52,7 +52,6 @@ import {
   Bot,
   TrendingUp,
   AlertTriangle,
-  Flame,
 } from "lucide-react"
 
 import {
@@ -105,40 +104,6 @@ export interface GroupComparisonItem {
   total_errors: number
 }
 
-export interface ErrorTypeInfo {
-  key: string
-  label: string
-  category: string
-  severity?: string
-}
-
-export interface EntityErrorInfo {
-  id: string
-  name: string
-  group_name?: string | null
-  error_counts: Record<string, number>
-  total_errors: number
-}
-
-export interface ErrorHeatmapData {
-  error_types: ErrorTypeInfo[]
-  entities: EntityErrorInfo[]
-  totals_by_error: Record<string, number>
-}
-
-function getHeatmapColor(count: number, maxCount: number): string {
-  if (!count || count === 0) return "bg-muted/15 text-muted-foreground/40 border border-transparent"
-  const ratio = maxCount > 0 ? count / maxCount : 0
-  if (ratio < 0.3) {
-    return "bg-amber-500/20 text-amber-800 dark:text-amber-200 border border-amber-500/35 font-medium"
-  } else if (ratio < 0.7) {
-    return "bg-orange-500/35 text-orange-950 dark:text-orange-100 border border-orange-500/50 font-semibold"
-  } else {
-    return "bg-red-500/50 text-red-950 dark:text-red-100 border border-red-500/70 font-bold shadow-xs"
-  }
-}
-
-
 export interface CadetRecordSummary {
   record_id: string
   ticket_id?: string
@@ -156,7 +121,7 @@ export interface CadetRecordSummary {
 export interface CadetSummary {
   cadet_id: string
   cadet_name: string
-  success_rate: number
+  success_rate: number | null
   records: CadetRecordSummary[]
 }
 
@@ -211,6 +176,7 @@ export interface LessonHistoryItem {
   group_id: string
   group_name?: string
   target_role: string
+  mode?: string
   status: string
   complexity?: string
   categories?: string[]
@@ -242,72 +208,24 @@ const DEFAULT_GROUPS_COMPARISON: GroupComparisonItem[] = [
   { group_id: "grp-4", group_name: "Группа 202-С", student_count: 13, avg_score: 79.8, pass_rate: 78.4, total_sessions: 180, total_errors: 79 },
 ]
 
-const DEFAULT_HEATMAP_DATA: ErrorHeatmapData = {
-  error_types: [
-    { key: "comm_rude_tone", label: "Грубый тон", category: "communication", severity: "high" },
-    { key: "comm_interruption", label: "Перебивание", category: "communication", severity: "medium" },
-    { key: "comm_clarification_missed", label: "Пропуск уточнения", category: "communication", severity: "medium" },
-    { key: "card_wrong_address", label: "Ошибка адреса", category: "card", severity: "critical" },
-    { key: "card_wrong_services", label: "Неверные службы", category: "card", severity: "critical" },
-    { key: "card_missing_caller", label: "Данные заявителя", category: "card", severity: "medium" },
-    { key: "sla_dispatch_delay", label: "Задержка ДДС", category: "sla", severity: "high" },
-    { key: "sla_call_duration_exceeded", label: "Время звонка", category: "sla", severity: "medium" },
-  ],
-  entities: [
-    {
-      id: "cadet-101",
-      name: "Денисов Д. А.",
-      group_name: "Группа 101-П",
-      error_counts: { comm_rude_tone: 1, card_wrong_address: 3, sla_dispatch_delay: 2 },
-      total_errors: 6,
-    },
-    {
-      id: "cadet-102",
-      name: "Соколов А. В.",
-      group_name: "Группа 101-П",
-      error_counts: { card_wrong_services: 1, comm_interruption: 1 },
-      total_errors: 2,
-    },
-    {
-      id: "cadet-103",
-      name: "Волков М. С.",
-      group_name: "Группа 102-П",
-      error_counts: { sla_dispatch_delay: 4, sla_call_duration_exceeded: 3, card_wrong_address: 2 },
-      total_errors: 9,
-    },
-    {
-      id: "cadet-104",
-      name: "Кузнецова Е. Д.",
-      group_name: "Группа 201-С",
-      error_counts: { comm_clarification_missed: 2, card_missing_caller: 1 },
-      total_errors: 3,
-    },
-  ],
-  totals_by_error: {
-    comm_rude_tone: 18,
-    comm_interruption: 24,
-    comm_clarification_missed: 15,
-    card_wrong_address: 34,
-    card_wrong_services: 22,
-    card_missing_caller: 19,
-    sla_dispatch_delay: 29,
-    sla_call_duration_exceeded: 27,
-  },
-}
-
 export interface AnalyticsPageProps {
   initialTab?: "history" | "split" | "all" | "ai_report" | "charts"
 }
 
+const HIDE_COMPLETED_LESSONS_KEY = "teacher.analytics.hideCompletedLessons"
+
 export default function AnalyticsPage({ initialTab = "split" }: AnalyticsPageProps = {}) {
   const [activeTab, setActiveTab] = useState<"history" | "split" | "all" | "ai_report" | "charts">(initialTab)
   const [sessionId, setSessionId] = useState<string>("")
+  const [selectedLessonId, setSelectedLessonId] = useState<string>("")
   const [sessionData, setSessionData] = useState<SessionData>({ session_id: "", title: "", cadets: [] })
   const [selectedRecord, setSelectedRecord] = useState<RecordDetail | null>(null)
   const [isLoadingSession, setIsLoadingSession] = useState<boolean>(false)
   const [isLoadingRecord, setIsLoadingRecord] = useState<boolean>(false)
   const [searchQuery, setSearchQuery] = useState<string>("")
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
+  const sessionRequestRef = useRef(0)
+  const recordRequestRef = useRef(0)
 
   // Group AI reports state
   const [groupAiReports, setGroupAiReports] = useState<any[]>([])
@@ -321,6 +239,7 @@ export default function AnalyticsPage({ initialTab = "split" }: AnalyticsPagePro
   const [expandedLessonId, setExpandedLessonId] = useState<string | null>("lesson-demo-1")
   const [historySearchQuery, setHistorySearchQuery] = useState<string>("")
   const [selectedGroupId, setSelectedGroupId] = useState<string>("ALL")
+  const [hideCompletedLessons, setHideCompletedLessons] = useState(false)
   const [expandedCadetId, setExpandedCadetId] = useState<string | null>(null)
   const [editingNotesId, setEditingNotesId] = useState<string | null>(null)
   const [editingNotesText, setEditingNotesText] = useState<string>("")
@@ -366,10 +285,6 @@ export default function AnalyticsPage({ initialTab = "split" }: AnalyticsPagePro
   const [chartsError, setChartsError] = useState<string | null>(null)
   const fetchChartsRequestIdRef = useRef<number>(0)
   const [groupComparisonData, setGroupComparisonData] = useState<GroupComparisonItem[]>([])
-  const [heatmapData, setHeatmapData] = useState<ErrorHeatmapData>({ error_types: [], entities: [], totals_by_error: {} })
-  const [heatmapEntityType, setHeatmapEntityType] = useState<"students" | "groups">("students")
-  const [heatmapCategory, setHeatmapCategory] = useState<string>("ALL")
-  const [heatmapSearch, setHeatmapSearch] = useState<string>("")
   const [isLoadingCharts, setIsLoadingCharts] = useState<boolean>(false)
 
   const fetchChartsData = useCallback(async () => {
@@ -416,25 +331,6 @@ export default function AnalyticsPage({ initialTab = "split" }: AnalyticsPagePro
         setGroupComparisonData([])
       }
 
-      // 3. Fetch heatmap
-      const hmCatParam = heatmapCategory !== "ALL" ? `&category=${encodeURIComponent(heatmapCategory)}` : ""
-      const hmGroupParam = dynamicsGroupId !== "ALL" ? `&group_id=${encodeURIComponent(dynamicsGroupId)}` : ""
-      const hmRes = await fetch(
-        `/api/analytics/errors-heatmap?entity_type=${heatmapEntityType}${hmCatParam}${hmGroupParam}`,
-        { headers: authHeaders }
-      )
-      if (reqId !== fetchChartsRequestIdRef.current) return
-      if (hmRes.ok) {
-        const hJson = await hmRes.json()
-        if (reqId !== fetchChartsRequestIdRef.current) return
-        setHeatmapData(
-          hJson && Array.isArray(hJson.entities)
-            ? hJson
-            : { error_types: [], entities: [], totals_by_error: {} }
-        )
-      } else {
-        setHeatmapData({ error_types: [], entities: [], totals_by_error: {} })
-      }
     } catch (err: any) {
       if (reqId === fetchChartsRequestIdRef.current) {
         console.warn("Could not load charts data from API:", err)
@@ -460,25 +356,12 @@ export default function AnalyticsPage({ initialTab = "split" }: AnalyticsPagePro
         setIsLoadingCharts(false)
       }
     }
-  }, [dynamicsDays, dynamicsGroupId, heatmapEntityType, heatmapCategory])
+  }, [dynamicsDays, dynamicsGroupId])
 
   useEffect(() => {
     setIsMounted(true)
     fetchChartsData()
   }, [fetchChartsData])
-
-  const filteredHeatmapEntities = React.useMemo(() => {
-    if (!heatmapData || !Array.isArray(heatmapData.entities)) return []
-    let list = heatmapData.entities
-    if (heatmapSearch.trim()) {
-      const q = heatmapSearch.toLowerCase()
-      list = list.filter(
-        (e) => e.name.toLowerCase().includes(q) || (e.group_name && e.group_name.toLowerCase().includes(q))
-      )
-    }
-    return list
-  }, [heatmapData, heatmapSearch])
-
 
   const fetchGroupAiReports = useCallback(async (grpId: string) => {
     if (!grpId || grpId === "ALL") return
@@ -513,9 +396,41 @@ export default function AnalyticsPage({ initialTab = "split" }: AnalyticsPagePro
     }
   }
 
+  const loadRecordDetail = useCallback(async (recordId: string, cadetName?: string) => {
+    const requestId = ++recordRequestRef.current
+    setSelectedRecord(null)
+    setIsLoadingRecord(true)
+    setErrorMessage(null)
+    try {
+      const res = await fetch(`/api/v1/analytics/records/${encodeURIComponent(recordId)}`)
+      if (requestId !== recordRequestRef.current) return
+      if (!res.ok) {
+        setErrorMessage(res.status === 403
+          ? "Доступ к этому ответу ограничен."
+          : res.status === 404 ? "Ответ курсанта не найден." : `Не удалось загрузить ответ (${res.status}).`)
+        return
+      }
+      const data: RecordDetail = await res.json()
+      if (requestId !== recordRequestRef.current) return
+      setSelectedRecord({ ...data, cadet_name: data.cadet_name || cadetName })
+    } catch {
+      if (requestId === recordRequestRef.current) {
+        setErrorMessage("Ошибка сети при загрузке ответа. Попробуйте открыть его ещё раз.")
+      }
+    } finally {
+      if (requestId === recordRequestRef.current) setIsLoadingRecord(false)
+    }
+  }, [])
+
   // Fetch session analytics
   const fetchSessionAnalytics = useCallback(async (sid: string) => {
     if (!sid.trim()) return
+    setSelectedLessonId("")
+    const requestId = ++sessionRequestRef.current
+    ++recordRequestRef.current
+    setSelectedRecord(null)
+    setIsLoadingRecord(false)
+    setSessionData({ session_id: sid, title: "", cadets: [] })
     try {
       setIsLoadingSession(true)
       setErrorMessage(null)
@@ -524,9 +439,11 @@ export default function AnalyticsPage({ initialTab = "split" }: AnalyticsPagePro
       const res = await fetch(`/api/v1/analytics/sessions/${encodeURIComponent(sid.trim())}`, {
         headers: authHeaders,
       })
+      if (requestId !== sessionRequestRef.current) return
       if (res.ok) {
         const data = await res.json()
-        if (data && Array.isArray(data.cadets) && data.cadets.length > 0) {
+        if (requestId !== sessionRequestRef.current) return
+        if (data && Array.isArray(data.cadets)) {
           setSessionData(data)
           const firstCadet = data.cadets[0]
           if (firstCadet && firstCadet.records?.length > 0) {
@@ -539,9 +456,11 @@ export default function AnalyticsPage({ initialTab = "split" }: AnalyticsPagePro
                 error_details: firstRec.error_details || [],
               } as RecordDetail)
             } else {
-              loadRecordDetail(firstRec.record_id, firstCadet.cadet_name)
+              await loadRecordDetail(firstRec.record_id, firstCadet.cadet_name)
             }
           }
+        } else {
+          setErrorMessage("Не удалось прочитать данные сессии.")
         }
       } else {
         if (sid && sid.trim()) {
@@ -557,6 +476,7 @@ export default function AnalyticsPage({ initialTab = "split" }: AnalyticsPagePro
         }
       }
     } catch (err: any) {
+      if (requestId !== sessionRequestRef.current) return
       console.warn("Could not load session from API:", err)
       if (sid && sid.trim()) {
         setSessionData({ session_id: sid, title: "Ошибка загрузки", created_at: "", cadets: [] })
@@ -564,9 +484,122 @@ export default function AnalyticsPage({ initialTab = "split" }: AnalyticsPagePro
         setErrorMessage("Ошибка сети при загрузке сессии.")
       }
     } finally {
-      setIsLoadingSession(false)
+      if (requestId === sessionRequestRef.current) setIsLoadingSession(false)
     }
-  }, [])
+  }, [loadRecordDetail])
+
+  // Fetch lesson analytics & cadets breakdown
+  const handleSelectLesson = useCallback(async (lessonId: string) => {
+    setSelectedLessonId(lessonId)
+    setSessionId("")
+    const requestId = ++sessionRequestRef.current
+    ++recordRequestRef.current
+    setSelectedRecord(null)
+    setIsLoadingRecord(false)
+    setErrorMessage(null)
+
+    if (!lessonId) {
+      setSessionData({ session_id: "", title: "", cadets: [] })
+      return
+    }
+
+    setSessionData({ session_id: lessonId, title: "", cadets: [] })
+    setIsLoadingSession(true)
+
+    try {
+      const token = getStoredToken()
+      const authHeaders: HeadersInit = token ? { Authorization: `Bearer ${token}` } : {}
+
+      let res = await fetch(`/api/v1/analytics/lessons/${encodeURIComponent(lessonId)}`, { headers: authHeaders })
+      if (!res.ok && res.status === 404) {
+        res = await fetch(`/api/v1/lessons/${encodeURIComponent(lessonId)}`, { headers: authHeaders })
+      }
+
+      if (requestId !== sessionRequestRef.current) return
+
+      if (res.ok) {
+        const data = await res.json()
+        if (requestId !== sessionRequestRef.current) return
+
+        let parsedCadets: Array<any> = []
+
+        if (Array.isArray(data.cadets) && data.cadets.length > 0 && Array.isArray(data.cadets[0]?.records)) {
+          parsedCadets = data.cadets
+        } else {
+          const rawStudents = data.students || data.cadets || []
+          parsedCadets = rawStudents.map((st: any) => {
+            let successRate: number | null = null
+            if (st.passed != null && st.failed != null && (st.passed + st.failed) > 0) {
+              successRate = Math.round((st.passed / (st.passed + st.failed)) * 100)
+            }
+
+            const records = (st.tickets || []).filter((t: any) => t.record_id || t.card_id).map((t: any) => ({
+              record_id: t.record_id || t.card_id,
+              ticket_id: t.ticket_id,
+              title: t.title || `Билет #${(t.ticket_id || '').slice(0, 8)}`,
+              status: t.status || (t.score != null ? (t.score >= 70 ? 'passed' : 'failed') : 'ungraded'),
+              score: t.score ?? null,
+              is_appealed: Boolean(t.is_appealed),
+              errors_count: t.errors_count ?? (Array.isArray(t.errors) ? t.errors.length : 0),
+              etalon: t.etalon,
+              student_answer: t.student_answer,
+              error_details: t.error_details || (Array.isArray(t.errors) ? t.errors.map((e: any) => typeof e === 'string' ? { message: e } : e) : []),
+            }))
+
+            return {
+              cadet_id: st.cadet_id,
+              cadet_name: st.cadet_name || `Курсант ${st.cadet_id?.slice(0, 6)}`,
+              success_rate: successRate,
+              records,
+            }
+          })
+        }
+
+        setSessionData({
+          session_id: data.id || data.session_id || lessonId,
+          title: data.group_name ? `Урок: ${data.group_name}` : data.title || `Урок #${lessonId.slice(0, 8)}`,
+          created_at: data.created_at || "",
+          cadets: parsedCadets,
+        })
+
+        const firstCadetWithRecord = parsedCadets.find((c: any) => c.records && c.records.length > 0)
+        if (firstCadetWithRecord) {
+          const firstRec = firstCadetWithRecord.records[0]
+          if (firstRec.etalon && firstRec.student_answer) {
+            setSelectedRecord({
+              ...firstRec,
+              cadet_name: firstCadetWithRecord.cadet_name,
+              cadet_id: firstCadetWithRecord.cadet_id,
+              error_details: firstRec.error_details || [],
+            } as RecordDetail)
+          } else if (firstRec.record_id) {
+            await loadRecordDetail(firstRec.record_id, firstCadetWithRecord.cadet_name)
+          }
+        }
+      } else {
+        setSessionData({ session_id: lessonId, title: "Занятие не найдено", created_at: "", cadets: [] })
+        setSelectedRecord(null)
+        if (res.status === 404) {
+          setErrorMessage("Занятие не найдено или не содержит записей.")
+        } else if (res.status === 403) {
+          setErrorMessage("Доступ к этому занятию ограничен (занятие другой группы или преподавателя).")
+        } else if (res.status === 401) {
+          setErrorMessage("Требуется авторизация для просмотра занятия.")
+        } else {
+          setErrorMessage(`Ошибка загрузки занятия (${res.status})`)
+        }
+      }
+    } catch (err) {
+      if (requestId !== sessionRequestRef.current) return
+      setSessionData({ session_id: lessonId, title: "Ошибка загрузки", created_at: "", cadets: [] })
+      setSelectedRecord(null)
+      setErrorMessage("Ошибка сети при загрузке занятия.")
+    } finally {
+      if (requestId === sessionRequestRef.current) {
+        setIsLoadingSession(false)
+      }
+    }
+  }, [loadRecordDetail])
 
   // Fetch available groups for filter
 
@@ -604,54 +637,38 @@ export default function AnalyticsPage({ initialTab = "split" }: AnalyticsPagePro
     fetchLessonsHistory()
   }, [fetchLessonsHistory])
 
-  // Load single record details
-  const loadRecordDetail = useCallback(async (recordId: string, cadetName?: string) => {
+  useEffect(() => {
     try {
-      setIsLoadingRecord(true)
-      const token = getStoredToken()
-      const authHeaders: HeadersInit = token ? { Authorization: `Bearer ${token}` } : {}
-      const res = await fetch(`/api/v1/analytics/records/${encodeURIComponent(recordId)}`, {
-        headers: authHeaders,
-      })
-      if (res.ok) {
-        const data: RecordDetail = await res.json()
-        if (cadetName && !data.cadet_name) {
-          data.cadet_name = cadetName
-        }
-        setSelectedRecord(data)
-      } else {
-        for (const cadet of sessionData.cadets) {
-          const rec = cadet.records.find((r) => r.record_id === recordId)
-          if (rec && rec.etalon && rec.student_answer) {
-            setSelectedRecord({
-              ...rec,
-              cadet_name: cadet.cadet_name,
-              cadet_id: cadet.cadet_id,
-              error_details: rec.error_details || [],
-            } as RecordDetail)
-            break
-          }
-        }
-      }
-    } catch (err) {
-      console.warn("Could not load record details from API:", err)
-    } finally {
-      setIsLoadingRecord(false)
+      setHideCompletedLessons(localStorage.getItem(HIDE_COMPLETED_LESSONS_KEY) === "true")
+    } catch {
+      // Filtering remains available when browser storage is disabled.
     }
-  }, [sessionData])
+  }, [])
 
   const handleSelectRecord = loadRecordDetail
 
+  const openRecordFromHistory = (recordId: string, cadetName?: string) => {
+    ++sessionRequestRef.current
+    setIsLoadingSession(false)
+    setSelectedLessonId("")
+    setSessionId("")
+    setSessionData({ session_id: "", title: "", cadets: [] })
+    setActiveTab("split")
+    loadRecordDetail(recordId, cadetName)
+  }
+
   const handleGradingSuccess = useCallback(async () => {
     await fetchLessonsHistory()
-    if (sessionId) {
+    if (selectedLessonId) {
+      await handleSelectLesson(selectedLessonId)
+    } else if (sessionId) {
       await fetchSessionAnalytics(sessionId)
     }
     await fetchChartsData()
     if (selectedRecord?.record_id) {
       await handleSelectRecord(selectedRecord.record_id, selectedRecord.cadet_name)
     }
-  }, [fetchLessonsHistory, sessionId, fetchSessionAnalytics, fetchChartsData, selectedRecord, handleSelectRecord])
+  }, [fetchLessonsHistory, selectedLessonId, handleSelectLesson, sessionId, fetchSessionAnalytics, fetchChartsData, selectedRecord, handleSelectRecord])
 
   // Save updated teacher notes for a lesson
   const handleSaveLessonNotes = async (lessonId: string) => {
@@ -767,7 +784,9 @@ export default function AnalyticsPage({ initialTab = "split" }: AnalyticsPagePro
       }
     })
 
-    if (sessionId) {
+    if (selectedLessonId) {
+      await handleSelectLesson(selectedLessonId)
+    } else if (sessionId) {
       await fetchSessionAnalytics(sessionId)
     }
     await fetchLessonsHistory()
@@ -780,67 +799,45 @@ export default function AnalyticsPage({ initialTab = "split" }: AnalyticsPagePro
     try {
       setIsExportingExcel(true)
 
-      // 1. Gather records from active session or lessons history
-      const customRecords: any[] = []
-
-      // Add cadets from current session
-      if (sessionData && sessionData.cadets && sessionData.cadets.length > 0) {
+      // Export recorded journal grades, including teacher overrides. Unmarked
+      // work remains blank rather than receiving a fabricated perfect score.
+      const customRecords: Record<string, unknown>[] = []
+      if (activeTab === "split") {
         for (const cadet of sessionData.cadets) {
-          if (cadet.records && cadet.records.length > 0) {
-            for (const r of cadet.records) {
-              customRecords.push({
-                cadet_name: cadet.cadet_name,
-                ticket_id: r.title || r.ticket_id || "Билет",
-                comm_metrics: {
-                  greeting_success: true,
-                  filler_words: 0,
-                  script_followed_pct: 100,
-                },
-                card_metrics: {
-                  address_correct: true,
-                  services_matched: true,
-                  over_dispatched_services: [],
-                  missed_critical_factoids: [],
-                },
-                sla_metrics: {
-                  sla_breached_count: 0,
-                  time_to_first_dispatch_sec: 40,
-                },
-              })
-            }
-          } else {
+          for (const record of cadet.records || []) {
             customRecords.push({
               cadet_name: cadet.cadet_name,
-              ticket_id: "Билет",
-              comm_metrics: { greeting_success: true, filler_words: 0, script_followed_pct: 100 },
-              card_metrics: {
-                address_correct: true,
-                services_matched: true,
-                over_dispatched_services: [],
-                missed_critical_factoids: [],
-              },
-              sla_metrics: { sla_breached_count: 0, time_to_first_dispatch_sec: 35 },
+              ticket_id: record.title || record.ticket_id || "Билет",
+              final_score: record.score ?? null,
             })
           }
         }
-      }
-
-      // Add students from lessons if sessionData had no records
-      if (customRecords.length === 0 && lessonsList && lessonsList.length > 0) {
-        for (const lesson of lessonsList) {
+        if (sessionData.cadets.length === 0 && selectedRecord) {
+          customRecords.push({
+            cadet_name: selectedRecord.cadet_name || "Курсант",
+            ticket_id: selectedRecord.title || selectedRecord.ticket_id || "Билет",
+            final_score: selectedRecord.score ?? null,
+          })
+        }
+      } else {
+        for (const lesson of filteredLessons) {
           for (const student of lesson.students || []) {
-            customRecords.push({
-              cadet_name: student.cadet_name,
-              ticket_id: lesson.group_name || `Урок #${lesson.id.slice(0, 6)}`,
-              comm_metrics: { greeting_success: true, filler_words: 0, script_followed_pct: 100 },
-              card_metrics: {
-                address_correct: true,
-                services_matched: true,
-                over_dispatched_services: [],
-                missed_critical_factoids: [],
-              },
-              sla_metrics: { sla_breached_count: 0, time_to_first_dispatch_sec: 30 },
-            })
+            if (student.tickets?.length) {
+              for (const ticket of student.tickets) {
+                customRecords.push({
+                  cadet_name: student.cadet_name,
+                  ticket_id: ticket.title || ticket.ticket_id,
+                  final_score: ticket.score ?? null,
+                  penalties_list: ticket.errors || [],
+                })
+              }
+            } else {
+              customRecords.push({
+                cadet_name: student.cadet_name,
+                ticket_id: lesson.group_name || `Урок #${lesson.id.slice(0, 6)}`,
+                final_score: student.score ?? null,
+              })
+            }
           }
         }
       }
@@ -852,7 +849,8 @@ export default function AnalyticsPage({ initialTab = "split" }: AnalyticsPagePro
         body: JSON.stringify({
           group_id: selectedGroupId !== "ALL" ? selectedGroupId : undefined,
           session_ids: sessionId ? [sessionId] : undefined,
-          custom_records: customRecords.length > 0 ? customRecords : undefined,
+          custom_records: customRecords,
+          format: "excel",
         }),
       })
 
@@ -920,6 +918,7 @@ export default function AnalyticsPage({ initialTab = "split" }: AnalyticsPagePro
   )
 
   const filteredLessons = lessonsList.filter((l) => {
+    if (hideCompletedLessons && l.status?.toUpperCase() === "COMPLETED") return false
     const matchesGroup = selectedGroupId === "ALL" || l.group_id === selectedGroupId
     const query = historySearchQuery.toLowerCase().trim()
     const matchesQuery =
@@ -1063,7 +1062,7 @@ export default function AnalyticsPage({ initialTab = "split" }: AnalyticsPagePro
                 )}
               </div>
               <p className="text-sm text-muted-foreground mt-1">
-                Мониторинг динамики баллов, сравнительный анализ учебных подразделений и карта нарушений регламентов вызова 112
+                Динамика результатов курсантов и сравнение учебных групп
               </p>
             </div>
 
@@ -1374,209 +1373,7 @@ export default function AnalyticsPage({ initialTab = "split" }: AnalyticsPagePro
             </Card>
           </div>
 
-          {/* 3. HEATMAP: Тепловая матрица частоты ошибок */}
-          <Card className="p-5" data-testid="heatmap-card">
-            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-5 pb-4 border-b">
-              <div>
-                <CardTitle className="text-base font-bold flex items-center gap-2">
-                  <Flame className="h-4 w-4 text-orange-600" />
-                  Тепловая карта девиаций и ошибок
-                </CardTitle>
-                <CardDescription className="text-xs mt-0.5">
-                  Частота конкретных ошибок у конкретных учеников или групп с цветовой индикацией интенсивности
-                </CardDescription>
-              </div>
 
-              <div className="flex flex-wrap items-center gap-2">
-                {/* Search */}
-                <div className="relative w-44">
-                  <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
-                  <Input
-                    placeholder="Поиск..."
-                    value={heatmapSearch}
-                    onChange={(e) => setHeatmapSearch(e.target.value)}
-                    className="h-8 pl-8 text-xs"
-                  />
-                </div>
-
-                {/* Entity switch: Students vs Groups */}
-                <div className="flex items-center bg-muted/60 p-0.5 rounded-lg border text-xs">
-                  <button
-                    type="button"
-                    onClick={() => setHeatmapEntityType("students")}
-                    className={`px-2.5 py-1 rounded-md font-semibold transition-all ${
-                      heatmapEntityType === "students"
-                        ? "bg-white dark:bg-card text-foreground shadow-xs font-bold"
-                        : "text-muted-foreground hover:text-foreground"
-                    }`}
-                  >
-                    По курсантам
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setHeatmapEntityType("groups")}
-                    className={`px-2.5 py-1 rounded-md font-semibold transition-all ${
-                      heatmapEntityType === "groups"
-                        ? "bg-white dark:bg-card text-foreground shadow-xs font-bold"
-                        : "text-muted-foreground hover:text-foreground"
-                    }`}
-                  >
-                    По группам
-                  </button>
-                </div>
-
-                {/* Category Filter Pills */}
-                <div className="flex items-center bg-muted/60 p-0.5 rounded-lg border text-xs">
-                  {[
-                    { id: "ALL", label: "Все" },
-                    { id: "communication", label: "Коммуникация" },
-                    { id: "card", label: "Карточка" },
-                    { id: "sla", label: "SLA" },
-                  ].map((c) => (
-                    <button
-                      key={c.id}
-                      type="button"
-                      onClick={() => setHeatmapCategory(c.id)}
-                      className={`px-2 py-1 rounded-md font-medium text-[11px] transition-all ${
-                        heatmapCategory === c.id
-                          ? "bg-white dark:bg-card text-foreground shadow-xs font-bold"
-                          : "text-muted-foreground hover:text-foreground"
-                      }`}
-                    >
-                      {c.label}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            </div>
-
-            {/* Heatmap Legend */}
-            <div className="flex items-center justify-between text-xs text-muted-foreground mb-3 px-1">
-              <span className="text-[11px]">
-                Отображено: {filteredHeatmapEntities.length} {heatmapEntityType === "students" ? "курсантов" : "групп"}
-              </span>
-              <div className="flex items-center gap-2 text-[11px]">
-                <span className="text-muted-foreground">Интенсивность:</span>
-                <span className="flex items-center gap-1">
-                  <span className="inline-block w-3 h-3 rounded-xs bg-muted/30 border border-muted" /> 0
-                </span>
-                <span className="flex items-center gap-1">
-                  <span className="inline-block w-3 h-3 rounded-xs bg-amber-500/20 border border-amber-500/40" /> 1–2
-                </span>
-                <span className="flex items-center gap-1">
-                  <span className="inline-block w-3 h-3 rounded-xs bg-orange-500/35 border border-orange-500/50" /> 3–5
-                </span>
-                <span className="flex items-center gap-1">
-                  <span className="inline-block w-3 h-3 rounded-xs bg-red-500/50 border border-red-500/70" /> 6+
-                </span>
-              </div>
-            </div>
-
-            {/* Heatmap Table Matrix */}
-            <div className="overflow-x-auto rounded-xl border bg-card">
-              <Table>
-                <TableHeader>
-                  <TableRow className="bg-muted/40 hover:bg-muted/40">
-                    <TableHead className="w-56 font-bold text-xs sticky left-0 bg-muted/90 backdrop-blur-xs z-10">
-                      {heatmapEntityType === "students" ? "Курсант / Группа" : "Учебная группа"}
-                    </TableHead>
-                    {heatmapData.error_types.map((et) => (
-                      <TableHead key={et.key} className="text-center text-xs px-2 py-3 min-w-[110px]">
-                        <div className="flex flex-col items-center gap-1">
-                          <span className="font-semibold text-foreground leading-tight text-[11px]">
-                            {et.label}
-                          </span>
-                          <Badge
-                            variant="secondary"
-                            className={`text-[9px] px-1 py-0 ${
-                              et.category === "communication"
-                                ? "bg-blue-500/10 text-blue-700 dark:text-blue-300"
-                                : et.category === "card"
-                                ? "bg-purple-500/10 text-purple-700 dark:text-purple-300"
-                                : "bg-amber-500/10 text-amber-700 dark:text-amber-300"
-                            }`}
-                          >
-                            {et.category === "communication" ? "комм" : et.category === "card" ? "карта" : "sla"}
-                          </Badge>
-                        </div>
-                      </TableHead>
-                    ))}
-                    <TableHead className="text-center font-bold text-xs w-20 bg-muted/60">
-                      Итого
-                    </TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {filteredHeatmapEntities.slice(0, 15).map((entity) => {
-                    const maxVal = Math.max(
-                      ...heatmapData.error_types.map((et) => entity.error_counts[et.key] || 0),
-                      1
-                    )
-                    return (
-                      <TableRow key={entity.id} className="hover:bg-muted/30 transition-colors">
-                        <TableCell className="font-medium text-xs sticky left-0 bg-card/95 backdrop-blur-xs z-10 border-r">
-                          <div className="font-bold text-foreground truncate max-w-[200px]" title={entity.name}>
-                            {entity.name}
-                          </div>
-                          {entity.group_name && (
-                            <div className="text-[10px] text-muted-foreground truncate max-w-[200px]">
-                              {entity.group_name}
-                            </div>
-                          )}
-                        </TableCell>
-                        {heatmapData.error_types.map((et) => {
-                          const count = entity.error_counts[et.key] || 0
-                          return (
-                            <TableCell key={et.key} className="p-1.5 text-center">
-                              <div
-                                className={`h-8 rounded-lg flex items-center justify-center text-xs transition-all ${getHeatmapColor(
-                                  count,
-                                  maxVal
-                                )}`}
-                                title={`${entity.name}: ${et.label} — ${count} раз`}
-                              >
-                                {count > 0 ? count : <span className="opacity-30">—</span>}
-                              </div>
-                            </TableCell>
-                          )
-                        })}
-                        <TableCell className="text-center font-bold text-xs bg-muted/20 border-l">
-                          <Badge
-                            variant={entity.total_errors > 5 ? "destructive" : "secondary"}
-                            className="font-mono text-[11px]"
-                          >
-                            {entity.total_errors}
-                          </Badge>
-                        </TableCell>
-                      </TableRow>
-                    )
-                  })}
-                  {/* Summary Totals Row */}
-                  <TableRow className="bg-muted/50 font-bold border-t-2">
-                    <TableCell className="sticky left-0 bg-muted/90 backdrop-blur-xs z-10 text-xs font-bold border-r">
-                      Всего по ошибкам
-                    </TableCell>
-                    {heatmapData.error_types.map((et) => {
-                      const colTotal = heatmapData.totals_by_error[et.key] || 0
-                      return (
-                        <TableCell key={et.key} className="text-center text-xs font-bold p-2 text-foreground font-mono">
-                          {colTotal}
-                        </TableCell>
-                      )
-                    })}
-                    <TableCell className="text-center font-black text-xs bg-muted/80 text-foreground border-l font-mono">
-                      {Object.values(heatmapData.totals_by_error).reduce((a, b) => a + b, 0)}
-                    </TableCell>
-                  </TableRow>
-                </TableBody>
-              </Table>
-            </div>
-            {filteredHeatmapEntities.length > 15 && (
-              <p className="text-[11px] text-muted-foreground text-center mt-3">
-                Показаны первые 15 записей из {filteredHeatmapEntities.length}. Используйте поиск для точной фильтрации.
-              </p>
-            )}
-          </Card>
         </div>
       )}
 
@@ -1631,6 +1428,24 @@ export default function AnalyticsPage({ initialTab = "split" }: AnalyticsPagePro
             </Button>
           </div>
 
+          <label className="flex items-center gap-2 text-sm cursor-pointer w-fit">
+            <input
+              type="checkbox"
+              checked={hideCompletedLessons}
+              onChange={(event) => {
+                const hide = event.target.checked
+                setHideCompletedLessons(hide)
+                try {
+                  localStorage.setItem(HIDE_COMPLETED_LESSONS_KEY, String(hide))
+                } catch {
+                  // Keep the selected filter for this visit if storage is unavailable.
+                }
+              }}
+              className="h-4 w-4 accent-primary"
+            />
+            Скрыть завершённые уроки
+          </label>
+
           {lessonsAuthError && (
             <div className="p-4 rounded-xl bg-amber-500/10 border border-amber-500/20 text-amber-900 dark:text-amber-200 text-sm flex items-center justify-between gap-3">
               <span>{lessonsAuthError}</span>
@@ -1655,6 +1470,8 @@ export default function AnalyticsPage({ initialTab = "split" }: AnalyticsPagePro
                 <p className="text-sm text-muted-foreground max-w-sm mx-auto">
                   {historySearchQuery
                     ? `По запросу "${historySearchQuery}" ничего не найдено`
+                    : hideCompletedLessons && lessonsList.length > 0
+                    ? "Нет уроков по выбранным фильтрам. Снимите флажок «Скрыть завершённые уроки», чтобы увидеть завершённые занятия."
                     : "Пока нет сохраненных уроков. Запустите урок через раздел «Начать урок»."}
                 </p>
                 <Link href="/teacher/sessions/new">
@@ -2047,6 +1864,18 @@ export default function AnalyticsPage({ initialTab = "split" }: AnalyticsPagePro
                                                             </span>
                                                           </div>
 
+                                                          {(t.record_id || t.card_id) && (
+                                                            <Button
+                                                              type="button"
+                                                              size="sm"
+                                                              variant="outline"
+                                                              className="h-7 text-xs"
+                                                              onClick={() => openRecordFromHistory((t.record_id || t.card_id)!, student.cadet_name)}
+                                                            >
+                                                              Разобрать ответ
+                                                            </Button>
+                                                          )}
+
                                                           {(() => {
                                                             const isTicketActiveOrUnsubmitted =
                                                               t.status?.toLowerCase() === "in_progress" ||
@@ -2183,30 +2012,82 @@ export default function AnalyticsPage({ initialTab = "split" }: AnalyticsPagePro
       {/* ────────────────── SECTION 2: ЖУРНАЛ РАЗБОРА (СПЛИТ-СКРИН) ────────────────── */}
       {(activeTab === "all" || activeTab === "split") && (
         <div className="space-y-6">
-          <div className="flex items-center justify-between gap-4 bg-muted/30 p-3 rounded-xl border">
-            <span className="text-sm font-medium text-muted-foreground">
-              Разбор карточек сценариев конкретной сессии:
-            </span>
-            <div className="flex items-center gap-2">
-              <Input
-                aria-label="Идентификатор сессии"
-                placeholder="ID сессии..."
-                value={sessionId}
-                onChange={(e) => setSessionId(e.target.value)}
-                className="w-36 md:w-44 h-8 text-sm"
-              />
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => fetchSessionAnalytics(sessionId)}
-                disabled={isLoadingSession}
-                className="flex items-center gap-1.5 h-8 text-xs"
-              >
-                <RefreshCw className={`h-3.5 w-3.5 ${isLoadingSession ? "animate-spin" : ""}`} />
-                Обновить
-              </Button>
+          <div className="rounded-xl border p-4 space-y-2 text-sm">
+            <p>Здесь можно сравнить ответ курсанта с правильным образцом, разобрать ошибки и выставить или изменить оценку.</p>
+            <Button type="button" variant="outline" size="sm" onClick={() => setActiveTab("history")}>
+              Выбрать ответ из истории уроков
+            </Button>
+            <p className="text-muted-foreground">В истории откройте урок и билеты курсанта, затем нажмите «Разобрать ответ».</p>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 bg-muted/30 p-3 rounded-xl border">
+            <div className="space-y-1.5">
+              <label htmlFor="lesson-select" className="text-sm font-medium text-foreground flex items-center gap-1.5">
+                <BookOpen className="h-4 w-4 text-primary" />
+                Выбор занятия для разбора:
+              </label>
+              <div className="flex items-center gap-2">
+                <select
+                  id="lesson-select"
+                  aria-label="Выбор урока"
+                  value={selectedLessonId}
+                  onChange={(e) => handleSelectLesson(e.target.value)}
+                  className="flex h-8 w-full rounded-md border border-input bg-background px-3 py-1 text-sm shadow-xs transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                >
+                  <option value="">-- Выберите занятие для разбора ответов --</option>
+                  {filteredLessons.map((l) => (
+                    <option key={l.id} value={l.id}>
+                      {l.group_name || `Урок #${l.id.slice(0, 8)}`} — {l.mode === "EXAM" ? "Экзамен" : "Тренировка"} ({l.status === "COMPLETED" ? "Завершён" : l.status === "ACTIVE" ? "В процессе" : "Ожидание"})
+                    </option>
+                  ))}
+                </select>
+                {selectedLessonId && (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => handleSelectLesson(selectedLessonId)}
+                    disabled={isLoadingSession}
+                    title="Обновить данные занятия"
+                    aria-label="Обновить занятие"
+                    className="h-8 px-2 shrink-0"
+                  >
+                    <RefreshCw className={`h-3.5 w-3.5 ${isLoadingSession ? "animate-spin" : ""}`} />
+                  </Button>
+                )}
+              </div>
+            </div>
+
+            <div className="space-y-1.5">
+              <label htmlFor="session-id-input" className="text-sm font-medium text-muted-foreground flex items-center gap-1.5">
+                Или ID конкретной сессии:
+              </label>
+              <div className="flex items-center gap-2">
+                <Input
+                  id="session-id-input"
+                  aria-label="Идентификатор сессии"
+                  placeholder="ID сессии..."
+                  value={sessionId}
+                  onChange={(e) => setSessionId(e.target.value)}
+                  className="h-8 text-sm"
+                />
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => {
+                    setSelectedLessonId("")
+                    fetchSessionAnalytics(sessionId)
+                  }}
+                  disabled={isLoadingSession || !sessionId.trim()}
+                  className="flex items-center gap-1.5 h-8 text-xs shrink-0"
+                >
+                  <RefreshCw className={`h-3.5 w-3.5 ${isLoadingSession ? "animate-spin" : ""}`} />
+                  Обновить
+                </Button>
+              </div>
             </div>
           </div>
+
+          {errorMessage && <p role="alert" className="rounded-lg border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive">{errorMessage}</p>}
 
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
             {/* Sidebar: Детализация по курсантам */}
@@ -2238,12 +2119,16 @@ export default function AnalyticsPage({ initialTab = "split" }: AnalyticsPagePro
                 <CardContent className="pt-4 px-3 space-y-3 max-h-[750px] overflow-y-auto">
                   {filteredCadets.length === 0 ? (
                     <div className="text-center py-8 text-muted-foreground text-sm">
-                      Курсанты не найдены
+                      {isLoadingSession
+                        ? "Загрузка сессии..."
+                        : sessionData.session_id
+                        ? (selectedLessonId ? "В выбранном занятии пока нет ответов курсантов" : "Курсанты не найдены")
+                        : "Выберите занятие из списка выше или загрузите сессию по её ID"}
                     </div>
                   ) : (
                     filteredCadets.map((cadet) => {
-                      const isHighRate = cadet.success_rate >= 80
-                      const isMidRate = cadet.success_rate >= 50 && cadet.success_rate < 80
+                      const isHighRate = cadet.success_rate != null && cadet.success_rate >= 80
+                      const isMidRate = cadet.success_rate != null && cadet.success_rate >= 50 && cadet.success_rate < 80
 
                       return (
                         <div
@@ -2257,7 +2142,9 @@ export default function AnalyticsPage({ initialTab = "split" }: AnalyticsPagePro
                             </div>
                             <Badge
                               className={
-                                isHighRate
+                                cadet.success_rate == null
+                                  ? "bg-muted text-muted-foreground"
+                                  : isHighRate
                                   ? "bg-emerald-600 text-white hover:bg-emerald-700"
                                   : isMidRate
                                   ? "bg-amber-500 text-white hover:bg-amber-600"
@@ -2265,7 +2152,7 @@ export default function AnalyticsPage({ initialTab = "split" }: AnalyticsPagePro
                               }
                               data-testid={`success-rate-${cadet.cadet_id}`}
                             >
-                              {cadet.success_rate}% успеха
+                              {cadet.success_rate == null ? "Нет оценки" : `${cadet.success_rate}% успеха`}
                             </Badge>
                           </div>
 
@@ -2278,7 +2165,7 @@ export default function AnalyticsPage({ initialTab = "split" }: AnalyticsPagePro
                                   ? "bg-amber-500"
                                   : "bg-rose-600"
                               }`}
-                              style={{ width: `${Math.max(0, Math.min(100, cadet.success_rate))}%` }}
+                              style={{ width: `${Math.max(0, Math.min(100, cadet.success_rate ?? 0))}%` }}
                             />
                           </div>
 
@@ -2295,6 +2182,9 @@ export default function AnalyticsPage({ initialTab = "split" }: AnalyticsPagePro
                                   type="button"
                                   onClick={() => {
                                     if (rec.etalon && rec.student_answer) {
+                                      ++recordRequestRef.current
+                                      setIsLoadingRecord(false)
+                                      setErrorMessage(null)
                                       setSelectedRecord({
                                         ...rec,
                                         cadet_name: cadet.cadet_name,
@@ -2317,7 +2207,7 @@ export default function AnalyticsPage({ initialTab = "split" }: AnalyticsPagePro
                                       {rec.title || `Ответ #${rec.record_id}`}
                                     </div>
                                     <div className="text-muted-foreground flex items-center gap-1.5 mt-0.5">
-                                      <span>{rec.status === "passed" ? "Зачтено" : "Не зачтено"}</span>
+                                      <span>{rec.status === "passed" ? "Зачтено" : rec.status === "failed" ? "Не зачтено" : rec.status === "in_progress" ? "В процессе" : rec.status === "incomplete" ? "Не завершено" : rec.score == null ? "Ожидает проверки" : "Проверено"}</span>
                                       {rec.is_appealed && (
                                         <span className="text-purple-600 dark:text-purple-400 font-semibold">
                                           • Апелляция
@@ -2346,11 +2236,18 @@ export default function AnalyticsPage({ initialTab = "split" }: AnalyticsPagePro
 
             {/* Split Screen Panel */}
             <div className="lg:col-span-8">
-              {selectedRecord ? (
+              {isLoadingRecord ? (
+                <Card className="flex items-center justify-center gap-2 p-12 text-muted-foreground" role="status">
+                  <Loader2 className="h-5 w-5 animate-spin" /> Загрузка ответа курсанта...
+                </Card>
+              ) : selectedRecord ? (
                 <SplitScreen
                   record={selectedRecord}
                   onAppeal={handleAppeal}
-                  onClose={() => setSelectedRecord(null)}
+                  onClose={() => {
+                    ++recordRequestRef.current
+                    setSelectedRecord(null)
+                  }}
                 />
               ) : (
                 <Card className="h-full flex items-center justify-center p-12 text-center text-muted-foreground border-dashed">
@@ -2490,8 +2387,7 @@ export default function AnalyticsPage({ initialTab = "split" }: AnalyticsPagePro
         onClose={() => setGradingState((prev) => ({ ...prev, isOpen: false }))}
         onSuccess={handleGradingSuccess}
         onOpenSplitScreen={(recId) => {
-          setActiveTab("split")
-          handleSelectRecord(recId)
+          openRecordFromHistory(recId, gradingState.cadetName)
         }}
         recordId={gradingState.recordId}
         cadetName={gradingState.cadetName}

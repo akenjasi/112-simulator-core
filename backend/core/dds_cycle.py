@@ -357,20 +357,9 @@ def build_session_state_dict(
     actions = dds_data.get("actions", [])
     submitted_at = dds_data.get("submitted_at")
     score = get_session_score(evals, trs)
-    editable = session.status == "ACTIVE" and lesson.status == "ACTIVE" and submitted_at is None
     service_statuses = current_service_statuses(incoming_card, (card.assigned_services or {}) if card else {}, actions)
     blockers = completion_blockers(dds_data, (card.assigned_services or {}) if card else {})
     progress = card_progress(dds_data)
-    history = [{"card_id": item["card_id"], "ticket_id": item["ticket_id"],
-                "submitted_at": item.get("card_submitted_at"), "status": "completed"}
-               for item in archived_cards(dds_data)]
-    if not any(item["card_id"] == card_id for item in history):
-        history.append({"card_id": card_id, "ticket_id": session.ticket_id or lesson.scenario_id,
-                        "submitted_at": dds_data.get("card_submitted_at"),
-                        "status": "completed" if submitted_at else "active" if editable else "incomplete"})
-    if dds_data.get("version") == 2:
-        score = get_session_score([ev for ev in evals if ev.card_id == card_id],
-                                  [tr for tr in trs if tr.ticket_id == session.ticket_id])
 
     # Time calculations
     start_dt = _card_started_at(session, dds_data)
@@ -415,12 +404,34 @@ def build_session_state_dict(
     start_time_iso = start_dt.isoformat() if start_dt is not None else None
     error_limit = session.error_limit if session.error_limit is not None else (lesson.error_limit if lesson else None)
 
+    is_exam = bool(lesson and (lesson.mode or "").upper() == "EXAM")
+    is_exam_timeout = is_exam and (is_expired or dds_data.get("stop_reason") == "exam_timeout")
+    editable = (
+        session.status == "ACTIVE"
+        and lesson.status == "ACTIVE"
+        and submitted_at is None
+        and not is_exam_timeout
+    )
+    effective_session_status = "COMPLETED" if (session.status == "COMPLETED" or is_exam_timeout) else session.status
+    effective_stop_reason = dds_data.get("stop_reason") or ("exam_timeout" if is_exam_timeout else None)
+
+    history = [{"card_id": item["card_id"], "ticket_id": item["ticket_id"],
+                "submitted_at": item.get("card_submitted_at"), "status": "completed"}
+               for item in archived_cards(dds_data)]
+    if not any(item["card_id"] == card_id for item in history):
+        history.append({"card_id": card_id, "ticket_id": session.ticket_id or lesson.scenario_id,
+                        "submitted_at": dds_data.get("card_submitted_at"),
+                        "status": "completed" if submitted_at else "active" if editable else "incomplete"})
+    if dds_data.get("version") == 2:
+        score = get_session_score([ev for ev in evals if ev.card_id == card_id],
+                                  [tr for tr in trs if tr.ticket_id == session.ticket_id])
+
     return {
         "session_id": session.session_id,
         "lesson_id": lesson.assignment_id,
         "ticket_id": session.ticket_id or lesson.scenario_id,
         "card_id": card_id,
-        "session_status": session.status,
+        "session_status": effective_session_status,
         "lesson_status": lesson.status,
         "started_at": (
             (session.start_time.replace(tzinfo=timezone.utc) if session.start_time.tzinfo is None else session.start_time).isoformat()
@@ -448,7 +459,9 @@ def build_session_state_dict(
         "cards": history,
         "readonly": not editable,
         "stopped_at": dds_data.get("stopped_at"),
-        "stop_reason": dds_data.get("stop_reason"),
+        "stop_reason": effective_stop_reason,
+        "card_pool_source": lesson.card_pool_source if lesson else None,
+        "is_self_training": bool(lesson and lesson.card_pool_source == "self_training"),
     }
 
 
@@ -537,7 +550,9 @@ async def apply_dds_action(
         m_svc = (existing.get("service_name") == payload.service_name)
         m_st = (existing.get("status") == payload.status)
         m_cm = (existing.get("comment") == payload.comment)
-        m_ord = (existing.get("order_number") == payload.order_number)
+        # New status actions persist a trimmed number; retries must compare the
+        # same normalized value while retaining legacy null-number replays.
+        m_ord = ((existing.get("order_number") or "").strip() == (payload.order_number or "").strip())
         m_who = (existing.get("who_accepted") == payload.who_accepted)
         m_sum = (existing.get("summary") == payload.summary)
         if existing_pair[0] == target_card and m_kind and m_svc and m_st and m_cm and m_ord and m_who and m_sum:
@@ -556,6 +571,11 @@ async def apply_dds_action(
 
     # 5. Check session and lesson ACTIVE state (strictly ACTIVE required)
     if (session.status or "").upper() != "ACTIVE" or dds_data.get("submitted_at") is not None:
+        if dds_data.get("stop_reason") == "exam_timeout":
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail={"code": "DDS_EXAM_TIME_EXPIRED", "message": "Время выполнения экзамена истекло"},
+            )
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail="Session is not in ACTIVE state; action rejected",
@@ -596,10 +616,23 @@ async def apply_dds_action(
         flag_modified(session, "dynamic_state")
 
         if (lesson.mode or "").upper() == "EXAM":
+            session.status = "COMPLETED"
+            session.end_time = now_dt
+            dds_data["stopped_at"] = now_dt.isoformat()
+            dds_data["stop_reason"] = "exam_timeout"
+            dds_data["submitted_at"] = None
+            state_copy = deepcopy(session.dynamic_state or {})
+            state_copy["dds"] = dds_data
+            session.dynamic_state = state_copy
+            flag_modified(session, "dynamic_state")
+            card_id = dds_data.get("card_id")
+            card = await db.get(IncidentCard, card_id) if card_id else None
+            if card and card.status != "Отработана":
+                card.status = "Не завершено"
             await db.commit()
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
-                detail="Время выполнения экзамена истекло",
+                detail={"code": "DDS_EXAM_TIME_EXPIRED", "message": "Время выполнения экзамена истекло"},
             )
 
     # 6. Fetch IncidentCard
@@ -649,7 +682,7 @@ async def apply_dds_action(
     if payload.comment is not None:
         action_record["comment"] = payload.comment
     if payload.order_number is not None:
-        action_record["order_number"] = payload.order_number
+        action_record["order_number"] = payload.order_number.strip() if isinstance(payload.order_number, str) else payload.order_number
     if payload.who_accepted is not None:
         action_record["who_accepted"] = payload.who_accepted
     if payload.summary is not None:
@@ -740,6 +773,13 @@ async def get_dds_session_state(
     else:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied")
 
+    # EXAM reads may persist a timeout. Serialize them with actions, card
+    # completion and teacher stop, then reload instead of writing a stale JSON.
+    if (lesson.mode or "").upper() == "EXAM" and session.status == "ACTIVE":
+        await lock_assignment(db, lesson.assignment_id)
+        await db.refresh(lesson)
+        await db.refresh(session)
+
     data = (session.dynamic_state or {}).get("dds", {})
     current_id = data.get("card_id")
     selected_id = card_id or current_id
@@ -754,6 +794,43 @@ async def get_dds_session_state(
     evals = list((await db.scalars(select(EvaluationResult).where(EvaluationResult.session_id == session_id))).all())
     trs = list((await db.scalars(select(TicketResult).where(TicketResult.session_id == session_id))).all())
     active_card = await db.get(IncidentCard, current_id) if selected_id != current_id else card
+    if (lesson.mode or "").upper() == "EXAM" and session.status == "ACTIVE":
+        limit = (
+            session.time_limit_seconds
+            if (session.time_limit_seconds and session.time_limit_seconds > 0)
+            else (
+                lesson.time_limit_seconds
+                if (lesson and lesson.time_limit_seconds and lesson.time_limit_seconds > 0)
+                else 30
+            )
+        )
+        now_dt = datetime.now(timezone.utc)
+        start_dt = _card_started_at(session, data)
+        if start_dt is not None:
+            if start_dt.tzinfo is None:
+                start_dt = start_dt.replace(tzinfo=timezone.utc)
+        else:
+            start_dt = now_dt
+        if now_dt > (start_dt + timedelta(seconds=limit)):
+            now_str = now_dt.isoformat()
+            session.status = "COMPLETED"
+            session.end_time = now_dt
+            data = deepcopy(data)
+            data["timed_out"] = True
+            data["time_exceeded_seconds"] = max(1, int((now_dt - (start_dt + timedelta(seconds=limit))).total_seconds()))
+            data["stopped_at"] = now_str
+            data["stop_reason"] = "exam_timeout"
+            data["submitted_at"] = None
+            state_copy = deepcopy(session.dynamic_state or {})
+            state_copy["dds"] = data
+            session.dynamic_state = state_copy
+            flag_modified(session, "dynamic_state")
+            if active_card and active_card.status != "Отработана":
+                active_card.status = "Не завершено"
+            await db.commit()
+            await db.refresh(session)
+            if active_card:
+                await db.refresh(active_card)
     result = build_session_state_dict(session, lesson, active_card, evals, trs)
     if archived:
         # Build a read projection, never replace or modify the active ORM session state.
@@ -826,6 +903,48 @@ async def list_cadet_dds_assignments(
         results.append(build_session_state_dict(s, lesson, card, evals, trs))
 
     return results
+
+
+def extract_last_activity(session: Optional[ExamSession]) -> Optional[str]:
+    """Return the ISO timestamp of the cadet's most recent action in the session."""
+    if not session or not session.dynamic_state or not isinstance(session.dynamic_state, dict):
+        return None
+    dds_data = session.dynamic_state.get("dds")
+    if not isinstance(dds_data, dict):
+        return None
+
+    actions: list[dict] = []
+    for card_info in archived_cards(dds_data):
+        if isinstance(card_info, dict):
+            card_actions = card_info.get("actions")
+            if isinstance(card_actions, list):
+                actions.extend(card_actions)
+
+    curr_actions = dds_data.get("actions")
+    if isinstance(curr_actions, list):
+        actions.extend(curr_actions)
+
+    if not actions:
+        return None
+
+    latest_dt = None
+    latest_at = None
+    for action in actions:
+        if not isinstance(action, dict):
+            continue
+        at = action.get("at")
+        if not at or not isinstance(at, str):
+            continue
+        try:
+            dt = datetime.fromisoformat(at.replace("Z", "+00:00"))
+            if dt.tzinfo is None:
+                dt = dt.replace(tzinfo=timezone.utc)
+            if latest_dt is None or dt >= latest_dt:
+                latest_dt = dt
+                latest_at = at
+        except Exception:
+            continue
+    return latest_at
 
 
 async def build_dds_cadet_stats(
@@ -981,6 +1100,7 @@ async def build_dds_cadet_stats(
             continue
 
         c_stats.session_id = s.session_id
+        c_stats.last_activity = extract_last_activity(s)
         session_evals = evals_by_session.get(s.session_id, [])
         session_trs = trs_by_session.get(s.session_id, [])
         session_cards = cards_by_session.get(s.session_id, [])

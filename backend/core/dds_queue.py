@@ -1,6 +1,6 @@
 """Persisted sequential DDS exercises. Queue snapshots never leave the server."""
 from copy import deepcopy
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from typing import Any
 
 from fastapi import HTTPException
@@ -162,12 +162,44 @@ async def complete_card(db: AsyncSession, session_id: str, card_id: str, request
         # The same card can be acknowledged repeatedly, but never advance twice.
         return await get_dds_session_state(session_id, user, db)
     if session.status != "ACTIVE" or lesson.status != "ACTIVE":
+        if data.get("stop_reason") == "exam_timeout":
+            raise HTTPException(409, detail={"code": "DDS_EXAM_TIME_EXPIRED", "message": "Время выполнения экзамена истекло"})
         raise HTTPException(409, detail={"code": "DDS_SESSION_NOT_ACTIVE"})
     if data.get("card_id") != card_id:
         raise HTTPException(409, detail={"code": "DDS_CARD_NOT_CURRENT"})
     card = await db.get(IncidentCard, card_id)
     if not card or card.session_id != session_id:
         raise HTTPException(409, "Card not found")
+    now = datetime.now(timezone.utc)
+    if (lesson.mode or "").upper() == "EXAM":
+        from backend.core.dds_cycle import _card_started_at
+        limit = (
+            session.time_limit_seconds
+            if (session.time_limit_seconds and session.time_limit_seconds > 0)
+            else (
+                lesson.time_limit_seconds
+                if (lesson and lesson.time_limit_seconds and lesson.time_limit_seconds > 0)
+                else 30
+            )
+        )
+        start_dt = _card_started_at(session, data)
+        if start_dt is not None:
+            if start_dt.tzinfo is None:
+                start_dt = start_dt.replace(tzinfo=timezone.utc)
+        else:
+            start_dt = now
+        if now > (start_dt + timedelta(seconds=limit)):
+            session.status, session.end_time = "COMPLETED", now
+            data["timed_out"] = True
+            data["time_exceeded_seconds"] = max(1, int((now - (start_dt + timedelta(seconds=limit))).total_seconds()))
+            data["stopped_at"] = now.isoformat()
+            data["stop_reason"] = "exam_timeout"
+            data["submitted_at"] = None
+            if card.status != "Отработана":
+                card.status = "Не завершено"
+            store_state(session, data)
+            await db.commit()
+            raise HTTPException(409, detail={"code": "DDS_EXAM_TIME_EXPIRED", "message": "Время выполнения экзамена истекло"})
     blockers = completion_blockers(data, card.assigned_services or {})
     if blockers:
         raise HTTPException(409, detail={"code": "DDS_CARD_NOT_READY", "blockers": blockers})

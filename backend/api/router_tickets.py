@@ -60,6 +60,19 @@ def make_abbr(text: str) -> str:
     return "".join([w[0].upper() for w in text.split()[:2] if w])
 
 
+def _standalone_scenario_tickets():
+    """Select legacy tickets without a canonical GeneratedTicket representation.
+
+    Generation and import save the same ID in both tables for different consumers.
+    Exclude mirrors before filtering so a stale or deleted canonical ticket cannot
+    reappear through its scenario representation.
+    """
+    canonical_ticket = select(GeneratedTicket.id).where(
+        GeneratedTicket.id == ScenarioTicket.scenario_id
+    )
+    return select(ScenarioTicket).where(~canonical_ticket.exists())
+
+
 AVAILABLE_DEFAULT_CATEGORIES: List[str] = [
     "Пожары и задымления",
     "ДТП",
@@ -232,22 +245,62 @@ def resolve_classifier_row(category: str, subcategory: Optional[str] = None) -> 
 
 
 active_generations: int = 0
+generation_jobs: Dict[str, Dict[str, Any]] = {}
+
+
+def compute_ticket_content_fingerprint(ticket_or_dict: Any) -> str:
+    """Identity and sequence numbers do not make an exercise different."""
+    if hasattr(ticket_or_dict, "plot"):
+        plot = getattr(ticket_or_dict, "plot", None)
+        factoids = getattr(ticket_or_dict, "factoids", None)
+        ground_truth = getattr(ticket_or_dict, "ground_truth", None)
+        etalon_services = getattr(ticket_or_dict, "etalon_services", None)
+        complexity = getattr(ticket_or_dict, "complexity", None)
+    elif isinstance(ticket_or_dict, dict):
+        plot = ticket_or_dict.get("plot")
+        factoids = ticket_or_dict.get("factoids")
+        ground_truth = ticket_or_dict.get("ground_truth")
+        etalon_services = ticket_or_dict.get("etalon_services")
+        complexity = ticket_or_dict.get("complexity")
+    else:
+        plot = None
+        factoids = None
+        ground_truth = None
+        etalon_services = None
+        complexity = None
+
+    return json.dumps(
+        {
+            "complexity": complexity,
+            "etalon_services": etalon_services,
+            "factoids": factoids,
+            "ground_truth": ground_truth,
+            "plot": plot,
+        },
+        ensure_ascii=False,
+        sort_keys=True,
+    )
 
 
 async def generate_tickets_background_task(
     category: Optional[str],
     subcategory: Optional[str],
     count: int,
+    generation_id: Optional[str] = None,
 ):
     """Background task to generate tickets, save to DB, and cache TTS audio for bricks."""
     global active_generations
     processed = 0
+    MAX_ATTEMPTS_PER_TICKET = 10
+    batch_fingerprints: set[str] = set()
+    job = generation_jobs.get(generation_id) if generation_id else None
+
     try:
         faker = FakeDataGenerator()
         import random
         from sqlalchemy import text
 
-        for _ in range(count):
+        while processed < count:
             cur_cat = category
             if not cur_cat or cur_cat.strip().lower() in ["случайная категория", "случайная", "random", "any", "все категории"]:
                 cur_cat = random.choice(AVAILABLE_DEFAULT_CATEGORIES)
@@ -258,93 +311,114 @@ async def generate_tickets_background_task(
                 
             classifier_row = resolve_classifier_row(category=cur_cat, subcategory=cur_sub)
             ticket_sub = classifier_row.incident_name
-            generated_list = await asyncio.to_thread(generate_tickets, classifier_row=classifier_row, count=1, faker=faker)
-            
-            for t in generated_list:
-                # SAVE TO DB directly without heavy sound model or TTS synthesis
-                async with AsyncSessionLocal() as session:
+
+            candidate = None
+            for _ in range(MAX_ATTEMPTS_PER_TICKET):
+                generated_list = await asyncio.to_thread(generate_tickets, classifier_row=classifier_row, count=1, faker=faker)
+                if not generated_list:
+                    continue
+                t = generated_list[0]
+                fp = compute_ticket_content_fingerprint(t)
+                if fp in batch_fingerprints:
+                    continue
+                batch_fingerprints.add(fp)
+                candidate = t
+                break
+
+            if candidate is None:
+                logger.warning("Could not generate a unique ticket after %d attempts", MAX_ATTEMPTS_PER_TICKET)
+                if job is not None:
+                    job["error_code"] = "UNIQUE_TICKETS_EXHAUSTED"
+                break
+
+            t = candidate
+            # SAVE TO DB directly without heavy sound model or TTS synthesis
+            async with AsyncSessionLocal() as session:
+                await session.execute(
+                    text("CREATE TABLE IF NOT EXISTS sys_sequences (name VARCHAR PRIMARY KEY, last_val INTEGER NOT NULL DEFAULT 0)")
+                )
+                try:
                     await session.execute(
-                        text("CREATE TABLE IF NOT EXISTS sys_sequences (name VARCHAR PRIMARY KEY, last_val INTEGER NOT NULL DEFAULT 0)")
+                        text("INSERT INTO sys_sequences (name, last_val) VALUES ('generated_tickets', 0) ON CONFLICT (name) DO NOTHING")
                     )
-                    try:
-                        await session.execute(
-                            text("INSERT INTO sys_sequences (name, last_val) VALUES ('generated_tickets', 0) ON CONFLICT (name) DO NOTHING")
-                        )
-                    except Exception:
-                        await session.execute(
-                            text("INSERT OR IGNORE INTO sys_sequences (name, last_val) VALUES ('generated_tickets', 0)")
-                        )
-                    await session.commit()
-
-                    seq_res = await session.execute(text("SELECT last_val FROM sys_sequences WHERE name='generated_tickets'"))
-                    current_seq = seq_res.scalar() or 0
-                    current_seq += 1
-
-                    gen_gt = dict(t.ground_truth or {})
-                    dds_et = getattr(t, "dds_etalon", None)
-                    if dds_et:
-                        gen_gt["dds_etalon"] = dds_et
-
-                    gen_ticket = GeneratedTicket(
-                        id=t.ticket_id,
-                        category=cur_cat,
-                        subcategory=ticket_sub,
-                        complexity=t.complexity,
-                        plot=t.plot,
-                        factoids=t.factoids,
-                        ground_truth=gen_gt,
-                        etalon_services=t.etalon_services,
-                        sequence_number=current_seq,
-                        status="UNDER_REVIEW",
+                except Exception:
+                    await session.execute(
+                        text("INSERT OR IGNORE INTO sys_sequences (name, last_val) VALUES ('generated_tickets', 0)")
                     )
-                    session.add(gen_ticket)
+                await session.commit()
 
-                    card = build_incoming_card(
-                        category=cur_cat,
-                        subcategory=ticket_sub,
-                        plot=t.plot or "",
-                        ground_truth=t.ground_truth or {},
-                        etalon_services=t.etalon_services or [],
-                        seq=current_seq,
-                    )
+                seq_res = await session.execute(text("SELECT last_val FROM sys_sequences WHERE name='generated_tickets'"))
+                current_seq = seq_res.scalar() or 0
+                current_seq += 1
 
-                    scenario_settings = {
-                        "complexity": t.complexity,
-                        "etalon_services": t.etalon_services,
+                gen_gt = dict(t.ground_truth or {})
+                dds_et = getattr(t, "dds_etalon", None)
+                if dds_et:
+                    gen_gt["dds_etalon"] = dds_et
+
+                gen_ticket = GeneratedTicket(
+                    id=t.ticket_id,
+                    category=cur_cat,
+                    subcategory=ticket_sub,
+                    complexity=t.complexity,
+                    plot=t.plot,
+                    factoids=t.factoids,
+                    ground_truth=gen_gt,
+                    etalon_services=t.etalon_services,
+                    sequence_number=current_seq,
+                    status="UNDER_REVIEW",
+                )
+                session.add(gen_ticket)
+
+                card = build_incoming_card(
+                    category=cur_cat,
+                    subcategory=ticket_sub,
+                    plot=t.plot or "",
+                    ground_truth=t.ground_truth or {},
+                    etalon_services=t.etalon_services or [],
+                    seq=current_seq,
+                )
+
+                scenario_settings = {
+                    "complexity": t.complexity,
+                    "etalon_services": t.etalon_services,
+                    "plot": t.plot,
+                    "category": cur_cat,
+                    "subcategory": ticket_sub,
+                    "sequence_number": current_seq,
+                }
+                if dds_et:
+                    scenario_settings["dds_etalon"] = dds_et
+
+                scenario_ticket = ScenarioTicket(
+                    scenario_id=t.ticket_id,
+                    title=ticket_sub or cur_cat,
+                    category=cur_cat,
+                    complexity=t.complexity,
+                    content={"incoming_card": card},
+                    settings=scenario_settings,
+                    ground_truth=gen_gt,
+                    ai_content={
+                        "factoids": t.factoids,
                         "plot": t.plot,
-                        "category": cur_cat,
-                        "subcategory": ticket_sub,
-                        "sequence_number": current_seq,
-                    }
-                    if dds_et:
-                        scenario_settings["dds_etalon"] = dds_et
+                    },
+                    workflow_state={
+                        "status": "UNDER_REVIEW",
+                    },
+                )
+                session.add(scenario_ticket)
 
-                    scenario_ticket = ScenarioTicket(
-                        scenario_id=t.ticket_id,
-                        title=ticket_sub or cur_cat,
-                        category=cur_cat,
-                        complexity=t.complexity,
-                        content={"incoming_card": card},
-                        settings=scenario_settings,
-                        ground_truth=gen_gt,
-                        ai_content={
-                            "factoids": t.factoids,
-                            "plot": t.plot,
-                        },
-                        workflow_state={
-                            "status": "UNDER_REVIEW",
-                        },
-                    )
-                    session.add(scenario_ticket)
+                await session.execute(
+                    text("UPDATE sys_sequences SET last_val = :val WHERE name = 'generated_tickets'"),
+                    {"val": current_seq}
+                )
+                await session.commit()
 
-                    await session.execute(
-                        text("UPDATE sys_sequences SET last_val = :val WHERE name = 'generated_tickets'"),
-                        {"val": current_seq}
-                    )
-                    await session.commit()
+            processed += 1
+            if job is not None:
+                job["generated_count"] = processed
+            active_generations = max(0, active_generations - 1)
 
-                processed += 1
-                active_generations = max(0, active_generations - 1)
 
     except asyncio.CancelledError:
         logger.warning("generate_tickets_background_task was cancelled")
@@ -353,6 +427,10 @@ async def generate_tickets_background_task(
     finally:
         remaining_to_deduct = count - processed
         active_generations = max(0, active_generations - remaining_to_deduct)
+        if job is not None:
+            job["status"] = "completed" if processed == count else "failed"
+            if processed != count and not job.get("error_code"):
+                job["error_code"] = "GENERATION_FAILED"
 
 
 
@@ -360,8 +438,22 @@ async def generate_tickets_background_task(
 @api_tickets_router.get("/status/", response_model=TicketStatusResponse, include_in_schema=False)
 @tickets_router.get("/status", response_model=TicketStatusResponse)
 @tickets_router.get("/status/", response_model=TicketStatusResponse, include_in_schema=False)
-async def get_tickets_status() -> TicketStatusResponse:
+async def get_tickets_status(
+    generation_id: Optional[str] = Query(None),
+    current_user: User = Depends(require_role("ADMIN", "TEACHER", "CADET")),
+) -> TicketStatusResponse:
     """Статус фоновых генераций для честного UI."""
+    if generation_id:
+        job = generation_jobs.get(generation_id)
+        if not job or (current_user.role != "ADMIN" and job["owner_id"] != current_user.user_id):
+            raise HTTPException(404, "Генерация не найдена; обновите список билетов")
+        return TicketStatusResponse(
+            generation_id=generation_id, status=job["status"],
+            requested_count=job["requested_count"], generated_count=job["generated_count"],
+            error_code=job.get("error_code"), is_generating=job["status"] == "in_progress",
+            remaining_tickets=max(0, job["requested_count"] - job["generated_count"])
+            if job["status"] == "in_progress" else 0,
+        )
     return TicketStatusResponse(
         is_generating=active_generations > 0,
         remaining_tickets=active_generations,
@@ -390,7 +482,7 @@ async def get_tickets_counts(
     stmt1 = stmt1.group_by(GeneratedTicket.category, GeneratedTicket.subcategory)
     
     # 2. Scenario Tickets
-    stmt2 = select(ScenarioTicket).where(or_(ScenarioTicket.is_deleted == False, ScenarioTicket.is_deleted.is_(None)))
+    stmt2 = _standalone_scenario_tickets().where(or_(ScenarioTicket.is_deleted == False, ScenarioTicket.is_deleted.is_(None)))
         
     res1 = await db.execute(stmt1)
     res2 = await db.execute(stmt2)
@@ -415,16 +507,6 @@ async def get_tickets_counts(
         counts[cat_name]["total"] += 1
         if subcat:
             counts[cat_name]["subcategories"][subcat] = counts[cat_name]["subcategories"].get(subcat, 0) + 1
-            
-    # dummy loop for existing code
-    for cat, subcat, count in []:
-        cat_name = cat or "Общее"
-        if cat_name not in counts:
-            counts[cat_name] = {"category": cat_name, "total": 0, "subcategories": {}}
-        counts[cat_name]["total"] += count
-        
-        if subcat:
-            counts[cat_name]["subcategories"][subcat] = count
             
     return list(counts.values())
 
@@ -505,7 +587,7 @@ async def list_tickets(
     """Получение списка сохраненных билетов с поддержкой фильтрации."""
     TicketFilterParams(category=category, subcategory=subcategory, complexity=complexity)
 
-    stmt = select(GeneratedTicket).order_by(desc(GeneratedTicket.created_at))
+    stmt = select(GeneratedTicket).order_by(desc(GeneratedTicket.created_at), desc(GeneratedTicket.id))
     if category:
         stmt = stmt.where(GeneratedTicket.category == category)
     if subcategory:
@@ -548,7 +630,7 @@ async def list_tickets(
         )
 
     # Fetch ScenarioTickets as well, applying filters
-    stmt_legacy = select(ScenarioTicket).order_by(desc(ScenarioTicket.created_at))
+    stmt_legacy = _standalone_scenario_tickets().order_by(desc(ScenarioTicket.created_at), desc(ScenarioTicket.scenario_id))
     
     if not include_deleted:
         from sqlalchemy import or_
@@ -589,7 +671,9 @@ async def list_tickets(
             )
         )
 
-    return output
+    # Apply ordering and limit to logical tickets across both storage formats.
+    output.sort(key=lambda ticket: (ticket.created_at, ticket.id), reverse=True)
+    return output[:limit] if limit is not None else output
 
 
 @api_tickets_router.post(
@@ -621,14 +705,27 @@ async def generate_ticket_endpoint(
 ) -> TicketGenerateAcceptedResponse:
     """Асинхронная генерация пакета билетов через BackgroundTasks."""
     global active_generations
+    # Match the existing single-process background runner; bound completed
+    # metadata and let clients recover explicitly after a process restart.
+    for old_id in list(generation_jobs):
+        if len(generation_jobs) < 100:
+            break
+        if generation_jobs[old_id]["status"] != "in_progress":
+            del generation_jobs[old_id]
+    generation_id = str(uuid.uuid4())
+    generation_jobs[generation_id] = {
+        "owner_id": _teacher.user_id, "requested_count": req.count,
+        "generated_count": 0, "status": "in_progress", "error_code": None,
+    }
     active_generations += req.count
     background_tasks.add_task(
         generate_tickets_background_task,
         category=req.category,
         subcategory=req.subcategory,
         count=req.count,
+        generation_id=generation_id,
     )
-    return TicketGenerateAcceptedResponse(message="Генерация начата")
+    return TicketGenerateAcceptedResponse(message="Генерация начата", generation_id=generation_id)
 
 
 def generate_tickets_import_template_excel() -> bytes:
@@ -717,10 +814,10 @@ async def upload_tickets_import(
 ) -> Dict[str, Any]:
     """Эндпоинт для загрузки и пакетного импорта билетов из Excel."""
     filename = (file.filename or "").lower()
-    if not (filename.endswith(".xlsx") or filename.endswith(".xls")):
+    if not filename.endswith(".xlsx"):
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail="Неподдерживаемый формат файла. Требуется файл .xlsx или .xls",
+            detail="Требуется файл .xlsx. Сохраните старый файл .xls в формате .xlsx.",
         )
 
     file_bytes = await file.read()
@@ -842,7 +939,10 @@ async def upload_tickets_import(
 
         # Извлечение служб
         extracted_services: List[str] = []
+        # Excel converts codes like 01 to a number when the cell is numeric.
         lower_s = services_str.lower()
+        if re.fullmatch(r"[1-4](?:\.0)?", lower_s):
+            lower_s = f"0{int(float(lower_s))}"
         has_01 = bool(re.search(r"\b(01|101)\b", lower_s) or "пожар" in lower_s)
         has_02 = bool(re.search(r"\b(02|102)\b", lower_s) or "полиц" in lower_s or "мвд" in lower_s or "дпс" in lower_s)
         has_03 = bool(re.search(r"\b(03|103)\b", lower_s) or "скор" in lower_s or "медиц" in lower_s or "врач" in lower_s)
