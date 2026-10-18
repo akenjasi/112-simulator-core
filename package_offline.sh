@@ -12,7 +12,7 @@ QWEN_SIZE=5680522464
 QWEN_URL="https://huggingface.co/unsloth/Qwen3.5-9B-GGUF/resolve/$QWEN_REVISION/Qwen3.5-9B-Q4_K_M.gguf"
 DEFAULT_MODEL=1
 [[ -z "${DDS_LLM_MODEL_PATH:-}" ]] || DEFAULT_MODEL=0
-OUTPUT="" WORK_DIR="${TMPDIR:-/tmp}" CHECK=0 WITH_DATA=0 DOWNLOAD=1
+OUTPUT="" WORK_DIR="" CHECK=0 WITH_DATA=0 DOWNLOAD=1
 SOURCE_PROJECT="$(basename "$ROOT")"
 STAGE="" PART=""
 
@@ -29,7 +29,7 @@ No current .env, TLS private key, database or uploads are copied by default.
   --no-download          Require cached/local weights; never download model weights
   --output FILE         Destination .tar.gz (must not exist)
   --version TAG         Release/image tag (default: UTC timestamp)
-  --work-dir DIR        Temporary space for images and weights (several GB needed)
+  --work-dir DIR        Temporary space (default: .work next to the output archive)
   --with-data           Include logical database dump and /app/data from live stack
   --source-project NAME Source Compose project for --with-data (default: directory name)
   --check               Validate inputs and Docker; do not download, build or package
@@ -71,6 +71,8 @@ if ((WITH_DATA)); then
   [[ "$SOURCE_PROJECT" =~ ^[a-z0-9][a-z0-9_-]*$ ]] || die 'Invalid source project name'
 fi
 [[ -n "$OUTPUT" ]] || OUTPUT="$ROOT/reports/offline/simulator112-$VERSION-linux-amd64.tar.gz"
+# /tmp is often a small RAM filesystem. Keep multi-GB staging on the output disk.
+[[ -n "$WORK_DIR" ]] || WORK_DIR="$(dirname "$OUTPUT")/.work"
 [[ "$OUTPUT" == *.tar.gz ]] || die '--output must end with .tar.gz'
 [[ ! -e "$OUTPUT" ]] || die "Output already exists: $OUTPUT"
 [[ ! -e "${OUTPUT}.sha256" ]] || die "Checksum already exists: ${OUTPUT}.sha256"
@@ -98,10 +100,31 @@ if ((DEFAULT_MODEL && DOWNLOAD && ! CHECK)) && [[ ! -e "$LLM_MODEL" ]]; then
   flock 9
   if [[ ! -e "$LLM_MODEL" ]]; then
     log 'Downloading Qwen3.5-9B Q4_K_M (5.7 GB); interrupted transfers can resume'
-    curl --fail --location --show-error --progress-bar --retry 3 --retry-delay 2 \
-      --proto '=https' --proto-redir '=https' --connect-timeout 30 \
-      --speed-time 120 --speed-limit 1024 --continue-at - \
-      --output "${LLM_MODEL}.part" "$QWEN_URL"
+    # Start a fresh curl invocation per retry so -C - uses the latest file size.
+    # curl's internal retries can discard bytes received by the failed attempt.
+    for attempt in {1..6}; do
+      if [[ -f "${LLM_MODEL}.part" ]] && \
+         [[ "$(stat -c %s -- "${LLM_MODEL}.part")" == "$QWEN_SIZE" ]]; then
+        break  # A previous connection may have closed after the last byte.
+      fi
+      if curl --fail --location --show-error --progress-bar \
+        --proto '=https' --proto-redir '=https' --connect-timeout 30 \
+        --speed-time 120 --speed-limit 1024 --continue-at - \
+        --output "${LLM_MODEL}.part" "$QWEN_URL"; then
+        break
+      else
+        curl_status=$?
+      fi
+      case "$curl_status" in
+        5|6|7|16|18|22|28|35|52|55|56|92|95)
+          if ((attempt < 6)); then
+            log "Download interrupted (curl $curl_status); resuming saved bytes, retry $attempt/5"
+            sleep 2
+            continue
+          fi;;
+      esac
+      die "Download failed (curl $curl_status). Saved bytes remain in ${LLM_MODEL}.part; rerun ./package_offline.sh to resume."
+    done
     if [[ "$(stat -c %s -- "${LLM_MODEL}.part")" != "$QWEN_SIZE" ]] || \
        [[ "$(sha256sum -- "${LLM_MODEL}.part" | cut -d ' ' -f 1)" != "$QWEN_SHA256" ]]; then
       rm -f -- "${LLM_MODEL}.part"
