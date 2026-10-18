@@ -20,7 +20,7 @@ describe('LoginPage 2FA Flow', () => {
   it('renders credential form initially', () => {
     render(<LoginPage />)
     expect(screen.getByText('Вход в систему')).toBeInTheDocument()
-    expect(screen.getByPlaceholderText('admin')).toBeInTheDocument()
+    expect(screen.getByLabelText('Логин', { exact: true })).toBeInTheDocument()
     expect(screen.getByPlaceholderText('••••••••')).toBeInTheDocument()
   })
 
@@ -35,7 +35,7 @@ describe('LoginPage 2FA Flow', () => {
 
     render(<LoginPage />)
 
-    fireEvent.change(screen.getByPlaceholderText('admin'), { target: { value: 'admin' } })
+    fireEvent.change(screen.getByLabelText('Логин', { exact: true }), { target: { value: 'admin' } })
     fireEvent.change(screen.getByPlaceholderText('••••••••'), { target: { value: 'password' } })
     fireEvent.click(screen.getByRole('button', { name: /Войти/i }))
 
@@ -66,7 +66,7 @@ describe('LoginPage 2FA Flow', () => {
 
     render(<LoginPage />)
 
-    fireEvent.change(screen.getByPlaceholderText('admin'), { target: { value: 'admin' } })
+    fireEvent.change(screen.getByLabelText('Логин', { exact: true }), { target: { value: 'admin' } })
     fireEvent.change(screen.getByPlaceholderText('••••••••'), { target: { value: 'password' } })
     fireEvent.click(screen.getByRole('button', { name: /Войти/i }))
 
