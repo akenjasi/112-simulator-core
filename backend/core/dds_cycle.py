@@ -25,6 +25,7 @@ from backend.models.domain_04 import IncidentCard, EvaluationResult, TicketResul
 from backend.schemas.dds_cycle import DispatcherData, DDSActionPayload
 from backend.schemas.lessons import CadetLessonStats, CadetTicketDetail
 from backend.core.dds_service_policy import action_error, allowed_statuses, current_service_statuses
+from backend.core.dds_queue import archived_cards, card_progress, completion_blockers, has_dispatch, queue_ticket_details
 
 
 def sanitize_incoming_card(content: Any) -> Dict[str, Any]:
@@ -236,6 +237,18 @@ def build_session_state_dict(
     score = get_session_score(evals, trs)
     editable = session.status == "ACTIVE" and lesson.status == "ACTIVE" and submitted_at is None
     service_statuses = current_service_statuses(incoming_card, (card.assigned_services or {}) if card else {}, actions)
+    blockers = completion_blockers(dds_data, (card.assigned_services or {}) if card else {})
+    progress = card_progress(dds_data)
+    history = [{"card_id": item["card_id"], "ticket_id": item["ticket_id"],
+                "submitted_at": item.get("card_submitted_at"), "status": "completed"}
+               for item in archived_cards(dds_data)]
+    if not any(item["card_id"] == card_id for item in history):
+        history.append({"card_id": card_id, "ticket_id": session.ticket_id or lesson.scenario_id,
+                        "submitted_at": dds_data.get("card_submitted_at"),
+                        "status": "completed" if submitted_at else "active" if editable else "incomplete"})
+    if dds_data.get("version") == 2:
+        score = get_session_score([ev for ev in evals if ev.card_id == card_id],
+                                  [tr for tr in trs if tr.ticket_id == session.ticket_id])
 
     return {
         "session_id": session.session_id,
@@ -255,6 +268,17 @@ def build_session_state_dict(
         },
         "submitted_at": submitted_at,
         "score": score,
+        **progress,
+        "received_at": dds_data.get("received_at") or (
+            (session.start_time.replace(tzinfo=timezone.utc) if session.start_time.tzinfo is None else session.start_time).isoformat()
+            if session.start_time else None),
+        "card_submitted_at": dds_data.get("card_submitted_at") or submitted_at,
+        "can_complete": editable and not blockers,
+        "completion_blockers": blockers if editable else [],
+        "cards": history,
+        "readonly": not editable,
+        "stopped_at": dds_data.get("stopped_at"),
+        "stop_reason": dds_data.get("stop_reason"),
     }
 
 
@@ -328,9 +352,16 @@ async def apply_dds_action(
 
     dds_data = deepcopy((session.dynamic_state or {}).get("dds", {}))
     existing_actions = dds_data.get("actions", [])
+    if dds_data.get("version") == 2 and len(dds_data["queue"]) > 1 and not payload.card_id:
+        raise HTTPException(409, detail={"code": "DDS_CARD_ID_REQUIRED"})
+    target_card = payload.card_id or dds_data.get("card_id")
 
     # 4. Check for idempotent retry or request_id conflict
-    existing = next((a for a in existing_actions if a.get("request_id") == payload.request_id), None)
+    all_actions = [(dds_data.get("card_id"), a) for a in existing_actions]
+    all_actions.extend((item["card_id"], action) for item in archived_cards(dds_data)
+                       for action in item["actions"])
+    existing_pair = next(((cid, a) for cid, a in all_actions if a.get("request_id") == payload.request_id), None)
+    existing = existing_pair[1] if existing_pair else None
     if existing:
         m_kind = (existing.get("kind") == payload.kind)
         m_svc = (existing.get("service_name") == payload.service_name)
@@ -339,7 +370,7 @@ async def apply_dds_action(
         m_ord = (existing.get("order_number") == payload.order_number)
         m_who = (existing.get("who_accepted") == payload.who_accepted)
         m_sum = (existing.get("summary") == payload.summary)
-        if m_kind and m_svc and m_st and m_cm and m_ord and m_who and m_sum:
+        if existing_pair[0] == target_card and m_kind and m_svc and m_st and m_cm and m_ord and m_who and m_sum:
             card = await db.get(IncidentCard, dds_data.get("card_id"))
             evals = (await db.scalars(select(EvaluationResult).where(EvaluationResult.session_id == session.session_id))).all()
             trs = (await db.scalars(select(TicketResult).where(TicketResult.session_id == session.session_id))).all()
@@ -349,6 +380,9 @@ async def apply_dds_action(
                 status_code=status.HTTP_409_CONFLICT,
                 detail=f"Action request_id '{payload.request_id}' already exists with different payload",
             )
+
+    if target_card != dds_data.get("card_id"):
+        raise HTTPException(409, detail={"code": "DDS_CARD_NOT_CURRENT"})
 
     # 5. Check session and lesson ACTIVE state (strictly ACTIVE required)
     if (session.status or "").upper() != "ACTIVE" or dds_data.get("submitted_at") is not None:
@@ -365,11 +399,7 @@ async def apply_dds_action(
     # 6. Fetch IncidentCard
     card_id = dds_data.get("card_id")
     card = await db.get(IncidentCard, card_id) if card_id else None
-    if not card:
-        stmt_c = select(IncidentCard).where(IncidentCard.session_id == session.session_id)
-        card = (await db.execute(stmt_c)).scalar_one_or_none()
-
-    if not card:
+    if not card or card.session_id != session.session_id:
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail="IncidentCard not found for assigned DDS session",
@@ -393,6 +423,9 @@ async def apply_dds_action(
     error = action_error(service_statuses.get(payload.service_name, ""), payload)
     if error:
         raise HTTPException(status_code=error[0], detail={"code": error[1]})
+    if (payload.kind == "status" and payload.status == "Работы завершены"
+            and not has_dispatch(existing_actions, payload.service_name)):
+        raise HTTPException(409, detail={"code": "DDS_DISPATCH_REQUIRED"})
 
     # 7. Record action with server-generated actor_id and timestamp into dynamic_state.dds.actions
     server_now = datetime.now(timezone.utc).isoformat()
@@ -401,6 +434,8 @@ async def apply_dds_action(
         "kind": payload.kind,
         "service_name": payload.service_name,
         "actor_id": current_user.user_id,
+        "actor_name": current_user.full_name or current_user.username,
+        "card_id": card_id,
         "at": server_now,
     }
     if payload.status is not None:
@@ -457,124 +492,16 @@ async def finish_dds_session(
     current_user: User,
     db: AsyncSession,
 ) -> Dict[str, Any]:
-    """Atomically complete cadet DDS session under lesson lock."""
-    # 1. Fetch ExamSession
-    stmt_s = select(ExamSession).where(ExamSession.session_id == session_id)
-    session = (await db.execute(stmt_s)).scalar_one_or_none()
-    if not session:
-        raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND,
-            detail=f"ExamSession '{session_id}' not found",
-        )
-
-    # 2. Authorization check
-    if current_user.role != "ADMIN":
-        if current_user.role != "CADET" or session.cadet_id != current_user.user_id:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="CADET can only finish their own session; teacher cannot submit for student",
-            )
-
-    if not session.assignment_id:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail="Session is not linked to an assignment",
-        )
-
-    # 3. Transaction serialization: acquire row lock on Assignment
-    await lock_assignment(db, session.assignment_id)
-
-    stmt_l = (
-        select(Assignment)
-        .where(Assignment.assignment_id == session.assignment_id)
-        .execution_options(populate_existing=True)
-    )
-    lesson = (await db.execute(stmt_l)).scalar_one_or_none()
-    if not lesson:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Lesson not found")
-
-    _validate_session_is_assigned_dds(session, lesson)
-
-    stmt_s_fresh = (
-        select(ExamSession)
-        .where(ExamSession.session_id == session_id)
-        .execution_options(populate_existing=True)
-    )
-    session = (await db.execute(stmt_s_fresh)).scalar_one_or_none()
-
-    dds_data = deepcopy((session.dynamic_state or {}).get("dds", {}))
-
-    # 4. Check lesson status
-    if (lesson.status or "").upper() == "COMPLETED":
-        if dds_data.get("submitted_at") is not None:
-            card = await db.get(IncidentCard, dds_data.get("card_id"))
-            evals = (await db.scalars(select(EvaluationResult).where(EvaluationResult.session_id == session.session_id))).all()
-            trs = (await db.scalars(select(TicketResult).where(TicketResult.session_id == session.session_id))).all()
-            return build_session_state_dict(session, lesson, card, list(evals), list(trs))
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail="Lesson was already stopped by teacher; submit rejected",
-        )
-
-    if (lesson.status or "").upper() != "ACTIVE":
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail="Lesson is not active; submit rejected",
-        )
-
-    # 5. Check if already finished
-    if (session.status or "").upper() == "COMPLETED" and dds_data.get("submitted_at") is not None:
-        card = await db.get(IncidentCard, dds_data.get("card_id"))
-        evals = (await db.scalars(select(EvaluationResult).where(EvaluationResult.session_id == session.session_id))).all()
-        trs = (await db.scalars(select(TicketResult).where(TicketResult.session_id == session.session_id))).all()
-        return build_session_state_dict(session, lesson, card, list(evals), list(trs))
-
-    if (session.status or "").upper() != "ACTIVE":
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail="Session is not in ACTIVE state; finish rejected",
-        )
-
-    # Card must exist for honest finish
-    card_id = dds_data.get("card_id")
-    card = await db.get(IncidentCard, card_id) if card_id else None
-    if not card:
-        stmt_c = select(IncidentCard).where(IncidentCard.session_id == session.session_id)
-        card = (await db.execute(stmt_c)).scalar_one_or_none()
-
-    if not card:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail="Cannot finish session without valid incident card",
-        )
-
-    # 6. Mark COMPLETED atomically
-    now_dt = datetime.now(timezone.utc)
-    session.status = "COMPLETED"
-    session.end_time = now_dt
-
-    dds_data["submitted_at"] = now_dt.isoformat()
-    state_copy = deepcopy(session.dynamic_state or {})
-    state_copy["dds"] = dds_data
-    session.dynamic_state = state_copy
-    flag_modified(session, "dynamic_state")
-
-    card.status = "Отработана"
-    flag_modified(card, "status")
-
-    await db.commit()
-    await db.refresh(session)
-    await db.refresh(card)
-
-    evals = (await db.scalars(select(EvaluationResult).where(EvaluationResult.session_id == session.session_id))).all()
-    trs = (await db.scalars(select(TicketResult).where(TicketResult.session_id == session.session_id))).all()
-    return build_session_state_dict(session, lesson, card, list(evals), list(trs))
+    """End the exercise early; card completion uses the separate complete API."""
+    from backend.core.dds_queue import stop_session
+    return await stop_session(db, session_id, current_user)
 
 
 async def get_dds_session_state(
     session_id: str,
     current_user: User,
     db: AsyncSession,
+    card_id: Optional[str] = None,
 ) -> Dict[str, Any]:
     """Retrieve session state with strict access validation (CADET owner, TEACHER owner, ADMIN)."""
     stmt_s = select(ExamSession).where(ExamSession.session_id == session_id)
@@ -607,15 +534,32 @@ async def get_dds_session_state(
     else:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied")
 
-    card_id = (session.dynamic_state or {}).get("dds", {}).get("card_id")
-    card = await db.get(IncidentCard, card_id) if card_id else None
+    data = (session.dynamic_state or {}).get("dds", {})
+    current_id = data.get("card_id")
+    selected_id = card_id or current_id
+    archived = next((item for item in archived_cards(data) if item["card_id"] == selected_id), None)
+    if selected_id != current_id and not archived:
+        raise HTTPException(404, "Card not available in this session")
+    card = await db.get(IncidentCard, selected_id) if selected_id else None
+    if card and card.session_id != session_id:
+        raise HTTPException(409, "Card does not belong to session")
     if not card:
-        stmt_c = select(IncidentCard).where(IncidentCard.session_id == session.session_id)
-        card = (await db.execute(stmt_c)).scalar_one_or_none()
+        raise HTTPException(409, "Saved incident card is missing")
+    evals = list((await db.scalars(select(EvaluationResult).where(EvaluationResult.session_id == session_id))).all())
+    trs = list((await db.scalars(select(TicketResult).where(TicketResult.session_id == session_id))).all())
+    active_card = await db.get(IncidentCard, current_id) if selected_id != current_id else card
+    result = build_session_state_dict(session, lesson, active_card, evals, trs)
+    if archived:
+        # Build a read projection, never replace or modify the active ORM session state.
+        result.update(card_id=archived["card_id"], ticket_id=archived["ticket_id"],
+                      incoming_card=deepcopy(archived["incoming_card"]), actions=deepcopy(archived["actions"]),
+                      received_at=archived.get("received_at"), card_submitted_at=archived.get("card_submitted_at"),
+                      readonly=True, can_complete=False, completion_blockers=[])
+        result["allowed_service_statuses"] = {service["name"]: [] for service in archived["incoming_card"]["services"]}
+        result["score"] = get_session_score([ev for ev in evals if ev.card_id == selected_id],
+                                           [tr for tr in trs if tr.ticket_id == archived["ticket_id"]])
+    return result
 
-    evals = (await db.scalars(select(EvaluationResult).where(EvaluationResult.session_id == session.session_id))).all()
-    trs = (await db.scalars(select(TicketResult).where(TicketResult.session_id == session.session_id))).all()
-    return build_session_state_dict(session, lesson, card, list(evals), list(trs))
 
 
 async def list_cadet_dds_assignments(
@@ -653,7 +597,7 @@ async def list_cadet_dds_assignments(
 
     session_ids = [s.session_id for s in valid_sessions]
     res_c = await db.execute(select(IncidentCard).where(IncidentCard.session_id.in_(session_ids)))
-    card_map = {c.session_id: c for c in res_c.scalars().all()}
+    card_map = {c.card_id: c for c in res_c.scalars().all()}
 
     res_ev = await db.execute(select(EvaluationResult).where(EvaluationResult.session_id.in_(session_ids)))
     evals_map: Dict[str, List[EvaluationResult]] = {}
@@ -670,7 +614,7 @@ async def list_cadet_dds_assignments(
         lesson = lesson_map.get(s.assignment_id)
         if not lesson:
             continue
-        card = card_map.get(s.session_id)
+        card = card_map.get((s.dynamic_state or {}).get("dds", {}).get("card_id"))
         evals = evals_map.get(s.session_id, [])
         trs = trs_map.get(s.session_id, [])
         results.append(build_session_state_dict(s, lesson, card, evals, trs))
@@ -810,6 +754,22 @@ async def build_dds_cadet_stats(
         dds_data = (s.dynamic_state or {}).get("dds", {}) if isinstance(s.dynamic_state, dict) else {}
         submitted_at = dds_data.get("submitted_at")
         s_status = (s.status or "").upper()
+
+        if dds_data.get("version") == 2:
+            c_stats.tickets = queue_ticket_details(s, session_evals, session_trs)
+            c_stats.status = "COMPLETED" if submitted_at else "INCOMPLETE" if s_status == "COMPLETED" else "IN_PROGRESS"
+            c_stats.progress = round(100 * len(archived_cards(dds_data)) / len(dds_data["queue"]))
+            c_stats.current_ticket = c_stats.tickets[dds_data["current_index"]].title
+            c_stats.in_progress = int(s_status == "ACTIVE")
+            c_stats.passed = sum(ticket.status == "passed" for ticket in c_stats.tickets)
+            c_stats.failed = sum(ticket.status == "failed" for ticket in c_stats.tickets)
+            scores = [ticket.score for ticket in c_stats.tickets if ticket.score is not None]
+            c_stats.score = scores[0] if len(scores) == 1 else round(sum(scores) / len(scores), 1) if scores else None
+            total_in_progress += c_stats.in_progress
+            total_passed += int(c_stats.passed == len(c_stats.tickets))
+            total_failed += int(c_stats.failed > 0)
+            cadets_list.append(c_stats)
+            continue
 
         if s_status == "COMPLETED":
             if submitted_at:

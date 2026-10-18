@@ -514,7 +514,9 @@ async def get_student_stats(
         ev_res = await db.execute(select(EvaluationResult).where(EvaluationResult.session_id.in_(session_ids)))
         eval_results = list(ev_res.scalars().all())
 
-    lessons_completed = sum(1 for s in filtered_sessions if str(s.status).upper() in ("COMPLETED", "PASSED"))
+    queue_sessions = {s.session_id: s for s in filtered_sessions if (s.dynamic_state or {}).get("dds", {}).get("version") == 2}
+    lessons_completed = sum(1 for s in filtered_sessions if str(s.status).upper() in ("COMPLETED", "PASSED")
+                            and (s.session_id not in queue_sessions or s.dynamic_state["dds"].get("submitted_at")))
     completed_sessions_with_tickets = {
         tr.session_id
         for tr in ticket_results
@@ -549,6 +551,8 @@ async def get_student_stats(
     errors_list: List[str] = []
 
     for tr in ticket_results:
+        if tr.session_id in queue_sessions and tr.score_total is None:
+            continue
         if tr.score_total is not None:
             sc = float(tr.score_total)
         elif tr.is_passed:
@@ -606,7 +610,8 @@ async def get_student_stats(
     avg_month = round(sum(month_scores) / len(month_scores), 1) if month_scores else avg_all_time
 
     # New metrics for TZ 49
-    cards_solved = len(ticket_results)
+    cards_solved = sum(1 for tr in ticket_results if tr.session_id not in queue_sessions) + sum(
+        len(s.dynamic_state["dds"].get("completed_cards", [])) for s in queue_sessions.values())
     average_score_7_days = avg_week
     if week_scores and len(all_scores) > len(week_scores):
         prev_scores = all_scores[:-len(week_scores)]
@@ -681,6 +686,7 @@ async def get_student_stats(
         competence_matrix=competence_matrix,
         top_errors=top_errors,
         cards_solved=cards_solved,
+        graded_cards=len(all_scores),
         average_score_7_days=average_score_7_days,
         score_trend=score_trend,
         average_processing_time_seconds=average_processing_time_seconds,
@@ -748,6 +754,21 @@ async def get_student_lessons(
         )
 
         if role and target_role.upper() != role.upper():
+            continue
+
+        data = (s.dynamic_state or {}).get("dds", {})
+        if data.get("version") == 2:
+            from backend.core.dds_queue import queue_ticket_details
+            evs = list((await db.scalars(select(EvaluationResult).where(EvaluationResult.session_id == s.session_id))).all())
+            details = queue_ticket_details(s, evs, ticket_results_by_session.get(s.session_id, []))
+            scores = [ticket.score for ticket in details if ticket.score is not None]
+            results.append(StudentLessonHistoryItem(session_id=s.session_id, lesson_id=s.assignment_id,
+                assignment_id=s.assignment_id, title=f"Занятие #{s.assignment_id[:8]}", target_role=target_role,
+                session_type=s.session_type, status="COMPLETED" if data.get("submitted_at") else "INCOMPLETE" if s.status == "COMPLETED" else s.status,
+                score=scores[0] if len(scores) == 1 else round(sum(scores) / len(scores), 1) if scores else None,
+                date=s.start_time.strftime("%d.%m.%Y %H:%M") if s.start_time else None,
+                created_at=s.start_time, start_time=s.start_time, end_time=s.end_time,
+                tickets=[StudentLessonHistoryTicket(**ticket.model_dump(exclude={"actions"})) for ticket in details]))
             continue
 
         trs = ticket_results_by_session.get(s.session_id, [])

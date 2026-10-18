@@ -7,10 +7,9 @@ from sqlalchemy.orm.attributes import flag_modified
 
 from backend.core.dds_cycle import (
     build_dds_cadet_stats,
-    is_suitable_dds_ticket,
     lock_assignment,
-    incoming_card_from_ticket,
 )
+from backend.core.dds_queue import initialize_queue, load_pool
 from backend.core.deps import require_role, get_current_user
 from backend.database import get_db
 from backend.models.domain_01 import SecurityPolicy, User, StudentGroup
@@ -376,13 +375,8 @@ async def create_lesson(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Создание занятий ДДС разрешено только преподавателю этой группы",
             )
-        if payload.ticket_id:
-            ticket = await db.get(ScenarioTicket, payload.ticket_id)
-            if not is_suitable_dds_ticket(ticket):
-                raise HTTPException(
-                    status_code=status.HTTP_409_CONFLICT,
-                    detail="Выбранный билет некорректен или не существует",
-                )
+        await load_pool(db, payload.ticket_ids if payload.ticket_ids is not None
+                        else [payload.ticket_id] if payload.ticket_id else [])
 
     session_type = (
         "CARD_ACTIONS" if payload.target_role == "DISPATCHER_DDS" else "CALL_SIMULATION"
@@ -393,7 +387,8 @@ async def create_lesson(
         assigned_by=current_user.user_id,
         target_role=payload.target_role or "OPERATOR_112",
         session_type=session_type,
-        scenario_id=payload.ticket_id if payload.target_role == "DISPATCHER_DDS" else None,
+        scenario_id=(payload.ticket_ids or [payload.ticket_id])[0] if payload.target_role == "DISPATCHER_DDS" else None,
+        card_pool_ids=(payload.ticket_ids or [payload.ticket_id]) if payload.target_role == "DISPATCHER_DDS" else [],
         mode="TRAINING",
         status="WAITING",
         categories=payload.categories or [],
@@ -416,6 +411,7 @@ async def create_lesson(
         group_name=group.group_name,
         teacher_id=lesson.assigned_by,
         target_role=lesson.target_role,
+        ticket_ids=lesson.card_pool_ids or ([lesson.scenario_id] if lesson.scenario_id else []),
         status=lesson.status,
         categories=lesson.categories or [],
         complexity=lesson.complexity,
@@ -556,6 +552,7 @@ async def get_lesson_detail(
         group_name=group.group_name if group else None,
         teacher_id=lesson.assigned_by,
         target_role=lesson.target_role or "OPERATOR_112",
+        ticket_ids=lesson.card_pool_ids or ([lesson.scenario_id] if lesson.scenario_id else []),
         status=lesson.status,
         categories=lesson.categories or [],
         complexity=lesson.complexity,
@@ -620,6 +617,7 @@ async def start_lesson(
                 group_name=group.group_name if group else None,
                 teacher_id=lesson.assigned_by,
                 target_role=lesson.target_role,
+                ticket_ids=lesson.card_pool_ids or ([lesson.scenario_id] if lesson.scenario_id else []),
                 status=lesson.status,
                 categories=lesson.categories or [],
                 complexity=lesson.complexity,
@@ -638,12 +636,7 @@ async def start_lesson(
                 total_failed=total_failed,
             )
 
-        if not lesson.scenario_id:
-            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="No scenario ticket chosen for DDS lesson")
-        ticket = await db.get(ScenarioTicket, lesson.scenario_id)
-        if not is_suitable_dds_ticket(ticket):
-            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Scenario ticket is invalid or deleted")
-        sanitized_incoming = incoming_card_from_ticket(ticket)
+        pool = await load_pool(db, lesson.card_pool_ids or ([lesson.scenario_id] if lesson.scenario_id else []))
 
         cadet_user_ids = set(group.cadet_ids or []) if group else set()
         if group and group.students:
@@ -668,7 +661,7 @@ async def start_lesson(
                 session_type="CARD_ACTIONS",
                 assignment_id=lesson.assignment_id,
                 cadet_id=student.user_id,
-                ticket_id=lesson.scenario_id,
+                ticket_id=pool[0]["ticket_id"],
                 status="ACTIVE",
                 start_time=now_dt,
                 categories=lesson.categories or [],
@@ -679,43 +672,7 @@ async def start_lesson(
             db.add(cadet_session)
             await db.flush()
 
-            assigned_services = {}
-            for svc in sanitized_incoming.get("services", []):
-                svc_name = svc.get("name")
-                if svc_name:
-                    clean_history = []
-                    for h in svc.get("history", []):
-                        if isinstance(h, dict) and h.get("status"):
-                            clean_history.append({"status": h.get("status"), "time": h.get("time") or h.get("at")})
-                    assigned_services[svc_name] = {
-                        "status": svc.get("status", "Получена службой"),
-                        "time": svc.get("time", ""),
-                        "id": svc.get("id", ""),
-                        "history": clean_history,
-                    }
-
-            card = IncidentCard(
-                session_id=cadet_session.session_id,
-                scenario_id=lesson.scenario_id,
-                operator_id=student.user_id,
-                card_origin="DDS",
-                filled_data=deepcopy(sanitized_incoming),
-                assigned_services=assigned_services,
-                status="open",
-                created_at=now_dt,
-            )
-            db.add(card)
-            await db.flush()
-
-            cadet_session.dynamic_state = {
-                "dds": {
-                    "incoming_card": deepcopy(sanitized_incoming),
-                    "card_id": card.card_id,
-                    "actions": [],
-                    "submitted_at": None,
-                }
-            }
-            flag_modified(cadet_session, "dynamic_state")
+            await initialize_queue(db, cadet_session, pool, now_dt)
 
         await db.commit()
         await db.refresh(lesson)
@@ -727,6 +684,7 @@ async def start_lesson(
             group_name=group.group_name if group else None,
             teacher_id=lesson.assigned_by,
             target_role=lesson.target_role,
+            ticket_ids=lesson.card_pool_ids or ([lesson.scenario_id] if lesson.scenario_id else []),
             status=lesson.status,
             categories=lesson.categories or [],
             complexity=lesson.complexity,
@@ -792,6 +750,7 @@ async def start_lesson(
         group_name=group.group_name if group else None,
         teacher_id=lesson.assigned_by,
         target_role=lesson.target_role,
+        ticket_ids=lesson.card_pool_ids or ([lesson.scenario_id] if lesson.scenario_id else []),
         status=lesson.status,
         categories=lesson.categories or [],
         complexity=lesson.complexity,
@@ -852,6 +811,7 @@ async def stop_lesson(
             group_name=group.group_name if group else None,
             teacher_id=lesson.assigned_by,
             target_role=lesson.target_role,
+            ticket_ids=lesson.card_pool_ids or ([lesson.scenario_id] if lesson.scenario_id else []),
             status=lesson.status,
             categories=lesson.categories or [],
             complexity=lesson.complexity,
@@ -884,6 +844,10 @@ async def stop_lesson(
             if isinstance(s.dynamic_state, dict) and "dds" in s.dynamic_state:
                 dds_data = deepcopy(s.dynamic_state.get("dds", {}))
                 dds_data["stopped_at"] = now.isoformat()
+                dds_data["stop_reason"] = "teacher"
+                card = await db.get(IncidentCard, dds_data.get("card_id"))
+                if card:
+                    card.status = "Не завершено"
                 state_copy = deepcopy(s.dynamic_state)
                 state_copy["dds"] = dds_data
                 s.dynamic_state = state_copy
@@ -901,6 +865,7 @@ async def stop_lesson(
         group_name=group.group_name if group else None,
         teacher_id=lesson.assigned_by,
         target_role=lesson.target_role,
+        ticket_ids=lesson.card_pool_ids or ([lesson.scenario_id] if lesson.scenario_id else []),
         status=lesson.status,
         categories=lesson.categories or [],
         complexity=lesson.complexity,
@@ -966,6 +931,7 @@ async def update_lesson_notes(
         group_name=group.group_name if group else None,
         teacher_id=lesson.assigned_by,
         target_role=lesson.target_role,
+        ticket_ids=lesson.card_pool_ids or ([lesson.scenario_id] if lesson.scenario_id else []),
         status=lesson.status,
         categories=lesson.categories or [],
         complexity=lesson.complexity,

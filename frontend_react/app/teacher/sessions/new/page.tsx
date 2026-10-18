@@ -1,5 +1,7 @@
 "use client"
 
+import {OrderedDDSTickets} from "@/components/dispatcher/ordered-dds-tickets"
+
 import { apiFetch as fetch } from "@/lib/api-fetch"
 
 import React, { useState, useEffect, useCallback, useRef } from "react"
@@ -189,7 +191,8 @@ export default function SessionSetupPage() {
   }, [])
 
   const [ddsTickets, setDdsTickets] = useState<DDSTicketSummary[]>([])
-  const [selectedDdsTicketId, setSelectedDdsTicketId] = useState<string>("")
+  const [ddsCatalogCategories, setDdsCatalogCategories] = useState<string[]>([])
+  const [selectedDdsTickets, setSelectedDdsTickets] = useState<DDSTicketSummary[]>([])
   const [isLoadingDdsTickets, setIsLoadingDdsTickets] = useState<boolean>(false)
   const [ddsTicketsError, setDdsTicketsError] = useState<string | null>(null)
 
@@ -230,26 +233,22 @@ export default function SessionSetupPage() {
           if (currentReqId !== ddsReqIdRef.current) return
           if (Array.isArray(data)) {
             setDdsTickets(data)
-            // If the previously selected ticket is no longer in the filtered list, reset selection (Requirement 6)
-            setSelectedDdsTicketId((prev) => {
-              if (!prev) return ""
-              const exists = data.some((t: any) => t.ticket_id === prev)
-              return exists ? prev : ""
-            })
+            if (!cat) setDdsCatalogCategories([...new Set<string>(data.map((ticket: DDSTicketSummary) => ticket.category).filter((value: unknown): value is string => typeof value === "string" && value.length > 0))])
+
           } else {
             setDdsTickets([])
-            setSelectedDdsTicketId("")
+
           }
         } else {
           setDdsTicketsError(`Ошибка загрузки билетов ДДС (${res.status})`)
           setDdsTickets([])
-          setSelectedDdsTicketId("")
+
         }
       } catch (e: any) {
         if (currentReqId !== ddsReqIdRef.current) return
         setDdsTicketsError("Не удалось загрузить билеты ДДС")
         setDdsTickets([])
-        setSelectedDdsTicketId("")
+
       } finally {
         if (currentReqId === ddsReqIdRef.current) {
           setIsLoadingDdsTickets(false)
@@ -535,7 +534,7 @@ export default function SessionSetupPage() {
       }
 
       if (data.target_role === "DISPATCHER_DDS") {
-        if (isLoadingDdsTickets || ddsTicketsError || !selectedDdsTicketId || !ddsTickets.some((ticket) => ticket.ticket_id === selectedDdsTicketId)) {
+        if (isLoadingDdsTickets || ddsTicketsError || selectedDdsTickets.length === 0) {
           setErrorMessage("Пожалуйста, выберите подготовленный билет ДДС")
           return
         }
@@ -550,7 +549,7 @@ export default function SessionSetupPage() {
       const payload: Record<string, any> = {
         group_id: data.group_id,
         target_role: data.target_role,
-        ticket_id: isDds ? selectedDdsTicketId : undefined,
+        ticket_ids: isDds ? selectedDdsTickets.map(ticket => ticket.ticket_id) : undefined,
         categories: isDds ? [] : (isAllCategoriesSelected ? [] : (data.categories || [])),
         complexity: data.complexity,
         distribution_mode: data.distribution_mode,
@@ -672,13 +671,13 @@ export default function SessionSetupPage() {
     : 0
   const isDdsRole = watch("target_role") === "DISPATCHER_DDS"
   const isCategoriesInvalid = isDdsRole
-    ? isLoadingDdsTickets || Boolean(ddsTicketsError) || !ddsTickets.some((ticket) => ticket.ticket_id === selectedDdsTicketId)
+    ? isLoadingDdsTickets || Boolean(ddsTicketsError) || selectedDdsTickets.length === 0
     : !isAllCategoriesSelected && selectedMainCategories.length === 0
   const totalAvailableTickets = isDdsRole
-    ? (selectedDdsTicketId ? 1 : ddsTickets.length)
+    ? selectedDdsTickets.length
     : getTotalAvailableTickets()
   const isNoTickets = isDdsRole
-    ? ddsTickets.length === 0
+    ? selectedDdsTickets.length === 0
     : Boolean((ticketCounts.length > 0 || !isAllCategoriesSelected) && totalAvailableTickets === 0)
 
   const isSubmitDisabled =
@@ -1052,7 +1051,7 @@ export default function SessionSetupPage() {
                       className="h-8 text-xs bg-background"
                     >
                       <SelectItem value="">Все категории</SelectItem>
-                      {classifierCategories.map((cat) => (
+                      {[...new Set([...ddsCatalogCategories, ...classifierCategories])].map((cat) => (
                         <SelectItem key={cat} value={cat}>
                           {cat}
                         </SelectItem>
@@ -1117,29 +1116,10 @@ export default function SessionSetupPage() {
                     <p>Нет доступных подготовленных билетов ДДС по заданным фильтрам.</p>
 
                   </div>
-                ) : (
-                  <div className="space-y-2">
-                    <select
-                      id="dds_ticket_select"
-                      aria-label="Подготовленный билет ДДС"
-                      value={selectedDdsTicketId}
-                      onChange={(e) => setSelectedDdsTicketId(e.target.value)}
-                      className="w-full h-9 px-3 rounded-md border border-input bg-background text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-ring"
-                    >
-                      <option value="">-- Выберите подготовленный билет ДДС --</option>
-                      {ddsTickets.map((t) => (
-                        <option key={t.ticket_id} value={t.ticket_id}>
-                          {t.title}
-                          {t.category ? ` • ${t.category}` : ""}
-                          {t.complexity ? ` [Уровень ${t.complexity}]` : ""}
-                        </option>
-                      ))}
-                    </select>
-                    <p className="text-[11px] text-muted-foreground leading-relaxed">
-                      Для роли «Диспетчер ДДС» карточка определяется выбранным сценарием. Оценивание и пороги ошибок в текущей версии не настроены.
-                    </p>
-                  </div>
-                )}
+                ) : null}
+                <OrderedDDSTickets tickets={isLoadingDdsTickets || ddsTicketsError ? [] : ddsTickets}
+                  selected={selectedDdsTickets} onChange={setSelectedDdsTickets} disabled={isSubmitting}/>
+                <p className="text-[11px] text-muted-foreground">Карточки выдаются по одной в выбранном порядке. Новые баллы и пороги этим запуском не задаются.</p>
               </div>
             ) : (
               <div className="space-y-2.5">
@@ -1554,10 +1534,10 @@ export default function SessionSetupPage() {
           <CardFooter className="flex flex-col sm:flex-row items-center justify-between gap-3 border-t py-3 px-6">
             <div className="flex flex-col gap-0.5">
               <div className="text-sm font-semibold text-foreground">
-                {isDdsRole ? "Подготовленный билет ДДС: " : "Будет доступно билетов: "}
+                {isDdsRole ? "Набор билетов ДДС: " : "Будет доступно билетов: "}
                 <span className={isNoTickets ? "text-destructive font-bold" : "text-primary font-bold"}>
                   {isDdsRole
-                    ? (selectedDdsTicketId ? "Выбран" : "Не выбран")
+                    ? (selectedDdsTickets.length ? `Выбрано: ${selectedDdsTickets.length}` : "Не выбран")
                     : totalAvailableTickets}
                 </span>
               </div>
@@ -1566,7 +1546,7 @@ export default function SessionSetupPage() {
                   <AlertCircle className="h-3.5 w-3.5 shrink-0" />
                   <span>
                     {isDdsRole
-                      ? "Подготовленные билеты ДДС отсутствуют"
+                      ? (ddsTickets.length ? "Выберите билеты и порядок прохождения" : "Подготовленные билеты ДДС отсутствуют")
                       : "Выберите другую категорию или подготовьте билеты"}
                   </span>
                 </div>
@@ -1575,7 +1555,7 @@ export default function SessionSetupPage() {
             <Button
               type="submit"
               disabled={isSubmitDisabled}
-              title={isNoTickets ? "Выберите другую категорию или подготовьте билеты" : undefined}
+              title={isNoTickets ? (isDdsRole && ddsTickets.length ? "Выберите билеты и порядок прохождения" : "Выберите другую категорию или подготовьте билеты") : undefined}
               size="lg"
               className="w-full sm:w-auto h-11 px-7 text-sm font-bold shadow-md hover:shadow-lg transition-all"
             >

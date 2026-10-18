@@ -8,6 +8,7 @@ import Link from "next/link"
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
+import { DDSSelfTraining } from "@/components/dispatcher/dds-self-training"
 import { DDSAssignments } from "@/components/dispatcher/dds-assignments"
 import { LogoutButton } from "@/components/auth/LogoutButton"
 import {
@@ -433,7 +434,7 @@ export default function StudentLobbyPage() {
             className="gap-1.5 px-3 py-1.5 text-xs border-emerald-500/40 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 font-semibold hidden sm:flex"
           >
             <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
-            <span>Сервер подключен</span>
+            <span>Учебный режим ДДС</span>
           </Badge>
 
           <LogoutButton compact />
@@ -447,114 +448,10 @@ export default function StudentLobbyPage() {
           <DDSAssignments />
         </Card>
 
-        <Card className="border-2 border-primary/20 shadow-xl overflow-hidden backdrop-blur-xs bg-card/95">
-          {/* Top Strict Solid Line (no gradient) */}
-          <div className="h-1.5 bg-[#1f2b31] dark:bg-slate-700" />
-
-          <CardHeader className="text-center pt-7 pb-3 space-y-3">
-            {/* Pulsing Sonar / Radar Animation */}
-            <div className="relative mx-auto flex items-center justify-center w-20 h-20">
-              <div className="absolute inset-0 rounded-full bg-primary/20 animate-ping opacity-75" />
-              <div className="absolute inset-2 rounded-full bg-primary/15 animate-pulse" />
-              <div className="relative z-10 w-14 h-14 rounded-full bg-primary text-white flex items-center justify-center shadow-lg">
-                <Radio className="h-7 w-7 animate-pulse" />
-              </div>
-            </div>
-
-            <div className="space-y-1">
-              <CardTitle className="text-xl sm:text-2xl font-extrabold tracking-tight">
-                Откройте назначенное занятие в списке выше
-              </CardTitle>
-              <CardDescription className="text-xs sm:text-sm max-w-md mx-auto leading-relaxed">
-                Самостоятельный демо-запуск ниже — отдельная тренировка
-              </CardDescription>
-            </div>
-          </CardHeader>
-
-          <CardContent className="space-y-4 pt-1 pb-5 px-6">
-            {/* The cadet-facing simulator starts only the dispatcher workflow. */}
-            <div className="p-3.5 rounded-xl border bg-muted/40 space-y-2.5">
-              <div className="flex items-center justify-between text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-                <span>Целевая учебная роль:</span>
-                <span className="text-[11px] normal-case text-primary font-normal">
-                  (для демо-запуска)
-                </span>
-              </div>
-
-              <div className="flex items-center gap-2.5 p-2.5 rounded-lg border border-primary bg-primary/10 shadow-xs ring-1 ring-primary/40">
-                <Radio className="h-5 w-5 text-primary shrink-0" />
-                <div>
-                  <div className="text-sm font-semibold text-foreground">Диспетчер ДДС</div>
-                  <div className="text-[11px] text-muted-foreground">Направление служб</div>
-                </div>
-              </div>
-            </div>
-
-            {/* Error Message Box */}
-            {errorMessage && (
-              <div className="p-3 rounded-lg border border-red-500/30 bg-red-500/10 text-red-700 dark:text-red-400 text-xs flex items-start gap-2.5">
-                <AlertTriangle className="h-4 w-4 shrink-0 mt-0.5" />
-                <div className="space-y-1">
-                  <div className="font-semibold">Ошибка демо-запуска</div>
-                  <div>{errorMessage}</div>
-                </div>
-              </div>
-            )}
-
-            {/* Dedicated button to open equipment check without scrolling */}
-            <div>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={() => setIsAudioModalOpen(true)}
-                className="w-full h-10 border-primary/30 hover:border-primary/60 bg-primary/5 hover:bg-primary/10 text-primary font-medium gap-2 cursor-pointer transition-all shadow-2xs"
-              >
-                <Sliders className="h-4 w-4" />
-                <span>Проверка оборудования (наушники и микрофон)</span>
-              </Button>
-            </div>
-
-            {/* Accent Demo Launch Action Button */}
-            <div className="pt-1 space-y-1.5">
-              <Button
-                size="lg"
-                onClick={handleDemoLaunch}
-                disabled={isStartingDemo}
-                className="w-full py-5 text-base font-bold bg-primary hover:bg-primary/90 text-primary-foreground shadow-md hover:shadow-lg transition-all gap-2 cursor-pointer"
-              >
-                {isStartingDemo ? (
-                  <>
-                    <Loader2 className="h-5 w-5 animate-spin" />
-                    <span>Инициализация сессии...</span>
-                  </>
-                ) : (
-                  <>
-                    <Play className="h-5 w-5 fill-current" />
-                    <span>
-                      Самостоятельный демо-запуск (отдельный демонстрационный запуск)
-                    </span>
-                    <ArrowRight className="h-4 w-4 ml-1" />
-                  </>
-                )}
-              </Button>
-              <p className="text-[11px] text-muted-foreground text-center">
-                Самостоятельная тренировка:{" "}
-                <span className="font-semibold text-foreground">
-                  список происшествий → «Взять карточку в обработку» → рабочее место ДДС
-                </span>
-              </p>
-            </div>
-          </CardContent>
-
-          <CardFooter className="bg-muted/20 border-t py-2.5 px-6 flex justify-between items-center text-xs text-muted-foreground">
-            <span className="font-mono">Идентификатор АРМ: WKST-7 (Курсант)</span>
-            <span className="inline-flex items-center gap-1.5 text-emerald-600 dark:text-emerald-400 font-medium">
-              <span className="h-2 w-2 rounded-full bg-emerald-500" />
-              Готов к работе
-            </span>
-          </CardFooter>
-        </Card>
+        <DDSSelfTraining />
+        <Button type="button" variant="outline" onClick={() => setIsAudioModalOpen(true)} className="w-full">
+          Проверка оборудования (наушники и микрофон)
+        </Button>
       </main>
 
       {/* Footer without copyright text */}

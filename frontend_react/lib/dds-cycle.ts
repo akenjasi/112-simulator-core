@@ -40,11 +40,14 @@ export interface DDSActionRecord {
   who_accepted?: string | null
   summary?: string | null
   actor_id?: string | null
+  actor_name?: string | null
+  card_id?: string | null
   at?: string | null
 }
 
 export interface DDSActionPayload {
   request_id: string
+  card_id?: string
   kind: DDSActionKind
   service_name: string
   status?: string
@@ -69,6 +72,16 @@ export interface DDSSessionState {
   allowed_service_statuses?: Record<string, string[]>
   submitted_at: string | null
   score: number | null
+  received_at?: string | null
+  card_submitted_at?: string | null
+  current_index?: number
+  total_cards?: number
+  completed_cards?: number
+  can_complete?: boolean
+  completion_blockers?: {code: string; service_name: string}[]
+  cards?: {card_id: string; ticket_id: string; status: string; submitted_at?: string | null}[]
+  readonly?: boolean
+  stop_reason?: string | null
 }
 
 export interface DDSTicketSummary {
@@ -285,6 +298,8 @@ export function validateDDSSessionState(
         who_accepted: typeof act.who_accepted === "string" ? act.who_accepted : null,
         summary: typeof act.summary === "string" ? act.summary : null,
         actor_id: typeof act.actor_id === "string" ? act.actor_id : null,
+        actor_name: typeof act.actor_name === "string" ? act.actor_name : null,
+        card_id: typeof act.card_id === "string" ? act.card_id : null,
         at: typeof act.at === "string" ? act.at : null,
       })
     }
@@ -303,6 +318,19 @@ export function validateDDSSessionState(
     allowedServiceStatuses = Object.fromEntries(Object.entries(options).map(([name, values]) => [name, [...values as string[]]]))
   }
 
+  for (const field of ["current_index", "total_cards", "completed_cards"] as const) {
+    if (obj[field] !== undefined && (!Number.isSafeInteger(obj[field]) || obj[field] < (field === "total_cards" ? 1 : 0))) {
+      throw new Error("Некорректный ответ: неверный прогресс занятия")
+    }
+  }
+  if (obj.cards !== undefined && (!Array.isArray(obj.cards) || obj.cards.some((item: any) =>
+    !item || typeof item.card_id !== "string" || typeof item.ticket_id !== "string" || typeof item.status !== "string"))) {
+    throw new Error("Некорректный ответ: неверная история карточек")
+  }
+  if (obj.completion_blockers !== undefined && (!Array.isArray(obj.completion_blockers) || obj.completion_blockers.some((item: any) =>
+    !item || typeof item.code !== "string" || typeof item.service_name !== "string"))) {
+    throw new Error("Некорректный ответ: неверные условия закрытия")
+  }
   return {
     session_id: obj.session_id,
     lesson_id: obj.lesson_id,
@@ -316,6 +344,13 @@ export function validateDDSSessionState(
     allowed_service_statuses: allowedServiceStatuses,
     submitted_at: submittedAt,
     score: scoreVal,
+    received_at: typeof obj.received_at === "string" && Number.isFinite(Date.parse(obj.received_at)) ? obj.received_at : null,
+    card_submitted_at: typeof obj.card_submitted_at === "string" ? obj.card_submitted_at : null,
+    current_index: obj.current_index ?? 0, total_cards: obj.total_cards ?? 1,
+    completed_cards: obj.completed_cards ?? (submittedAt ? 1 : 0),
+    can_complete: obj.can_complete === true, readonly: obj.readonly === true,
+    completion_blockers: obj.completion_blockers ?? [], cards: obj.cards ?? [],
+    stop_reason: typeof obj.stop_reason === "string" ? obj.stop_reason : null,
   }
 }
 
@@ -387,10 +422,14 @@ export async function fetchDDSSessionState(
     throw new Error("Некорректный формат ответа сервера")
   }
 
-  return validateDDSSessionState(data, sessionId, ticketId)
+  const state = validateDDSSessionState(data, sessionId)
+  if (ticketId && state.ticket_id !== ticketId && !state.cards?.some(card => card.ticket_id === ticketId)) {
+    throw new Error("Несоответствие идентификатора билета")
+  }
+  return state
 }
 
-export async function fetchDDSAssignments(signal?: AbortSignal): Promise<DDSSessionState[]> {
+export async function fetchDDSAssignments(signal?: AbortSignal, includeHistory = false): Promise<DDSSessionState[]> {
   const token = getStoredToken()
   if (!token) {
     throw new Error("Требуется авторизация для доступа к назначениям. Пожалуйста, выполните вход.")
@@ -398,7 +437,7 @@ export async function fetchDDSAssignments(signal?: AbortSignal): Promise<DDSSess
 
   let res: Response
   try {
-    res = await fetch("/api/dds/assignments", {
+    res = await fetch(includeHistory ? "/api/dds/assignments?include_history=true" : "/api/dds/assignments", {
       method: "GET",
       headers: {
         Authorization: `Bearer ${token}`,
@@ -452,22 +491,7 @@ export async function postDDSAction(
     throw new Error("Ошибка сети при сохранении действия")
   }
 
-  if (!res.ok) {
-    // Only fixed policy codes become UI text; never expose arbitrary backend detail.
-    if (res.status === 409 || res.status === 422) {
-      const messages: Record<string, string> = {
-        DDS_SERVICE_TRANSITION_FORBIDDEN: "Этот переход статуса службы недоступен. Обновите данные",
-        DDS_SERVICE_NOT_DISPATCHABLE: "Направление доступно только для принятой службы до завершения работ",
-        DDS_REFUSAL_REASON_REQUIRED: "Укажите причину отказа",
-        DDS_STATUS_COMMENT_REQUIRED: "Для повторного статуса укажите комментарий",
-        DDS_DISPATCH_STATUS_FORBIDDEN: "Изменяйте статус через карандаш службы",
-      }
-      let code: unknown
-      try { code = (await res.json())?.detail?.code } catch { /* Safe generic fallback below. */ }
-      if (typeof code === "string" && Object.hasOwn(messages, code)) throw new Error(messages[code])
-    }
-    throw new Error(getSafeHttpErrorMessage(res.status))
-  }
+  if (!res.ok) throw await ddsResponseError(res)
 
   let data: unknown
   try {
@@ -506,9 +530,7 @@ export async function finishDDSSession(
     throw new Error("Ошибка сети при завершении занятия")
   }
 
-  if (!res.ok) {
-    throw new Error(getSafeHttpErrorMessage(res.status))
-  }
+  if (!res.ok) throw await ddsResponseError(res)
 
   let data: unknown
   try {
@@ -581,4 +603,69 @@ export async function fetchPreparedDDSTickets(
   }
 
   return validateDDSTicketSummaryList(data)
+}
+
+
+export class DDSRequestError extends Error {
+  constructor(message: string, public status: number) { super(message) }
+  get retryable() { return this.status >= 500 }
+}
+
+export function ddsBlockerMessage(blocker: {code: string; service_name: string}): string {
+  const messages: Record<string, string> = {
+    DDS_DISPATCH_REQUIRED: "Сохраните направление: «Кто принял» и «Суть»",
+    DDS_REFUSAL_REASON_REQUIRED: "Укажите причину отказа",
+    DDS_SERVICE_NOT_FINISHED: "Завершите отработку службы или укажите мотивированный отказ",
+    DDS_NO_SERVICES: "В карточке отсутствуют службы",
+  }
+  return `${blocker.service_name ? blocker.service_name + ": " : ""}${messages[blocker.code] || "Карточка ещё не готова к закрытию"}`
+}
+
+async function ddsResponseError(res: Response): Promise<DDSRequestError> {
+  const messages: Record<string, string> = {
+    DDS_SERVICE_TRANSITION_FORBIDDEN: "Этот переход статуса службы недоступен. Обновите данные",
+    DDS_SERVICE_NOT_DISPATCHABLE: "Направление доступно только для принятой службы до завершения работ",
+    DDS_REFUSAL_REASON_REQUIRED: "Укажите причину отказа",
+    DDS_STATUS_COMMENT_REQUIRED: "Для повторного статуса укажите комментарий",
+    DDS_DISPATCH_STATUS_FORBIDDEN: "Изменяйте статус через карандаш службы",
+    DDS_DISPATCH_REQUIRED: "Сначала сохраните реквизиты направления: «Кто принял» и «Суть»",
+    DDS_CARD_NOT_CURRENT: "Текущая карточка изменилась. Обновите данные",
+    DDS_CARD_ID_REQUIRED: "Обновите рабочее место для работы с набором карточек",
+    DDS_CARD_NOT_READY: "Завершите работу всех служб и сохраните реквизиты",
+    DDS_SESSION_NOT_ACTIVE: "Занятие уже остановлено. Обновите данные",
+    DDS_TICKET_UNAVAILABLE: "Один из выбранных билетов недоступен. Обновите каталог",
+    DDS_REQUEST_CONFLICT: "Этот запрос уже использован для другого действия. Обновите данные",
+  }
+  let code: unknown
+  try { code = (await res.json())?.detail?.code } catch { /* fixed messages only */ }
+  return new DDSRequestError(typeof code === "string" && Object.hasOwn(messages, code)
+    ? messages[code] : getSafeHttpErrorMessage(res.status), res.status)
+}
+
+async function ddsRequest(path: string, payload?: unknown, signal?: AbortSignal): Promise<unknown> {
+  const token = getStoredToken()
+  if (!token) throw new DDSRequestError("Требуется авторизация", 401)
+  const response = await fetch(path, {method: payload === undefined ? "GET" : "POST",
+    headers: {Authorization: `Bearer ${token}`, ...(payload === undefined ? {} : {"Content-Type": "application/json"})},
+    ...(payload === undefined ? {} : {body: JSON.stringify(payload)}), cache: "no-store", signal})
+  if (!response.ok) throw await ddsResponseError(response)
+  return response.json()
+}
+
+export async function completeDDSCard(sessionId: string, cardId: string, payload: {request_id: string}, signal?: AbortSignal) {
+  return validateDDSSessionState(await ddsRequest(`/api/dds/sessions/${encodeURIComponent(sessionId)}/cards/${encodeURIComponent(cardId)}/complete`, payload, signal), sessionId)
+}
+
+export async function fetchDDSCard(sessionId: string, cardId: string, signal?: AbortSignal) {
+  const result = validateDDSSessionState(await ddsRequest(`/api/dds/sessions/${encodeURIComponent(sessionId)}/cards/${encodeURIComponent(cardId)}`, undefined, signal), sessionId)
+  if (result.card_id !== cardId) throw new Error("Несоответствие идентификатора карточки")
+  return result
+}
+
+export async function fetchDDSTrainingTickets(signal?: AbortSignal) {
+  return validateDDSTicketSummaryList(await ddsRequest("/api/dds/training/tickets", undefined, signal))
+}
+
+export async function startDDSTraining(payload: {request_id: string; ticket_ids: string[]}, signal?: AbortSignal) {
+  return validateDDSSessionState(await ddsRequest("/api/dds/training", payload, signal))
 }

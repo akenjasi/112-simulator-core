@@ -14,9 +14,11 @@ type Props = {
   allowedStatuses?: Record<string, string[]>
   closeHref?: string
   disabledReason?: string
+  completionDisabled?: boolean
+  completionReason?: string
 }
 
-export function ServicesBar({ data, onStatusChange, onAccept, onNextCard, disabled = false, allowedStatuses, closeHref, disabledReason }: Props) {
+export function ServicesBar({ data, onStatusChange, onAccept, onNextCard, disabled = false, allowedStatuses, closeHref, disabledReason, completionDisabled = false, completionReason }: Props) {
   const barRef = useRef<HTMLDivElement>(null)
   const submittingRef = useRef(false)
   const editingStatusRef = useRef<string | null>(null)
@@ -358,9 +360,9 @@ export function ServicesBar({ data, onStatusChange, onAccept, onNextCard, disabl
             type="button"
             aria-label="Отработана"
             onClick={onNextCard}
-            disabled={disabled || isSubmitting}
+            disabled={disabled || isSubmitting || completionDisabled}
             className="flex items-center justify-center px-4 2xl:px-5 border-r border-[#49555d] text-sm 2xl:text-sm font-bold text-white bg-[#157dbd] hover:bg-[#136ba3] transition-colors"
-            title="Отработана"
+            title={completionReason || "Отработана"}
           >
             отработана
           </button>
@@ -406,7 +408,7 @@ export function ServicesBar({ data, onStatusChange, onAccept, onNextCard, disabl
             type="button"
             aria-label="Закрыть"
             onClick={onNextCard}
-            disabled={disabled || isSubmitting}
+            disabled={disabled || isSubmitting || completionDisabled}
             className="flex w-[46px] 2xl:w-[64px] items-center justify-center text-white/80 hover:text-white hover:bg-red-600/80 transition-colors"
             title="Закрыть"
           >

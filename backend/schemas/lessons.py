@@ -6,11 +6,26 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator, model_valida
 class LessonCreate(BaseModel):
     group_id: str = Field(..., description="ID учебной группы")
     ticket_id: Optional[str] = Field(None, description="ID подготовленного билета сценария")
+    ticket_ids: Optional[List[str]] = Field(None, description="Упорядоченный набор билетов ДДС")
     target_role: Optional[str] = Field("DISPATCHER_DDS", description="Целевая роль (OPERATOR_112 или DISPATCHER_DDS)")
     categories: Optional[List[str]] = Field(default_factory=list, description="Список категорий происшествий")
     complexity: Optional[str] = Field("adaptive", description="Сложность (level_1, level_2, level_3, adaptive, mixed)")
     time_limit_seconds: Optional[int] = Field(30, description="Лимит времени на вызов в секундах")
     error_limit: Optional[int] = Field(None, description="Допустимое количество ошибок")
+
+    @model_validator(mode="after")
+    def validate_ticket_pool(self) -> "LessonCreate":
+        if self.ticket_ids is not None:
+            if self.target_role != "DISPATCHER_DDS":
+                raise ValueError("ticket_ids is only supported for DDS lessons")
+            if not self.ticket_ids or any(not value.strip() for value in self.ticket_ids):
+                raise ValueError("ticket_ids must be a nonempty list of IDs")
+            self.ticket_ids = [value.strip() for value in self.ticket_ids]
+            if len(set(self.ticket_ids)) != len(self.ticket_ids):
+                raise ValueError("ticket_ids must not contain duplicates")
+            if self.ticket_id and self.ticket_ids != [self.ticket_id]:
+                raise ValueError("Use either ticket_id or ticket_ids")
+        return self
 
     @field_validator("group_id")
     @classmethod
@@ -90,6 +105,7 @@ class CadetLessonStats(BaseModel):
 
 class LessonDetailResponse(BaseModel):
     id: str
+    ticket_ids: List[str] = Field(default_factory=list)
     assignment_id: Optional[str] = None
     session_id: Optional[str] = None
     group_id: str

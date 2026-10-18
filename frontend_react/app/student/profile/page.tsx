@@ -82,6 +82,7 @@ export interface StudentStats {
   average_processing_time_seconds: number
   time_trend: number
   service_accuracy_percent: number
+  graded_cards?: number | null
   cards_solved: number
   lessons_completed: number
   competence_matrix: CompetenceItem[]
@@ -92,6 +93,7 @@ export interface StudentStats {
 
 export interface HistoryTicket {
   ticket_id: string
+  card_id?: string | null
   title: string
   category?: string
   status: string
@@ -398,6 +400,7 @@ export default function StudentProfilePage() {
           : []
 
         setStats({
+          graded_cards: data.graded_cards,
           average_score: data.average_score ?? 0,
           average_score_week: data.average_score_week ?? 0,
           average_score_all_time: data.average_score_all_time ?? data.average_score ?? 0,
@@ -556,7 +559,7 @@ export default function StudentProfilePage() {
             </div>
             <div className="mt-1">
               <div className="text-2xl font-black text-foreground">
-                {stats.cards_solved === 0 ? "—" : stats.average_score_all_time.toFixed(1)}
+                {(stats.graded_cards === 0 || stats.cards_solved === 0) ? "—" : stats.average_score_all_time.toFixed(1)}
                 {stats.cards_solved > 0 && <span className="text-xs font-normal text-muted-foreground"> / 100</span>}
               </div>
               <p className="text-[11px] text-muted-foreground mt-0.5">Общая успеваемость за курс</p>
@@ -587,7 +590,7 @@ export default function StudentProfilePage() {
             </div>
             <div className="mt-1">
               <div className="text-2xl font-black text-foreground">
-                {stats.cards_solved === 0 ? "—" : stats.average_score_7_days.toFixed(1)}
+                {(stats.graded_cards === 0 || stats.cards_solved === 0) ? "—" : stats.average_score_7_days.toFixed(1)}
                 {stats.cards_solved > 0 && <span className="text-xs font-normal text-muted-foreground"> / 100</span>}
               </div>
               <p className="text-[11px] text-muted-foreground mt-0.5">Текущий недельный срез</p>
@@ -820,12 +823,12 @@ export default function StudentProfilePage() {
                 </div>
               ) : (
                 <div className="flex flex-col items-center justify-center text-center text-muted-foreground text-xs py-10 gap-2">
-                  <CheckCircle2 className="h-8 w-8 text-emerald-500/70" />
-                  <span className="font-semibold text-foreground">Замечаний и ошибок нет</span>
+                  <Clock className="h-8 w-8 text-muted-foreground" />
+                  <span className="font-semibold text-foreground">Замечаний не зафиксировано</span>
                   <span className="text-[11px] text-muted-foreground max-w-xs">
-                    {stats.cards_solved === 0
+                    {(stats.graded_cards ?? stats.cards_solved) === 0
                       ? "Пройдите тренировочные билеты для формирования персональной статистики."
-                      : "Все нормативы и регламенты выполнены без нарушений."}
+                      : "В сохранённых результатах замечаний нет."}
                   </span>
                 </div>
               )}
@@ -944,12 +947,12 @@ export default function StudentProfilePage() {
                           <div className="flex items-center gap-3">
                             <div
                               className={`h-8 w-8 rounded-lg flex items-center justify-center shrink-0 ${
-                                isPassed
+                                score == null ? "bg-slate-100 text-slate-500" : isPassed
                                   ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
                                   : "bg-red-500/10 text-red-600 dark:text-red-400"
                               }`}
                             >
-                              {isPassed ? (
+                              {score == null ? <Clock className="h-4 w-4"/> : isPassed ? (
                                 <CheckCircle2 className="h-4 w-4" />
                               ) : (
                                 <XCircle className="h-4 w-4" />
@@ -1033,19 +1036,18 @@ export default function StudentProfilePage() {
                                         <Badge
                                           variant="outline"
                                           className={`text-[10px] font-mono font-bold py-0 ${
-                                            tPassed
+                                            ticket.score == null ? "border-slate-300 text-slate-600" : tPassed
                                               ? "border-emerald-500/50 text-emerald-600 dark:text-emerald-400 bg-emerald-500/10"
                                               : "border-red-500/50 text-red-600 dark:text-red-400 bg-red-500/10"
                                           }`}
                                         >
                                           {ticket.score !== undefined && ticket.score !== null
                                             ? `${ticket.score.toFixed(0)} б.`
-                                            : tPassed
-                                            ? "Сдан"
-                                            : "Не сдан"}
+                                            : ({ungraded: "Нет оценки", incomplete: "Не завершено", pending: "Не получена", in_progress: "В работе", passed: "Сдан", failed: "Не сдан"} as Record<string, string>)[ticket.status] || "Нет оценки"}
                                         </Badge>
                                       </div>
 
+                                      {ticket.card_id && <Link className="text-xs text-primary underline" href={`/dds?${new URLSearchParams({session_id: lesson.session_id, ticket_id: ticket.ticket_id, card_id: ticket.card_id})}`}>Открыть карточку</Link>}
                                       {/* Ticket Errors */}
                                       {ticket.errors && ticket.errors.length > 0 ? (
                                         <div className="pt-1 border-t space-y-0.5">
@@ -1062,7 +1064,7 @@ export default function StudentProfilePage() {
                                       ) : (
                                         <div className="pt-1 text-[11px] text-emerald-600 dark:text-emerald-400 flex items-center gap-1">
                                           <CheckCircle2 className="h-3 w-3" />
-                                          <span>Билет выполнен без ошибок</span>
+                                          <span>{ticket.score == null ? "Оценивание не выполнено" : "Ошибок не зафиксировано"}</span>
                                         </div>
                                       )}
                                     </div>

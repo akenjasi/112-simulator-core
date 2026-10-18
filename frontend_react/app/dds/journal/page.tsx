@@ -74,18 +74,18 @@ interface IncidentItem {
 
 function toIncident(state: DDSSessionState): IncidentItem {
   const card = getDDSWorkingCard(state)
-  const started = state.started_at ? new Date(state.started_at) : null
+  const started = (state.received_at || state.started_at) ? new Date((state.received_at || state.started_at)!) : null
   const knownTime = started && Number.isFinite(started.getTime())
   return {
-    id: state.session_id,
-    consoleUrl: `/dds?${new URLSearchParams({session_id: state.session_id, ticket_id: state.ticket_id})}`,
+    id: `${state.session_id}:${state.card_id}`,
+    consoleUrl: `/dds?${new URLSearchParams({session_id: state.session_id, ticket_id: state.ticket_id, ...(state.readonly ? {card_id: state.card_id} : {})})}`,
     number: card.incident.number || state.ticket_id,
     date: knownTime ? started.toLocaleDateString("ru-RU") : "—",
     time: knownTime ? started.toLocaleTimeString("ru-RU") : "—",
     type: card.classification.title || card.classification.section || "Не указано",
     oper: card.incident.operator || "—", arm: "—",
     injured: card.statuses.injured || "неизвестно",
-    status: state.session_status === "COMPLETED" ? state.submitted_at ? "Отработана" : "Не завершено" : state.session_status === "ACTIVE" ? "В процессе" : state.session_status,
+    status: state.card_submitted_at ? "Отработана" : state.session_status === "COMPLETED" ? state.submitted_at ? "Отработана" : "Не завершено" : state.session_status === "ACTIVE" ? "В процессе" : state.session_status,
     address: card.caller.address, description: card.description,
     preview: {
       services: card.services.map(service => ({name: service.name, time: service.time, status: service.status})),
@@ -128,7 +128,7 @@ function DdsJournalContent() {
     setLoading(true)
     setError(null)
     try {
-      const data = await fetchDDSAssignments(controller.signal)
+      const data = await fetchDDSAssignments(controller.signal, true)
       if (epoch === epochRef.current) setSessions(data)
     } catch (err: any) {
       if (!controller.signal.aborted && epoch === epochRef.current) {
@@ -143,12 +143,12 @@ function DdsJournalContent() {
     load()
     return () => { epochRef.current++; controllerRef.current?.abort() }
   }, [load])
-  const orderedSessions = [...sessions].sort((a, b) => (b.started_at || "").localeCompare(a.started_at || ""))
+  const orderedSessions = [...sessions].sort((a, b) => (b.received_at || b.started_at || "").localeCompare(a.received_at || a.started_at || ""))
   const incidents = orderedSessions.map(toIncident)
-  const focusedSession = focusedSessionId ? sessions.find(item => item.session_id === focusedSessionId && (!focusedTicketId || item.ticket_id === focusedTicketId)) : undefined
-  const sessionToOpen = focusedSessionId ? focusedSession : orderedSessions.find(item => item.session_status === "ACTIVE" && item.lesson_status === "ACTIVE" && !item.submitted_at)
+  const focusedSession = focusedSessionId ? sessions.find(item => !item.readonly && item.session_id === focusedSessionId && (!focusedTicketId || (item.ticket_id === focusedTicketId || item.cards?.some(card => card.ticket_id === focusedTicketId)))) : undefined
+  const sessionToOpen = focusedSessionId ? focusedSession : orderedSessions.find(item => !item.readonly && item.session_status === "ACTIVE" && item.lesson_status === "ACTIVE" && !item.submitted_at)
   const canOpen = Boolean(sessionToOpen && sessionToOpen.session_status === "ACTIVE" && sessionToOpen.lesson_status === "ACTIVE" && !sessionToOpen.submitted_at)
-  const selectedIncident = sessionToOpen ? incidents.find(item => item.id === sessionToOpen.session_id) : undefined
+  const selectedIncident = sessionToOpen ? incidents.find(item => item.id === `${sessionToOpen.session_id}:${sessionToOpen.card_id}`) : undefined
 
   // Search State
   const [searchQuery, setSearchQuery] = useState("")
@@ -642,7 +642,7 @@ function DdsJournalContent() {
                   return (
                     <div
                       key={incident.id}
-                      className={`flex flex-col bg-[#49555d] hover:bg-[#525f69] transition-colors rounded-[2px] border overflow-hidden shadow-xs ${incident.id === focusedSessionId ? "border-[#54b9ec]" : "border-[#3d474e]/50"}`}
+                      className={`flex flex-col bg-[#49555d] hover:bg-[#525f69] transition-colors rounded-[2px] border overflow-hidden shadow-xs ${incident.id === selectedIncident?.id ? "border-[#54b9ec]" : "border-[#3d474e]/50"}`}
                     >
                       {/* Main Incident Row (Exactly 50% / 50% Split) */}
                       <div className="flex w-full items-stretch text-[12px] text-gray-100 divide-x divide-[#3d474e] min-h-[30px]">

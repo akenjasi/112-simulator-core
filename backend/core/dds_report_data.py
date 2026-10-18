@@ -44,6 +44,8 @@ class DDSReportTicketResultItem(BaseModel):
     result_id: str
     ticket_id: Optional[str] = None
     is_passed: bool
+    status: Optional[str] = None
+    score_total: Optional[float] = None
     errors_count: int = 0
     error_details: Dict[str, Any] = Field(default_factory=dict)
 
@@ -64,6 +66,9 @@ class DDSReportSessionItem(BaseModel):
     start_time: Optional[str] = None
     end_time: Optional[str] = None
     time_limit_seconds: Optional[int] = None
+    exercise_status: Optional[str] = None
+    total_cards: Optional[int] = None
+    completed_cards: Optional[int] = None
     evaluations: List[DDSReportEvaluationItem] = Field(default_factory=list)
     ticket_results: List[DDSReportTicketResultItem] = Field(default_factory=list)
     cards: List[DDSReportCardItem] = Field(default_factory=list)
@@ -271,6 +276,8 @@ async def collect_lesson_report_data(
                 "result_id": tr.result_id,
                 "ticket_id": tr.ticket_id,
                 "is_passed": tr.is_passed,
+                "status": tr.status,
+                "score_total": tr.score_total,
                 "errors_count": tr.errors_count,
                 "error_details": tr.error_details or {},
             })
@@ -286,6 +293,9 @@ async def collect_lesson_report_data(
             "start_time": _format_datetime(s.start_time),
             "end_time": _format_datetime(s.end_time),
             "time_limit_seconds": s.time_limit_seconds,
+            "exercise_status": ("completed" if s.dynamic_state["dds"].get("submitted_at") else "incomplete") if (s.dynamic_state or {}).get("dds", {}).get("version") == 2 else None,
+            "total_cards": len(s.dynamic_state["dds"]["queue"]) if (s.dynamic_state or {}).get("dds", {}).get("version") == 2 else None,
+            "completed_cards": len(s.dynamic_state["dds"]["completed_cards"]) if (s.dynamic_state or {}).get("dds", {}).get("version") == 2 else None,
             "evaluations": evals_by_session.get(s.session_id, []),
             "ticket_results": tickets_by_session.get(s.session_id, []),
             "cards": cards_by_session.get(s.session_id, []),

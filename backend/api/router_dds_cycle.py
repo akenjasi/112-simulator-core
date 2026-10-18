@@ -24,6 +24,7 @@ from backend.core.dds_cycle import (
     matches_dds_ticket_filters,
 )
 from backend.database import get_db
+from backend.core.dds_queue import available_for_training, complete_card, start_training
 from backend.models.domain_01 import User
 from backend.models.domain_02 import ScenarioTicket
 from backend.schemas.dds_cycle import (
@@ -31,6 +32,8 @@ from backend.schemas.dds_cycle import (
     DDSFinishPayload,
     DDSSessionStateResponse,
     DDSTicketSummary,
+    DDSCompletePayload,
+    DDSTrainingStartPayload,
 )
 
 router_dds_cycle = APIRouter(
@@ -85,6 +88,33 @@ async def get_prepared_dds_tickets(
     return suitable
 
 
+@router_dds_cycle.get("/training/tickets", response_model=List[DDSTicketSummary],
+                      dependencies=[Depends(require_role("CADET"))])
+async def get_training_tickets(
+    category: Optional[str] = Query(None),
+    complexity: Optional[int] = Query(None, ge=1, le=3),
+    db: AsyncSession = Depends(get_db),
+):
+    tickets = (await db.scalars(select(ScenarioTicket).order_by(ScenarioTicket.created_at.desc()))).all()
+    result = []
+    for ticket in tickets:
+        if (is_suitable_dds_ticket(ticket) and available_for_training(ticket)
+                and matches_dds_ticket_filters(ticket, category=category, complexity=complexity)):
+            cat, subcat, comp, title = extract_dds_ticket_metadata(ticket)
+            result.append(DDSTicketSummary(ticket_id=ticket.scenario_id, title=title,
+                                          category=cat, subcategory=subcat, complexity=comp))
+    return result
+
+
+@router_dds_cycle.post("/training", response_model=DDSSessionStateResponse)
+async def post_training(
+    payload: DDSTrainingStartPayload,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    return await start_training(db, payload, current_user)
+
+
 @router_dds_cycle.get(
     "/assignments",
     response_model=List[DDSSessionStateResponse],
@@ -95,11 +125,20 @@ async def get_prepared_dds_tickets(
     include_in_schema=False,
 )
 async def get_cadet_assignments(
+    include_history: bool = Query(False),
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> List[DDSSessionStateResponse]:
     """Return assigned DDS sessions for the logged-in CADET (or ADMIN)."""
     items = await list_cadet_dds_assignments(current_user=current_user, db=db)
+    if include_history:
+        expanded = []
+        for item in items:
+            expanded.append(item)
+            for card in item["cards"]:
+                if card["card_id"] != item["card_id"]:
+                    expanded.append(await get_dds_session_state(item["session_id"], current_user, db, card_id=card["card_id"]))
+        items = expanded
     return [DDSSessionStateResponse.model_validate(it) for it in items]
 
 
@@ -120,6 +159,24 @@ async def get_session_state_endpoint(
     """Retrieve full session state for CADET owner, TEACHER owner, or ADMIN."""
     state = await get_dds_session_state(session_id=session_id, current_user=current_user, db=db)
     return DDSSessionStateResponse.model_validate(state)
+
+
+@router_dds_cycle.get("/sessions/{session_id}/cards/{card_id}", response_model=DDSSessionStateResponse)
+async def get_session_card(
+    session_id: str, card_id: str,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    return await get_dds_session_state(session_id, current_user, db, card_id=card_id)
+
+
+@router_dds_cycle.post("/sessions/{session_id}/cards/{card_id}/complete", response_model=DDSSessionStateResponse)
+async def post_complete_card(
+    session_id: str, card_id: str, payload: DDSCompletePayload,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    return await complete_card(db, session_id, card_id, payload.request_id, current_user)
 
 
 @router_dds_cycle.post(
