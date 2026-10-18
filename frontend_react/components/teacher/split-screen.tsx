@@ -37,7 +37,8 @@ export interface RecordDetail {
   ticket_id?: string
   title?: string
   status: "passed" | "failed" | string
-  score?: number
+  score?: number | null
+  snapshot_missing?: boolean
   is_appealed?: boolean
   teacher_comment?: string | null
   etalon: Record<string, any>
@@ -201,7 +202,7 @@ export function SplitScreen({ record, onAppeal, onClose, className = "" }: Split
                   <Sparkles className="h-3 w-3 mr-1" /> Апеллировано
                 </Badge>
               )}
-              {record.score !== undefined && (
+              {record.score != null && (
                 <span className="font-semibold text-foreground">Балл: {record.score}%</span>
               )}
             </CardDescription>
@@ -248,9 +249,14 @@ export function SplitScreen({ record, onAppeal, onClose, className = "" }: Split
             <div className="flex items-center gap-2 pb-3 mb-4 border-b">
               <FileCheck className="h-5 w-5 text-blue-600 dark:text-blue-400" />
               <h3 className="font-bold text-lg text-blue-900 dark:text-blue-300">Эталон</h3>
-              <Badge variant="outline" className="ml-auto text-xs">Правильный ответ</Badge>
+              {!record.snapshot_missing && <Badge variant="outline" className="ml-auto text-xs">Правильный ответ</Badge>}
             </div>
 
+            {record.snapshot_missing && (
+              <p role="status" className="mb-4 text-sm text-muted-foreground">
+                Исторический эталон не сохранён. Текущая версия билета не используется для сравнения.
+              </p>
+            )}
             <div className="space-y-4">
               {allFieldKeys.map((key) => {
                 const label = FIELD_LABELS[key] || key

@@ -81,6 +81,8 @@ export interface SessionStats {
   complexity?: string
   categories?: string[]
   teacher_notes?: string
+  time_limit_seconds?: number
+  error_limit?: number | null
   status: "WAITING" | "ACTIVE" | "COMPLETED" | string
   overall_progress: number
   total_cadets: number
@@ -93,11 +95,17 @@ export interface SessionStats {
 
 export interface LiveDashboardProps {
   sessionId?: string
+  source?: "lesson" | "session"
   params?: Promise<{ id: string }> | { id: string }
   initialStatus?: string
 }
 
 export default function LiveDashboardPage(props: LiveDashboardProps = {}) {
+  const getSourceFromUrl = (): "lesson" | "session" => {
+    if (props.source) return props.source
+    if (typeof window !== "undefined" && new URLSearchParams(window.location.search).get("source") === "session") return "session"
+    return "lesson"
+  }
   // Always derive ID from URL on every render (client-side navigation safe)
   const getIdFromUrl = () => {
     if (props.sessionId) return props.sessionId
@@ -121,6 +129,7 @@ export default function LiveDashboardPage(props: LiveDashboardProps = {}) {
 
   const [sessionId, setSessionId] = useState<string>(getIdFromUrl)
   const [initialStatusHint, setInitialStatusHint] = useState<string>(getStatusFromUrl)
+  const [source, setSource] = useState<"lesson" | "session">(getSourceFromUrl)
 
   // Sync state synchronously when props.sessionId changes between renders
   const prevPropIdRef = useRef<string | undefined>(props.sessionId)
@@ -134,8 +143,10 @@ export default function LiveDashboardPage(props: LiveDashboardProps = {}) {
     if (!props.sessionId && typeof window !== "undefined") {
       const id = getIdFromUrl()
       const status = getStatusFromUrl()
+      const nextSource = getSourceFromUrl()
       if (id && id !== sessionId) setSessionId(id)
       if (status !== initialStatusHint) setInitialStatusHint(status)
+      if (nextSource !== source) setSource(nextSource)
     }
   }, [props.sessionId, typeof window !== "undefined" ? window.location.search : ""])
 
@@ -204,7 +215,11 @@ export default function LiveDashboardPage(props: LiveDashboardProps = {}) {
       setError(null)
 
       try {
-        const res = await fetch(`/api/v1/lessons/${targetLessonId}`, {
+        const isSessionTarget = source === "session"
+        const primaryUrl = isSessionTarget
+          ? `/api/v1/sessions/${targetLessonId}/stats`
+          : `/api/v1/lessons/${targetLessonId}`
+        const res = await fetch(primaryUrl, {
           headers: getAuthHeaders(),
           signal: controller.signal,
         })
@@ -284,7 +299,7 @@ export default function LiveDashboardPage(props: LiveDashboardProps = {}) {
         }
       }
     },
-    [initialStatusHint]
+    [initialStatusHint, source]
   )
 
   // Session lifecycle: reset on ID change, launch fetch and poll
@@ -502,6 +517,8 @@ export default function LiveDashboardPage(props: LiveDashboardProps = {}) {
             {stats?.group_name ? `${stats.group_name} • ` : ""}Урок #{sessionId}
             {stats?.target_role ? ` • Роль: ${stats.target_role === "OPERATOR_112" ? "Оператор 112" : "Диспетчер ДДС"}` : ""}
             {stats?.complexity ? ` • Сложность: ${stats.complexity}` : ""}
+            {stats?.time_limit_seconds ? ` • Лимит времени: ${stats.time_limit_seconds}с` : " • Лимит времени: 30с"}
+            {stats?.error_limit !== undefined && stats?.error_limit !== null ? ` • Допустимо ошибок: ${stats.error_limit}` : ""}
           </p>
         </div>
 
@@ -510,10 +527,10 @@ export default function LiveDashboardPage(props: LiveDashboardProps = {}) {
           {/* Read-Only mode indicator */}
           <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium bg-muted text-muted-foreground border">
             <Eye className="h-3.5 w-3.5 text-primary" />
-            <span>Режим: только чтение</span>
+            <span>{source === "session" ? "Сессия: только чтение; управление недоступно" : "Мониторинг урока"}</span>
           </span>
 
-          {!isCompleted && lessonStatus === "ACTIVE" && (
+          {source === "lesson" && !isCompleted && lessonStatus === "ACTIVE" && (
             <Button
               variant="destructive"
               size="sm"
@@ -562,7 +579,7 @@ export default function LiveDashboardPage(props: LiveDashboardProps = {}) {
       )}
 
       {/* ────────────────── 1. WAITING STATE BANNER & START BUTTON ────────────────── */}
-      {!isCompleted && lessonStatus === "WAITING" && stats !== null && (
+      {source === "lesson" && !isCompleted && lessonStatus === "WAITING" && stats !== null && (
         <Card className="border-2 border-primary/20 bg-gradient-to-br from-primary/5 via-card to-background shadow-md">
           <CardContent className="p-8 flex flex-col md:flex-row items-center justify-between gap-6">
             <div className="space-y-2 text-center md:text-left">
@@ -701,12 +718,13 @@ export default function LiveDashboardPage(props: LiveDashboardProps = {}) {
           <Textarea
             value={teacherNotes}
             onChange={(e) => setTeacherNotes(e.target.value)}
+            readOnly={source === "session"}
             placeholder="Введите комментарии о ходе урока, типичных ошибках группы или индивидуальных наблюдениях..."
             className="min-h-[90px] text-sm"
           />
         </CardContent>
         <CardFooter className="flex justify-end pt-0 pb-4">
-          <Button
+          {source === "lesson" && <Button
             size="sm"
             onClick={handleSaveNotes}
             disabled={isSavingNotes}
@@ -714,7 +732,7 @@ export default function LiveDashboardPage(props: LiveDashboardProps = {}) {
           >
             {isSavingNotes && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
             <span>Сохранить заметки</span>
-          </Button>
+          </Button>}
         </CardFooter>
       </Card>
 

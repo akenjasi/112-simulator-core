@@ -1,10 +1,13 @@
 import React from 'react';
 import { render, screen, waitFor, fireEvent, act } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+const { pushMock } = vi.hoisted(() => ({ pushMock: vi.fn() }));
+vi.mock('next/navigation', () => ({ useRouter: () => ({ push: pushMock }) }));
 import SessionSetupPage from '@/app/teacher/sessions/new/page';
 
 describe('ТЗ 41: Запуск урока (Создание сессии) - Настройка и UI', () => {
   let operator112Enabled = true;
+  let ddsTicketsEnabled = true;
 
   const mockGroups = [
     {
@@ -38,12 +41,15 @@ describe('ТЗ 41: Запуск урока (Создание сессии) - Н�
     'Обрушения',
     'ДТП',
   ];
+  const mockDdsTickets = [
+    { ticket_id: 'dds-approved-1', title: 'Подтвержденный билет', category: 'ДТП', complexity: 1 },
+  ];
 
   beforeEach(() => {
     operator112Enabled = true;
+    ddsTicketsEnabled = true;
     vi.stubGlobal('fetch', vi.fn((url: string, init?: RequestInit) => {
       const urlStr = url.toString();
-
       if (urlStr.endsWith('/api/v1/lessons/available-roles')) {
         return Promise.resolve({
           ok: true,
@@ -54,6 +60,10 @@ describe('ТЗ 41: Запуск урока (Создание сессии) - Н�
               : ['DISPATCHER_DDS'],
           }),
         });
+      }
+
+      if (urlStr.startsWith('/api/dds/tickets')) {
+        return Promise.resolve({ ok: true, status: 200, json: async () => ddsTicketsEnabled ? mockDdsTickets : [] });
       }
 
       if (urlStr.endsWith('/api/v1/groups') && (!init || init.method === 'GET' || !init.method)) {
@@ -198,6 +208,8 @@ describe('ТЗ 41: Запуск урока (Создание сессии) - Н�
     // Select DISPATCHER_DDS role
     const dispatcherRadio = screen.getByRole('radio', { name: /Диспетчер ДДС/i });
     fireEvent.click(dispatcherRadio);
+    await waitFor(() => expect(screen.getByRole('combobox', { name: /Подготовленный билет ДДС/i })).toBeInTheDocument());
+    fireEvent.change(screen.getByRole('combobox', { name: /Подготовленный билет ДДС/i }), { target: { value: 'dds-approved-1' } });
 
     // Select adaptive complexity
     const adaptiveRadio = screen.getByText(/Адаптивный/i);
@@ -229,11 +241,50 @@ describe('ТЗ 41: Запуск урока (Создание сессии) - Н�
 
     expect(parsedBody.group_id).toBe('grp-2');
     expect(parsedBody.time_limit_seconds).toBe(45);
+    expect(parsedBody.mode).toBe('TRAINING');
+    expect(parsedBody.distribution_mode).toBeUndefined();
+    expect(pushMock).toHaveBeenCalledWith(expect.stringContaining('&source=lesson'));
+    expect(global.fetch).toHaveBeenCalledWith(
+      '/api/v1/groups/grp-2/students',
+      expect.any(Object)
+    );
+  });
+
+  it('sends exam mode to the backend', async () => {
+    render(<SessionSetupPage />);
+    await waitFor(() => expect(screen.getByText(/Группа 101/i)).toBeInTheDocument());
+    fireEvent.change(screen.getByRole('combobox', { name: /Выбор Группы/i }), { target: { value: 'grp-1' } });
+    fireEvent.click(screen.getByText(/Экзаменационный режим/i));
+    fireEvent.click(screen.getByRole('button', { name: /Создать и запустить/i }));
+
+    await waitFor(() => expect(pushMock).toHaveBeenCalled());
+    const createCall = (global.fetch as any).mock.calls.find((call: any[]) =>
+      call[0] === '/api/v1/lessons' && call[1]?.method === 'POST'
+    );
+    expect(JSON.parse(createCall[1].body).mode).toBe('EXAM');
+  });
+
+  it('blocks DDS lesson creation when the approved ticket catalog is empty', async () => {
+    ddsTicketsEnabled = false;
+    render(<SessionSetupPage />);
+    await waitFor(() => expect(screen.getByText(/Группа 101/i)).toBeInTheDocument());
+    fireEvent.change(screen.getByRole('combobox', { name: /Выбор Группы/i }), { target: { value: 'grp-1' } });
+    fireEvent.click(screen.getByRole('radio', { name: /Диспетчер ДДС/i }));
+    await waitFor(() => expect(screen.getByText(/Нет доступных подготовленных билетов ДДС/i)).toBeInTheDocument());
+
+    const submit = screen.getByRole('button', { name: /Создать и запустить/i });
+    expect(submit).toBeDisabled();
+    fireEvent.submit(submit.closest('form')!);
+    await waitFor(() => expect(screen.getByText(/выберите подготовленный билет ДДС/i)).toBeInTheDocument());
+    expect((global.fetch as any).mock.calls.some((call: any[]) => call[0] === '/api/v1/lessons' && call[1]?.method === 'POST')).toBe(false);
   });
 
   it('should handle API errors gracefully', async () => {
     vi.stubGlobal('fetch', vi.fn((url: string, init?: RequestInit) => {
       const urlStr = url.toString();
+      if (urlStr.endsWith('/api/v1/lessons/available-roles')) {
+        return Promise.resolve({ ok: true, status: 200, json: async () => ({ roles: ['OPERATOR_112', 'DISPATCHER_DDS'] }) });
+      }
       if (urlStr.endsWith('/api/v1/groups')) {
         return Promise.resolve({
           ok: true,

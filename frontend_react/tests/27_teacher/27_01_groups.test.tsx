@@ -9,13 +9,13 @@ describe('27.1 / ТЗ 29: Рефакторинг управления групп
       group_id: 'grp-1',
       group_name: 'Группа 101',
       department: 'Отделение связи',
-      cadet_ids: ['cadet-1', 'cadet-2'],
+      cadet_ids: ['cadet-1'],
     },
     {
       group_id: 'grp-2',
       group_name: 'Группа 202',
       department: 'Диспетчерская служба',
-      cadet_ids: ['cadet-3'],
+      cadet_ids: [],
     },
   ];
 
@@ -26,13 +26,17 @@ describe('27.1 / ТЗ 29: Рефакторинг управления групп
       full_name: 'Иванов Иван Иванович',
       role: 'CADET',
       groups: ['Группа 101'],
+      is_active: true,
+      created_at: '2026-01-15T10:00:00Z',
     },
     {
       user_id: 'cadet-2',
       username: 'petrov@test.com',
       full_name: 'Петров Петр Петрович',
       role: 'CADET',
-      groups: ['Группа 101'],
+      groups: [],
+      is_active: true,
+      created_at: '2026-02-20T12:00:00Z',
     },
   ];
 
@@ -63,11 +67,50 @@ describe('27.1 / ТЗ 29: Рефакторинг управления групп
         });
       }
 
+      if (urlStr.includes('/students/bulk-link') && init?.method === 'POST') {
+        const body = JSON.parse(init.body as string);
+        const userIds = body.user_ids || [];
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          json: async () =>
+            userIds.map((uid: string) => ({
+              user_id: uid,
+              status: 'success',
+              error: null,
+            })),
+        });
+      }
+
+      if (urlStr.includes('/students/') && init?.method === 'DELETE') {
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          json: async () => ({ message: 'Курсант успешно исключен из группы' }),
+        });
+      }
+
       if (urlStr.endsWith('/api/v1/students') && (!init || init.method === 'GET' || !init.method)) {
         return Promise.resolve({
           ok: true,
           status: 200,
           json: async () => mockStudents,
+        });
+      }
+
+      if (urlStr.includes('/grp-1/students') && (!init || init.method === 'GET' || !init.method)) {
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          json: async () => [mockStudents[0]],
+        });
+      }
+
+      if (urlStr.includes('/grp-2/students') && (!init || init.method === 'GET' || !init.method)) {
+        return Promise.resolve({
+          ok: true,
+          status: 200,
+          json: async () => [],
         });
       }
 
@@ -86,31 +129,6 @@ describe('27.1 / ТЗ 29: Рефакторинг управления групп
           json: async () => ({
             message: 'Students imported successfully',
             count: 2,
-          }),
-        });
-      }
-
-      if (urlStr.includes('/reset-passwords') && init?.method === 'POST') {
-        return Promise.resolve({
-          ok: true,
-          status: 200,
-          json: async () => [
-            { user_id: 'cadet-1', fio: 'Иванов Иван Иванович', email: 'ivanov@test.com', new_password: '12345' },
-            { user_id: 'cadet-2', fio: 'Петров Петр Петрович', email: 'petrov@test.com', new_password: '67890' },
-          ],
-        });
-      }
-
-      if (urlStr.includes('/reset-password') && init?.method === 'POST') {
-        return Promise.resolve({
-          ok: true,
-          status: 200,
-          json: async () => ({
-            user_id: 'cadet-1',
-            fio: 'Иванов Иван Иванович',
-            email: 'ivanov@test.com',
-            new_password: '54321',
-            message: 'Пароль успешно сброшен',
           }),
         });
       }
@@ -134,7 +152,6 @@ describe('27.1 / ТЗ 29: Рефакторинг управления групп
     expect(screen.getByText(/Список групп/i)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /^Добавить группу$/i })).toBeInTheDocument();
 
-    // Verify there is no 'Выбрать' button in groups list (TZ 34)
     await waitFor(() => {
       expect(screen.getByText('Группа 101')).toBeInTheDocument();
       expect(screen.getByText('Группа 202')).toBeInTheDocument();
@@ -247,53 +264,92 @@ describe('27.1 / ТЗ 29: Рефакторинг управления групп
     });
   });
 
-  it('should reset single student password with confirmation modal and display 5-digit code in modal (TZ 34)', async () => {
+  it('should completely forbid password resets by teacher: no reset buttons or modals present', async () => {
     render(<GroupsPage />);
 
     await waitFor(() => {
       expect(screen.getByText('Группа 101')).toBeInTheDocument();
     });
 
+    // Expand Group 101
+    fireEvent.click(screen.getByText('Группа 101'));
+
+    await waitFor(() => {
+      expect(screen.getByText('Иванов')).toBeInTheDocument();
+    });
+
+    // Ensure NO password reset buttons exist in group composition
+    expect(screen.queryByRole('button', { name: /Сбросить пароли/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Сбросить пароль/i })).not.toBeInTheDocument();
+
     // Switch to All students tab
     fireEvent.click(screen.getByRole('button', { name: /Все ученики/i }));
 
-    // Verify split FIO columns and localized role (TZ 34)
     await waitFor(() => {
-      expect(screen.getByText('Фамилия')).toBeInTheDocument();
-      expect(screen.getByText('Имя')).toBeInTheDocument();
-      expect(screen.getByText('Отчество')).toBeInTheDocument();
       expect(screen.getByText('Иванов')).toBeInTheDocument();
-      expect(screen.getByText('Иван')).toBeInTheDocument();
-      expect(screen.getByText('Иванович')).toBeInTheDocument();
-      expect(screen.getAllByText('Группа 101').length).toBeGreaterThan(0);
-      expect(screen.getAllByText('Ученик').length).toBeGreaterThan(0);
-      expect(screen.queryByText('CADET')).not.toBeInTheDocument();
     });
 
-    // Click reset password
-    const resetButtons = screen.getAllByRole('button', { name: /Сбросить пароль/i });
-    fireEvent.click(resetButtons[0]);
+    // Ensure NO password reset buttons exist in All Students table
+    expect(screen.queryByRole('button', { name: /Сбросить пароль/i })).not.toBeInTheDocument();
+    expect(screen.queryByText(/Массовый сброс паролей/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Распечатать доступы/i)).not.toBeInTheDocument();
+  });
 
-    // Confirmation modal should appear (TZ 34)
+  it('should select students from catalog and link them to group via bulk-link endpoint', async () => {
+    render(<GroupsPage />);
+
     await waitFor(() => {
-      expect(screen.getByText('Требуется подтверждение действия')).toBeInTheDocument();
-      expect(screen.getByText(/Вы действительно хотите сбросить пароль для ученика/i)).toBeInTheDocument();
+      expect(screen.getByText('Группа 101')).toBeInTheDocument();
     });
 
-    // Confirm password reset inside modal
-    const confirmButtons = screen.getAllByRole('button', { name: /Сбросить пароль/i });
-    // Find the one in the modal dialog (with amber style)
-    const modalConfirmBtn = confirmButtons.find((btn) => btn.className.includes('bg-amber-600')) || confirmButtons[confirmButtons.length - 1];
-    fireEvent.click(modalConfirmBtn);
+    // Expand group 101
+    fireEvent.click(screen.getByText('Группа 101'));
 
-    // Code modal should appear with 5-digit password
+    // Find and click "Выбрать из каталога" button
+    const openCatalogBtn = await screen.findByRole('button', { name: /Выбрать из каталога/i });
+    fireEvent.click(openCatalogBtn);
+
+    // Catalog modal should open
     await waitFor(() => {
-      expect(screen.getByText('Пароль успешно сброшен')).toBeInTheDocument();
-      expect(screen.getByText('54321')).toBeInTheDocument();
+      expect(screen.getByText(/Выбор курсантов из каталога/i)).toBeInTheDocument();
+      expect(screen.getByText(/Целевая группа: Группа 101/i)).toBeInTheDocument();
+    });
+
+    // Verify search input is present in modal
+    const searchInput = screen.getByPlaceholderText(/Поиск курсантов по ФИО, логину или email.../i);
+    expect(searchInput).toBeInTheDocument();
+
+    // In catalog, cadet-1 should show "Уже в этой группе"
+    expect(screen.getByText(/Уже в этой группе/i)).toBeInTheDocument();
+
+    // In catalog, cadet-2 (Петров) is available ("Без группы")
+    expect(screen.getByText(/^Без группы$/i)).toBeInTheDocument();
+
+    // Select cadet-2 checkbox
+    const checkboxes = screen.getAllByRole('checkbox');
+    // Find the enabled checkbox for cadet-2
+    const availableCheckboxes = checkboxes.filter((cb) => !(cb as HTMLInputElement).disabled);
+    expect(availableCheckboxes.length).toBeGreaterThan(0);
+    fireEvent.click(availableCheckboxes[availableCheckboxes.length - 1]);
+
+    // Submit button should show count: "Добавить в группу (1)"
+    const addSubmitBtn = screen.getByRole('button', { name: /Добавить в группу \(1\)/i });
+    fireEvent.click(addSubmitBtn);
+
+    // Should call POST /api/v1/groups/grp-1/students/bulk-link
+    await waitFor(() => {
+      expect(global.fetch).toHaveBeenCalledWith(
+        '/api/v1/groups/grp-1/students/bulk-link',
+        expect.objectContaining({
+          method: 'POST',
+          body: JSON.stringify({ user_ids: ['cadet-2'] }),
+        })
+      );
+      expect(screen.getByText(/Курсанты успешно добавлены в группу/i)).toBeInTheDocument();
     });
   });
 
-  it('should reset group passwords with confirmation modal and show print accesses modal (TZ 34)', async () => {
+  it('should remove student from group with confirmation dialog warning about preserved account and history', async () => {
     render(<GroupsPage />);
 
     await waitFor(() => {
@@ -304,26 +360,52 @@ describe('27.1 / ТЗ 29: Рефакторинг управления групп
     fireEvent.click(screen.getByText('Группа 101'));
 
     await waitFor(() => {
-      expect(screen.getByRole('button', { name: /Сбросить пароли всей группе/i })).toBeInTheDocument();
+      expect(screen.getByText('Иванов')).toBeInTheDocument();
     });
 
-    fireEvent.click(screen.getByRole('button', { name: /Сбросить пароли всей группе/i }));
+    // Click remove button (trash icon)
+    const removeBtn = screen.getByTitle('Исключить из группы');
+    fireEvent.click(removeBtn);
 
-    // Group confirmation modal should appear (TZ 34)
+    // Confirmation modal should appear with required warning message
     await waitFor(() => {
-      expect(screen.getByText(/Массовый сброс паролей/i)).toBeInTheDocument();
-      expect(screen.getByText(/Вы действительно хотите сбросить пароли всем ученикам группы/i)).toBeInTheDocument();
+      expect(screen.getByText('Исключение из группы')).toBeInTheDocument();
+      expect(
+        screen.getByText(/Ученик будет исключен из группы, но его учетная запись и история результатов сохранятся/i)
+      ).toBeInTheDocument();
     });
 
-    // Confirm group reset
-    const confirmGroupBtn = screen.getByRole('button', { name: /^Сбросить пароли$/i });
-    fireEvent.click(confirmGroupBtn);
+    // Confirm removal
+    const confirmBtn = screen.getByRole('button', { name: /^Исключить из группы$/i });
+    fireEvent.click(confirmBtn);
+
+    // Should call DELETE /api/v1/groups/grp-1/students/cadet-1
+    await waitFor(() => {
+      expect(global.fetch).toHaveBeenCalledWith(
+        '/api/v1/groups/grp-1/students/cadet-1',
+        expect.objectContaining({
+          method: 'DELETE',
+        })
+      );
+      expect(screen.getByText(/Ученик успешно исключен из группы/i)).toBeInTheDocument();
+    });
+  });
+
+  it('should render all students tab with registration date, groups, and status', async () => {
+    render(<GroupsPage />);
+
+    // Switch to All students tab
+    fireEvent.click(screen.getByRole('button', { name: /Все ученики/i }));
 
     await waitFor(() => {
-      expect(screen.getByText(/Доступы группы: Группа 101/i)).toBeInTheDocument();
-      expect(screen.getByText('12345')).toBeInTheDocument();
-      expect(screen.getByText('67890')).toBeInTheDocument();
-      expect(screen.getByRole('button', { name: /Распечатать доступы/i })).toBeInTheDocument();
+      expect(screen.getByText('Фамилия')).toBeInTheDocument();
+      expect(screen.getByText('Имя')).toBeInTheDocument();
+      expect(screen.getByText('Отчество')).toBeInTheDocument();
+      expect(screen.getByText('Дата регистрации')).toBeInTheDocument();
+      expect(screen.getByText('Статус')).toBeInTheDocument();
+      expect(screen.getByText('Иванов')).toBeInTheDocument();
+      expect(screen.getByText('Петров')).toBeInTheDocument();
+      expect(screen.getAllByText('Активен').length).toBeGreaterThan(0);
     });
   });
 
@@ -351,7 +433,6 @@ describe('27.1 / ТЗ 29: Рефакторинг управления групп
 
     await waitFor(() => {
       expect(screen.getByText('Иванов')).toBeInTheDocument();
-      expect(screen.getByText('Петров')).toBeInTheDocument();
     });
 
     // Filter by group 202 (has no matching mock students in mock list)

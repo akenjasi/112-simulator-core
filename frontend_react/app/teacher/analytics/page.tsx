@@ -2,7 +2,7 @@
 
 import { apiFetch as fetch } from "@/lib/api-fetch"
 
-import React, { useState, useEffect, useCallback } from "react"
+import React, { useState, useEffect, useCallback, useRef } from "react"
 import Link from "next/link"
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -69,12 +69,30 @@ import {
 
 export interface DailyDynamicsPoint {
   date: string
-  avg_score: number
+  avg_score: number | null
   total_sessions: number
+  graded_count?: number
+  pending_count?: number
   passed_count: number
   failed_count: number
-  pass_rate: number
+  pass_rate: number | null
 }
+
+export interface AnalyticsOverview {
+  total_sessions: number
+  total_attempts: number
+  graded_attempts: number
+  pending_attempts: number
+  avg_score: number | null
+  passed_count: number
+  failed_count: number
+  pass_rate: number | null
+  total_errors: number
+  active_cadets_count: number
+  trend_direction?: "positive" | "negative" | "stable" | null
+  daily_dynamics: DailyDynamicsPoint[]
+}
+
 
 export interface GroupComparisonItem {
   group_id: string
@@ -202,242 +220,6 @@ export interface LessonHistoryItem {
   students?: LessonHistoryCadet[]
 }
 
-// Initial demo/fallback state for instant rendering and resilient testing
-const DEFAULT_SESSION_DATA: SessionData = {
-  session_id: "session-1",
-  title: "Сессия аттестации: Экстренное реагирование 112",
-  created_at: "2026-09-24T10:00:00Z",
-  cadets: [
-    {
-      cadet_id: "cadet-101",
-      cadet_name: "Иванов Иван Алексеевич",
-      success_rate: 50,
-      records: [
-        {
-          record_id: "rec-1",
-          ticket_id: "ticket-42",
-          title: "Билет №42: ДТП с пострадавшими на Ленина",
-          status: "failed",
-          score: 50,
-          is_appealed: false,
-          errors_count: 2,
-          etalon: {
-            caller_name: "Сергей Петрович",
-            phone: "+7 (999) 111-22-33",
-            address: "ул. Ленина, д. 15",
-            incident_type: "ДТП с пострадавшими",
-            services: ["01 (Пожарные)", "02 (Полиция)", "03 (Скорая)"],
-            description: "Столкновение легкового авто и грузовика, заблокирован водитель",
-          },
-          student_answer: {
-            caller_name: "Сергей Петрович",
-            phone: "+7 (999) 111-22-33",
-            address: "ул. Лермонтова, д. 15",
-            incident_type: "ДТП с пострадавшими",
-            services: ["02 (Полиция)"],
-            description: "Авария на дороге",
-          },
-          error_details: [
-            {
-              field: "address",
-              severity: "error",
-              message: "Неверный адрес: указана 'ул. Лермонтова' вместо правильного 'ул. Ленина'",
-            },
-            {
-              field: "services",
-              severity: "warning",
-              message: "Не все службы вызваны: '01', '03'",
-            },
-          ],
-        },
-        {
-          record_id: "rec-2",
-          ticket_id: "ticket-10",
-          title: "Билет №10: Запах газа в подъезде",
-          status: "passed",
-          score: 100,
-          is_appealed: false,
-          errors_count: 0,
-          etalon: {
-            caller_name: "Мария Ивановна",
-            phone: "+7 (911) 555-44-33",
-            address: "пр. Мира, д. 8, под. 2",
-            incident_type: "Утечка газа",
-            services: ["04 (Газовая служба)"],
-            description: "Сильный запах газа на 3 этаже",
-          },
-          student_answer: {
-            caller_name: "Мария Ивановна",
-            phone: "+7 (911) 555-44-33",
-            address: "пр. Мира, д. 8, под. 2",
-            incident_type: "Утечка газа",
-            services: ["04 (Газовая служба)"],
-            description: "Сильный запах газа на 3 этаже",
-          },
-          error_details: [],
-        },
-      ],
-    },
-    {
-      cadet_id: "cadet-102",
-      cadet_name: "Петрова Анна Сергеевна",
-      success_rate: 100,
-      records: [
-        {
-          record_id: "rec-3",
-          ticket_id: "ticket-05",
-          title: "Билет №05: Возгорание в жилом доме",
-          status: "passed",
-          score: 95,
-          is_appealed: false,
-          errors_count: 0,
-          etalon: {
-            caller_name: "Николай",
-            phone: "+7 (900) 333-22-11",
-            address: "ул. Садовая, д. 4",
-            incident_type: "Пожар",
-            services: ["01", "03"],
-            description: "Дым из окна 2 этажа",
-          },
-          student_answer: {
-            caller_name: "Николай",
-            phone: "+7 (900) 333-22-11",
-            address: "ул. Садовая, д. 4",
-            incident_type: "Пожар",
-            services: ["01", "03"],
-            description: "Дым из окна 2 этажа",
-          },
-          error_details: [],
-        },
-      ],
-    },
-  ],
-}
-
-const DEFAULT_LESSONS_HISTORY: LessonHistoryItem[] = [
-  {
-    id: "lesson-demo-1",
-    group_id: "group-101",
-    group_name: "Группа 101",
-    target_role: "OPERATOR_112",
-    status: "COMPLETED",
-    complexity: "level_2",
-    categories: ["Пожары", "ДТП"],
-    total_cadets: 4,
-    passed_count: 3,
-    failed_count: 1,
-    avg_score: 87.5,
-    teacher_notes: "Группа в целом показала хорошую скорость реакции на ДТП. Требуется повторить регламент вызова службы газа.",
-    created_at: "2026-09-24T14:30:00Z",
-    completed_at: "2026-09-24T15:15:00Z",
-    students: [
-      {
-        cadet_id: "cadet-1",
-        cadet_name: "Иванов Иван",
-        status: "PASSED",
-        progress: 100,
-        score: 92,
-        passed: 2,
-        failed: 0,
-        tickets: [
-          {
-            ticket_id: "ticket-101",
-            title: "Билет №1: Пожар в жилом помещении на 4 этаже",
-            status: "passed",
-            score: 95,
-            errors_count: 0,
-            errors: [],
-          },
-          {
-            ticket_id: "ticket-102",
-            title: "Билет №2: Запах газа в подъезде многоквартирного дома",
-            status: "passed",
-            score: 89,
-            errors_count: 0,
-            errors: [],
-          },
-        ],
-      },
-      {
-        cadet_id: "cadet-2",
-        cadet_name: "Петров Петр",
-        status: "PASSED",
-        progress: 100,
-        score: 98,
-        passed: 3,
-        failed: 0,
-        tickets: [
-          {
-            ticket_id: "ticket-103",
-            title: "Билет №1: Возгорание электрощитовой в подвале",
-            status: "passed",
-            score: 100,
-            errors_count: 0,
-            errors: [],
-          },
-          {
-            ticket_id: "ticket-104",
-            title: "Билет №2: ДТП без пострадавших на трассе",
-            status: "passed",
-            score: 96,
-            errors_count: 0,
-            errors: [],
-          },
-        ],
-      },
-      {
-        cadet_id: "cadet-3",
-        cadet_name: "Сидорова Анна",
-        status: "FAILED",
-        progress: 100,
-        score: 64,
-        passed: 1,
-        failed: 1,
-        tickets: [
-          {
-            ticket_id: "ticket-105",
-            title: "Билет №1: Ложное срабатывание пожарной сигнализации",
-            status: "passed",
-            score: 88,
-            errors_count: 0,
-            errors: [],
-          },
-          {
-            ticket_id: "ticket-106",
-            title: "Билет №2: ДТП с пострадавшими на перекрестке",
-            status: "failed",
-            score: 40,
-            errors_count: 2,
-            errors: [
-              "Не передана карточка происшествия в службу скорой помощи (03)",
-              "Превышено допустимое время опроса заявителя (более 75 секунд)",
-            ],
-          },
-        ],
-      },
-      {
-        cadet_id: "cadet-4",
-        cadet_name: "Кузнецов Алексей",
-        status: "PASSED",
-        progress: 100,
-        score: 86,
-        passed: 2,
-        failed: 0,
-        tickets: [
-          {
-            ticket_id: "ticket-107",
-            title: "Билет №1: Задымление в торговом центре",
-            status: "passed",
-            score: 86,
-            errors_count: 0,
-            errors: [],
-          },
-        ],
-      },
-    ],
-  },
-]
-
 const DEFAULT_DYNAMICS_DATA: DailyDynamicsPoint[] = [
   { date: "2026-09-01", avg_score: 74.2, total_sessions: 24, passed_count: 17, failed_count: 7, pass_rate: 70.8 },
   { date: "2026-09-05", avg_score: 77.0, total_sessions: 28, passed_count: 22, failed_count: 6, pass_rate: 78.6 },
@@ -512,10 +294,10 @@ export interface AnalyticsPageProps {
   initialTab?: "history" | "split" | "all" | "ai_report" | "charts"
 }
 
-export default function AnalyticsPage({ initialTab = "all" }: AnalyticsPageProps = {}) {
+export default function AnalyticsPage({ initialTab = "split" }: AnalyticsPageProps = {}) {
   const [activeTab, setActiveTab] = useState<"history" | "split" | "all" | "ai_report" | "charts">(initialTab)
   const [sessionId, setSessionId] = useState<string>("")
-  const [sessionData, setSessionData] = useState<SessionData>({ session_id: "", title: "", created_at: "", cadets: [] })
+  const [sessionData, setSessionData] = useState<SessionData>({ session_id: "", title: "", cadets: [] })
   const [selectedRecord, setSelectedRecord] = useState<RecordDetail | null>(null)
   const [isLoadingSession, setIsLoadingSession] = useState<boolean>(false)
   const [isLoadingRecord, setIsLoadingRecord] = useState<boolean>(false)
@@ -540,11 +322,27 @@ export default function AnalyticsPage({ initialTab = "all" }: AnalyticsPageProps
   const [isSavingNotes, setIsSavingNotes] = useState<boolean>(false)
   const [lessonsAuthError, setLessonsAuthError] = useState<string | null>(null)
 
-  // Charts & Dashboards state (ТЗ 75)
+  // Charts & Dashboards state (ТЗ 75 & Verified Analytics)
   const [isMounted, setIsMounted] = useState<boolean>(false)
   const [dynamicsDays, setDynamicsDays] = useState<number>(30)
   const [dynamicsGroupId, setDynamicsGroupId] = useState<string>("ALL")
   const [dynamicsData, setDynamicsData] = useState<DailyDynamicsPoint[]>([])
+  const [overviewData, setOverviewData] = useState<AnalyticsOverview>({
+    total_sessions: 0,
+    total_attempts: 0,
+    graded_attempts: 0,
+    pending_attempts: 0,
+    avg_score: null,
+    passed_count: 0,
+    failed_count: 0,
+    pass_rate: null,
+    total_errors: 0,
+    active_cadets_count: 0,
+    trend_direction: null,
+    daily_dynamics: [],
+  })
+  const [chartsError, setChartsError] = useState<string | null>(null)
+  const fetchChartsRequestIdRef = useRef<number>(0)
   const [groupComparisonData, setGroupComparisonData] = useState<GroupComparisonItem[]>([])
   const [heatmapData, setHeatmapData] = useState<ErrorHeatmapData>({ error_types: [], entities: [], totals_by_error: {} })
   const [heatmapEntityType, setHeatmapEntityType] = useState<"students" | "groups">("students")
@@ -553,40 +351,92 @@ export default function AnalyticsPage({ initialTab = "all" }: AnalyticsPageProps
   const [isLoadingCharts, setIsLoadingCharts] = useState<boolean>(false)
 
   const fetchChartsData = useCallback(async () => {
+    fetchChartsRequestIdRef.current += 1
+    const reqId = fetchChartsRequestIdRef.current
+
     try {
       setIsLoadingCharts(true)
+      setChartsError(null)
+      setDynamicsData([])
+      setOverviewData({
+        total_sessions: 0, total_attempts: 0, graded_attempts: 0, pending_attempts: 0,
+        avg_score: null, passed_count: 0, failed_count: 0, pass_rate: null,
+        total_errors: 0, active_cadets_count: 0, trend_direction: null, daily_dynamics: [],
+      })
+
       const dynGroupParam = dynamicsGroupId !== "ALL" ? `&group_id=${encodeURIComponent(dynamicsGroupId)}` : ""
-      const dynRes = await fetch(`/api/analytics/dynamics?days=${dynamicsDays}${dynGroupParam}`)
-      if (dynRes.ok) {
-        const dJson = await dynRes.json()
-        if (Array.isArray(dJson) && dJson.length > 0) {
-          setDynamicsData(dJson)
-        }
+      const token = getStoredToken()
+      const authHeaders: HeadersInit = token ? { Authorization: `Bearer ${token}` } : {}
+
+      // 1. Fetch server overview
+      const overviewRes = await fetch(`/api/analytics/overview?days=${dynamicsDays}${dynGroupParam}`, {
+        headers: authHeaders,
+      })
+
+      if (reqId !== fetchChartsRequestIdRef.current) return
+      if (overviewRes.ok) {
+        const oJson: AnalyticsOverview = await overviewRes.json()
+        if (reqId !== fetchChartsRequestIdRef.current) return
+        setOverviewData(oJson)
+        setDynamicsData(Array.isArray(oJson.daily_dynamics) ? oJson.daily_dynamics : [])
+      } else {
+        setChartsError(`Ошибка загрузки данных аналитики (${overviewRes.status})`)
       }
 
-      const compRes = await fetch("/api/analytics/groups-comparison")
+      // 2. Fetch group comparison
+      const compRes = await fetch("/api/analytics/groups-comparison", { headers: authHeaders })
+      if (reqId !== fetchChartsRequestIdRef.current) return
       if (compRes.ok) {
         const cJson = await compRes.json()
-        if (Array.isArray(cJson) && cJson.length > 0) {
-          setGroupComparisonData(cJson)
-        }
+        if (reqId !== fetchChartsRequestIdRef.current) return
+        setGroupComparisonData(Array.isArray(cJson) ? cJson : [])
+      } else {
+        setGroupComparisonData([])
       }
 
+      // 3. Fetch heatmap
       const hmCatParam = heatmapCategory !== "ALL" ? `&category=${encodeURIComponent(heatmapCategory)}` : ""
       const hmGroupParam = dynamicsGroupId !== "ALL" ? `&group_id=${encodeURIComponent(dynamicsGroupId)}` : ""
       const hmRes = await fetch(
-        `/api/analytics/errors-heatmap?entity_type=${heatmapEntityType}${hmCatParam}${hmGroupParam}`
+        `/api/analytics/errors-heatmap?entity_type=${heatmapEntityType}${hmCatParam}${hmGroupParam}`,
+        { headers: authHeaders }
       )
+      if (reqId !== fetchChartsRequestIdRef.current) return
       if (hmRes.ok) {
         const hJson = await hmRes.json()
-        if (hJson && Array.isArray(hJson.entities) && hJson.entities.length > 0) {
-          setHeatmapData(hJson)
-        }
+        if (reqId !== fetchChartsRequestIdRef.current) return
+        setHeatmapData(
+          hJson && Array.isArray(hJson.entities)
+            ? hJson
+            : { error_types: [], entities: [], totals_by_error: {} }
+        )
+      } else {
+        setHeatmapData({ error_types: [], entities: [], totals_by_error: {} })
       }
-    } catch (err) {
-      console.warn("Could not load charts data from API:", err)
+    } catch (err: any) {
+      if (reqId === fetchChartsRequestIdRef.current) {
+        console.warn("Could not load charts data from API:", err)
+        setChartsError("Не удалось загрузить данные аналитики. Проверьте сетевое соединение.")
+        setDynamicsData([])
+        setOverviewData({
+          total_sessions: 0,
+          total_attempts: 0,
+          graded_attempts: 0,
+          pending_attempts: 0,
+          avg_score: null,
+          passed_count: 0,
+          failed_count: 0,
+          pass_rate: null,
+          total_errors: 0,
+          active_cadets_count: 0,
+          trend_direction: null,
+          daily_dynamics: [],
+        })
+      }
     } finally {
-      setIsLoadingCharts(false)
+      if (reqId === fetchChartsRequestIdRef.current) {
+        setIsLoadingCharts(false)
+      }
     }
   }, [dynamicsDays, dynamicsGroupId, heatmapEntityType, heatmapCategory])
 
@@ -643,30 +493,54 @@ export default function AnalyticsPage({ initialTab = "all" }: AnalyticsPageProps
 
   // Fetch session analytics
   const fetchSessionAnalytics = useCallback(async (sid: string) => {
+    if (!sid.trim()) return
     try {
       setIsLoadingSession(true)
       setErrorMessage(null)
-      const res = await fetch(`/api/v1/analytics/sessions/${sid}`)
+      const token = getStoredToken()
+      const authHeaders: HeadersInit = token ? { Authorization: `Bearer ${token}` } : {}
+      const res = await fetch(`/api/v1/analytics/sessions/${encodeURIComponent(sid.trim())}`, {
+        headers: authHeaders,
+      })
       if (res.ok) {
         const data = await res.json()
-        setSessionData(data)
-        const firstCadet = data.cadets?.[0]
-        if (firstCadet && firstCadet.records?.length > 0) {
-          const firstRec = firstCadet.records[0]
-          if (firstRec.etalon && firstRec.student_answer) {
-            setSelectedRecord({
-              ...firstRec,
-              cadet_name: firstCadet.cadet_name,
-              cadet_id: firstCadet.cadet_id,
-              error_details: firstRec.error_details || [],
-            } as RecordDetail)
+        if (data && Array.isArray(data.cadets) && data.cadets.length > 0) {
+          setSessionData(data)
+          const firstCadet = data.cadets[0]
+          if (firstCadet && firstCadet.records?.length > 0) {
+            const firstRec = firstCadet.records[0]
+            if (firstRec.etalon && firstRec.student_answer) {
+              setSelectedRecord({
+                ...firstRec,
+                cadet_name: firstCadet.cadet_name,
+                cadet_id: firstCadet.cadet_id,
+                error_details: firstRec.error_details || [],
+              } as RecordDetail)
+            } else {
+              loadRecordDetail(firstRec.record_id, firstCadet.cadet_name)
+            }
+          }
+        }
+      } else {
+        if (sid && sid.trim()) {
+          setSessionData({ session_id: sid, title: "Сессия не найдена", created_at: "", cadets: [] })
+          setSelectedRecord(null)
+          if (res.status === 404) {
+            setErrorMessage("Сессия не найдена или не содержит записей.")
+          } else if (res.status === 403) {
+            setErrorMessage("Доступ к этой сессии ограничен (сессия другой группы или преподавателя).")
           } else {
-            loadRecordDetail(firstRec.record_id, firstCadet.cadet_name)
+            setErrorMessage(`Ошибка загрузки сессии (${res.status})`)
           }
         }
       }
     } catch (err: any) {
       console.warn("Could not load session from API:", err)
+      if (sid && sid.trim()) {
+        setSessionData({ session_id: sid, title: "Ошибка загрузки", created_at: "", cadets: [] })
+        setSelectedRecord(null)
+        setErrorMessage("Ошибка сети при загрузке сессии.")
+      }
     } finally {
       setIsLoadingSession(false)
     }
@@ -705,9 +579,8 @@ export default function AnalyticsPage({ initialTab = "all" }: AnalyticsPageProps
   }, [])
 
   useEffect(() => {
-    fetchSessionAnalytics(sessionId)
     fetchLessonsHistory()
-  }, [fetchSessionAnalytics, fetchLessonsHistory,  sessionId])
+  }, [fetchLessonsHistory])
 
   // Save updated teacher notes for a lesson
   const handleSaveLessonNotes = async (lessonId: string) => {
@@ -739,7 +612,11 @@ export default function AnalyticsPage({ initialTab = "all" }: AnalyticsPageProps
   const loadRecordDetail = async (recordId: string, cadetName?: string) => {
     try {
       setIsLoadingRecord(true)
-      const res = await fetch(`/api/v1/analytics/records/${recordId}`)
+      const token = getStoredToken()
+      const authHeaders: HeadersInit = token ? { Authorization: `Bearer ${token}` } : {}
+      const res = await fetch(`/api/v1/analytics/records/${encodeURIComponent(recordId)}`, {
+        headers: authHeaders,
+      })
       if (res.ok) {
         const data: RecordDetail = await res.json()
         if (cadetName && !data.cadet_name) {
@@ -769,11 +646,30 @@ export default function AnalyticsPage({ initialTab = "all" }: AnalyticsPageProps
 
   // Handle appeal submission
   const handleAppeal = async (recordId: string, payload: { status: string; comment: string }) => {
-    const res = await fetch(`/api/v1/analytics/records/${recordId}/appeal`, {
+    const token = getStoredToken()
+    const headers: Record<string, string> = { "Content-Type": "application/json" }
+    if (token) {
+      headers["Authorization"] = `Bearer ${token}`
+    }
+
+    let res = await fetch(`/api/v1/analytics/records/${encodeURIComponent(recordId)}/appeal`, {
       method: "PATCH",
-      headers: { "Content-Type": "application/json" },
+      headers,
       body: JSON.stringify(payload),
     })
+
+    if (!res.ok && res.status === 409) {
+      // Fallback to grade-override endpoint for assigned DDS sessions with audit logging
+      res = await fetch(`/api/v1/analytics/records/${encodeURIComponent(recordId)}/grade-override`, {
+        method: "POST",
+        headers,
+        body: JSON.stringify({
+          score: payload.status === "passed" ? 100 : 0,
+          reason: payload.comment || "Пересмотр оценки преподавателем",
+          comment: payload.comment,
+        }),
+      })
+    }
 
     if (!res.ok) {
       throw new Error(`Ошибка при отправке апелляции (${res.status})`)
@@ -1105,9 +1001,15 @@ export default function AnalyticsPage({ initialTab = "all" }: AnalyticsPageProps
                   <TrendingUp className="h-5 w-5" />
                 </div>
                 <h2 className="text-xl font-bold tracking-tight">Дашборды успеваемости и статистика</h2>
-                <Badge variant="outline" className="bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border-emerald-500/30 text-xs">
-                  50+ курсантов
-                </Badge>
+                {overviewData.active_cadets_count > 0 ? (
+                  <Badge variant="outline" className="bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 border-emerald-500/30 text-xs">
+                    {overviewData.active_cadets_count} {overviewData.active_cadets_count === 1 ? "курсант" : overviewData.active_cadets_count < 5 ? "курсанта" : "курсантов"}
+                  </Badge>
+                ) : (
+                  <Badge variant="outline" className="bg-muted text-muted-foreground border-muted-foreground/30 text-xs">
+                    Нет активных курсантов
+                  </Badge>
+                )}
               </div>
               <p className="text-sm text-muted-foreground mt-1">
                 Мониторинг динамики баллов, сравнительный анализ учебных подразделений и карта нарушений регламентов вызова 112
@@ -1130,14 +1032,6 @@ export default function AnalyticsPage({ initialTab = "all" }: AnalyticsPageProps
                       {g.name}
                     </option>
                   ))}
-                  {allGroupOptions.length === 0 && (
-                    <>
-                      <option value="grp-1">Группа 101-П</option>
-                      <option value="grp-2">Группа 102-П</option>
-                      <option value="grp-3">Группа 201-С</option>
-                      <option value="grp-4">Группа 202-С</option>
-                    </>
-                  )}
                 </select>
               </div>
 
@@ -1155,6 +1049,23 @@ export default function AnalyticsPage({ initialTab = "all" }: AnalyticsPageProps
             </div>
           </div>
 
+          {chartsError && (
+            <div className="p-4 rounded-xl border border-destructive/30 bg-destructive/10 text-destructive text-sm flex items-center justify-between gap-3">
+              <div className="flex items-center gap-2">
+                <AlertTriangle className="h-4 w-4 shrink-0" />
+                <span>{chartsError}</span>
+              </div>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => fetchChartsData()}
+                className="h-7 text-xs border-destructive/40 hover:bg-destructive/20"
+              >
+                Повторить
+              </Button>
+            </div>
+          )}
+
           {/* Quick Metrics Bar */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
             <Card className="p-4 bg-card/60 backdrop-blur-xs">
@@ -1164,29 +1075,44 @@ export default function AnalyticsPage({ initialTab = "all" }: AnalyticsPageProps
               </div>
               <div className="mt-2 flex items-baseline gap-2">
                 <span className="text-2xl font-black text-foreground">
-                  {dynamicsData.length > 0
-                    ? (dynamicsData.reduce((acc, d) => acc + d.avg_score, 0) / dynamicsData.length).toFixed(1)
-                    : "0"}
+                  {overviewData.avg_score != null ? overviewData.avg_score.toFixed(1) : "—"}
                 </span>
                 <span className="text-xs text-muted-foreground">/ 100</span>
               </div>
-              <p className="text-[11px] text-emerald-600 dark:text-emerald-400 mt-1 font-medium">
-                Положительная динамика
+              <p className={`text-[11px] mt-1 font-medium ${
+                overviewData.graded_attempts === 0
+                  ? "text-muted-foreground"
+                  : overviewData.trend_direction === "positive"
+                  ? "text-emerald-600 dark:text-emerald-400"
+                  : overviewData.trend_direction === "negative"
+                  ? "text-rose-600 dark:text-rose-400"
+                  : "text-muted-foreground"
+              }`}>
+                {overviewData.graded_attempts === 0
+                  ? "Нет оценок"
+                  : overviewData.trend_direction === "positive"
+                  ? "Положительная динамика"
+                  : overviewData.trend_direction === "negative"
+                  ? "Отрицательная динамика"
+                  : "Стабильный результат"}
               </p>
             </Card>
 
             <Card className="p-4 bg-card/60 backdrop-blur-xs">
               <div className="flex items-center justify-between">
-                <span className="text-xs font-medium text-muted-foreground">Всего сессий</span>
+                <span className="text-xs font-medium text-muted-foreground">Сессии и попытки</span>
                 <History className="h-4 w-4 text-blue-600" />
               </div>
               <div className="mt-2 flex items-baseline gap-2">
                 <span className="text-2xl font-black text-foreground">
-                  {dynamicsData.reduce((acc, d) => acc + d.total_sessions, 0) || 0}
+                  {overviewData.total_sessions}
                 </span>
-                <span className="text-xs text-muted-foreground">билетов</span>
+                <span className="text-xs text-muted-foreground">сессий</span>
               </div>
-              <p className="text-[11px] text-muted-foreground mt-1">За выбранный период</p>
+              <p className="text-[11px] text-muted-foreground mt-1">
+                {overviewData.graded_attempts} оценённых попыток
+                {overviewData.pending_attempts > 0 ? ` (${overviewData.pending_attempts} в процессе)` : ""}
+              </p>
             </Card>
 
             <Card className="p-4 bg-card/60 backdrop-blur-xs">
@@ -1196,13 +1122,23 @@ export default function AnalyticsPage({ initialTab = "all" }: AnalyticsPageProps
               </div>
               <div className="mt-2 flex items-baseline gap-2">
                 <span className="text-2xl font-black text-foreground">
-                  {dynamicsData.length > 0
-                    ? (dynamicsData.reduce((acc, d) => acc + d.pass_rate, 0) / dynamicsData.length).toFixed(1)
-                    : "0"}%
+                  {overviewData.pass_rate != null ? `${overviewData.pass_rate.toFixed(1)}%` : "—"}
                 </span>
-                <span className="text-xs text-muted-foreground">с 1-й попытки</span>
+                <span className="text-xs text-muted-foreground">от оценённых</span>
               </div>
-              <p className="text-[11px] text-emerald-600 dark:text-emerald-400 mt-1 font-medium">Норматив соблюден</p>
+              <p className={`text-[11px] mt-1 font-medium ${
+                overviewData.pass_rate == null
+                  ? "text-muted-foreground"
+                  : overviewData.pass_rate >= 75
+                  ? "text-emerald-600 dark:text-emerald-400"
+                  : "text-amber-600 dark:text-amber-400"
+              }`}>
+                {overviewData.pass_rate == null
+                  ? (overviewData.graded_attempts > 0 ? "Результат сдачи не определён" : "Нет оценённых попыток")
+                  : overviewData.pass_rate >= 75
+                  ? "Норматив соблюден (≥ 75%)"
+                  : "Ниже норматива (< 75%)"}
+              </p>
             </Card>
 
             <Card className="p-4 bg-card/60 backdrop-blur-xs">
@@ -1212,11 +1148,13 @@ export default function AnalyticsPage({ initialTab = "all" }: AnalyticsPageProps
               </div>
               <div className="mt-2 flex items-baseline gap-2">
                 <span className="text-2xl font-black text-foreground">
-                  {Object.values(heatmapData.totals_by_error).reduce((a, b) => a + b, 0) || 0}
+                  {overviewData.total_errors}
                 </span>
                 <span className="text-xs text-muted-foreground">инцидентов</span>
               </div>
-              <p className="text-[11px] text-amber-600 dark:text-amber-400 mt-1 font-medium">Требуют разбора</p>
+              <p className="text-[11px] text-amber-600 dark:text-amber-400 mt-1 font-medium">
+                {overviewData.total_errors > 0 ? "Требуют разбора" : "Ошибок не зафиксировано"}
+              </p>
             </Card>
           </div>
 
@@ -1262,7 +1200,7 @@ export default function AnalyticsPage({ initialTab = "all" }: AnalyticsPageProps
                   {isMounted ? (
                     <ResponsiveContainer width="100%" height="100%">
                       <LineChart data={dynamicsData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
-                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsl(var(--muted-foreground)/0.15)" />
+                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--border)" strokeOpacity={0.6} />
                         <XAxis
                           dataKey="date"
                           tickFormatter={(val) => {
@@ -1271,19 +1209,23 @@ export default function AnalyticsPage({ initialTab = "all" }: AnalyticsPageProps
                             return parts.length === 3 ? `${parts[2]}.${parts[1]}` : val
                           }}
                           tick={{ fontSize: 11 }}
-                          stroke="hsl(var(--muted-foreground)/0.5)"
+                          stroke="var(--muted-foreground)"
+                          strokeOpacity={0.7}
                         />
-                        <YAxis domain={[40, 100]} tick={{ fontSize: 11 }} stroke="hsl(var(--muted-foreground)/0.5)" />
+                        <YAxis domain={[0, 100]} tick={{ fontSize: 11 }} stroke="var(--muted-foreground)" strokeOpacity={0.7} />
                         <RechartsTooltip
                           contentStyle={{
-                            backgroundColor: "hsl(var(--card))",
-                            borderColor: "hsl(var(--border))",
+                            backgroundColor: "var(--card)",
+                            borderColor: "var(--border)",
+                            color: "var(--card-foreground)",
                             borderRadius: "0.75rem",
                             fontSize: "12px",
-                            boxShadow: "0 10px 15px -3px rgba(0, 0, 0, 0.1)",
+                            boxShadow: "0 10px 15px -3px rgba(0, 0, 0, 0.3)",
                           }}
+                          itemStyle={{ color: "var(--card-foreground)" }}
+                          labelStyle={{ color: "var(--muted-foreground)" }}
                           formatter={(value: any, name: any) => [
-                            `${value} баллов`,
+                            value != null ? `${value} баллов` : "Нет данных",
                             name === "avg_score" ? "Средний балл" : name,
                           ]}
                           labelFormatter={(label) => `Дата: ${label}`}
@@ -1296,6 +1238,7 @@ export default function AnalyticsPage({ initialTab = "all" }: AnalyticsPageProps
                           strokeWidth={3}
                           dot={{ r: 3, fill: "#10b981" }}
                           activeDot={{ r: 6 }}
+                          connectNulls={false}
                         />
                       </LineChart>
                     </ResponsiveContainer>
@@ -1334,21 +1277,25 @@ export default function AnalyticsPage({ initialTab = "all" }: AnalyticsPageProps
                   {isMounted ? (
                     <ResponsiveContainer width="100%" height="100%">
                       <BarChart data={groupComparisonData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
-                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsl(var(--muted-foreground)/0.15)" />
+                        <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--border)" strokeOpacity={0.6} />
                         <XAxis
                           dataKey="group_name"
                           tick={{ fontSize: 11 }}
-                          stroke="hsl(var(--muted-foreground)/0.5)"
+                          stroke="var(--muted-foreground)"
+                          strokeOpacity={0.7}
                         />
-                        <YAxis domain={[0, 100]} tick={{ fontSize: 11 }} stroke="hsl(var(--muted-foreground)/0.5)" />
+                        <YAxis domain={[0, 100]} tick={{ fontSize: 11 }} stroke="var(--muted-foreground)" strokeOpacity={0.7} />
                         <RechartsTooltip
                           contentStyle={{
-                            backgroundColor: "hsl(var(--card))",
-                            borderColor: "hsl(var(--border))",
+                            backgroundColor: "var(--card)",
+                            borderColor: "var(--border)",
+                            color: "var(--card-foreground)",
                             borderRadius: "0.75rem",
                             fontSize: "12px",
-                            boxShadow: "0 10px 15px -3px rgba(0, 0, 0, 0.1)",
+                            boxShadow: "0 10px 15px -3px rgba(0, 0, 0, 0.3)",
                           }}
+                          itemStyle={{ color: "var(--card-foreground)" }}
+                          labelStyle={{ color: "var(--muted-foreground)" }}
                           formatter={(value: any, name: any) => [
                             `${value}${name === "pass_rate" ? "%" : " б."}`,
                             name === "avg_score" ? "Средний балл" : "Успешность (с 1 попытки)",

@@ -17,6 +17,7 @@ beforeEach(()=>{
   if(url.includes('/classifier/categories')) return response(['ЖКХ'])
   if(url.includes('/classifier/subcategories')) return response(['Вода'])
   if(url.includes('/tickets/counts')) return response([])
+  if(url.includes('/api/dds/tickets/categories')) return response([{category:'ЖКХ',total:catalog.length,subcategories:[]}])
   if(url.includes('/api/dds/tickets')) return responder ? responder(url) : response(catalog,fail?500:200)
   return response({})
  }))

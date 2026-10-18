@@ -151,23 +151,34 @@ describe('27.5: Пост-аналитика и Апелляция', () => {
     vi.restoreAllMocks();
   });
 
+  const loadTestSession = async () => {
+    fireEvent.change(screen.getByLabelText(/Идентификатор сессии/i), { target: { value: 'session-test-100' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Обновить' }));
+    await waitFor(() => expect(screen.getByText(/50% успеха/i)).toBeInTheDocument());
+  };
+
   it('should render split screen and appeal button', async () => {
     render(<AnalyticsPage />);
+    expect(global.fetch).not.toHaveBeenCalledWith('/api/v1/analytics/sessions', expect.anything());
+    fireEvent.click(screen.getByRole('button', { name: 'Обновить' }));
+    expect(global.fetch).not.toHaveBeenCalledWith('/api/v1/analytics/sessions', expect.anything());
+    await loadTestSession();
     expect(screen.getByRole('button', { name: /Изменить оценку/i })).toBeInTheDocument();
     expect(screen.getByText(/Эталон/i)).toBeInTheDocument();
 
     await waitFor(() => {
-      expect(screen.getByText('Иванов Иван Алексеевич')).toBeInTheDocument();
+      expect(screen.getAllByText('Иванов Иван Алексеевич').length).toBeGreaterThan(0);
     });
   });
 
   it('should render cadets list with success rates', async () => {
     render(<AnalyticsPage />);
+    await loadTestSession();
 
     expect(screen.getByText(/Детализация по курсантам/i)).toBeInTheDocument();
 
     await waitFor(() => {
-      expect(screen.getByText('Иванов Иван Алексеевич')).toBeInTheDocument();
+      expect(screen.getAllByText('Иванов Иван Алексеевич').length).toBeGreaterThan(0);
       expect(screen.getByText(/50% успеха/i)).toBeInTheDocument();
       expect(screen.getByText('Петрова Анна Сергеевна')).toBeInTheDocument();
       expect(screen.getByText(/100% успеха/i)).toBeInTheDocument();
@@ -176,6 +187,7 @@ describe('27.5: Пост-аналитика и Апелляция', () => {
 
   it('should render split-screen with dual columns and highlight errors in red or yellow', async () => {
     render(<AnalyticsPage />);
+    await loadTestSession();
 
     await waitFor(() => {
       expect(screen.getByTestId('split-screen-columns')).toBeInTheDocument();
@@ -202,6 +214,7 @@ describe('27.5: Пост-аналитика и Апелляция', () => {
 
   it('should open appeal modal with Textarea when clicking Изменить оценку and send PATCH request', async () => {
     render(<AnalyticsPage />);
+    await loadTestSession();
 
     const appealBtn = screen.getByRole('button', { name: /Изменить оценку/i });
     fireEvent.click(appealBtn);

@@ -332,7 +332,7 @@ describe('Mobile Adaptivity (task_78)', () => {
 
     it('should render Teacher Analytics with overflow-x-auto container', async () => {
       const AnalyticsPage = (await import('../app/teacher/analytics/page')).default;
-      const { container } = render(<AnalyticsPage />);
+      const { container } = render(<AnalyticsPage initialTab="charts" />);
 
       const overflowContainers = container.querySelectorAll('.overflow-x-auto');
       expect(overflowContainers.length).toBeGreaterThan(0);

@@ -69,7 +69,7 @@ describe('27.4: Live Dashboard', () => {
   });
 
   it('should render live statistics', async () => {
-    render(<LiveDashboardPage sessionId="sess-101" />);
+    render(<LiveDashboardPage sessionId="sess-101" source="session" />);
 
     await waitFor(() => {
       expect(screen.getByText(/Live Мониторинг сессии/i)).toBeInTheDocument();
@@ -95,8 +95,23 @@ describe('27.4: Live Dashboard', () => {
     expect(progressBars.length).toBeGreaterThanOrEqual(1);
   });
 
+  it('routes by explicit source rather than guessing from an ID prefix', async () => {
+    render(<LiveDashboardPage sessionId="sess-looks-like-a-session" source="lesson" />);
+
+    await waitFor(() => {
+      expect(global.fetch).toHaveBeenCalledWith(
+        '/api/v1/lessons/sess-looks-like-a-session',
+        expect.any(Object)
+      );
+    });
+    expect(global.fetch).not.toHaveBeenCalledWith(
+      '/api/v1/sessions/sess-looks-like-a-session/stats',
+      expect.anything()
+    );
+  });
+
   it('should not have pause or intervention buttons (read-only mode)', async () => {
-    render(<LiveDashboardPage sessionId="sess-101" />);
+    render(<LiveDashboardPage sessionId="sess-101" source="session" />);
 
     await waitFor(() => {
       expect(screen.getByText('Иван Иванов')).toBeInTheDocument();
@@ -106,6 +121,7 @@ describe('27.4: Live Dashboard', () => {
     expect(screen.queryByRole('button', { name: /пауза|pause/i })).toBeNull();
     expect(screen.queryByRole('button', { name: /остановить|stop|прервать/i })).toBeNull();
     expect(screen.queryByRole('button', { name: /вмешаться|intervene/i })).toBeNull();
+    expect(screen.queryByRole('button', { name: /сохранить заметки/i })).toBeNull();
 
     // Read-only indicator is displayed
     expect(screen.getByText(/только чтение/i)).toBeInTheDocument();
@@ -114,7 +130,7 @@ describe('27.4: Live Dashboard', () => {
   it('should poll data periodically for updates', async () => {
     vi.useFakeTimers();
 
-    render(<LiveDashboardPage sessionId="sess-101" />);
+    render(<LiveDashboardPage sessionId="sess-101" source="session" />);
 
     // Initial fetch
     expect(global.fetch).toHaveBeenCalledTimes(1);
@@ -137,7 +153,7 @@ describe('27.4: Live Dashboard', () => {
   });
 
   it('should toggle between grid and table view', async () => {
-    render(<LiveDashboardPage sessionId="sess-101" />);
+    render(<LiveDashboardPage sessionId="sess-101" source="session" />);
 
     await waitFor(() => {
       expect(screen.getByText('Иван Иванов')).toBeInTheDocument();
@@ -164,7 +180,7 @@ describe('27.4: Live Dashboard', () => {
   });
 
   it('should filter cadets by search query', async () => {
-    render(<LiveDashboardPage sessionId="sess-101" />);
+    render(<LiveDashboardPage sessionId="sess-101" source="session" />);
 
     await waitFor(() => {
       expect(screen.getByText('Иван Иванов')).toBeInTheDocument();
