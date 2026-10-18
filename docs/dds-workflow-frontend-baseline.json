@@ -19,7 +19,7 @@
     "app/dds/page.tsx": "c55dbf093965002fa67f0306cded9c7044dea1c69551e479a1539ebe69c9a1ab",
     "app/globals.css": "89cee80595155ad838afd3740186c49d20c1f0bb28ac74fa563379bff264781e",
     "app/layout.tsx": "159a127e5d54d3941943ab85422d5bcc4194035958f1eb8a6c33490bb6666fbb",
-    "app/login/page.tsx": "febc9e937c6d84bd6e8c3b77b2d73d64199369bc26059b42d9178b8cbfa7d6ad",
+    "app/login/page.tsx": "1c01c030f25e6ea450c1fc5f91b0c8d87a1dec9bf718abdb5da9cc907b9915fb",
     "app/operator/journal/page.tsx": "1f87972aa4fe49a761c9fa501260e58a3e2356eb54471bf2d51fe19bc32e9288",
     "app/operator/page.tsx": "f9254d385418f6ae976833add3267340526162306b8746c57c642495b6e64a80",
     "app/page.tsx": "fca3741ea12d86b9345c7103468275c12e278cc1a70495de6a6a13245139924d",
@@ -58,7 +58,7 @@
     "components/teacher/grade-dialog.tsx": "d053b581a7222772219cace31a16b34cdc974d38ae100fca327318d76fb165a1",
     "components/teacher/grade-score-input.tsx": "cfe0a0a309087cb38a563b99339a03ce632b84a24fd7927a27d41b31f7099ff7",
     "components/teacher/split-screen.tsx": "0b6c92b096a24a7da0a5d8bd76a5e456f59bf4e99f0fa8b856c9c02b92a5f8cb",
-    "components/theme-provider.tsx": "b017e3c8d423fc5f58a6af89be74b93eae805030cd8b62923350fc465665509d",
+    "components/theme-provider.tsx": "2b6f22e2dcb366177c9dd518acad182fb723bf06b3f77c093d1a6e0de27ff21a",
     "components/theme-select.tsx": "3382c4c59e0a98c7a19c4f97bb419b6b38104526cd5d1af1f4db8ee22ab2e4ea",
     "components/tutorial.tsx": "2f06b7b9a648071085f3b200d9f1cb630ebe80127881f8da2b5cf4e7f8c332f6",
     "components/ui/badge.tsx": "313db4c15e8f6d6e7b93d52ac5e2550f072ac3f6f725e369fc2452fb0f8cdee1",
@@ -82,7 +82,7 @@
     "lib/dds-service-response.ts": "8f9cb30f185f84014a1dc23d256d462c8c1e979601750ea83bbd3571c7a3b2c5",
     "lib/dds-working-card.ts": "27573f77ef198925a79aed3221e769c13668c45a55e7e1a429eaf066cc46159d",
     "lib/dispatcher-data.ts": "7031332e719f3897c14d4d9a165690a4df9f4037601ae6dfb76b9d995e92ebae",
-    "lib/theme.ts": "b92984e5d51110408976376f2e5d89d5edd79c7b58d2aff9c1df41ff89cf18a4",
+    "lib/theme.ts": "8755e05411fd2271b2cded231eda5080b2afcb60284bdae39e326f994c146ffe",
     "lib/utils.ts": "e46429536f43f5910f5b2b0c50bb2769b510a4558bb4b5d20a3b0a9091dbf7c3",
     "next-env.d.ts": "1862ac4bbbc5192d4bf562161df66ea547ed3e67173100656ab606ae9797db2b",
     "next.config.mjs": "7c5234e09cbf4659743ff4ee56e1d9d82103c0d0d5a1cc3df879da413af69f57",
@@ -111,5 +111,16 @@
     "public/placeholder.svg": "64badf7aabda0b9630b87020ffb6095cb858ccbcf66b355c2aa08b1063954d3b",
     "store/useCallStore.ts": "b94d5e7ae3f42159e0216ab5a63d4f71bf55218cc20b4e4e3f8b43ff9f9824d3",
     "tsconfig.json": "f2fc3309a966ecb35a51a17b2b7ab03c92d88b7c663ddbed5cb626f597c83277"
-  }
+  },
+  "approved_integrations": [
+    {
+      "commit": "0f81c44257766697121a8e957e3239c9de8626c3",
+      "reason": "Merged prototype login and theme changes; DDS workspace hashes remain unchanged.",
+      "files": [
+        "app/login/page.tsx",
+        "components/theme-provider.tsx",
+        "lib/theme.ts"
+      ]
+    }
+  ]
 }
