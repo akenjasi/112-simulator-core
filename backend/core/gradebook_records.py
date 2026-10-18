@@ -54,10 +54,29 @@ def build_attempt_records(results, cards, evaluations):
 
 def historical_record_snapshot(session, scenario_id):
     state = session.dynamic_state if session and isinstance(session.dynamic_state, dict) else {}
+    snapshots = state.get("_gradebook_snapshots")
+    if isinstance(snapshots, dict):
+        snapshot = snapshots.get(scenario_id)
+        if isinstance(snapshot, dict) and snapshot.get("ticket_id") == scenario_id:
+            return snapshot
     snapshot = state.get("_gradebook_snapshot")
     if isinstance(snapshot, dict) and snapshot.get("ticket_id") == scenario_id:
         return snapshot
     return None
+
+
+def dds_state_for_card(session, card_id):
+    """Project only the selected card, including completed queue entries."""
+    state = session.dynamic_state if session and isinstance(session.dynamic_state, dict) else {}
+    dds = state.get("dds", {})
+    if not isinstance(dds, dict):
+        return {}
+    if card_id and dds.get("card_id") and str(dds["card_id"]) != str(card_id):
+        for item in dds.get("completed_cards", []):
+            if isinstance(item, dict) and str(item.get("card_id")) == str(card_id):
+                return {**item, "submitted_at": item.get("card_submitted_at")}
+        return {}
+    return dds
 
 
 def _score(value):
@@ -82,15 +101,15 @@ def resolve_attempt_score_and_status(session, ticket_result=None, eval_result=No
     # A numeric mark alone does not define success without a saved rubric outcome.
     saved_passed = ev_scores.get("is_passed")
     if not isinstance(saved_passed, bool):
-        saved_passed = bool(tr.is_passed) if tr is not None and tr_score is not None else None
+        saved_passed = bool(tr.is_passed) if tr is not None and (tr_score is not None or tr.is_appealed) else None
     dds_passed = dds.get("is_passed") if isinstance(dds.get("is_passed"), bool) else None
 
     def result_status(passed):
         return "passed" if passed is True else ("failed" if passed is False else "completed")
 
-    if tr and tr.is_appealed and tr_score is not None:
+    if tr and tr.is_appealed:
         return tr_score, bool(tr.is_passed), "passed" if tr.is_passed else "failed", tr.errors_count or 0, "OVERRIDDEN"
-    if ev and (ev.is_appealed or ev.expert_modified_at) and ev_score is not None:
+    if ev and (ev.is_appealed or ev.expert_modified_at) and (ev_score is not None or isinstance(saved_passed, bool)):
         passed = saved_passed
         return ev_score, passed, result_status(passed), len(ev.errors_list or []), "OVERRIDDEN"
     if dds.get("teacher_comment") and dds_score is not None:

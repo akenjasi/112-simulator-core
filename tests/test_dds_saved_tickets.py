@@ -44,13 +44,17 @@ async def test_selected_saved_ticket_supplies_exact_services_without_new_ticket_
     assert 'SECRET' not in loaded.text and 'hidden' not in loaded.text
     names=[item['name'] for item in expected['services']]
     for status in ['Принята','Начало реагирования','Прибытие','Проведение работ','Работы завершены']:
+        if status == 'Работы завершены':
+            dispatched=await request('POST',base+'/actions',users['cadets'][0],json=action(
+                service_name=names[0],kind='dispatch',status=None,who_accepted='Учебная бригада',summary='Направлена на место'))
+            assert dispatched.status_code==200,dispatched.text
         saved=await request('POST',base+'/actions',users['cadets'][0],json=action(service_name=names[0],status=status))
         assert saved.status_code==200,saved.text
         assert saved.json()['allowed_service_statuses'][names[1]]==['Принята','Не принята']
     second=await request('POST',base+'/actions',users['cadets'][0],json=action(service_name=names[1],status='Принята'))
     assert second.status_code==200,second.text
     restored=await request('GET',base,users['cadets'][0])
-    assert restored.json()['incoming_card']==expected and len(restored.json()['actions'])==6
+    assert restored.json()['incoming_card']==expected and len(restored.json()['actions'])==7
     async with AsyncSessionLocal() as db:
         assert await db.scalar(select(func.count()).select_from(ScenarioTicket))==before
         card=await db.get(IncidentCard,restored.json()['card_id'])

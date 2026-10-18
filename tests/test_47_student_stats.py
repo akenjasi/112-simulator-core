@@ -192,7 +192,10 @@ async def test_demo_session_creation_defaults_to_dds(cadet_auth_client: AsyncCli
     """
     Демо-сессия курсанта по умолчанию создаётся для ДДС.
     """
-    gt = GeneratedTicket(category="ДТП", subcategory="Авария", complexity=2, plot="Demo plot", status="active")
+    from copy import deepcopy
+    from tests.test_dds_cycle_acceptance import INCOMING
+    gt = ScenarioTicket(title="Подготовленная карточка", category="ДТП",
+                        content={"incoming_card": deepcopy(INCOMING)}, workflow_state={"status": "APPROVED"})
     db_session.add(gt)
     await db_session.commit()
 

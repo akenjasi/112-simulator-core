@@ -32,9 +32,8 @@ export function CallerPanel({ data }: Props) {
             </div>
             <div className="relative flex h-[400px] 2xl:h-[560px] w-full items-center justify-center rounded border border-[#b4b9bc] bg-[#dbeafe]">
               <div className="flex flex-col items-center gap-2 2xl:gap-2">
-                <MapPinned className="h-12 2xl:h-16 w-12 2xl:w-16 text-red-600 animate-bounce" />
                 <span className="rounded bg-white/90 px-4 2xl:px-5 py-2 2xl:py-2 text-sm 2xl:text-sm font-bold shadow">
-                  Чертановская ул., 58, к. 2 (Координаты: 55.6024, 37.5951)
+                  Координаты в карточке не переданы. Положение на карте недоступно.
                 </span>
               </div>
             </div>

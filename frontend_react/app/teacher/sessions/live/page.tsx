@@ -942,6 +942,7 @@ export default function LiveDashboardPage(props: LiveDashboardProps = {}) {
                               >
                                 {(() => {
                                   const s = t.status?.toLowerCase()
+                                  if (s === "pending") return "Ожидает выдачи"
                                   if (s === "ungraded") return "Выполнено, нет оценки"
                                   if (s === "completed") return "Выполнено"
                                   if (s === "incomplete") return "Не завершено"
@@ -1088,7 +1089,8 @@ export default function LiveDashboardPage(props: LiveDashboardProps = {}) {
                                     >
                                       {(() => {
                                         const s = t.status?.toLowerCase()
-                                        if (s === "ungraded") return "Выполнено, нет оценки"
+                                        if (s === "pending") return "Ожидает выдачи"
+                                  if (s === "ungraded") return "Выполнено, нет оценки"
                                         if (s === "completed") return "Выполнено"
                                         if (s === "incomplete") return "Не завершено"
                                         if (s === "passed") return "Сдано"

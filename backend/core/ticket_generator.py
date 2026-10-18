@@ -101,6 +101,7 @@ def generate_tickets(classifier_row: ClassifierRow, count: int, faker: Any) -> L
                 "gender": gender,
                 "speaker": speaker,
             },
+            dds_etalon=None,
         )
         tickets.append(ticket)
 

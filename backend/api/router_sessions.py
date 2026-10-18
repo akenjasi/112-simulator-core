@@ -369,16 +369,18 @@ async def create_demo_session(
     if target_role == "DISPATCHER_DDS":
         from backend.core.dds_cycle import incoming_card_from_ticket, is_suitable_dds_ticket, extract_dds_ticket_metadata
 
+        from backend.core.dds_queue import available_for_training, initialize_queue
+
         chosen_id = req.ticket_id if req else None
         if chosen_id:
             saved_ticket = await db.get(ScenarioTicket, chosen_id)
-            if not is_suitable_dds_ticket(saved_ticket):
+            if not is_suitable_dds_ticket(saved_ticket) or not available_for_training(saved_ticket):
                 raise HTTPException(status_code=404, detail="Готовый билет ДДС не найден или удалён")
         else:
             candidates = (await db.scalars(select(ScenarioTicket).where(
                 (ScenarioTicket.is_deleted == False) | ScenarioTicket.is_deleted.is_(None)
             ).order_by(ScenarioTicket.created_at.desc()))).all()
-            suitable = [ticket for ticket in candidates if is_suitable_dds_ticket(ticket)]
+            suitable = [ticket for ticket in candidates if is_suitable_dds_ticket(ticket) and available_for_training(ticket)]
             # Prefer explicitly active/published material over unmarked legacy rows.
             published = [ticket for ticket in suitable if (ticket.workflow_state or {}).get("status") in ("active", "published")]
             import secrets
@@ -390,7 +392,9 @@ async def create_demo_session(
             assignment = Assignment(session_type="CARD_ACTIONS", mode="TRAINING", status="ACTIVE",
                 target_role=target_role, cadet_id=current_user.user_id,
                 assigned_by=current_user.user_id if current_user.role == "TEACHER" else None,
-                scenario_id=saved_ticket.scenario_id, categories=[category], complexity=str(complexity),
+                scenario_id=saved_ticket.scenario_id, card_pool_ids=[saved_ticket.scenario_id],
+                card_pool_source="self_training",
+                categories=[category], complexity=str(complexity),
                 teacher_notes="Самостоятельная тренировка по сохранённому билету")
             db.add(assignment)
             await db.flush()
@@ -399,18 +403,18 @@ async def create_demo_session(
                 categories=[category], complexity=str(complexity))
             db.add(session)
             await db.flush()
-            card = IncidentCard(session_id=session.session_id, scenario_id=saved_ticket.scenario_id,
-                operator_id=current_user.user_id, card_origin="112_CALL", status="open", filled_data=deepcopy(incoming),
-                assigned_services={s["name"]: {"id": s["id"], "status": s["status"], "history": []} for s in incoming["services"]})
-            db.add(card)
-            await db.flush()
-            session.dynamic_state = {"dds": {"incoming_card": incoming, "card_id": card.card_id,
-                                             "actions": [], "submitted_at": None}}
+            await initialize_queue(db, session, [{"ticket_id": saved_ticket.scenario_id, "incoming_card": incoming}],
+                                   datetime.datetime.now(datetime.timezone.utc))
+            # Preserve the legacy demo API's incoming-card origin and active result marker.
+            card = await db.get(IncidentCard, session.dynamic_state["dds"]["card_id"])
+            card.card_origin = "112_CALL"
             db.add(TicketResult(session_id=session.session_id, ticket_id=saved_ticket.scenario_id,
                                 status="active", is_passed=False))
             await db.commit()
             return DemoSessionResponse(session_id=session.session_id, ticket_id=saved_ticket.scenario_id,
                 role=target_role, redirect_url=f"/dds/journal?focus_session_id={session.session_id}&focus_ticket_id={saved_ticket.scenario_id}")
+
+        raise HTTPException(status_code=409, detail="Нет доступных подготовленных билетов ДДС")
 
     import uuid
     demo_uuid = str(uuid.uuid4())

@@ -164,7 +164,10 @@ async def test_parallel_start_action_finish_are_not_duplicate_or_lost_updates():
 @pytest.mark.asyncio
 async def test_completed_ungraded_and_teacher_stop_are_honest_in_history_and_report():
     d = await setup_group(); lesson, ss = await start(d)
-    first = await request("POST", f"/api/dds/sessions/{ss[0]['session_id']}/finish", d["cadets"][0], json={})
+    # Completing a card and stopping an exercise are separate queue operations.
+    from tests.test_dds_queue import ready, complete
+    await ready(ss[0], d["cadets"][0])
+    first = await complete(ss[0], d["cadets"][0])
     assert first.status_code == 200 and first.json()["score"] is None, first.text
     stop = await request("POST", f"/api/v1/lessons/{lesson}/stop", d["teacher"])
     assert stop.status_code == 200, stop.text
@@ -185,7 +188,7 @@ async def test_completed_ungraded_and_teacher_stop_are_honest_in_history_and_rep
     assert all(p["tickets"][0]["ticket_id"] == d["ticket_id"] for p in people.values())
     report = await request("GET", f"/api/ai-analytics/lessons/{lesson}/data", d["teacher"])
     assert report.status_code == 200, report.text
-    assert report.json()["summary"] == {"student_count": 2, "completed_session_count": 2, "evaluation_count": 0, "ticket_result_count": 0, "incident_card_count": 2}
+    assert report.json()["summary"] == {"student_count": 2, "completed_session_count": 2, "evaluation_count": 0, "ticket_result_count": 1, "incident_card_count": 2}
     async with AsyncSessionLocal() as db:
         group = await db.get(StudentGroup, d["group_id"])
         group.cadet_ids = []; group.students = []

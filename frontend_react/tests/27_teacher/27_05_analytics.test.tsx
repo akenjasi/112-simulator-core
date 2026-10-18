@@ -123,8 +123,8 @@ describe('27.5: Пост-аналитика и Апелляция', () => {
           });
         }
 
-        // PATCH record appeal
-        if (urlStr.includes('/appeal') && init?.method === 'PATCH') {
+        // Unified record grading accepts status without a numeric score.
+        if (urlStr.endsWith('/grade-override') && init?.method === 'POST') {
           const body = JSON.parse(init.body as string);
           return Promise.resolve({
             ok: true,
@@ -212,7 +212,7 @@ describe('27.5: Пост-аналитика и Апелляция', () => {
     expect(screen.getAllByText(/Не все службы вызваны/i).length).toBeGreaterThan(0);
   });
 
-  it('should open appeal modal with Textarea when clicking Изменить оценку and send PATCH request', async () => {
+  it('should open the grading modal and send the selected status without a numeric score', async () => {
     render(<AnalyticsPage />);
     await loadTestSession();
 
@@ -230,20 +230,22 @@ describe('27.5: Пост-аналитика и Апелляция', () => {
 
     // Fill in comment
     fireEvent.change(commentInput, { target: { value: 'Опечатка в адресе, курсант исправил устно' } });
+    fireEvent.change(screen.getByLabelText('Новый статус оценки'), { target: { value: 'passed' } });
 
     // Click Save
     const saveBtn = screen.getByRole('button', { name: /Сохранить/i });
     fireEvent.click(saveBtn);
 
-    // Verify PATCH request
+    // The selected status and optional score use the same audited endpoint.
     await waitFor(() => {
       expect(global.fetch).toHaveBeenCalledWith(
-        expect.stringMatching(/\/api\/v1\/analytics\/records\/.*\/appeal/),
+        expect.stringMatching(/\/api\/v1\/analytics\/records\/.*\/grade-override/),
         expect.objectContaining({
-          method: 'PATCH',
+          method: 'POST',
           headers: expect.objectContaining({ 'Content-Type': 'application/json' }),
           body: JSON.stringify({
             status: 'passed',
+            reason: 'Опечатка в адресе, курсант исправил устно',
             comment: 'Опечатка в адресе, курсант исправил устно',
           }),
         })

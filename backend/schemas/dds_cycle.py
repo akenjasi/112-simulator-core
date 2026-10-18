@@ -153,6 +153,7 @@ class DDSActionPayload(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     request_id: str = Field(..., min_length=1, max_length=128)
+    card_id: Optional[str] = Field(None, min_length=1)
     kind: Literal["status", "dispatch"]
     service_name: str = Field(..., min_length=1, max_length=255)
     status: Optional[str] = Field(None, max_length=128)
@@ -184,6 +185,25 @@ class DDSFinishPayload(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
 
+class DDSCompletePayload(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    request_id: str = Field(..., min_length=1, max_length=128)
+
+
+class DDSTrainingStartPayload(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    request_id: str = Field(..., min_length=1, max_length=128)
+    ticket_ids: List[str] = Field(..., min_length=1)
+
+    @field_validator("ticket_ids")
+    @classmethod
+    def validate_pool(cls, values: List[str]) -> List[str]:
+        clean = [value.strip() for value in values]
+        if any(not value for value in clean) or len(set(clean)) != len(clean):
+            raise ValueError("Expected nonempty unique ticket IDs")
+        return clean
+
+
 class DDSSessionStateResponse(BaseModel):
     session_id: str
     lesson_id: str
@@ -202,5 +222,16 @@ class DDSSessionStateResponse(BaseModel):
     is_expired: Optional[bool] = False
     start_time: Optional[str] = None
     error_limit: Optional[int] = None
+    received_at: Optional[str] = None
+    card_submitted_at: Optional[str] = None
+    current_index: int = 0
+    total_cards: int = 1
+    completed_cards: int = 0
+    can_complete: bool = False
+    completion_blockers: List[Dict[str, str]] = Field(default_factory=list)
+    cards: List[Dict[str, Any]] = Field(default_factory=list)
+    readonly: bool = False
+    stopped_at: Optional[str] = None
+    stop_reason: Optional[str] = None
 
     model_config = ConfigDict(from_attributes=True)
