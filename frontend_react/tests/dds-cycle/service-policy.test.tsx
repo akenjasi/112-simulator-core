@@ -31,6 +31,7 @@ it('keeps terminal history and a visibly disabled pencil even for a historical s
 it('needs no stage selection and requires a reason if the operator refuses instead', () => {
   render(<ServicesBar data={data} allowedStatuses={{[name]:['Начало реагирования','Отказ от выполнения работ','Принята']}}/>)
   fireEvent.click(screen.getByRole('button', {name:'Редактировать статус'}))
+  fireEvent.change(screen.getByPlaceholderText('Номер наряда'), {target:{value:'101'}})
   expect(screen.getByRole('button', {name:'Подтвердить'})).not.toBeDisabled()
   fireEvent.click(screen.getByRole('button', {name:'Выбрать статус службы'}))
   fireEvent.click(screen.getByText('Отказ от выполнения работ'))
@@ -53,6 +54,7 @@ it('passes validated server options through the assigned console to the historic
 it.each([
   ['DDS_REFUSAL_REASON_REQUIRED', 'Укажите причину отказа'],
   ['DDS_SERVICE_TRANSITION_FORBIDDEN', 'Этот переход статуса службы недоступен. Обновите данные'],
+  ['DDS_ORDER_NUMBER_REQUIRED', 'Укажите номер наряда'],
   ['private backend data', 'Конфликт состояния сессии. Обновите данные'],
 ])('shows only a known safe policy error: %s', async (code, message) => {
   localStorage.setItem('token','test')

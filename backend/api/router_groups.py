@@ -108,7 +108,7 @@ async def list_all_students(
         StudentResponse(
             user_id=s.user_id,
             id=s.user_id,
-            student_id=getattr(s, "student_id", None) or "СМ1-12",
+            student_id=s.student_id,
             username=s.username,
             email=s.username,
             full_name=s.full_name,

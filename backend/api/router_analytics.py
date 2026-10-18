@@ -12,6 +12,7 @@ from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm.attributes import flag_modified
 
+from backend.core.dds_cycle import build_dds_cadet_stats
 from backend.core.gradebook_records import build_attempt_records, dds_state_for_card, historical_record_snapshot, latest_evaluation, resolve_attempt_score_and_status
 from backend.core.analytics_engine import build_error_heatmap, calculate_trends
 from backend.core.deps import get_current_user, require_role
@@ -541,6 +542,83 @@ async def get_session_analytics(
         status=exam_session.status.lower() if exam_session.status else "unknown",
         created_at=exam_session.start_time.isoformat() if exam_session.start_time else None,
         cadets=[cadet_summary],
+    )
+
+
+@analytics_router.get("/lessons/{lesson_id}", response_model=SessionAnalyticsResponse, dependencies=[Depends(require_role("TEACHER"))])
+@analytics_v1_router.get("/lessons/{lesson_id}", response_model=SessionAnalyticsResponse, dependencies=[Depends(require_role("TEACHER"))])
+async def get_lesson_analytics(
+    lesson_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+):
+    """Retrieve session statistics for an entire lesson with real cadets and tickets breakdown."""
+    lesson_res = await db.execute(select(Assignment).where(Assignment.assignment_id == lesson_id))
+    lesson = lesson_res.scalar_one_or_none()
+    if not lesson:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Занятие {lesson_id} не найдено",
+        )
+
+    if current_user.role == "TEACHER":
+        if lesson.assigned_by != current_user.user_id:
+            allowed_group_ids = await _get_teacher_allowed_group_ids(db, current_user)
+            if not lesson.group_id or lesson.group_id not in allowed_group_ids:
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="Доступ запрещен: у вас нет прав на просмотр этого занятия",
+                )
+
+    group = None
+    if lesson.group_id:
+        group_res = await db.execute(select(StudentGroup).where(StudentGroup.group_id == lesson.group_id))
+        group = group_res.scalar_one_or_none()
+
+    cadets_list, _, _, _, _ = await build_dds_cadet_stats(lesson, group, db)
+
+    cadet_summaries: List[CadetAnalyticsSummary] = []
+    for c in cadets_list:
+        records: List[RecordSummary] = []
+        for t in c.tickets:
+            record_id = t.record_id or t.card_id
+            if not record_id:
+                # Future queue entries have ticket IDs, but no answer to review.
+                continue
+            records.append(
+                RecordSummary(
+                    record_id=record_id,
+                    ticket_id=t.ticket_id,
+                    title=t.title or f"Билет #{t.ticket_id[:6]}",
+                    status=t.status,
+                    score=round(t.score, 1) if t.score is not None else None,
+                    is_appealed=False,
+                    errors_count=t.errors_count,
+                    teacher_comment=None,
+                    evaluation_source="honest",
+                )
+            )
+
+        success_rate = None
+        if (c.passed + c.failed) > 0:
+            success_rate = round((c.passed / (c.passed + c.failed)) * 100.0, 1)
+
+        cadet_summaries.append(
+            CadetAnalyticsSummary(
+                cadet_id=c.cadet_id,
+                cadet_name=c.cadet_name,
+                success_rate=success_rate,
+                records=records,
+            )
+        )
+
+    title = f"Занятие: {group.group_name}" if group and group.group_name else (lesson.teacher_notes or f"Занятие #{lesson.assignment_id[:8]}")
+    return SessionAnalyticsResponse(
+        session_id=lesson.assignment_id,
+        title=title,
+        status=lesson.status.lower() if lesson.status else "unknown",
+        created_at=lesson.created_at.isoformat() if lesson.created_at else None,
+        cadets=cadet_summaries,
     )
 
 
@@ -1813,9 +1891,10 @@ async def get_errors_heatmap(
             EvaluationResult.errors_list,
         )
         .select_from(ExamSession)
-        .outerjoin(User, User.user_id == ExamSession.cadet_id)
+        .join(User, User.user_id == ExamSession.cadet_id)
         .outerjoin(TicketResult, TicketResult.session_id == ExamSession.session_id)
         .outerjoin(EvaluationResult, EvaluationResult.session_id == ExamSession.session_id)
+        .where(User.role == "CADET")
     )
 
     conds = []

@@ -1,0 +1,10 @@
+# Optional bridge between the main stack and docker-compose.llm.yml.
+# Supply DDS_LLM_MODEL_PATH for an existing local GGUF; no model is downloaded.
+services:
+  backend:
+    environment:
+      DDS_LLM_BASE_URL: http://llm:8080/v1
+      DDS_LLM_MODEL: dds-qwen
+  llm:
+    networks:
+      - simulator_net

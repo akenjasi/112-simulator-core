@@ -47,6 +47,7 @@ async def _background_generate_report(
     group_id: Optional[str] = None,
     session_ids: Optional[List[str]] = None,
     custom_records: Optional[List[Dict[str, Any]]] = None,
+    output_format: str = "pdf",
 ) -> None:
     """Async background task that compiles session data, calculates scores,
 
@@ -56,7 +57,7 @@ async def _background_generate_report(
         cadets_data: List[Dict[str, Any]] = []
 
         # 1. If custom_records are provided directly (e.g. from API/tests)
-        if custom_records:
+        if custom_records is not None:
             for rec in custom_records:
                 c_comm = rec.get(
                     "comm_metrics",
@@ -77,7 +78,7 @@ async def _background_generate_report(
                 )
 
                 score, details = calculate_final_score(c_comm, c_card, c_sla)
-                cadets_data.append({
+                item = {
                     "cadet_name": rec.get("cadet_name", "Курсант"),
                     "ticket_id": rec.get("ticket_id", "Билет #1"),
                     "comm_score": details["comm_score"],
@@ -88,7 +89,14 @@ async def _background_generate_report(
                     "over_dispatched_services": c_card.get("over_dispatched_services", []),
                     "missed_critical_factoids": c_card.get("missed_critical_factoids", []),
                     "penalties_list": details["penalties_list"],
-                })
+                }
+                # Journal exports already carry the recorded grade, including a
+                # teacher's override. Missing breakdowns must remain empty.
+                if "final_score" in rec:
+                    for key in ("final_score", "comm_score", "card_score", "sla_score", "time_to_first_dispatch_sec"):
+                        item[key] = rec.get(key)
+                    item["penalties_list"] = rec.get("penalties_list") or []
+                cadets_data.append(item)
 
         # 2. Query from database if group_id or session_ids are given
         elif group_id or session_ids:
@@ -183,7 +191,7 @@ async def _background_generate_report(
                 logger.warning("Database query failed during report generation: %s", db_err)
 
         # 3. Fallback placeholder if no data was found
-        if not cadets_data:
+        if not cadets_data and custom_records is None:
             cadets_data.append({
                 "cadet_name": "Курсант (Демо / Данные отсутствуют)",
                 "ticket_id": group_id or "Билет #0",
@@ -216,9 +224,13 @@ async def _background_generate_report(
 
         critical_errors_count = len(over_dispatch_items) + len(missed_factoid_items)
 
-        avg_final = round(sum(c["final_score"] for c in cadets_data) / len(cadets_data))
-        avg_comm = round(sum(c["comm_score"] for c in cadets_data) / len(cadets_data))
-        avg_card = round(sum(c["card_score"] for c in cadets_data) / len(cadets_data))
+        def average(key: str) -> int:
+            values = [c[key] for c in cadets_data if c.get(key) is not None]
+            return round(sum(values) / len(values)) if values else 0
+
+        avg_final = average("final_score")
+        avg_comm = average("comm_score")
+        avg_card = average("card_score")
 
         context = {
             "generated_at": datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC"),
@@ -232,12 +244,12 @@ async def _background_generate_report(
             "missed_factoid_items": missed_factoid_items,
         }
 
-        # 5. Render HTML
-        html_content = render_report_html(context)
-
-        # 6. Save PDF asynchronously via asyncio.to_thread (Event loop is NEVER blocked)
-        output_pdf = f"/tmp/report_{task_id}.pdf"
-        await asyncio.to_thread(generate_pdf_from_html, html_content, output_pdf)
+        # Excel/CSV downloads do not require optional PDF rendering libraries.
+        output_pdf = None
+        if output_format == "pdf":
+            html_content = render_report_html(context)
+            output_pdf = f"/tmp/report_{task_id}.pdf"
+            await asyncio.to_thread(generate_pdf_from_html, html_content, output_pdf)
 
         # Also save CSV for dual export support
         output_csv = f"/tmp/report_{task_id}.csv"
@@ -283,6 +295,7 @@ async def generate_report(
         group_id=req.group_id,
         session_ids=req.session_ids,
         custom_records=req.custom_records,
+        output_format=req.format,
     )
 
     return {"task_id": task_id}
@@ -320,7 +333,7 @@ async def _download_report_response(task_id: str, format: str):
             detail="Report generation is still in progress",
         )
 
-    if task["status"] == "failed" or not task.get("file_path"):
+    if task["status"] == "failed":
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"Report generation failed: {task.get('error')}",
@@ -354,7 +367,7 @@ async def _download_report_response(task_id: str, format: str):
         )
 
     file_path = task["file_path"]
-    if not os.path.exists(file_path):
+    if not file_path or not os.path.exists(file_path):
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="PDF report file not found",

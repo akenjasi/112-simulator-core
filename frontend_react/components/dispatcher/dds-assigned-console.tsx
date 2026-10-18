@@ -190,7 +190,9 @@ export function DDSAssignedConsole({sessionId, ticketId, cardId}: Props) {
   const completionNotice = sessionState.readonly && !isCompleted ? "Карточка завершена: просмотр истории" : isCompleted
     ? sessionState.submitted_at
       ? `Выполнено. ${sessionState.score == null ? "Нет оценки" : `Оценка: ${sessionState.score}`}`
-      : "Занятие завершено. Выполнение не завершено. Нет оценки"
+      : sessionState.stop_reason === "exam_timeout"
+        ? "Время выполнения экзамена истекло. Выполнение не завершено. Нет оценки"
+        : "Занятие завершено. Выполнение не завершено. Нет оценки"
     : null
 
   return (

@@ -223,6 +223,17 @@ export default function TicketsPage() {
 
   const [deletingTicketId, setDeletingTicketId] = useState<string | null>(null)
   const [approvingTicketId, setApprovingTicketId] = useState<string | null>(null)
+  const [isBulkApproving, setIsBulkApproving] = useState(false)
+  const [bulkApproval, setBulkApproval] = useState<{
+    total: number
+    attempted: number
+    succeeded: number
+    failures: { id: string; label: string; message: string }[]
+  } | null>(null)
+  const approvalInFlightRef = useRef(false)
+  // Preserve confirmed mutations if an older list request finishes during approval.
+  const approvalRevisionRef = useRef(0)
+  const approvedTicketIdsRef = useRef(new Map<string, number>())
 
   // Filters state
   const [filterCategory, setFilterCategory] = useState<string>("")
@@ -459,6 +470,7 @@ export default function TicketsPage() {
       comp = filterComplexity,
       silent = false
     ) => {
+      const requestedAtRevision = approvalRevisionRef.current
       try {
         if (!silent) {
           setIsRefreshing(true)
@@ -477,7 +489,12 @@ export default function TicketsPage() {
         }
         const data = await res.json()
         const ticketList: TicketItem[] = Array.isArray(data) ? data : []
-        setTickets(ticketList)
+        setTickets(ticketList.map((ticket) =>
+          (approvedTicketIdsRef.current.get(ticket.ticket_id || ticket.id || "") ?? 0) > requestedAtRevision &&
+          ["DRAFT", "ACTIVE", "UNDER_REVIEW"].includes(getTicketStatus(ticket))
+            ? { ...ticket, status: "APPROVED", workflow_state: { ...ticket.workflow_state, status: "APPROVED" } }
+            : ticket
+        ))
         return ticketList
       } catch (err: any) {
         if (!silent) {
@@ -544,8 +561,9 @@ export default function TicketsPage() {
 
   const handleSelectImportFile = (file: File) => {
     const name = (file?.name || "").toLowerCase()
-    if (!name.endsWith(".xlsx") && !name.endsWith(".xls")) {
-      setImportError("Поддерживаются только файлы Excel (.xlsx, .xls)")
+    if (!name.endsWith(".xlsx")) {
+      setImportFile(null)
+      setImportError("Поддерживаются файлы Excel .xlsx. Сохраните старый файл .xls в формате .xlsx.")
       return
     }
     setImportError(null)
@@ -691,6 +709,20 @@ export default function TicketsPage() {
       if (pollingRef.current) clearInterval(pollingRef.current)
       pollingRef.current = setInterval(async () => {
         try {
+          let job: { status?: string; generated_count?: number; error_code?: string } | null = null
+          if (responseData.generation_id) {
+            const statusRes = await fetch(`/api/v1/tickets/status?generation_id=${encodeURIComponent(responseData.generation_id)}`)
+            if (statusRes.status === 404) {
+              if (pollingRef.current) clearInterval(pollingRef.current)
+              if (countdownRef.current) clearInterval(countdownRef.current)
+              setIsGenerating(false)
+              setGenerationState(null)
+              setError("Статус генерации недоступен. Обновите список билетов перед повторным запуском.")
+              return
+            }
+            if (!statusRes.ok) throw new Error("Не удалось получить статус генерации")
+            job = await statusRes.json()
+          }
           // Poll ticket list
           const updatedList = await loadTickets(
             activeFiltersRef.current.category,
@@ -703,7 +735,16 @@ export default function TicketsPage() {
           const baseline = baselineTicketIdsRef.current
           const newTickets = updatedList.filter((t) => !baseline.has(t.ticket_id || t.id || ""))
 
-          if (newTickets.length >= countNum || updatedList.length >= baseline.size + countNum) {
+          if (job?.status === "failed") {
+            if (pollingRef.current) clearInterval(pollingRef.current)
+            if (countdownRef.current) clearInterval(countdownRef.current)
+            setIsGenerating(false)
+            setGenerationState(null)
+            const reason = job.error_code === "UNIQUE_TICKETS_EXHAUSTED"
+              ? "Не удалось получить больше уникальных билетов."
+              : "Генерация прервана."
+            setError(`${reason} Сохранено ${job.generated_count ?? 0} из ${countNum}.`)
+          } else if (job ? job.status === "completed" : newTickets.length >= countNum || updatedList.length >= baseline.size + countNum) {
             // Completed! Stop polling
             if (pollingRef.current) clearInterval(pollingRef.current)
             if (countdownRef.current) clearInterval(countdownRef.current)
@@ -711,11 +752,11 @@ export default function TicketsPage() {
             setIsGenerating(false)
             setGenerationState({
               status: "done",
-              targetCount: newTickets.length || countNum,
+              targetCount: job?.generated_count ?? (newTickets.length || countNum),
               remainingSeconds: 0,
               startTime: 0,
             })
-            setSuccessMessage(`Готово! Сгенерировано ${newTickets.length || countNum} билетов`)
+            setSuccessMessage(`Готово! Сгенерировано ${job?.generated_count ?? (newTickets.length || countNum)} билетов`)
           }
         } catch (pollErr) {
           console.warn("Polling error:", pollErr)
@@ -757,61 +798,78 @@ export default function TicketsPage() {
     }
   }
 
-  // Handle Approve Ticket
+  // Both approval paths use the server's existing validation for each ticket.
+  const approveTicket = async (ticket: TicketItem) => {
+    const ticketId = ticket.ticket_id || ticket.id
+    if (!ticketId) throw new Error("У билета нет ID")
+    const token = getStoredToken()
+    const res = await fetch(`/api/tickets/${encodeURIComponent(ticketId)}/approve`, {
+      method: "POST",
+      headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+    })
+    if (!res.ok) {
+      const data = await res.json().catch(() => null)
+      const detail = data?.detail
+      throw new Error(typeof detail === "string" ? detail : `Ошибка утверждения билета (${res.status})`)
+    }
+    approvedTicketIdsRef.current.set(ticketId, ++approvalRevisionRef.current)
+    const markApproved = (item: TicketItem): TicketItem => ({
+      ...item,
+      status: "APPROVED",
+      workflow_state: { ...item.workflow_state, status: "APPROVED" },
+    })
+    setTickets((prev) => prev.map((item) =>
+      (item.ticket_id || item.id) === ticketId ? markApproved(item) : item
+    ))
+    setSelectedTicket((prev) =>
+      prev && (prev.ticket_id || prev.id) === ticketId ? markApproved(prev) : prev
+    )
+  }
+
   const handleApproveTicket = async (ticket: TicketItem) => {
+    if (approvalInFlightRef.current) return
     const ticketId = ticket.ticket_id || ticket.id
     if (!ticketId) return
+    approvalInFlightRef.current = true
     try {
       setApprovingTicketId(ticketId)
       setError(null)
-      const token = getStoredToken()
-      const headers: HeadersInit = {
-        ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      }
-      const res = await fetch(`/api/tickets/${encodeURIComponent(ticketId)}/approve`, {
-        method: "POST",
-        headers,
-      })
-      if (!res.ok) {
-        const errData = await res.json().catch(() => null)
-        throw new Error(errData?.detail || `Ошибка утверждения билета (${res.status})`)
-      }
-      // Обновляем статус в локальном стейте билетов
-      setTickets((prev) =>
-        prev.map((t) => {
-          if ((t.ticket_id || t.id) === ticketId) {
-            return {
-              ...t,
-              status: "APPROVED",
-              workflow_state: {
-                ...(t.workflow_state || {}),
-                status: "APPROVED",
-              },
-            }
-          }
-          return t
-        })
-      )
-      if (selectedTicket && (selectedTicket.ticket_id || selectedTicket.id) === ticketId) {
-        setSelectedTicket((prev) =>
-          prev
-            ? {
-                ...prev,
-                status: "APPROVED",
-                workflow_state: {
-                  ...(prev.workflow_state || {}),
-                  status: "APPROVED",
-                },
-              }
-            : null
-        )
-      }
+      await approveTicket(ticket)
       setSuccessMessage(`Сценарий ${ticket.display_id || ticketId} успешно утвержден!`)
       setTimeout(() => setSuccessMessage(null), 4000)
     } catch (err: any) {
       setError(err.message || "Не удалось утвердить сценарий")
     } finally {
+      approvalInFlightRef.current = false
       setApprovingTicketId(null)
+    }
+  }
+
+  const handleBulkApprove = async (candidates: TicketItem[]) => {
+    if (approvalInFlightRef.current || candidates.length === 0) return
+    approvalInFlightRef.current = true
+    setIsBulkApproving(true)
+    setError(null)
+    setSuccessMessage(null)
+    const result = { total: candidates.length, attempted: 0, succeeded: 0,
+      failures: [] as { id: string; label: string; message: string }[] }
+    setBulkApproval({ ...result })
+    try {
+      for (const ticket of candidates) {
+        const id = ticket.ticket_id || ticket.id || ""
+        try {
+          await approveTicket(ticket)
+          result.succeeded += 1
+        } catch (err: any) {
+          result.failures.push({ id, label: ticket.display_id || id,
+            message: err.message || "Не удалось утвердить билет" })
+        }
+        result.attempted += 1
+        setBulkApproval({ ...result, failures: [...result.failures] })
+      }
+    } finally {
+      approvalInFlightRef.current = false
+      setIsBulkApproving(false)
     }
   }
 
@@ -1074,6 +1132,16 @@ export default function TicketsPage() {
     return displayId.includes(query)
   })
 
+  const seenApprovalIds = new Set<string>()
+  const approvableTickets = filteredTickets.filter((ticket) => {
+    const id = ticket.ticket_id || ticket.id
+    if (!id || seenApprovalIds.has(id) || !["DRAFT", "ACTIVE", "UNDER_REVIEW"].includes(getTicketStatus(ticket))) return false
+    seenApprovalIds.add(id)
+    return true
+  })
+  const failedIds = new Set(bulkApproval?.failures.map((failure) => failure.id))
+  const retryTickets = approvableTickets.filter((ticket) => failedIds.has(ticket.ticket_id || ticket.id || ""))
+
   return (
     <div className="container mx-auto p-4 sm:p-6 max-w-6xl space-y-6">
       {/* Page Header */}
@@ -1097,7 +1165,7 @@ export default function TicketsPage() {
             variant="outline"
             size="default"
             onClick={() => loadTickets()}
-            disabled={isLoading || isGenerating}
+            disabled={isLoading || isGenerating || isBulkApproving}
             title="Обновить список билетов"
             className="text-sm font-medium"
           >
@@ -1171,7 +1239,7 @@ export default function TicketsPage() {
                 Готово! Сгенерировано {generationState.targetCount} билетов
               </div>
               <div className="text-sm sm:text-base text-emerald-800 dark:text-emerald-300 mt-0.5">
-                Все сценарии и аудиофайлы TTS успешно сформированы и добавлены в базу
+                Сценарии добавлены в базу и ожидают проверки преподавателя
               </div>
             </div>
           </div>
@@ -1360,6 +1428,39 @@ export default function TicketsPage() {
               {(filterCategory || filterComplexity) && " (с учетом активных фильтров)"}
             </CardDescription>
           </div>
+          <div className="mt-3 flex flex-wrap items-center gap-3">
+            <Button
+              onClick={() => handleBulkApprove(approvableTickets)}
+              disabled={isLoading || isRefreshing || isGenerating || isBulkApproving || approvingTicketId !== null || deletingTicketId !== null || approvableTickets.length === 0}
+              aria-describedby="bulk-approval-scope"
+            >
+              {isBulkApproving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Check className="mr-2 h-4 w-4" />}
+              Утвердить все ({approvableTickets.length})
+            </Button>
+            <p id="bulk-approval-scope" className="text-sm text-muted-foreground">
+              Только неутверждённые билеты из текущего списка с учётом всех фильтров и поиска по ID.
+            </p>
+          </div>
+          {bulkApproval && (
+            <div className="mt-3 space-y-2 text-sm" aria-live="polite">
+              <p role="status">
+                {isBulkApproving ? `Обработано: ${bulkApproval.attempted} из ${bulkApproval.total}. ` : "Утверждение завершено. "}
+                Утверждено: {bulkApproval.succeeded} из {bulkApproval.total}. Ошибок: {bulkApproval.failures.length}.
+              </p>
+              {bulkApproval.failures.length > 0 && (
+                <div role="alert" className="text-destructive">
+                  <p>Не утверждены:</p>
+                  <ul className="list-disc pl-5">
+                    {bulkApproval.failures.map((failure) => <li key={failure.id}>{failure.label}: {failure.message}</li>)}
+                  </ul>
+                  <Button variant="outline" className="mt-2" onClick={() => handleBulkApprove(retryTickets)}
+                    disabled={isBulkApproving || approvingTicketId !== null || isRefreshing || retryTickets.length === 0}>
+                    Повторить неудачные ({retryTickets.length})
+                  </Button>
+                </div>
+              )}
+            </div>
+          )}
         </CardHeader>
 
         <CardContent>
@@ -1511,7 +1612,7 @@ export default function TicketsPage() {
                                 variant="outline"
                                 size="sm"
                                 onClick={() => handleApproveTicket(ticket)}
-                                disabled={approvingTicketId === ticketId}
+                                disabled={isBulkApproving || approvingTicketId !== null}
                                 aria-label={`Утвердить билет ${shortId}`}
                                 title="Утвердить сценарий"
                                 className="text-xs sm:text-sm font-medium border-emerald-500/40 text-emerald-700 hover:bg-emerald-50 hover:text-emerald-800 dark:border-emerald-500/40 dark:text-emerald-300 dark:hover:bg-emerald-950/40"
@@ -1538,7 +1639,7 @@ export default function TicketsPage() {
                               variant="outline"
                               size="sm"
                               onClick={() => handleDeleteTicket(ticket)}
-                              disabled={deletingTicketId === ticketId}
+                              disabled={isBulkApproving || deletingTicketId === ticketId}
                               aria-label={`Удалить билет ${shortId}`}
                               title="Удалить билет"
                               className="text-destructive hover:bg-destructive/10 hover:text-destructive h-8 w-8 p-0"
@@ -1650,7 +1751,7 @@ export default function TicketsPage() {
                   setImportFile(file)
                 }}
                 selectedFile={importFile}
-                accept=".xlsx,.xls,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel"
+                accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
                 disabled={isImportUploading}
                 title="2. Загрузить заполненный файл"
                 description="Перетащите сюда Excel-файл (.xlsx) или нажмите для выбора"
@@ -1962,7 +2063,7 @@ export default function TicketsPage() {
                     variant="outline"
                     size="sm"
                     onClick={() => handleApproveTicket(selectedTicket)}
-                    disabled={approvingTicketId === (selectedTicket.ticket_id || selectedTicket.id)}
+                    disabled={isBulkApproving || approvingTicketId !== null}
                     className="text-xs font-semibold border-emerald-500/40 text-emerald-700 hover:bg-emerald-50 dark:border-emerald-500/40 dark:text-emerald-300 dark:hover:bg-emerald-950/40"
                   >
                     {approvingTicketId === (selectedTicket.ticket_id || selectedTicket.id) ? (

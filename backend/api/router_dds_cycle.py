@@ -185,11 +185,14 @@ async def get_dds_ticket_categories(
 )
 async def get_cadet_assignments(
     include_history: bool = Query(False),
+    include_self_training: bool = Query(True),
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> List[DDSSessionStateResponse]:
     """Return assigned DDS sessions for the logged-in CADET (or ADMIN)."""
     items = await list_cadet_dds_assignments(current_user=current_user, db=db)
+    if not include_self_training:
+        items = [item for item in items if not item.get("is_self_training")]
     if include_history:
         expanded = []
         for item in items:

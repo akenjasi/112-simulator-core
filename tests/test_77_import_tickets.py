@@ -8,12 +8,12 @@ from backend.models.domain_02 import GeneratedTicket, ScenarioTicket
 
 
 @pytest.mark.asyncio
-async def test_batch_import_tickets(auth_client):
+async def test_batch_import_tickets(teacher_auth_client):
     """
     Test that template download works, and uploading a parsed list creates tickets.
     """
     # 1. Download template
-    res_template = await auth_client.get("/api/tickets/import/template")
+    res_template = await teacher_auth_client.get("/api/tickets/import/template")
     assert res_template.status_code == 200
     assert "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" in res_template.headers["content-type"]
     assert "tickets_template.xlsx" in res_template.headers.get("content-disposition", "")
@@ -56,7 +56,7 @@ async def test_batch_import_tickets(auth_client):
     wb_new.save(stream)
     stream.seek(0)
 
-    res_upload = await auth_client.post(
+    res_upload = await teacher_auth_client.post(
         "/api/tickets/import/upload",
         files={"file": ("tickets.xlsx", stream.getvalue(), "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")},
     )
@@ -84,15 +84,15 @@ async def test_batch_import_tickets(auth_client):
 
 
 @pytest.mark.asyncio
-async def test_download_template_v1_router(auth_client):
+async def test_download_template_v1_router(teacher_auth_client):
     """Verify template download endpoint works on /api/v1/tickets/import/template as well."""
-    res = await auth_client.get("/api/v1/tickets/import/template")
+    res = await teacher_auth_client.get("/api/v1/tickets/import/template")
     assert res.status_code == 200
     assert len(res.content) > 0
 
 
 @pytest.mark.asyncio
-async def test_upload_tickets_validation_errors(auth_client):
+async def test_upload_tickets_validation_errors(teacher_auth_client):
     """
     Test validation errors during upload:
     Row 2: Valid
@@ -123,7 +123,7 @@ async def test_upload_tickets_validation_errors(auth_client):
     wb.save(stream)
     stream.seek(0)
 
-    res = await auth_client.post(
+    res = await teacher_auth_client.post(
         "/api/tickets/import/upload",
         files={"file": ("batch.xlsx", stream.getvalue(), "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")},
     )
@@ -136,24 +136,24 @@ async def test_upload_tickets_validation_errors(auth_client):
 
 
 @pytest.mark.asyncio
-async def test_upload_invalid_file_format_and_empty(auth_client):
+async def test_upload_invalid_file_format_and_empty(teacher_auth_client):
     """Test rejection of non-excel files and empty content."""
     # 1. Non-excel extension
-    res = await auth_client.post(
+    res = await teacher_auth_client.post(
         "/api/tickets/import/upload",
         files={"file": ("tickets.txt", b"plain text", "text/plain")},
     )
     assert res.status_code == 400
 
     # 2. Empty file
-    res = await auth_client.post(
+    res = await teacher_auth_client.post(
         "/api/tickets/import/upload",
         files={"file": ("empty.xlsx", b"", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")},
     )
     assert res.status_code == 400
 
     # 3. Corrupted excel file
-    res = await auth_client.post(
+    res = await teacher_auth_client.post(
         "/api/tickets/import/upload",
         files={"file": ("corrupt.xlsx", b"invalid zip content", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")},
     )

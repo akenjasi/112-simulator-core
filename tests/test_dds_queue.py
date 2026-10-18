@@ -56,6 +56,7 @@ async def act(state, user, *, kind="status", status="Принята", **extra):
                "kind": kind, "service_name": "Аварийная служба"}
     if kind == "status":
         payload["status"] = status
+        payload.setdefault("order_number", "Н-101")
     else:
         payload.update(who_accepted="Начальник учебной бригады", summary="Бригада направлена по адресу")
     payload.update(extra)

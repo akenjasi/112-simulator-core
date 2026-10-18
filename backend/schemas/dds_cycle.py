@@ -233,5 +233,7 @@ class DDSSessionStateResponse(BaseModel):
     readonly: bool = False
     stopped_at: Optional[str] = None
     stop_reason: Optional[str] = None
+    card_pool_source: Optional[str] = None
+    is_self_training: Optional[bool] = False
 
     model_config = ConfigDict(from_attributes=True)

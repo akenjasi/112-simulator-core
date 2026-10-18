@@ -73,6 +73,33 @@ docker compose -p imba-llm -f docker-compose.llm.yml --env-file /path/to/externa
 - `http://127.0.0.1:8081/v1` — обращение к сервису с хоста.
 - `http://llm:8080/v1` — только при объединении сервисов в единую Docker-сеть (интеграция в основной compose проекта не производится).
 
+### Backend в Docker: подключение отчётов
+
+Для основного стенда предусмотрен опциональный `docker-compose.reports.yml`.
+Он объединяет backend и LLM в сети `simulator_net` и передаёт backend адрес
+`http://llm:8080/v1`. Loopback хоста `127.0.0.1:8081` внутри backend не работает.
+Используйте только уже подготовленные локальные веса и образ; флаг `--pull never`
+не даёт команде скачивать образ:
+
+```bash
+docker compose --env-file /path/to/external/.env.llm \
+  -f docker-compose.yml -f docker-compose.llm.yml -f docker-compose.reports.yml \
+  up -d --pull never llm backend
+```
+
+Read-only проверка доступности модели из backend, без генерации и учебных данных:
+
+```bash
+docker compose exec -T backend python -c \
+  'import asyncio; from backend.core.dds_report_llm import check_dds_llm_health; print(asyncio.run(check_dds_llm_health()))'
+```
+
+Успех — `status: ok`; `degraded` (например, 503) означает, что сервер пока не готов,
+`unreachable` — что соединение недоступно. `/health` у llama.cpp расположен вне `/v1`.
+Наличие этой конфигурации и mock-тесты не подтверждают реальный inference.
+При проверке 18.10.2026 работали только backend/frontend/postgres, LLM отсутствовал;
+готовность нейроотчёта на этом стенде остаётся неподтверждённой до запуска локальной модели.
+
 ---
 
 ## 6. Пример вызова генерации отчёта (Python)

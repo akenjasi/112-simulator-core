@@ -1,6 +1,6 @@
 """Pydantic schemas for reports and evaluations."""
 
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Literal, Optional
 from pydantic import BaseModel, Field
 
 
@@ -61,6 +61,7 @@ class CadetEvaluationItem(BaseModel):
 
 
 class ReportGenerateRequest(BaseModel):
+    format: Literal["pdf", "excel", "csv"] = "pdf"
     group_id: Optional[str] = None
     session_ids: Optional[List[str]] = None
     custom_records: Optional[List[Dict[str, Any]]] = None

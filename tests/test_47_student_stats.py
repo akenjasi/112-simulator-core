@@ -283,7 +283,7 @@ async def test_demo_session_creation_dds(cadet_auth_client: AsyncClient, db_sess
 @pytest.mark.asyncio
 async def test_student_id_and_no_avatar_url(auth_client: AsyncClient, cadet_auth_client: AsyncClient, db_session: AsyncSession):
     """
-    Проверка удаления avatar_url из API и генерации/сохранения короткого student_id формата СМ1-12.
+    Проверка удаления avatar_url и сохранения явно указанного student_id.
     """
     username = f"student_test_{uuid.uuid4().hex[:8]}@example.com"
     create_payload = {
@@ -315,7 +315,8 @@ async def test_student_id_and_no_avatar_url(auth_client: AsyncClient, cadet_auth
     me_data = me_res.json()
     assert "avatar_url" not in me_data
     assert "student_id" in me_data
-    assert me_data["student_id"] == "СМ1-12"
+    # The fixture account has no document number; do not invent one on profile reads.
+    assert me_data["student_id"] is None
 
 
 @pytest.mark.asyncio

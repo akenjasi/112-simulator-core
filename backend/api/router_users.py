@@ -41,8 +41,6 @@ async def get_current_user_profile(
     if current_user.role == "CADET":
         if not current_user.full_name:
             current_user.full_name = "Иванов Иван Иванович"
-        if not getattr(current_user, "student_id", None):
-            current_user.student_id = "СМ1-12"
     return current_user
 
 
@@ -124,7 +122,7 @@ async def create_user(
         password_hash=hash_password(user_in.password),
         role=user_in.role,
         full_name=user_in.full_name or ("Иванов Иван Иванович" if user_in.role == "CADET" else None),
-        student_id=user_in.student_id or ("СМ1-12" if user_in.role == "CADET" else None),
+        student_id=((user_in.student_id or "").strip() or None) if user_in.role == "CADET" else None,
     )
     db.add(user)
     await db.commit()

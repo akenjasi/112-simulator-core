@@ -9,15 +9,36 @@ from httpx import ASGITransport, AsyncClient
 from sqlalchemy import select
 
 from backend.main import app
+from backend.models.domain_02 import ScenarioTicket
 from backend.models.domain_03 import ExamSession
 from backend.models.domain_04 import IncidentCard
 from backend.schemas.dds_cycle import DispatcherData
+from backend.core.dds_cycle import build_incoming_card
 from tests.conftest import create_user_and_token
+
+
+async def _ensure_demo_ticket(db_session):
+    card = build_incoming_card(
+        category="Пожары",
+        plot="Учебный пожар",
+        etalon_services=["01 Пожарные", "02 Полиция"],
+        ground_truth={"fio": "Иван Иванов", "phone": "+79991234567", "address": "ул. Ленина, 1"},
+    )
+    ticket = ScenarioTicket(
+        title="Демо билет",
+        category="Пожары",
+        content={"incoming_card": card},
+        workflow_state={"status": "APPROVED"},
+    )
+    db_session.add(ticket)
+    await db_session.commit()
+    return ticket
 
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("path", ["/api/v1/sessions/demo", "/api/v2/sessions/demo"])
 async def test_lobby_demo_card_actions_finish_and_reload(path, cadet_auth_client, db_session):
+    await _ensure_demo_ticket(db_session)
     launched = await cadet_auth_client.post(path, json={"target_role": "DISPATCHER_DDS"})
     assert launched.status_code == 200, launched.text
     launch = launched.json()
@@ -46,7 +67,7 @@ async def test_lobby_demo_card_actions_finish_and_reload(path, cadet_auth_client
     assert session.ticket_id == stored_card.scenario_id == launch["ticket_id"]
 
     action = {"request_id": str(uuid.uuid4()), "kind": "status",
-              "service_name": card.services[0].name, "status": "Принята"}
+              "service_name": card.services[0].name, "status": "Принята", "order_number": "Н-101"}
     saved = await cadet_auth_client.post(state_url + "/actions", json=action)
     assert saved.status_code == 200, saved.text
     retry = await cadet_auth_client.post(state_url + "/actions", json=action)
@@ -61,12 +82,14 @@ async def test_lobby_demo_card_actions_finish_and_reload(path, cadet_auth_client
     for stage in ["Начало реагирования", "Прибытие", "Проведение работ", "Работы завершены"]:
         saved = await cadet_auth_client.post(state_url + "/actions", json={
             "request_id": str(uuid.uuid4()), "kind": "status", "service_name": card.services[0].name, "status": stage,
+            "order_number": "Н-101",
         })
         assert saved.status_code == 200, saved.text
     for service in card.services[1:]:
         saved = await cadet_auth_client.post(state_url + "/actions", json={
             "request_id": str(uuid.uuid4()), "kind": "status", "service_name": service.name,
             "status": "Не принята", "comment": "Учебный сценарий: не входит в компетенцию службы",
+            "order_number": "Н-101",
         })
         assert saved.status_code == 200, saved.text
     finished = await cadet_auth_client.post(state_url + f"/cards/{initial['card_id']}/complete",
@@ -82,6 +105,7 @@ async def test_lobby_demo_card_actions_finish_and_reload(path, cadet_auth_client
 
 @pytest.mark.asyncio
 async def test_demo_isolation_and_legacy_mutations_remain_blocked(cadet_auth_client, db_session):
+    await _ensure_demo_ticket(db_session)
     launch = (await cadet_auth_client.post("/api/v1/sessions/demo", json={})).json()
     state_url = f"/api/dds/sessions/{launch['session_id']}"
     own = await cadet_auth_client.get(state_url)
@@ -90,7 +114,7 @@ async def test_demo_isolation_and_legacy_mutations_remain_blocked(cadet_auth_cli
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test", headers=headers) as other:
         assert (await other.get(state_url)).status_code == 403
         assert (await other.post(state_url + "/finish", json={})).status_code == 403
-        action = {"request_id": str(uuid.uuid4()), "kind": "status", "service_name": "01 Пожарные", "status": "Принята"}
+        action = {"request_id": str(uuid.uuid4()), "kind": "status", "service_name": "01 Пожарные", "status": "Принята", "order_number": "Н-101"}
         assert (await other.post(state_url + "/actions", json=action)).status_code == 403
         assignments = await other.get("/api/dds/assignments")
         assert launch["session_id"] not in [item["session_id"] for item in assignments.json()]
@@ -104,7 +128,8 @@ async def test_demo_isolation_and_legacy_mutations_remain_blocked(cadet_auth_cli
 
 
 @pytest.mark.asyncio
-async def test_teacher_can_open_own_dds_demo(teacher_auth_client):
+async def test_teacher_can_open_own_dds_demo(teacher_auth_client, db_session):
+    await _ensure_demo_ticket(db_session)
     launch = await teacher_auth_client.post("/api/v1/sessions/demo", json={})
     assert launch.status_code == 200, launch.text
     state = await teacher_auth_client.get(f"/api/dds/sessions/{launch.json()['session_id']}")

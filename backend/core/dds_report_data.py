@@ -72,6 +72,7 @@ class DDSReportSessionItem(BaseModel):
     evaluations: List[DDSReportEvaluationItem] = Field(default_factory=list)
     ticket_results: List[DDSReportTicketResultItem] = Field(default_factory=list)
     cards: List[DDSReportCardItem] = Field(default_factory=list)
+    actions: List[Dict[str, Any]] = Field(default_factory=list)
 
 
 class DDSReportStudentItem(BaseModel):
@@ -287,18 +288,73 @@ async def collect_lesson_report_data(
     # 7. Construct sessions list
     sessions_list: List[Dict[str, Any]] = []
     for s in completed_sessions:
+        dds_dict = (s.dynamic_state or {}).get("dds") if isinstance(s.dynamic_state, dict) else None
+
+        exercise_status = None
+        total_cards = None
+        completed_cards_count = None
+        raw_actions: List[Any] = []
+
+        if isinstance(dds_dict, dict):
+            if dds_dict.get("submitted_at"):
+                exercise_status = "completed"
+            else:
+                exercise_status = "incomplete"
+
+            queue_list = dds_dict.get("queue")
+            if isinstance(queue_list, list):
+                total_cards = len(queue_list)
+
+            completed_cards_list = dds_dict.get("completed_cards") or []
+            if isinstance(completed_cards_list, list):
+                completed_cards_count = len(completed_cards_list)
+                for cc in completed_cards_list:
+                    if isinstance(cc, dict):
+                        cc_card_id = cc.get("card_id")
+                        for act in cc.get("actions") or []:
+                            if isinstance(act, dict):
+                                raw_actions.append((act, cc_card_id))
+
+            cur_card_id = dds_dict.get("card_id")
+            for act in dds_dict.get("actions") or []:
+                if isinstance(act, dict):
+                    raw_actions.append((act, cur_card_id))
+
+        session_actions: List[Dict[str, Any]] = []
+        seen_action_keys = set()
+        safe_keys = {
+            "request_id", "card_id", "kind", "service_name", "service",
+            "status", "at", "order_number", "timed_out", "arrival_time"
+        }
+        for act, default_card_id in raw_actions:
+            card_id = act.get("card_id") or default_card_id
+            req_id = act.get("request_id")
+            at_stamp = act.get("at")
+            dedup_key = (req_id,) if req_id else (card_id, at_stamp, act.get("kind"), act.get("status"))
+            if dedup_key in seen_action_keys:
+                continue
+            seen_action_keys.add(dedup_key)
+
+            sanitized_act = {k: v for k, v in act.items() if k in safe_keys}
+            if "card_id" not in sanitized_act and card_id:
+                sanitized_act["card_id"] = card_id
+            session_actions.append(sanitized_act)
+
+        session_actions.sort(key=lambda a: a.get("at") or "")
+
         sessions_list.append({
             "session_id": s.session_id,
             "cadet_id": s.cadet_id,
             "start_time": _format_datetime(s.start_time),
             "end_time": _format_datetime(s.end_time),
             "time_limit_seconds": s.time_limit_seconds,
-            "exercise_status": ("completed" if s.dynamic_state["dds"].get("submitted_at") else "incomplete") if (s.dynamic_state or {}).get("dds", {}).get("version") == 2 else None,
-            "total_cards": len(s.dynamic_state["dds"]["queue"]) if (s.dynamic_state or {}).get("dds", {}).get("version") == 2 else None,
-            "completed_cards": len(s.dynamic_state["dds"]["completed_cards"]) if (s.dynamic_state or {}).get("dds", {}).get("version") == 2 else None,
+            "exercise_status": exercise_status,
+            "total_cards": total_cards,
+            "completed_cards": completed_cards_count,
             "evaluations": evals_by_session.get(s.session_id, []),
             "ticket_results": tickets_by_session.get(s.session_id, []),
             "cards": cards_by_session.get(s.session_id, []),
+            "actions": session_actions,
         })
 
     # 8. Summary counts
@@ -314,6 +370,7 @@ async def collect_lesson_report_data(
     warnings: List[str] = []
     if len(all_evals) == 0:
         warnings.append("Отсутствуют результаты оценивания (evaluations) для выбранных сессий.")
+        warnings.append("Оценивание не проводилось; корректность действий не установлена.")
     if len(all_tickets) == 0:
         warnings.append("Отсутствуют результаты билетов (ticket_results) для выбранных сессий.")
     if len(all_cards) == 0:

@@ -97,6 +97,10 @@ export function ServicesBar({ data, onStatusChange, onAccept, onNextCard, disabl
   const handleConfirmAction = async () => {
     if (!editingService || disabled || submittingRef.current) return
 
+    if (!orderNumber.trim()) {
+      return
+    }
+
     const isRejection = selectedStatus === "Не принята" || selectedStatus === "Отказ от выполнения работ"
     if ((isRejection || isSupplement) && !commentText.trim()) {
       return
@@ -139,7 +143,9 @@ export function ServicesBar({ data, onStatusChange, onAccept, onNextCard, disabl
   const isRejection = selectedStatus === "Не принята" || selectedStatus === "Отказ от выполнения работ"
   const currentStatus = editingService?.status === "В пути" ? "Начало реагирования" : editingService?.status === "Прибыли" ? "Прибытие" : editingService?.status
   const isSupplement = selectedStatus === currentStatus
-  const isConfirmDisabled = disabled || isSubmitting || ((isRejection || isSupplement) && !commentText.trim())
+  const isOrderNumberMissing = !orderNumber.trim()
+  const isCommentMissing = (isRejection || isSupplement) && !commentText.trim()
+  const isConfirmDisabled = disabled || isSubmitting || isOrderNumberMissing || isCommentMissing
 
   return (
     <div ref={barRef} id="tour-services" className="relative select-none">
@@ -207,6 +213,7 @@ export function ServicesBar({ data, onStatusChange, onAccept, onNextCard, disabl
           {/* Кнопка подтверждения ✓ с оранжевой рамкой фокуса */}
           <button
             type="button"
+            aria-label="Подтвердить"
             onClick={handleConfirmAction}
             disabled={isConfirmDisabled}
             className={`flex h-full w-[42px] 2xl:w-[59px] items-center justify-center border-l border-r ${
@@ -214,7 +221,13 @@ export function ServicesBar({ data, onStatusChange, onAccept, onNextCard, disabl
                 ? "border-gray-300 text-gray-400 bg-gray-50 cursor-not-allowed"
                 : "border-[#f97316] text-[#16a34a] hover:bg-green-50"
             }`}
-            title="Подтвердить"
+            title={
+              isOrderNumberMissing
+                ? "Укажите номер наряда"
+                : isCommentMissing
+                  ? (isRejection ? "Укажите причину отказа" : "Укажите комментарий")
+                  : "Подтвердить"
+            }
           >
             <Check className="h-5 2xl:h-5 w-5 2xl:w-5 stroke-[2.5]" />
           </button>

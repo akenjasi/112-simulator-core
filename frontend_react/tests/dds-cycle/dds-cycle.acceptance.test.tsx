@@ -18,7 +18,7 @@ let network:ReturnType<typeof vi.fn>
 beforeEach(()=>{localStorage.clear();localStorage.setItem('token','a06-token');network=vi.fn();vi.stubGlobal('fetch',network)})
 afterEach(()=>{cleanup();vi.unstubAllGlobals();localStorage.clear()})
 
-function fillStatus(){fireEvent.click(screen.getAllByRole('button',{name:'Редактировать статус'})[0]);fireEvent.change(screen.getByPlaceholderText('Комментарий...'),{target:{value:'Проверено'}});fireEvent.click(screen.getByRole('button',{name:'Подтвердить'}))}
+function fillStatus(){fireEvent.click(screen.getAllByRole('button',{name:'Редактировать статус'})[0]);fireEvent.change(screen.getByPlaceholderText('Номер наряда'),{target:{value:'Н-101'}});fireEvent.change(screen.getByPlaceholderText('Комментарий...'),{target:{value:'Проверено'}});fireEvent.click(screen.getByRole('button',{name:'Подтвердить'}))}
 
 describe('Assigned DDS console',()=>{
  it('loads selected session with Bearer and keeps incoming fields read-only',async()=>{
@@ -60,7 +60,7 @@ describe('Assigned DDS console',()=>{
   let done!:(r:Response)=>void
   network.mockResolvedValueOnce(response(state())).mockImplementationOnce(()=>new Promise(r=>{done=r}))
   render(<DDSAssignedConsole sessionId="s1"/>);await flush()
-  fireEvent.click(screen.getAllByRole('button',{name:'Редактировать статус'})[0]);const button=screen.getByRole('button',{name:'Подтвердить'});fireEvent.click(button);fireEvent.click(button);await flush()
+  fireEvent.click(screen.getAllByRole('button',{name:'Редактировать статус'})[0]);fireEvent.change(screen.getByPlaceholderText('Номер наряда'),{target:{value:'Н-101'}});const button=screen.getByRole('button',{name:'Подтвердить'});fireEvent.click(button);fireEvent.click(button);await flush()
   expect(network).toHaveBeenCalledTimes(2);expect(button.hasAttribute('disabled')).toBe(true)
   done(response(state()));await flush()
  })
