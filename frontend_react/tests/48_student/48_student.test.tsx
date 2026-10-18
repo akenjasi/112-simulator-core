@@ -225,116 +225,55 @@ describe("ТЗ 48: Личный кабинет ученика и Лобби (Ф�
   })
 
   describe("1. Личный кабинет ученика (/student/profile)", () => {
-    it("renders cadet profile with the dispatcher-only role and no avatars", async () => {
+    it("shows the cadet identity and the dispatcher-only home", async () => {
       render(<StudentProfilePage />)
-
-      // Header title, FIO and short ID
-      expect(screen.getAllByText(/Личный кабинет курсанта/i).length).toBeGreaterThan(0)
-      await waitFor(() => {
-        expect(screen.getByText("Иванов Иван Иванович")).toBeInTheDocument()
-        expect(screen.getByText("ID: СМ1-12")).toBeInTheDocument()
-      })
-
-      // The cadet-facing profile must not expose the 112 operator role.
-      expect(screen.queryByRole("button", { name: /Оператор 112/i })).not.toBeInTheDocument()
-      expect(screen.getAllByText(/Диспетчер ДДС/i).length).toBeGreaterThan(0)
-
-      // Absence of avatar change button or gamification
-      expect(screen.queryByText(/Сменить фото/i)).not.toBeInTheDocument()
-      expect(screen.queryByText(/Уровень \d+/i)).not.toBeInTheDocument()
-      expect(screen.queryByText(/\bXP\b/i)).not.toBeInTheDocument()
+      expect(screen.getByRole("heading", {name: "Личный кабинет курсанта", level: 1})).toBeInTheDocument()
+      expect(await screen.findByText("СМ1-12")).toBeInTheDocument()
+      expect(screen.getByText("Иванов Иван Иванович", {selector: "span"})).toBeInTheDocument()
+      expect(screen.queryByRole("button", {name: /Оператор 112/i})).not.toBeInTheDocument()
+      expect(screen.queryByText(/Сменить фото|\bXP\b/i)).not.toBeInTheDocument()
     })
 
-    it("renders professional metrics summary cards with trends and without month score", async () => {
+    it("prioritizes assignments and practice instead of overall scores", async () => {
       render(<StudentProfilePage />)
-
-      await waitFor(() => {
-        expect(screen.getByText("За всё время")).toBeInTheDocument()
-        expect(screen.getByText("За 7 дней")).toBeInTheDocument()
-        expect(screen.getByText("Решено карточек")).toBeInTheDocument()
-        expect(screen.getByText("Время обработки")).toBeInTheDocument()
-        expect(screen.queryByText("Точность служб")).not.toBeInTheDocument()
-      })
-
-      // The profile loads dispatcher statistics by default.
-      await waitFor(() => {
-        expect(screen.getByText("81.0")).toBeInTheDocument()
-        expect(screen.getByText("84.0")).toBeInTheDocument()
-        expect(screen.getByText("16")).toBeInTheDocument()
-        expect(screen.getByText("70")).toBeInTheDocument()
-      })
+      expect(await screen.findByText("Пока нет назначенных занятий")).toBeInTheDocument()
+      expect(screen.getByRole("button", {name: "Выбрать задания"})).toBeInTheDocument()
+      for (const text of ["За всё время", "За 7 дней", "Матрица компетенций", "81.0", "84.0"]) {
+        expect(screen.queryByText(text)).not.toBeInTheDocument()
+      }
+      expect(screen.queryByRole("link", {name: /лобби/i})).not.toBeInTheDocument()
     })
 
-    it("shows DDS errors without the operator 112 competence radar", async () => {
+    it("explains the five criteria without presenting them as achieved results", async () => {
       render(<StudentProfilePage />)
-
-      await waitFor(() => {
-        expect(screen.queryByText("Матрица компетенций")).not.toBeInTheDocument()
-        expect(screen.getByText("Топ частых ошибок")).toBeInTheDocument()
-        expect(screen.queryByTestId("radar-container")).not.toBeInTheDocument()
-      })
-
-      // Check fatal and minor error sections and items
-      await waitFor(() => {
-        expect(screen.getByText(/Фатальные ошибки/i)).toBeInTheDocument()
-        expect(screen.getByText(/Мелкие недочеты/i)).toBeInTheDocument()
-        expect(screen.getByText("Нарушен регламент SLA передачи службе")).toBeInTheDocument()
-        expect(screen.getByText("Не указан наряд дежурной бригады")).toBeInTheDocument()
-      })
+      await screen.findByText("СМ1-12")
+      for (const name of ["Первичное подтверждение", "Соответствие службе", "Соответствие этапу", "Точность записей", "Завершение"]) {
+        expect(screen.getByRole("heading", {name})).toBeInTheDocument()
+      }
+      fireEvent.click(screen.getByRole("heading", {name: "Первичное подтверждение"}))
+      expect(screen.getByText(/30 секунд от направления карточки сервером/)).toBeVisible()
+      expect(screen.queryByText("Ошибок не зафиксировано")).not.toBeInTheDocument()
     })
 
-    it("loads dispatcher statistics without exposing a role switch", async () => {
+    it("requests only DDS history using the signed-in session", async () => {
       render(<StudentProfilePage />)
-
-      await waitFor(() => {
-        expect(screen.getByText("81.0")).toBeInTheDocument()
-      })
-
-      expect(screen.queryByRole("button", { name: /Оператор 112/i })).not.toBeInTheDocument()
-      expect(screen.queryByRole("button", { name: /Диспетчер ДДС/i })).not.toBeInTheDocument()
+      await screen.findByText("Занятие 1: Экстренное реагирование ДТП")
+      expect(fetch).toHaveBeenCalledWith("/api/v1/students/me/lessons?role=DISPATCHER_DDS", expect.objectContaining({
+        headers: expect.objectContaining({Authorization: "Bearer student-contract-test-token"}),
+      }))
+      expect(screen.queryByRole("button", {name: /Диспетчер ДДС/i})).not.toBeInTheDocument()
     })
 
-    it("renders learning history and reference materials tabs", async () => {
+    it("keeps lesson details accessible and preserves real teacher materials", async () => {
       render(<StudentProfilePage />)
-
-      await waitFor(() => {
-        expect(screen.getByText("История обучения и билеты")).toBeInTheDocument()
-        expect(screen.getByText("Справочные материалы")).toBeInTheDocument()
-      })
-
-      // Switch to docs tab
-      const docsBtn = screen.getByRole("button", { name: /Справочные материалы/i })
-      await act(async () => {
-        fireEvent.click(docsBtn)
-      })
-
-      // Check reference materials list from API
-      await waitFor(() => {
-        expect(screen.getByText("Учебное пособие ДДС.pdf")).toBeInTheDocument()
-      })
-
-      // Switch back to lessons tab
-      const lessonsBtn = screen.getByRole("button", { name: /История обучения и билеты/i })
-      await act(async () => {
-        fireEvent.click(lessonsBtn)
-      })
-
-      await waitFor(() => {
-        expect(screen.getByText("Занятие 1: Экстренное реагирование ДТП")).toBeInTheDocument()
-      })
-
-      // Expand accordion
-      const lessonBtn = screen.getByText("Занятие 1: Экстренное реагирование ДТП")
-      await act(async () => {
-        fireEvent.click(lessonBtn)
-      })
-
-      // Tickets inside should be visible
-      await waitFor(() => {
-        expect(screen.getByText("Билет #1: Столкновение на МКАД")).toBeInTheDocument()
-        expect(screen.getByText("Билет #2: Пожар в квартире")).toBeInTheDocument()
-        expect(screen.getByText("Задержка передачи информации")).toBeInTheDocument()
-      })
+      const title = await screen.findByText("Занятие 1: Экстренное реагирование ДТП")
+      fireEvent.click(title)
+      expect(screen.getByText("Билет #1: Столкновение на МКАД")).toBeInTheDocument()
+      expect(screen.getByText("Задержка передачи информации")).toBeInTheDocument()
+      expect(screen.queryByText(/95 б\.|92.5 \/ 100/)).not.toBeInTheDocument()
+      fireEvent.click(screen.getByRole("button", {name: "Справочные материалы"}))
+      expect(await screen.findByText("Учебное пособие ДДС.pdf")).toBeInTheDocument()
+      expect(screen.queryByText("Алгоритм опроса при ДТП.pdf")).not.toBeInTheDocument()
     })
   })
 
