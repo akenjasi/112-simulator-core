@@ -18,7 +18,7 @@ let network:ReturnType<typeof vi.fn>
 beforeEach(()=>{localStorage.clear();localStorage.setItem('token','a06-token');network=vi.fn();vi.stubGlobal('fetch',network)})
 afterEach(()=>{cleanup();vi.unstubAllGlobals();localStorage.clear()})
 
-function fillStatus(){fireEvent.change(screen.getByLabelText('Комментарий'),{target:{value:'Проверено'}});fireEvent.click(screen.getByRole('button',{name:'Сохранить статус'}))}
+function fillStatus(){fireEvent.click(screen.getAllByRole('button',{name:'Редактировать статус'})[0]);fireEvent.change(screen.getByPlaceholderText('Комментарий...'),{target:{value:'Проверено'}});fireEvent.click(screen.getByRole('button',{name:'Подтвердить'}))}
 
 describe('Assigned DDS console',()=>{
  it('loads selected session with Bearer and keeps incoming fields read-only',async()=>{
@@ -60,21 +60,21 @@ describe('Assigned DDS console',()=>{
   let done!:(r:Response)=>void
   network.mockResolvedValueOnce(response(state())).mockImplementationOnce(()=>new Promise(r=>{done=r}))
   render(<DDSAssignedConsole sessionId="s1"/>);await flush()
-  const button=screen.getByRole('button',{name:'Сохранить статус'});fireEvent.click(button);fireEvent.click(button);await flush()
+  fireEvent.click(screen.getAllByRole('button',{name:'Редактировать статус'})[0]);const button=screen.getByRole('button',{name:'Подтвердить'});fireEvent.click(button);fireEvent.click(button);await flush()
   expect(network).toHaveBeenCalledTimes(2);expect(button.hasAttribute('disabled')).toBe(true)
   done(response(state()));await flush()
  })
  it('finishes on server and shows completed without inventing a grade',async()=>{
   network.mockResolvedValueOnce(response(state())).mockResolvedValueOnce(response(state('s1',{session_status:'COMPLETED',submitted_at:'2026-10-17T10:01:00Z'})))
-  render(<DDSAssignedConsole sessionId="s1"/>);await flush();fireEvent.click(screen.getByRole('button',{name:'Завершить выполнение'}));await flush()
+  render(<DDSAssignedConsole sessionId="s1"/>);await flush();fireEvent.click(screen.getByRole('button',{name:'Завершить смену'}));await flush()
   expect(network.mock.calls[1][0]).toBe('/api/dds/sessions/s1/finish');expect(JSON.parse(network.mock.calls[1][1].body)).toEqual({})
   expect(document.body.textContent).toMatch(/нет оценки|оценка.*отсутствует/i)
-  expect(screen.getByRole('button',{name:'Сохранить статус'}).hasAttribute('disabled')).toBe(true)
+  for(const pencil of screen.getAllByRole('button',{name:'Редактировать статус'})) expect(pencil).toBeDisabled()
  })
  it('restores the saved actions after remount and never posts on load',async()=>{
   network.mockResolvedValue(response(state('s1',{actions:[{request_id:'saved',kind:'status',service_name:'Аварийная служба',status:'Принята',comment:'Сохранённое действие',actor_id:'cadet',at:'2026-10-17T10:00:00Z'}],session_status:'COMPLETED',submitted_at:'2026-10-17T10:00:00Z'})))
   const view=render(<DDSAssignedConsole sessionId="s1"/>);await flush();view.unmount();render(<DDSAssignedConsole sessionId="s1"/>);await flush()
-  expect(document.body.textContent).toContain('Сохранённое действие')
+  fireEvent.click(screen.getByRole('button',{name:'История службы Аварийная служба'}));expect(screen.getByRole('dialog').textContent).toContain('Сохранённое действие')
   expect(network.mock.calls.every(([,init])=>(init?.method??'GET')==='GET')).toBe(true)
  })
  it('ignores delayed responses after session changes',async()=>{
@@ -86,7 +86,7 @@ describe('Assigned DDS console',()=>{
  })
  it('rejects malformed successful payload rather than rendering a demo',async()=>{
   network.mockResolvedValue(response({session_id:'s1'}));render(<DDSAssignedConsole sessionId="s1"/>);await flush()
-  expect(screen.getByRole('alert')).toBeTruthy();expect(screen.queryByRole('button',{name:'Сохранить статус'})).toBeNull()
+  expect(screen.getByRole('alert')).toBeTruthy();expect(screen.queryAllByRole('button',{name:'Редактировать статус'})).toHaveLength(0)
  })
 })
 
@@ -96,7 +96,7 @@ describe('Personal DDS assignments',()=>{
   render(<DDSAssignments/>);await flush()
   expect(network.mock.calls[0][0]).toBe('/api/dds/assignments')
   expect(new Headers(network.mock.calls[0][1].headers).get('Authorization')).toBe('Bearer a06-token')
-  for(const id of ['s1','s2','s3']) expect(document.querySelector(`a[href*="session_id=${id}"]`)).toBeTruthy()
+  for(const id of ['s1','s2','s3']) expect(document.querySelector(`a[href^="/dds?session_id=${id}"]`)).toBeTruthy()
  })
  it('empty is empty, never filled with sample incidents',async()=>{
   network.mockResolvedValue(response([]));render(<DDSAssignments/>);await flush()
@@ -113,7 +113,7 @@ describe('Independent mutation lifecycle boundaries',()=>{
  it('blocks new mutations until the uncertain request has been retried or refreshed',async()=>{
   network.mockResolvedValueOnce(response(state())).mockRejectedValueOnce(new Error('offline'))
   render(<DDSAssignedConsole sessionId="s1"/>);await flush();fillStatus();await flush()
-  for(const name of ['Сохранить статус','Сохранить направление','Завершить выполнение']) {
+  for(const name of ['Подтвердить','Сохранить','Завершить смену']) {
    expect(screen.getByRole('button',{name}).hasAttribute('disabled')).toBe(true)
   }
   expect(screen.getByRole('button',{name:'Повторить сохранение'}).hasAttribute('disabled')).toBe(false)
@@ -126,7 +126,7 @@ describe('Independent mutation lifecycle boundaries',()=>{
   const signal=network.mock.calls[1][1].signal as AbortSignal
   view.rerender(<DDSAssignedConsole sessionId="s2"/>);await flush()
   expect(signal?.aborted).toBe(true)
-  expect(screen.getByRole('button',{name:'Сохранить статус'}).hasAttribute('disabled')).toBe(false)
+  expect(screen.getAllByRole('button',{name:'Редактировать статус'})[0].hasAttribute('disabled')).toBe(false)
   done(response(state('s1',{actions:[{request_id:'late',kind:'status',service_name:'Аварийная служба',status:'Принята',comment:'OLD_POST_MUST_NOT_APPEAR',actor_id:'c',at:'2026-10-17T10:00:00Z'}]})));await flush()
   expect(screen.getByText('Новая сессия')).toBeTruthy()
   expect(document.body.textContent).not.toContain('OLD_POST_MUST_NOT_APPEAR')

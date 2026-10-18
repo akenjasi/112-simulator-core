@@ -206,7 +206,7 @@ async def test_demo_session_creation_defaults_to_dds(cadet_auth_client: AsyncCli
     assert "role" in data
     assert data["role"] == "DISPATCHER_DDS"
     assert "redirect_url" in data
-    assert "/dds/journal?" in data["redirect_url"]
+    assert data["redirect_url"].startswith("/dds/journal?focus_session_id=")
 
     session_id = data["session_id"]
     sess_res = await db_session.execute(select(ExamSession).where(ExamSession.session_id == session_id))
@@ -255,7 +255,7 @@ async def test_demo_session_creation_dds(cadet_auth_client: AsyncClient, db_sess
     data = response.json()
 
     assert data["role"] == "DISPATCHER_DDS"
-    assert "/dds/journal?" in data["redirect_url"]
+    assert data["redirect_url"].startswith("/dds/journal?focus_session_id=")
 
     # Проверяем карточку инцидента
     session_id = data["session_id"]
@@ -264,13 +264,17 @@ async def test_demo_session_creation_dds(cadet_auth_client: AsyncClient, db_sess
     assert card is not None
     assert card.card_origin == "112_CALL"
 
-    # Демо-эндпоинт создаёт собственный сценарий, который наполняет карточку.
+    # DDS uses a saved prepared/legacy ticket when available, preserving its services.
     scenario_res = await db_session.execute(
         select(ScenarioTicket).where(ScenarioTicket.scenario_id == data["ticket_id"])
     )
     scenario = scenario_res.scalar_one_or_none()
     assert scenario is not None
-    assert card.filled_data.get("category") == scenario.settings.get("category")
+    from backend.core.dds_cycle import incoming_card_from_ticket
+    incoming = incoming_card_from_ticket(scenario)
+    assert card.filled_data["description"] == incoming["description"]
+    assert card.filled_data["services"] == incoming["services"]
+    assert list(card.assigned_services) == [service["name"] for service in incoming["services"]]
 
 
 @pytest.mark.asyncio

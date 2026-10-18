@@ -3,8 +3,8 @@
 import React, { useState, useEffect, useCallback, useRef, Suspense } from "react"
 import Link from "next/link"
 import { useSearchParams, useRouter } from "next/navigation"
-import { fetchDDSSessionState, type DDSSessionState } from "@/lib/dds-cycle"
-import { DDSAssignments } from "@/components/dispatcher/dds-assignments"
+import { fetchDDSAssignments, type DDSSessionState } from "@/lib/dds-cycle"
+import { getDDSWorkingCard } from "@/lib/dds-working-card"
 import {
   Search,
   ChevronDown,
@@ -62,7 +62,8 @@ interface IncidentItem {
   oper: string
   arm: string
   injured: string
-  status: "Отработана" | "Завершена" | "Проверена" | "Зарегистрирована"
+  status: string
+  consoleUrl: string
   address: string
   hasLink?: boolean
   isPinned?: boolean
@@ -71,298 +72,28 @@ interface IncidentItem {
   preview?: IncidentPreview
 }
 
-const INITIAL_INCIDENTS: IncidentItem[] = [
-  // Строка 1: 10:21:42 - Ошибочно набран номер (с описанием)
-  {
-    id: "38260204",
-    number: "38260204",
-    date: "17.02.25",
-    time: "10:21:42",
-    type: "Ошибочно набран номер",
-    oper: "951",
-    arm: "207",
-    injured: "Нет",
-    status: "Отработана",
-    address: "",
-    verified: true,
-    description: "17.02.2025 10:21:50 Опер. 951 Захватов А. В. - нет ответа",
+function toIncident(state: DDSSessionState): IncidentItem {
+  const card = getDDSWorkingCard(state)
+  const started = state.started_at ? new Date(state.started_at) : null
+  const knownTime = started && Number.isFinite(started.getTime())
+  return {
+    id: state.session_id,
+    consoleUrl: `/dds?${new URLSearchParams({session_id: state.session_id, ticket_id: state.ticket_id})}`,
+    number: card.incident.number || state.ticket_id,
+    date: knownTime ? started.toLocaleDateString("ru-RU") : "—",
+    time: knownTime ? started.toLocaleTimeString("ru-RU") : "—",
+    type: card.classification.title || card.classification.section || "Не указано",
+    oper: card.incident.operator || "—", arm: "—",
+    injured: card.statuses.injured || "неизвестно",
+    status: state.session_status === "COMPLETED" ? state.submitted_at ? "Отработана" : "Не завершено" : state.session_status === "ACTIVE" ? "В процессе" : state.session_status,
+    address: card.caller.address, description: card.description,
     preview: {
-      services: [
-        { name: "Служба 102", time: "10:21:45", status: "Получена службой" },
-      ],
-      applicant: {
-        name: "Иванов Сергей Петрович",
-        aon: "+7(926)543-21-00",
-        phone: "+7(926)543-21-00",
-        carrier: "МТС",
-        creationTime: "00:00:42",
-      },
-      info: "Ошибочно набран номер. Разговор не состоялся.",
-      actions: "Оп. 951 в 10:21:50 > Заявителю > +7(926)543-21-00",
+      services: card.services.map(service => ({name: service.name, time: service.time, status: service.status})),
+      applicant: {name: card.caller.name, aon: card.phones.aon, phone: card.phones.provided, carrier: "—", creationTime: ""},
+      info: card.description,
     },
-  },
-  // Строка 2: 10:21:34 - Ошибочно набран номер (без описания)
-  {
-    id: "38260202",
-    number: "38260202",
-    date: "17.02.25",
-    time: "10:21:34",
-    type: "Ошибочно набран номер",
-    oper: "677",
-    arm: "223",
-    injured: "Нет",
-    status: "Завершена",
-    address: "",
-    verified: true,
-    preview: {
-      services: [
-        { name: "Служба 102", time: "10:21:35", status: "Получена службой" },
-      ],
-      applicant: {
-        name: "Смирнова Елена Васильевна",
-        aon: "+7(915)321-45-67",
-        phone: "+7(915)321-45-67",
-        carrier: "Билайн",
-        creationTime: "00:00:35",
-      },
-      info: "Сброс вызова абонентом.",
-      actions: "Оп. 677 в 10:21:38 > Заявителю > +7(915)321-45-67",
-    },
-  },
-  // Строка 3: 10:21:26 - Ошибочно набран номер (без описания)
-  {
-    id: "38260201",
-    number: "38260201",
-    date: "17.02.25",
-    time: "10:21:26",
-    type: "Ошибочно набран номер",
-    oper: "377",
-    arm: "230",
-    injured: "Нет",
-    status: "Завершена",
-    address: "",
-    verified: true,
-    preview: {
-      services: [
-        { name: "Служба 102", time: "10:21:28", status: "Получена службой" },
-      ],
-      applicant: {
-        name: "Кузнецов Андрей Викторович",
-        aon: "+7(903)789-01-23",
-        phone: "+7(903)789-01-23",
-        carrier: "Мегафон",
-        creationTime: "00:00:28",
-      },
-      info: "Детская шалость / ошибочный набор номера.",
-      actions: "Оп. 377 в 10:21:30 > Заявителю > +7(903)789-01-23",
-    },
-  },
-  // Строка 4: 10:21:15 - Справка-103 (с описанием)
-  {
-    id: "38260199",
-    number: "38260199",
-    date: "17.02.25",
-    time: "10:21:15",
-    type: "Справка-103",
-    oper: "248",
-    arm: "447",
-    injured: "Нет",
-    status: "Отработана",
-    address: "",
-    verified: true,
-    description: "17.02.2025 10:21:44 Опер. 248 Черникова А. С. - Вызов врача /пред тел 122",
-    preview: {
-      services: [
-        { name: "Служба 103", time: "10:21:20", status: "Получена службой" },
-      ],
-      applicant: {
-        name: "Черникова Анна Сергеевна",
-        aon: "+7(916)445-56-78",
-        phone: "+7(916)445-56-78",
-        carrier: "МТС",
-        creationTime: "00:01:12",
-      },
-      info: "Вызов врача из поликлиники на дом. 03 не требуется. Предоставлен телефон 122.",
-      actions: "Оп. 248 в 10:21:44 > Заявителю > +7(916)445-56-78",
-    },
-  },
-  // Строка 5: 10:21:09 - Справка-103 (с описанием)
-  {
-    id: "38260198",
-    number: "38260198",
-    date: "17.02.25",
-    time: "10:21:09",
-    type: "Справка-103",
-    oper: "528",
-    arm: "204",
-    injured: "Нет",
-    status: "Отработана",
-    address: "",
-    verified: true,
-    description: "17.02.2025 10:21:37 Опер. 528 Чубарова Ю. А. - вызов из полик/03 не треб//пред 122",
-    preview: {
-      services: [
-        { name: "Служба 103", time: "10:21:12", status: "Получена службой" },
-      ],
-      applicant: {
-        name: "Чубарова Юлия Алексеевна",
-        aon: "+7(925)678-90-12",
-        phone: "+7(925)678-90-12",
-        carrier: "Теле2",
-        creationTime: "00:00:54",
-      },
-      info: "Вызов из поликлиники. 03 не требуется. Предоставлен телефон 122.",
-      actions: "Оп. 528 в 10:21:37 > Заявителю > +7(925)678-90-12",
-    },
-  },
-  // Строка 6: 10:21:08 - Справка-103 (с описанием и адресом Москва , (ЦАО, Тверской район))
-  {
-    id: "38260197",
-    number: "38260197",
-    date: "17.02.25",
-    time: "10:21:08",
-    type: "Справка-103",
-    oper: "816",
-    arm: "209",
-    injured: "Нет",
-    status: "Проверена",
-    address: "Москва , (ЦАО, Тверской район)",
-    verified: true,
-    description: "17.02.2025 10:21:36 Опер. 816 Шмытько П. М. - 103 не треб// врач из поликлиники// пред тел 122",
-    preview: {
-      services: [
-        { name: "Служба 103", time: "10:21:10", status: "Получена службой" },
-        { name: "УВД ЦАО", time: "10:21:25", status: "Получена службой" },
-      ],
-      applicant: {
-        name: "Шмытько Павел Михайлович",
-        aon: "+7(916)998-77-66",
-        phone: "+7(916)998-77-66",
-        carrier: "МТС",
-        creationTime: "00:01:05",
-      },
-      info: "103 не треб// врач из поликлиники// пред тел 122",
-      actions: "Оп. 816 в 10:21:36 > Заявителю > +7(916)998-77-66",
-    },
-  },
-  // Строка 7: 10:21:05 - Справка-103 (с описанием)
-  {
-    id: "38260195",
-    number: "38260195",
-    date: "17.02.25",
-    time: "10:21:05",
-    type: "Справка-103",
-    oper: "736",
-    arm: "206",
-    injured: "Нет",
-    status: "Отработана",
-    address: "",
-    verified: true,
-    description: "17.02.2025 10:21:17 Опер. 736 Кретинин А. И. - врач из пол-ки/ эос не треб / пред тел 122",
-    preview: {
-      services: [
-        { name: "Служба 103", time: "10:21:07", status: "Получена службой" },
-      ],
-      applicant: {
-        name: "Кретинин Александр Игоревич",
-        aon: "+7(985)222-33-44",
-        phone: "+7(985)222-33-44",
-        carrier: "Мегафон",
-        creationTime: "00:00:48",
-      },
-      info: "Врач из пол-ки/ эос не треб / пред тел 122",
-      actions: "Оп. 736 в 10:21:17 > Заявителю > +7(985)222-33-44",
-    },
-  },
-  // Строка 8: 10:20:51 - Дополнительный звонок от заявителя (ДТП / розовая скрепка связи)
-  {
-    id: "38260193",
-    number: "38260193",
-    date: "17.02.25",
-    time: "10:20:51",
-    type: "Дополнительный звонок от заявителя",
-    oper: "776",
-    arm: "208",
-    injured: "Нет",
-    status: "Отработана",
-    address: "",
-    hasLink: true,
-    verified: true,
-    preview: {
-      services: [
-        { name: "Служба 102", time: "10:48:38", status: "Получена службой" },
-        { name: "ЦОДД", time: "10:49:05", status: "Начало реагирования" },
-      ],
-      applicant: {
-        name: "Александр Александрович",
-        aon: "+7(926)123-45-67",
-        phone: "+7(926)123-45-67",
-        carrier: "МТС",
-        creationTime: "00:00:59",
-      },
-      info: "Разлив топлива: Нет. Легковой транспорт. Нет пострадавших. ТС: Kia Rio А123ВС777 .. Кол-во а/м: 2. Нет пострадавших",
-      actions: "Оп. 900 в 10:47:44 > Заявителю > +7(926)123-45-67",
-    },
-  },
-  // Строка 9: 10:20:46 - Справка-103 (с описанием)
-  {
-    id: "38260192",
-    number: "38260192",
-    date: "17.02.25",
-    time: "10:20:46",
-    type: "Справка-103",
-    oper: "283",
-    arm: "438",
-    injured: "Нет",
-    status: "Завершена",
-    address: "",
-    verified: true,
-    description: "17.02.2025 10:21:09 Опер. 283 Ключникова Ю. В. - врач на дом /122",
-    preview: {
-      services: [
-        { name: "Служба 103", time: "10:20:48", status: "Получена службой" },
-      ],
-      applicant: {
-        name: "Ключникова Юлия Владимировна",
-        aon: "+7(909)555-66-77",
-        phone: "+7(909)555-66-77",
-        carrier: "Билайн",
-        creationTime: "00:00:41",
-      },
-      info: "Врач на дом /122. Вызов участкового педиатра.",
-      actions: "Оп. 283 в 10:21:09 > Заявителю > +7(909)555-66-77",
-    },
-  },
-  // Строка 10: 10:20:43 - Справка-103 (с описанием)
-  {
-    id: "38260191",
-    number: "38260191",
-    date: "17.02.25",
-    time: "10:20:43",
-    type: "Справка-103",
-    oper: "682",
-    arm: "205",
-    injured: "Нет",
-    status: "Отработана",
-    address: "",
-    verified: true,
-    description: "17.02.2025 10:21:32 Опер. 682 Чубаров В. Д. - врач из пол-ки/ эос не треб / пред тел 122",
-    preview: {
-      services: [
-        { name: "Служба 103", time: "10:20:45", status: "Получена службой" },
-      ],
-      applicant: {
-        name: "Чубаров Виктор Дмитриевич",
-        aon: "+7(917)888-99-00",
-        phone: "+7(917)888-99-00",
-        carrier: "МТС",
-        creationTime: "00:00:52",
-      },
-      info: "Врач из пол-ки/ эос не треб / пред тел 122",
-      actions: "Оп. 682 в 10:21:32 > Заявителю > +7(917)888-99-00",
-    },
-  },
-]
+  }
+}
 
 const renderFormattedTime = (timeStr: string) => {
   const parts = timeStr.split(":")
@@ -379,10 +110,45 @@ const renderFormattedTime = (timeStr: string) => {
 }
 
 function DdsJournalContent() {
-  const searchParams = useSearchParams()
   const router = useRouter()
-  const sessionId = searchParams?.get("session_id")
-  const ticketId = searchParams?.get("ticket_id")
+  const searchParams = useSearchParams()
+  const focusedSessionId = searchParams?.get("focus_session_id")
+  const focusedTicketId = searchParams?.get("focus_ticket_id")
+  const [sessions, setSessions] = useState<DDSSessionState[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+  const [page, setPage] = useState(1)
+  const controllerRef = useRef<AbortController | null>(null)
+  const epochRef = useRef(0)
+  const load = useCallback(async () => {
+    controllerRef.current?.abort()
+    const controller = new AbortController()
+    controllerRef.current = controller
+    const epoch = ++epochRef.current
+    setLoading(true)
+    setError(null)
+    try {
+      const data = await fetchDDSAssignments(controller.signal)
+      if (epoch === epochRef.current) setSessions(data)
+    } catch (err: any) {
+      if (!controller.signal.aborted && epoch === epochRef.current) {
+        setSessions([])
+        setError(err.message || "Не удалось загрузить происшествия")
+      }
+    } finally {
+      if (epoch === epochRef.current) setLoading(false)
+    }
+  }, [])
+  useEffect(() => {
+    load()
+    return () => { epochRef.current++; controllerRef.current?.abort() }
+  }, [load])
+  const orderedSessions = [...sessions].sort((a, b) => (b.started_at || "").localeCompare(a.started_at || ""))
+  const incidents = orderedSessions.map(toIncident)
+  const focusedSession = focusedSessionId ? sessions.find(item => item.session_id === focusedSessionId && (!focusedTicketId || item.ticket_id === focusedTicketId)) : undefined
+  const sessionToOpen = focusedSessionId ? focusedSession : orderedSessions.find(item => item.session_status === "ACTIVE" && item.lesson_status === "ACTIVE" && !item.submitted_at)
+  const canOpen = Boolean(sessionToOpen && sessionToOpen.session_status === "ACTIVE" && sessionToOpen.lesson_status === "ACTIVE" && !sessionToOpen.submitted_at)
+  const selectedIncident = sessionToOpen ? incidents.find(item => item.id === sessionToOpen.session_id) : undefined
 
   // Search State
   const [searchQuery, setSearchQuery] = useState("")
@@ -410,20 +176,16 @@ function DdsJournalContent() {
   const [activeNavTab, setActiveNavTab] = useState("журнал")
 
   // Interactive verification state
-  const [verifiedMap, setVerifiedMap] = useState<Record<string, boolean>>(() => {
-    const initial: Record<string, boolean> = {}
-    INITIAL_INCIDENTS.forEach((item) => {
-      initial[item.id] = !!item.verified
-    })
-    return initial
-  })
+  // Verification is a separate service workflow; the list must not invent it.
+  const verifiedMap: Record<string, boolean> = {}
 
-  // Time state (defaults to screenshot 10:22:52)
+  // Clock in the preserved journal header.
   const [currentTime, setCurrentTime] = useState({
-    hoursMinutes: "10:22",
-    seconds: ":52",
+    hoursMinutes: "—",
+    seconds: "",
+    date: "",
   })
-  const [liveClock, setLiveClock] = useState(false)
+  const [liveClock, setLiveClock] = useState(true)
 
   // Toast feedback
   const [toastMessage, setToastMessage] = useState<string | null>(null)
@@ -444,6 +206,7 @@ function DdsJournalContent() {
       setCurrentTime({
         hoursMinutes: `${hh}:${mm}`,
         seconds: `:${ss}`,
+        date: now.toLocaleDateString("ru-RU", {weekday:"long",day:"numeric",month:"long",year:"numeric"}),
       })
     }
     updateTime()
@@ -459,24 +222,14 @@ function DdsJournalContent() {
     })
   }
 
-  const toggleVerified = (id: string) => {
-    setVerifiedMap((prev) => {
-      const next = !prev[id]
-      showToast(next ? `Карточка ${id} проверена` : `Отметка проверки снята`)
-      return { ...prev, [id]: next }
-    })
-  }
-
-  const handleDeleteRow = (number: string) => {
-    showToast(`Карточка №${number} перемещена в архив`)
-  }
+  const toggleVerified = () => showToast("Проверка карточки недоступна в этом режиме")
 
   const handleResetSearch = () => {
     setSearchQuery("")
     showToast("Поиск сброшен")
   }
 
-  const filteredIncidents = INITIAL_INCIDENTS.filter((item) => {
+  const filteredIncidents = incidents.filter((item) => {
     if (!searchQuery.trim()) return true
     const q = searchQuery.toLowerCase()
     return (
@@ -488,6 +241,15 @@ function DdsJournalContent() {
       (item.description && item.description.toLowerCase().includes(q))
     )
   })
+
+  const maxPage = Math.max(1, Math.ceil(filteredIncidents.length / 10))
+  const currentPage = Math.min(page, maxPage)
+  const visibleIncidents = filteredIncidents.slice((currentPage - 1) * 10, currentPage * 10)
+  useEffect(() => {
+    if (!autoRefresh) return
+    const timer = setInterval(load, 30000)
+    return () => clearInterval(timer)
+  }, [autoRefresh, load])
 
   // Exact 13 Navigation Items matching Screenshot 4
   const navItems = [
@@ -535,7 +297,7 @@ function DdsJournalContent() {
               <input
                 type="text"
                 value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
+                onChange={(e) => {setSearchQuery(e.target.value); setPage(1)}}
                 placeholder=""
                 className="w-full text-sm text-gray-800 dark:text-foreground outline-none pr-8 bg-transparent"
                 aria-label="Поиск происшествий"
@@ -591,7 +353,7 @@ function DdsJournalContent() {
               </div>
               <div>
                 <label className="block text-[10px] text-gray-500 dark:text-muted-foreground font-medium">Период:</label>
-                <input type="date" defaultValue="2025-02-17" className="w-full border dark:border-border rounded p-1 text-xs bg-white dark:bg-background text-foreground" />
+                <input type="date" className="w-full border dark:border-border rounded p-1 text-xs bg-white dark:bg-background text-foreground" />
               </div>
             </div>
           )}
@@ -606,13 +368,13 @@ function DdsJournalContent() {
               {/* Operator and Workstation Info with icons */}
               <div className="flex flex-col justify-center text-xs min-w-0 pr-2">
                 <span className="text-white text-[13px] font-bold leading-tight truncate">
-                  Понедельник, 17 Февраль 2025
+                  {currentTime.date || "Список происшествий"}
                 </span>
                 <div className="flex items-center gap-1.5 text-[11px] text-gray-300 mt-1">
-                  <span className="truncate">оп. 227 , Глущенко О И</span>
+                  <span className="truncate">Диспетчер ДДС</span>
                   <span className="flex items-center gap-0.5 text-gray-300 shrink-0">
                     <Monitor size={12} className="text-gray-300" />
-                    <span>АРМ 007</span>
+                    <span>АРМ ДДС</span>
                   </span>
 
                   <button
@@ -713,14 +475,11 @@ function DdsJournalContent() {
           {/* Far Right: Big Blue Action Button SPANNING FULL HEIGHT OF THE PANEL */}
           <button
             onClick={() => {
-              if (sessionId && ticketId) {
-                router.push(`/dds?session_id=${sessionId}&ticket_id=${ticketId}`)
-              } else {
-                router.push("/dds")
-              }
+              if (canOpen && selectedIncident) router.push(selectedIncident.consoleUrl)
             }}
+            disabled={loading || Boolean(error) || !canOpen}
             aria-label="Взять карточку в обработку"
-            className="w-[125px] xl:w-[135px] bg-[#0077be] hover:bg-[#006bb0] text-white flex items-center justify-center text-center p-1.5 transition-colors shrink-0 shadow-inner group h-full cursor-pointer"
+            className="w-[125px] xl:w-[135px] bg-[#0077be] hover:bg-[#006bb0] text-white flex items-center justify-center text-center p-1.5 transition-colors shrink-0 shadow-inner group h-full cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
             title="Взять карточку в обработку"
           >
             <div className="w-full h-full border border-white/90 flex flex-col items-center justify-center p-1 leading-tight font-bold text-[12px] xl:text-[13px] lowercase tracking-wide">
@@ -741,7 +500,7 @@ function DdsJournalContent() {
           onClick={() => setListCollapsed(!listCollapsed)}
           className="flex items-center gap-1.5 cursor-pointer font-bold text-[14.5px] hover:text-gray-200"
         >
-          <span>Список происшествий (Диспетчер ДДС)</span>
+          <span>Список происшествий</span>
           {listCollapsed ? <ChevronDown size={17} /> : <ChevronUp size={17} />}
         </div>
 
@@ -827,6 +586,11 @@ function DdsJournalContent() {
       {/* Right 50%: Starts exactly at middle with "Постр.", "Статус",   */}
       {/*            "Адрес", "Проверена"                                */}
       {/* ============================================================== */}
+      {loading && <div role="status" className="px-4 py-2 text-sm">Загрузка происшествий...</div>}
+      {error && <div role="alert" className="px-4 py-2 text-sm text-red-100 bg-red-950/70">
+        {error} <button type="button" onClick={load} className="underline ml-2">Повторить загрузку</button>
+      </div>}
+      {!loading && !error && focusedSessionId && !focusedSession && <div role="alert" className="px-4 py-2 text-sm text-red-100 bg-red-950/70">Выбранная карточка недоступна в вашем списке происшествий</div>}
       {!listCollapsed && (
         <div className="flex-1 overflow-x-auto w-full px-2 py-1">
           <div className="min-w-[1240px] text-xs">
@@ -867,10 +631,10 @@ function DdsJournalContent() {
             <div className="flex flex-col gap-2 mt-1.5">
               {filteredIncidents.length === 0 ? (
                 <div className="p-8 text-center text-gray-300 bg-[#49555d] rounded">
-                  По вашему запросу не найдено ни одного происшествия.
+                  {loading ? "Загрузка..." : error ? "Список недоступен" : searchQuery.trim() ? "По вашему запросу не найдено ни одного происшествия." : "Нет доступных карточек происшествий"}
                 </div>
               ) : (
-                filteredIncidents.map((incident) => {
+                visibleIncidents.map((incident) => {
                   const isPinned = !!pinnedRows[incident.id]
                   const isVerified = !!verifiedMap[incident.id]
                   const isExpanded = !!expandedRows[incident.id]
@@ -878,7 +642,7 @@ function DdsJournalContent() {
                   return (
                     <div
                       key={incident.id}
-                      className="flex flex-col bg-[#49555d] hover:bg-[#525f69] transition-colors rounded-[2px] border border-[#3d474e]/50 overflow-hidden shadow-xs"
+                      className={`flex flex-col bg-[#49555d] hover:bg-[#525f69] transition-colors rounded-[2px] border overflow-hidden shadow-xs ${incident.id === focusedSessionId ? "border-[#54b9ec]" : "border-[#3d474e]/50"}`}
                     >
                       {/* Main Incident Row (Exactly 50% / 50% Split) */}
                       <div className="flex w-full items-stretch text-[12px] text-gray-100 divide-x divide-[#3d474e] min-h-[30px]">
@@ -951,9 +715,9 @@ function DdsJournalContent() {
                           {/* 8. № Карточки происшествия */}
                           <div className="w-[84px] shrink-0 flex items-center justify-center font-mono font-medium text-gray-100">
                             <Link
-                              href={`/operator?ticket_id=${incident.number}`}
-                              className="hover:underline hover:text-blue-300"
-                              title="Открыть карточку происшествия"
+                              href={incident.consoleUrl}
+                              className="block max-w-full truncate hover:underline hover:text-blue-300"
+                              title={`Открыть карточку происшествия №${incident.number}`}
                             >
                               {incident.number}
                             </Link>
@@ -1008,7 +772,7 @@ function DdsJournalContent() {
                           <div className="w-[36px] shrink-0 flex items-center justify-center">
                             <button
                               type="button"
-                              onClick={() => showToast(`Бланк / планшет карточки №${incident.number}`)}
+                              onClick={() => router.push(incident.consoleUrl)}
                               className="text-gray-300 hover:text-white cursor-pointer p-0.5 transition-colors"
                               title="Планшет карточки"
                             >
@@ -1020,7 +784,8 @@ function DdsJournalContent() {
                           <div className="w-[36px] shrink-0 flex items-center justify-center">
                             <button
                               type="button"
-                              onClick={() => toggleVerified(incident.id)}
+                              onClick={() => toggleVerified()}
+                              disabled
                               className="cursor-pointer p-0.5"
                               title={isVerified ? "Карточка проверена" : "Отметить карточку как проверенную"}
                             >
@@ -1146,7 +911,7 @@ function DdsJournalContent() {
               onClick={() => showToast("Выбор страницы")}
               className="border border-gray-400 rounded px-1.5 py-0.5 flex items-center gap-1 hover:bg-white/10 cursor-pointer"
             >
-              <span>1</span>
+              <span>{currentPage}</span>
               <ChevronDown size={11} />
             </button>
           </div>
@@ -1165,13 +930,14 @@ function DdsJournalContent() {
           </div>
 
           {/* Total range */}
-          <span className="text-gray-300">1-10 из 23030</span>
+          <span className="text-gray-300">{filteredIncidents.length ? (currentPage - 1) * 10 + 1 : 0}-{Math.min(currentPage * 10, filteredIncidents.length)} из {filteredIncidents.length}</span>
 
           {/* Arrows */}
           <div className="flex items-center gap-1 ml-1">
             <button
               type="button"
-              onClick={() => showToast("Предыдущая страница")}
+              onClick={() => setPage(Math.max(1, currentPage - 1))}
+              disabled={currentPage === 1}
               className="text-gray-400 hover:text-white cursor-pointer p-0.5"
               title="Предыдущая"
             >
@@ -1179,7 +945,8 @@ function DdsJournalContent() {
             </button>
             <button
               type="button"
-              onClick={() => showToast("Следующая страница")}
+              onClick={() => setPage(Math.min(maxPage, currentPage + 1))}
+              disabled={currentPage === maxPage}
               className="text-gray-400 hover:text-white cursor-pointer p-0.5"
               title="Следующая"
             >
@@ -1192,256 +959,16 @@ function DdsJournalContent() {
   )
 }
 
-function AssignedDDSJournal({ sessionId, ticketId }: { sessionId: string; ticketId?: string }) {
-  const [state, setState] = useState<DDSSessionState | null>(null)
-  const [isLoading, setIsLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
-  const epochRef = useRef(0)
-  const controllerRef = useRef<AbortController | null>(null)
-
-  const loadData = useCallback(async () => {
-    const epoch = ++epochRef.current
-    if (controllerRef.current) {
-      controllerRef.current.abort()
-    }
-    const controller = new AbortController()
-    controllerRef.current = controller
-
-    setIsLoading(true)
-    setError(null)
-
-    try {
-      const data = await fetchDDSSessionState(sessionId, ticketId, controller.signal)
-      if (epochRef.current === epoch) {
-        setState(data)
-        setError(null)
-      }
-    } catch (err: any) {
-      if (controller.signal.aborted || epochRef.current !== epoch) return
-      setError(err.message || "Ошибка загрузки карточки занятия")
-      setState(null)
-    } finally {
-      if (epochRef.current === epoch) {
-        setIsLoading(false)
-      }
-    }
-  }, [sessionId, ticketId])
-
-  useEffect(() => {
-    loadData()
-    return () => {
-      epochRef.current++
-      if (controllerRef.current) {
-        controllerRef.current.abort()
-      }
-    }
-  }, [loadData])
-
-  if (isLoading && !state) {
-    return (
-      <div className="flex min-h-screen items-center justify-center bg-[#2b3a42] text-white text-sm">
-        Загрузка назначенной карточки происшествия...
-      </div>
-    )
-  }
-
-  if (error && !state) {
-    return (
-      <div className="flex min-h-screen items-center justify-center bg-[#2b3a42] p-4">
-        <div role="alert" className="max-w-md w-full bg-red-950/80 border border-red-500/50 p-6 rounded-lg text-white space-y-3">
-          <p className="font-semibold text-sm">{error}</p>
-          <button
-            type="button"
-            onClick={loadData}
-            className="px-3 py-1.5 bg-red-800 hover:bg-red-700 text-xs font-bold rounded text-white"
-          >
-            Повторить попытку
-          </button>
-        </div>
-      </div>
-    )
-  }
-
-  if (!state) return null
-
-  const card = state.incoming_card
-  const statusLabel =
-    state.session_status === "COMPLETED"
-      ? state.submitted_at
-        ? "Выполнено"
-        : "Не завершено"
-      : state.session_status === "ACTIVE"
-      ? "В процессе"
-      : state.session_status
-  const scoreLabel =
-    state.score !== null && state.score !== undefined ? `${state.score}` : "Нет оценки"
-  const consoleUrl = `/dds?session_id=${encodeURIComponent(sessionId)}&ticket_id=${encodeURIComponent(ticketId || state.ticket_id || "")}`
-
-  return (
-    <div className="min-h-screen bg-[#2b3a42] text-gray-100 flex flex-col font-sans">
-      <header className="bg-[#1f2b31] border-b border-[#3d4d55] px-6 py-3 flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <span className="font-bold text-sm text-white">Журнал ДДС &bull; Назначенная карточка</span>
-          <span className="text-xs px-2 py-0.5 rounded bg-blue-500/20 text-blue-300 border border-blue-500/30 font-medium">
-            {statusLabel}
-          </span>
-          <span className="text-xs px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 font-medium">
-            Оценка: {scoreLabel}
-          </span>
-        </div>
-        <div className="flex items-center gap-3">
-          <button
-            type="button"
-            onClick={loadData}
-            className="px-3 py-1 bg-white/10 hover:bg-white/20 text-xs rounded border border-white/20 transition-colors"
-          >
-            Обновить
-          </button>
-          <Link
-            href={consoleUrl}
-            className="px-3 py-1 bg-[#157dbd] hover:bg-[#136ba3] text-xs font-bold rounded text-white transition-colors"
-          >
-            Открыть рабочее место диспетчера &rarr;
-          </Link>
-        </div>
-      </header>
-
-      <main className="flex-1 max-w-5xl w-full mx-auto p-6 space-y-6">
-        {/* Card Header & Description */}
-        <div className="bg-[#34444d] rounded-lg border border-[#485c67] p-5 shadow-sm space-y-3">
-          <div className="flex items-center justify-between border-b border-[#485c67] pb-3">
-            <div>
-              <h2 className="text-base font-bold text-white">
-                Происшествие № {card.incident?.number || state.ticket_id}
-              </h2>
-              <p className="text-xs text-gray-300 mt-0.5">
-                {card.incident?.savedAt} &bull; {card.incident?.operator}
-              </p>
-            </div>
-            <Link
-              href={consoleUrl}
-              className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-xs font-bold rounded text-white transition-colors"
-            >
-              Перейти к отработке
-            </Link>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
-            <div className="space-y-1">
-              <span className="text-gray-400 font-semibold block">Заявитель:</span>
-              <p className="text-gray-200">{card.caller?.name} ({card.caller?.role})</p>
-              <p className="text-gray-300">{card.caller?.address}</p>
-              <p className="text-gray-400">Тел: {card.phones?.aon || card.phones?.provided}</p>
-            </div>
-
-            <div className="space-y-1">
-              <span className="text-gray-400 font-semibold block">Классификация:</span>
-              <p className="text-gray-200">{card.classification?.section}</p>
-              <p className="text-gray-300">{card.classification?.title} &bull; {card.classification?.class}</p>
-              <p className="text-gray-400">
-                Пострадавшие: {card.statuses?.injured} &bull; Заблокированные: {card.statuses?.blocked}
-              </p>
-            </div>
-          </div>
-
-          <div className="pt-2 border-t border-[#485c67]">
-            <span className="text-gray-400 font-semibold text-xs block mb-1">Описание происшествия:</span>
-            <p className="text-sm text-gray-100 bg-[#25333a] p-3 rounded border border-[#3d4d55] whitespace-pre-wrap">
-              {card.description}
-            </p>
-          </div>
-        </div>
-
-        {/* Services & Actions Journal */}
-        <div className="bg-[#34444d] rounded-lg border border-[#485c67] p-5 shadow-sm space-y-4">
-          <h3 className="text-sm font-bold text-white border-b border-[#485c67] pb-2">
-            Журнал действий и привлеченные службы ({state.actions.length} действий)
-          </h3>
-
-          <div className="space-y-2">
-            <span className="text-xs text-gray-400 font-semibold block">Службы в карточке:</span>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-              {card.services?.map((s, idx) => (
-                <div key={idx} className="p-2.5 rounded bg-[#25333a] border border-[#3d4d55] text-xs flex items-center justify-between">
-                  <span className="font-semibold text-gray-200">{s.name}</span>
-                  <span className="px-2 py-0.5 rounded bg-white/10 text-gray-300 font-mono text-[11px]">
-                    {s.status}
-                  </span>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          <div className="pt-2 space-y-2">
-            <span className="text-xs text-gray-400 font-semibold block">История действий курсанта:</span>
-            {state.actions.length === 0 ? (
-              <p className="text-xs text-gray-400 italic py-2">
-                Действия по карточке еще не фиксировались.
-              </p>
-            ) : (
-              <div className="space-y-2 max-h-64 overflow-y-auto pr-1">
-                {state.actions.map((act) => (
-                  <div
-                    key={act.request_id}
-                    className="p-3 rounded bg-[#25333a] border border-[#3d4d55] text-xs flex flex-col sm:flex-row sm:items-center justify-between gap-2"
-                  >
-                    <div className="space-y-0.5">
-                      <div className="flex items-center gap-2">
-                        <span className="font-bold text-white">{act.service_name}</span>
-                        <span className="px-1.5 py-0.2 rounded bg-white/10 text-gray-300 text-[11px]">
-                          {act.kind === "status" ? act.status || "Статус" : "Направление"}
-                        </span>
-                        {act.order_number && (
-                          <span className="text-gray-400 text-[11px]">№ {act.order_number}</span>
-                        )}
-                      </div>
-                      {act.comment && <p className="text-gray-200">{act.comment}</p>}
-                      {act.who_accepted && (
-                        <p className="text-gray-300 text-[11px]">
-                          Принял: {act.who_accepted} &bull; {act.summary}
-                        </p>
-                      )}
-                    </div>
-                    {act.at && (
-                      <span className="text-[11px] text-gray-400 shrink-0 font-mono">
-                        {new Date(act.at).toLocaleTimeString()}
-                      </span>
-                    )}
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        </div>
-      </main>
-    </div>
-  )
-}
-
 function DdsJournalRouter() {
   const searchParams = useSearchParams()
-  const sessionId = searchParams ? searchParams.get("session_id") : null
-  const ticketId = searchParams ? searchParams.get("ticket_id") : null
-
-  if (sessionId) {
-    return <AssignedDDSJournal sessionId={sessionId} ticketId={ticketId || undefined} />
-  }
-
-  return (
-    <div className="min-h-screen bg-[#24292e] text-white flex flex-col font-sans">
-      <div className="p-4 max-w-5xl mx-auto w-full space-y-6">
-        <DDSAssignments />
-        <div className="border-t border-gray-700 pt-6">
-          <div className="flex items-center justify-between mb-4">
-            <h3 className="text-base font-bold text-gray-300">
-              Демонстрационный журнал происшествий (ознакомительный режим)
-            </h3>
-          </div>
-          <DdsJournalContent />
-        </div>
-      </div>
-    </div>
-  )
+  const router = useRouter()
+  const query = searchParams?.toString() || ""
+  const hasCard = Boolean(searchParams?.get("session_id") || searchParams?.get("ticket_id"))
+  useEffect(() => {
+    if (hasCard) router.replace(`/dds?${query}`)
+  }, [hasCard, query, router])
+  // Old links are aliases to the workplace; no intermediate card screen is mounted.
+  return hasCard ? null : <DdsJournalContent />
 }
 
 export default function DdsJournalPage() {

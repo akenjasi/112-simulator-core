@@ -49,7 +49,9 @@ async def restore_existing_tickets(session: AsyncSession) -> Dict[str, Any]:
         if getattr(s, "is_deleted", False) or (s.workflow_state or {}).get("status") == "ARCHIVED":
             continue
 
-        if is_suitable_dds_ticket(s):
+        # Legacy tickets may be usable without a stored structured card.
+        # Restoration must still persist that card rather than skip the repair.
+        if s.content not in ({}, None) and is_suitable_dds_ticket(s):
             wf = dict(s.workflow_state or {})
             if wf.get("status") in (None, "", "active"):
                 # Restoration can repair structure, but approval is a teacher

@@ -389,7 +389,7 @@ export default function StudentLobbyPage() {
       const data = await response.json()
       const targetUrl =
         data.redirect_url ||
-        `/dds/journal?session_id=${data.session_id}&ticket_id=${data.ticket_id}&incoming_call=true`
+        `/dds/journal?focus_session_id=${encodeURIComponent(data.session_id)}&focus_ticket_id=${encodeURIComponent(data.ticket_id)}`
 
       // Perform redirect
       router.push(targetUrl)
@@ -541,9 +541,9 @@ export default function StudentLobbyPage() {
                 )}
               </Button>
               <p className="text-[11px] text-muted-foreground text-center">
-                Переход на рабочее место:{" "}
+                Самостоятельная тренировка:{" "}
                 <span className="font-semibold text-foreground">
-                  Диспетчер ДДС (/dds) &bull; отдельный демонстрационный запуск
+                  список происшествий → «Взять карточку в обработку» → рабочее место ДДС
                 </span>
               </p>
             </div>

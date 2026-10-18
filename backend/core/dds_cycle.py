@@ -24,6 +24,7 @@ from backend.models.domain_03 import Assignment, ExamSession
 from backend.models.domain_04 import IncidentCard, EvaluationResult, TicketResult
 from backend.schemas.dds_cycle import DispatcherData, DDSActionPayload
 from backend.schemas.lessons import CadetLessonStats, CadetTicketDetail
+from backend.core.dds_service_policy import action_error, allowed_statuses, current_service_statuses
 
 
 def sanitize_incoming_card(content: Any) -> Dict[str, Any]:
@@ -179,12 +180,40 @@ def build_incoming_card(
     return validated.model_dump(by_alias=True)
 
 
+def incoming_card_from_ticket(ticket: ScenarioTicket) -> Dict[str, Any]:
+    """Read prepared DDS cards or explicitly map the stored legacy ticket format.
+
+    A malformed structured card must fail validation, never fall back to an etalon.
+    Only incoming facts and the designated service list are copied for the DDS role.
+    """
+    if ticket.content not in ({}, None):
+        return sanitize_incoming_card(ticket.content)
+    settings = ticket.settings or {}
+    facts = ticket.ground_truth or {}
+    names = settings.get("etalon_services")
+    if not isinstance(names, list) or not names or not all(isinstance(name, str) and name.strip() for name in names):
+        raise ValueError("Stored ticket has no valid service list")
+    return sanitize_incoming_card({
+        "description": settings.get("plot", ""),
+        "phones": {"aon": facts.get("phone") or ""},
+        "incident": {"number": ticket.scenario_id, "operator": "112"},
+        "caller": {"name": facts.get("fio") or "", "role": facts.get("caller_status") or "",
+                   "address": ", ".join(str(facts[key]) for key in ("street", "house") if facts.get(key))},
+        "statuses": {key: facts.get(key) or "неизвестно" for key in ("injured", "ambulanceRefusal", "blocked")},
+        "classification": {"section": ticket.category or settings.get("category") or "",
+                           "title": settings.get("subcategory") or "", "class": settings.get("class") or "",
+                           "visClass": settings.get("visClass") or ""},
+        "services": [{"id": str(index), "name": name.strip(), "status": "Получена службой"}
+                     for index, name in enumerate(names)],
+    })
+
+
 def is_suitable_dds_ticket(ticket: Optional[ScenarioTicket]) -> bool:
     """Check if ticket is suitable for DDS lesson assignment."""
     if not ticket or getattr(ticket, "is_deleted", False):
         return False
     try:
-        sanitize_incoming_card(ticket.content)
+        incoming_card_from_ticket(ticket)
         return True
     except Exception:
         return False
@@ -318,6 +347,8 @@ def build_session_state_dict(
     actions = dds_data.get("actions", [])
     submitted_at = dds_data.get("submitted_at")
     score = get_session_score(evals, trs)
+    editable = session.status == "ACTIVE" and lesson.status == "ACTIVE" and submitted_at is None
+    service_statuses = current_service_statuses(incoming_card, (card.assigned_services or {}) if card else {}, actions)
 
     # Time calculations
     start_dt = session.start_time
@@ -369,8 +400,15 @@ def build_session_state_dict(
         "card_id": card_id,
         "session_status": session.status,
         "lesson_status": lesson.status,
+        "started_at": (
+            (session.start_time.replace(tzinfo=timezone.utc) if session.start_time.tzinfo is None else session.start_time).isoformat()
+            if session.start_time else None
+        ),
         "incoming_card": incoming_card,
         "actions": actions,
+        "allowed_service_statuses": {
+            name: allowed_statuses(current) if editable else [] for name, current in service_statuses.items()
+        },
         "submitted_at": submitted_at,
         "score": score,
         "time_limit_seconds": time_limit_seconds,
@@ -547,6 +585,11 @@ async def apply_dds_action(
             status_code=status.HTTP_409_CONFLICT,
             detail=f"Service '{payload.service_name}' is not in assigned services for this incident card",
         )
+
+    service_statuses = current_service_statuses(dds_data.get("incoming_card", {}), assigned_svcs, existing_actions)
+    error = action_error(service_statuses.get(payload.service_name, ""), payload)
+    if error:
+        raise HTTPException(status_code=error[0], detail={"code": error[1]})
 
     # 7. Record action with server-generated actor_id and timestamp into dynamic_state.dds.actions
     server_now = datetime.now(timezone.utc).isoformat()

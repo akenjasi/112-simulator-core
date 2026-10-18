@@ -10,7 +10,7 @@ from backend.core.dds_cycle import (
     build_dds_cadet_stats,
     is_suitable_dds_ticket,
     lock_assignment,
-    sanitize_incoming_card,
+    incoming_card_from_ticket,
 )
 from backend.core.ticket_lifecycle import is_approved_dds_ticket
 from backend.core.deps import require_role, get_current_user
@@ -422,7 +422,7 @@ async def start_lesson(
         ticket = await db.get(ScenarioTicket, lesson.scenario_id)
         if not is_suitable_dds_ticket(ticket) or not is_approved_dds_ticket(ticket):
             raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Scenario ticket must be approved, valid and not deleted")
-        sanitized_incoming = sanitize_incoming_card(ticket.content)
+        sanitized_incoming = incoming_card_from_ticket(ticket)
 
         if lesson.cadet_id:
             target_cadet = await db.get(User, lesson.cadet_id)

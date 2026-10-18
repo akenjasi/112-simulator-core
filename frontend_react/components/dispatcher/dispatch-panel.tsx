@@ -11,14 +11,28 @@ type Props = {
   setSummary: (v: string) => void
   services?: any[]
   calledServices?: string[]
-  onServiceSaved?: (serviceName: string) => void
+  onServiceSaved?: (serviceName: string, whoAccepted: string, summary: string) => void | boolean | Promise<void | boolean>
+  disabled?: boolean
+  acceptedServices?: string[]
+  selectedServiceName?: string
+  onServiceChange?: (serviceName: string) => void
+  savedDispatches?: Record<string, {whoAccepted: string; summary: string}>
 }
 
-export function DispatchPanel({ isCardAccepted, whoAccepted, setWhoAccepted, summary, setSummary, services = [], calledServices = [], onServiceSaved }: Props) {
+const EMPTY_SERVICES: any[] = []
+const EMPTY_CALLED_SERVICES: string[] = []
+
+export function DispatchPanel({ isCardAccepted, whoAccepted, setWhoAccepted, summary, setSummary, services = EMPTY_SERVICES, calledServices = EMPTY_CALLED_SERVICES, onServiceSaved, disabled = false, acceptedServices, selectedServiceName, onServiceChange, savedDispatches }: Props) {
   const [callState, setCallState] = useState<"idle" | "dialing" | "speaking" | "connected">("idle")
   const [inputsUnlocked, setInputsUnlocked] = useState(false)
   const [savedRequisites, setSavedRequisites] = useState(false)
-  const [selectedService, setSelectedService] = useState(services && services.length > 0 ? services[0].name : "Аварийная служба")
+  const [localService, setLocalService] = useState(services && services.length > 0 ? services[0].name : "Аварийная служба")
+  const selectedService = selectedServiceName ?? localService
+  const setSelectedService = (value: string) => onServiceChange ? onServiceChange(value) : setLocalService(value)
+  const accepted = acceptedServices ? acceptedServices.includes(selectedService) : isCardAccepted
+  const [saving, setSaving] = useState(false)
+  const savingRef = useRef(false)
+  const epochRef = useRef(0)
 
   useEffect(() => {
     if (services && services.length > 0 && !services.some(s => s.name === selectedService)) {
@@ -42,6 +56,9 @@ export function DispatchPanel({ isCardAccepted, whoAccepted, setWhoAccepted, sum
   }
 
   useEffect(() => {
+    epochRef.current++
+    savingRef.current = false
+    setSaving(false)
     // Clear all timeouts and audio when selectedService changes
     if (callTimeoutRef.current) clearTimeout(callTimeoutRef.current)
     if (speakingTimeoutRef.current) clearTimeout(speakingTimeoutRef.current)
@@ -65,13 +82,56 @@ export function DispatchPanel({ isCardAccepted, whoAccepted, setWhoAccepted, sum
     setInputsUnlocked(false)
     setWhoAccepted("")
     setSummary("")
+    return () => {
+      epochRef.current++
+      if (callTimeoutRef.current) clearTimeout(callTimeoutRef.current)
+      if (speakingTimeoutRef.current) clearTimeout(speakingTimeoutRef.current)
+      if (fallbackTimeoutRef.current) clearTimeout(fallbackTimeoutRef.current)
+      if (audioRef.current) audioRef.current.pause()
+      if (dialToneRef.current) {
+        try { dialToneRef.current.stop(); dialToneRef.current.disconnect() } catch {}
+        dialToneRef.current = null
+      }
+    }
   }, [selectedService]) // ONLY reset when selectedService changes
 
   useEffect(() => {
     setSavedRequisites(calledServices.includes(selectedService))
   }, [calledServices, selectedService])
 
+  const saved = savedDispatches?.[selectedService]
+  useEffect(() => {
+    if (saved) {
+      setWhoAccepted(saved.whoAccepted)
+      setSummary(saved.summary)
+    }
+  }, [selectedService, saved?.whoAccepted, saved?.summary])
+
+  const handleSave = async () => {
+    if (disabled || savingRef.current || !accepted || savedRequisites || !whoAccepted.trim() || !summary.trim()) return
+    const epoch = epochRef.current
+    savingRef.current = true
+    setSaving(true)
+    try {
+      const result = await onServiceSaved?.(selectedService, whoAccepted.trim(), summary.trim())
+      if (epochRef.current !== epoch || result === false) return
+      setSavedRequisites(true)
+      if (audioRef.current) audioRef.current.pause()
+      const audio = new Audio(`/audio/tts/${getServiceType(selectedService)}_accepted.wav`)
+      audioRef.current = audio
+      audio.play().catch(() => {})
+    } catch {
+      // Keep the draft. The assigned-session controller owns errors and retries.
+    } finally {
+      if (epochRef.current === epoch) {
+        savingRef.current = false
+        setSaving(false)
+      }
+    }
+  }
+
   const handleCall = () => {
+    if (disabled || saving || !accepted) return
     if (callState !== "idle" && callState !== "connected") return
     setCallState("dialing")
     setInputsUnlocked(false)
@@ -136,14 +196,14 @@ export function DispatchPanel({ isCardAccepted, whoAccepted, setWhoAccepted, sum
   }
 
   return (
-    <div className={`flex shrink-0 flex-col gap-1.5 2xl:gap-2 select-none transition-opacity duration-300 ${!isCardAccepted ? 'opacity-40 pointer-events-none grayscale' : ''}`}>
+    <div className={`flex shrink-0 flex-col gap-1.5 2xl:gap-2 select-none transition-opacity duration-300 ${!accepted ? 'opacity-40 grayscale' : ''}`}>
       {/* Section header (dark) */}
       <div className="mt-2 2xl:mt-3 flex items-center justify-between bg-[#303335] px-4 2xl:px-5 py-2 2xl:py-2">
         <span className="text-sm 2xl:text-sm font-bold text-white border-b border-dotted border-white">
           Отработка (Направление служб)
         </span>
         <span className={`text-[11px] 2xl:text-xs px-2 py-0.5 rounded font-semibold ${
-          !isCardAccepted
+          !accepted
             ? "bg-gray-700 text-gray-400"
             : callState === "connected"
             ? "bg-emerald-600 text-white"
@@ -151,7 +211,7 @@ export function DispatchPanel({ isCardAccepted, whoAccepted, setWhoAccepted, sum
             ? "bg-amber-500 text-white animate-pulse"
             : "bg-blue-600 text-white"
         }`}>
-          {!isCardAccepted
+          {!accepted
             ? "Заблокировано (требуется статус «Принята»)"
             : callState === "connected"
             ? "Соединено ✓"
@@ -167,9 +227,10 @@ export function DispatchPanel({ isCardAccepted, whoAccepted, setWhoAccepted, sum
       <div className="flex flex-col gap-1.5 2xl:gap-2">
         <div className="flex items-center rounded-[1px] border border-[#b4b9bc] bg-[#fbfdfe] px-4 2xl:px-5 py-2.5 2xl:py-2.5 text-base 2xl:text-sm gap-4">
           <select 
+            aria-label="Служба для направления"
             value={selectedService}
             onChange={(e) => setSelectedService(e.target.value)}
-            disabled={callState === "dialing" || callState === "speaking"}
+            disabled={disabled || saving || callState === "dialing" || callState === "speaking"}
             className="flex-1 bg-white border border-gray-300 rounded px-3 py-2 text-[#111827] outline-none focus:border-[#0078d4]"
           >
             {services && services.length > 0 ? (
@@ -192,7 +253,7 @@ export function DispatchPanel({ isCardAccepted, whoAccepted, setWhoAccepted, sum
 
           <button
             onClick={handleCall}
-            disabled={callState === "dialing" || callState === "speaking"}
+            disabled={disabled || saving || !accepted || callState === "dialing" || callState === "speaking"}
             className={`flex items-center justify-center gap-2 px-5 py-2.5 rounded text-white font-bold transition-all shadow-sm ${
               callState === "dialing" || callState === "speaking"
                 ? 'bg-amber-500 animate-pulse'
@@ -235,8 +296,9 @@ export function DispatchPanel({ isCardAccepted, whoAccepted, setWhoAccepted, sum
         <div className="flex items-center rounded-[1px] border border-[#b4b9bc] bg-[#fbfdfe] px-4 2xl:px-5 py-2.5 2xl:py-2.5 text-sm 2xl:text-sm gap-2 2xl:gap-2">
           <span className="text-[#6b7280] min-w-[110px] font-medium">Кто принял:</span>
           <input 
+            aria-label="Кто принял"
             type="text"
-            disabled={savedRequisites}
+            disabled={disabled || saving || !accepted || savedRequisites}
             value={whoAccepted}
             onChange={(e) => setWhoAccepted(e.target.value)}
             className={`flex-1 bg-transparent outline-none border-b border-transparent focus:border-[#0078d4] text-[#111827] font-medium`}
@@ -247,8 +309,9 @@ export function DispatchPanel({ isCardAccepted, whoAccepted, setWhoAccepted, sum
         <div className="flex items-center rounded-[1px] border border-[#b4b9bc] bg-[#fbfdfe] px-4 2xl:px-5 py-2.5 2xl:py-2.5 text-sm 2xl:text-sm gap-2 2xl:gap-2">
           <span className="text-[#6b7280] min-w-[110px] font-medium">Суть:</span>
           <input 
+            aria-label="Суть сообщения"
             type="text"
-            disabled={savedRequisites}
+            disabled={disabled || saving || !accepted || savedRequisites}
             value={summary}
             onChange={(e) => setSummary(e.target.value)}
             className={`flex-1 bg-transparent outline-none border-b border-transparent focus:border-[#0078d4] text-[#111827] font-medium`}
@@ -258,23 +321,8 @@ export function DispatchPanel({ isCardAccepted, whoAccepted, setWhoAccepted, sum
 
         <div className="flex justify-end mt-1">
           <button
-            onClick={() => {
-                if (whoAccepted.trim() && summary.trim()) {
-                  setSavedRequisites(true)
-                  if (onServiceSaved) onServiceSaved(selectedService)
-                  
-                  if (audioRef.current) {
-                    audioRef.current.pause()
-                  }
-                  
-                  const sType = getServiceType(selectedService)
-                  const audioUrl = `/audio/tts/${sType}_accepted.wav`
-                  const audio = new Audio(audioUrl)
-                  audioRef.current = audio
-                  audio.play().catch(e => console.warn("Auto-play prevented", e))
-                }
-              }}
-              disabled={savedRequisites || !whoAccepted.trim() || !summary.trim()}
+            onClick={handleSave}
+            disabled={disabled || saving || !accepted || savedRequisites || !whoAccepted.trim() || !summary.trim()}
               className={`px-4 py-1.5 text-xs font-bold rounded transition-colors ${
                 savedRequisites 
                   ? "bg-gray-200 text-gray-500 cursor-not-allowed" 
@@ -283,7 +331,7 @@ export function DispatchPanel({ isCardAccepted, whoAccepted, setWhoAccepted, sum
                   : "bg-[#0078d4] text-white hover:bg-[#006cbd]"
               }`}
             >
-              {savedRequisites ? "✓ Сохранено" : "Сохранить"}
+              {saving ? "Сохранение..." : savedRequisites ? "✓ Сохранено" : "Сохранить"}
             </button>
           </div>
       </div>

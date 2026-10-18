@@ -47,18 +47,15 @@ describe('27.4: Live Dashboard', () => {
       'fetch',
       vi.fn((url: string) => {
         const urlStr = url.toString();
-        if (urlStr.includes('/api/v1/sessions/') && urlStr.endsWith('/stats')) {
+        // Explicit lesson and session sources each use their own API contract.
+        if (urlStr === '/api/v1/lessons/sess-101' || urlStr === '/api/v1/sessions/sess-101/stats') {
           return Promise.resolve({
             ok: true,
             status: 200,
             json: async () => mockStats,
           });
         }
-        return Promise.resolve({
-          ok: true,
-          status: 200,
-          json: async () => ({}),
-        });
+        throw new Error(`Unexpected dashboard request: ${urlStr}`);
       })
     );
   });
