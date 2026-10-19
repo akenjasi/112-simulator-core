@@ -4,10 +4,11 @@ from datetime import datetime, timezone, timedelta
 from typing import Any
 
 from fastapi import HTTPException
-from sqlalchemy import select, text
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm.attributes import flag_modified
 
+from backend.core.student_workspace import lock_cadets
 from backend.core.dds_service_policy import canonical_status, current_service_statuses
 from backend.models.domain_02 import ScenarioTicket
 from backend.models.domain_01 import User
@@ -262,7 +263,7 @@ async def start_training(db: AsyncSession, payload: DDSTrainingStartPayload, use
     if user.role != "CADET":
         raise HTTPException(403, "Self-training requires a cadet")
     # Serialize retries for this user, not all users, including first insertion.
-    await db.execute(text("UPDATE users SET is_active = is_active WHERE user_id = :uid"), {"uid": user.user_id})
+    await lock_cadets(db, [user.user_id])
     sessions = (await db.scalars(select(ExamSession).join(Assignment).where(
         ExamSession.cadet_id == user.user_id, Assignment.card_pool_source == "self_training"))).all()
     for session in sessions:

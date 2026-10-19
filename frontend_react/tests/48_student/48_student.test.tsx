@@ -125,6 +125,9 @@ describe("ТЗ 48: Личный кабинет ученика и Лобби (Ф�
       vi.fn((url: string, init?: RequestInit) => {
         const urlStr = url.toString()
 
+        if (urlStr === "/api/dds/student-workspace") {
+          return Promise.resolve({ok: true, status: 200, json: async () => ({activities: [], can_start_training: true})})
+        }
         if (urlStr === "/api/dds/assignments") {
           return Promise.resolve({ok: true, status: 200, json: async () => []})
         }
@@ -236,7 +239,7 @@ describe("ТЗ 48: Личный кабинет ученика и Лобби (Ф�
 
     it("prioritizes assignments and practice instead of overall scores", async () => {
       render(<StudentProfilePage />)
-      expect(await screen.findByText("Пока нет назначенных занятий")).toBeInTheDocument()
+      expect(await screen.findByText("Занятия сейчас нет")).toBeInTheDocument()
       expect(screen.getByRole("button", {name: "Выбрать задания"})).toBeInTheDocument()
       for (const text of ["За всё время", "За 7 дней", "Матрица компетенций", "81.0", "84.0"]) {
         expect(screen.queryByText(text)).not.toBeInTheDocument()

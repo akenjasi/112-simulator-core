@@ -1,0 +1,32 @@
+/* Keep the desktop home in one viewport; long records scroll inside their panel. */
+@media (min-width: 1024px) and (min-height: 720px) {
+  .root {
+    height: 100dvh;
+    min-height: 0;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+  }
+  .root > header { flex-shrink: 0; }
+  .root .main {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+  }
+  .root .layout { flex: 1; min-height: 0; align-items: stretch; }
+  .root .left, .root .aside {
+    display: flex;
+    min-height: 0;
+    flex-direction: column;
+    gap: 16px;
+  }
+  .root .left > *, .root .aside > * { margin-block: 0; }
+  .root .left > section:first-child, .root .aside > section:first-child { flex-shrink: 0; }
+  .results { display: flex; flex: 1; min-height: 0; flex-direction: column; }
+  .results > div:first-child, .results > nav { flex-shrink: 0; }
+  .resultContent { min-height: 0; overflow-y: auto; overscroll-behavior: contain; }
+  .criteria { min-height: 0; display: flex; flex-direction: column; }
+  .criteria > :not(ol) { flex-shrink: 0; }
+  .criteriaList { min-height: 0; overflow-y: auto; overscroll-behavior: contain; }
+}
