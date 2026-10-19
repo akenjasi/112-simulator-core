@@ -8,15 +8,17 @@ ENV_FILE ?= $(ROOT)/.env
 PORT ?= 8000
 PROJECT_ARGS = $(if $(PROJECT),-p "$(PROJECT)",)
 COMPOSE = docker compose --project-directory "$(ROOT)" --env-file "$(ENV_FILE)" $(PROJECT_ARGS)
+LLM_RUNTIME ?= cpu
+LLM_COMPOSE = $(if $(filter gpu,$(LLM_RUNTIME)),llm.yml,llm-cpu.yml)
 LLM_ARGS = $(if $(filter 1,$(WITH_LLM)),--env-file "$(LLM_ENV_FILE)" --profile llm,)
-LLM_FILES = $(if $(filter 1,$(WITH_LLM)),-f "$(ROOT)/docker/compose/llm.yml" -f "$(ROOT)/docker/compose/reports.yml",)
+LLM_FILES = $(if $(filter 1,$(WITH_LLM)),-f "$(ROOT)/docker/compose/$(LLM_COMPOSE)" -f "$(ROOT)/docker/compose/reports.yml",)
 BASE = -f "$(ROOT)/docker/compose/base.yml"
 DEV = $(COMPOSE) $(LLM_ARGS) $(BASE) -f "$(ROOT)/docker/compose/dev.yml" $(LLM_FILES)
 PROD = $(COMPOSE) $(LLM_ARGS) $(BASE) -f "$(ROOT)/docker/compose/prod.yml" $(LLM_FILES)
 
 .PHONY: help install init backend frontend test test-all build up up-prod down logs llm-up backup replace-dds-tickets package-offline deploy-offline check-python check-llm
 help:
-	@printf '%s\n' 'Setup:   make install | init' 'Develop: make backend [PORT=8000] | frontend' 'Verify:  make test | test-all' 'Docker:  make build | up | up-prod | down | logs' 'LLM:     make llm-up LLM_ENV_FILE=/private/file.env' '         make up WITH_LLM=1 LLM_ENV_FILE=/private/file.env' 'Data:    make backup | replace-dds-tickets [ARGS=--apply]' 'Offline: make package-offline ARGS="--help"' '         make deploy-offline ARCHIVE=/path/bundle.tar.gz [ARGS="..."]' 'Options: ENV_FILE=/private/file.env PROJECT=existing_project VENV=/path/venv'
+	@printf '%s\n' 'Setup:   make install | init' 'Develop: make backend [PORT=8000] | frontend' 'Verify:  make test | test-all' 'Docker:  make build | up | up-prod | down | logs' 'LLM:     make llm-up LLM_ENV_FILE=/private/file.env' '         make up WITH_LLM=1 LLM_ENV_FILE=/private/file.env' 'Data:    make backup | replace-dds-tickets [ARGS=--apply]' 'Offline: make package-offline ARGS="--help"' '         make deploy-offline ARCHIVE=/path/bundle.tar.gz [ARGS="..."]' 'LLM_RUNTIME=cpu (default) | gpu' 'Options: ENV_FILE=/private/file.env PROJECT=existing_project VENV=/path/venv'
 
 install:
 	@cd "$(ROOT)" && "$(PYTHON)" -c 'import sys; assert sys.version_info[:2] == (3,11), "Use Python 3.11"'
@@ -56,6 +58,7 @@ build:
 	@cd "$(ROOT)" && docker build -f docker/images/frontend.Dockerfile -t "$${FRONTEND_IMAGE:-simulator_frontend:latest}" .
 
 check-llm:
+	@case "$(LLM_RUNTIME)" in cpu|gpu) ;; *) echo 'LLM_RUNTIME must be cpu or gpu.' >&2; exit 1;; esac
 	@if [ "$(WITH_LLM)" = 1 ]; then test -n "$(LLM_ENV_FILE)" && test -f "$(LLM_ENV_FILE)" || { echo 'Set LLM_ENV_FILE to an existing private env file.' >&2; exit 1; }; fi
 
 up: check-llm
@@ -70,9 +73,9 @@ down: check-llm
 logs: check-llm
 	@$(DEV) logs -f
 
-llm-up:
+llm-up: check-llm
 	@test -n "$(LLM_ENV_FILE)" && test -f "$(LLM_ENV_FILE)" || { echo 'Set LLM_ENV_FILE to an existing private env file.' >&2; exit 1; }
-	@docker compose --project-directory "$(ROOT)" --env-file "$(LLM_ENV_FILE)" -p "$(if $(PROJECT),$(PROJECT),imba-llm)" -f "$(ROOT)/docker/compose/llm.yml" --profile llm up -d
+	@docker compose --project-directory "$(ROOT)" --env-file "$(LLM_ENV_FILE)" -p "$(if $(PROJECT),$(PROJECT),imba-llm)" -f "$(ROOT)/docker/compose/$(LLM_COMPOSE)" --profile llm up -d
 
 backup: check-python
 	@cd "$(ROOT)" && "$(PY)" -m backend.scripts.db.backup

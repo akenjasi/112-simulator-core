@@ -168,8 +168,14 @@ class DDSReportJobWorker:
         logger.info("DDS Report Job Worker stopped.")
 
     def submit(self, job_id: str) -> None:
-        """Enqueue a newly created or successfully reset job ID for background execution."""
-        self._queue.put_nowait(job_id)
+        """Compatibility notification; the production scheduler polls the durable table.
+
+        This historical worker is no longer started by the application. Keeping
+        the hook avoids introducing a second in-memory production queue.
+        """
+        if self._running:
+            # Explicit legacy worker instances retain their documented lifecycle.
+            self._queue.put_nowait(job_id)
 
     async def _recover_interrupted_jobs(self) -> None:
         """Recover lingering pending/running jobs on process startup.

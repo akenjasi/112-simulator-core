@@ -6,6 +6,7 @@ import math
 import random
 from collections import Counter
 from datetime import datetime, timezone, timedelta
+from zoneinfo import ZoneInfo
 from typing import Optional, List, Union
 from fastapi import APIRouter, Depends, UploadFile, File, HTTPException, Response, Query, status, Body
 from sqlalchemy import select, or_
@@ -38,6 +39,13 @@ from backend.schemas.students import (
 )
 from backend.core.csv_parser import parse_students_csv, generate_csv_template
 from backend.core.gradebook_records import latest_evaluation, resolve_attempt_score_and_status
+
+
+def _student_history_date(value):
+    if value is None:
+        return None
+    utc_value = value.replace(tzinfo=timezone.utc) if value.tzinfo is None else value
+    return utc_value.astimezone(ZoneInfo("Europe/Moscow")).strftime("%d.%m.%Y %H:%M")
 
 
 def _student_teacher_assessment(session, ticket_result, evaluation, card_id=None):
@@ -1174,7 +1182,7 @@ async def get_student_lessons(
                 assignment_id=s.assignment_id, title=f"Занятие #{s.assignment_id[:8]}", target_role=target_role,
                 session_type=s.session_type, status="COMPLETED" if data.get("submitted_at") else "INCOMPLETE" if s.status == "COMPLETED" else s.status,
                 score=scores[0] if len(scores) == 1 else round(sum(scores) / len(scores), 1) if scores else None,
-                date=s.start_time.strftime("%d.%m.%Y %H:%M") if s.start_time else None,
+                date=_student_history_date(s.start_time),
                 created_at=s.start_time, start_time=s.start_time, end_time=s.end_time,
                 tickets=history_tickets))
             continue
@@ -1264,7 +1272,7 @@ async def get_student_lessons(
             ))
 
         avg_score = round(sum(score_acc) / len(score_acc), 1) if score_acc else None
-        date_str = s.start_time.strftime("%d.%m.%Y %H:%M") if s.start_time else None
+        date_str = _student_history_date(s.start_time)
         title = f"Урок #{s.session_id[:8]}" if not assignment else f"Занятие #{assignment.assignment_id[:8]}"
 
         results.append(

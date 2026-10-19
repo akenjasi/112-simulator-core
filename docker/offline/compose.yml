@@ -31,7 +31,8 @@ services:
     command: [--model, /models/report.gguf, --alias, dds-qwen, --offline,
               --host, 0.0.0.0, --port, "8080", --n-gpu-layers, "0",
               --threads, "${LLM_THREADS:-4}", --ctx-size, "${LLM_CONTEXT:-8192}",
-              --parallel, "1", --n-predict, "1200"]
+              --batch-size, "32", --ubatch-size, "32", --slots,
+              --parallel, "1", --sleep-idle-seconds, "10", --n-predict, "1200"]
     networks: [local]
 
   backend:
@@ -47,6 +48,11 @@ services:
       INITIAL_ADMIN_FULL_NAME: Администратор системы 112
       DDS_LLM_BASE_URL: http://llm:8080/v1
       DDS_LLM_MODEL: dds-qwen
+      DDS_REPORT_CPU_MAX_PERCENT: ${DDS_REPORT_CPU_MAX_PERCENT:-40}
+      DDS_REPORT_IDLE_SECONDS: ${DDS_REPORT_IDLE_SECONDS:-30}
+      DDS_REPORT_RAM_RESERVE_MB: ${DDS_REPORT_RAM_RESERVE_MB:-2048}
+      DDS_REPORT_CANCEL_TIMEOUT_SECONDS: ${DDS_REPORT_CANCEL_TIMEOUT_SECONDS:-30}
+      DDS_REPORT_MODEL_BUDGET_MB: ${DDS_REPORT_MODEL_BUDGET_MB:-8192}
       DDS_LLM_TIMEOUT_SECONDS: ${LLM_TIMEOUT_SECONDS:-900}
       FACTOIDS_LLM_BASE_URL: http://llm:8080/v1
       FACTOIDS_LLM_MODEL: dds-qwen

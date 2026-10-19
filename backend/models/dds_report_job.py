@@ -15,7 +15,7 @@ from sqlalchemy.orm import Mapped, mapped_column
 from backend.models.base import Base
 
 
-class DDSReportJob(Base):
+class LegacyDDSReportJob(Base):
     __tablename__ = "dds_report_jobs"
 
     job_id: Mapped[str] = mapped_column(
@@ -82,3 +82,7 @@ class DDSReportJob(Base):
         if "updated_at" not in kwargs:
             kwargs["updated_at"] = datetime.now(timezone.utc)
         super().__init__(**kwargs)
+
+
+# Preserve the public model import while keeping the original table for migration.
+from backend.models.report_job import ReportJob as DDSReportJob  # noqa: E402, F401

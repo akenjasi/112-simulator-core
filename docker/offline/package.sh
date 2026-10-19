@@ -188,9 +188,9 @@ docker build --platform linux/amd64 -f "$CONTEXT/docker/images/backend.Dockerfil
 docker build --platform linux/amd64 -f "$CONTEXT/docker/images/frontend.Dockerfile" -t "$FRONTEND_IMAGE" "$CONTEXT"
 log 'Fetching PostgreSQL and the CPU-only llama.cpp runtime'
 docker pull --platform linux/amd64 postgres:15-alpine
-docker pull --platform linux/amd64 ghcr.io/ggml-org/llama.cpp:server
+docker pull --platform linux/amd64 ghcr.io/ggml-org/llama.cpp@sha256:951661b272f3ff206c499719d69864b9f53621786ff8e55ce1bb8996b4bf48a1
 docker tag postgres:15-alpine "$POSTGRES_IMAGE"
-docker tag ghcr.io/ggml-org/llama.cpp:server "$LLM_IMAGE"
+docker tag ghcr.io/ggml-org/llama.cpp@sha256:951661b272f3ff206c499719d69864b9f53621786ff8e55ce1bb8996b4bf48a1 "$LLM_IMAGE"
 for image in "$BACKEND_IMAGE" "$FRONTEND_IMAGE" "$POSTGRES_IMAGE" "$LLM_IMAGE"; do
   [[ "$(docker image inspect --format '{{.Os}}/{{.Architecture}}' "$image")" == linux/amd64 ]] \
     || die "Wrong image platform: $image"

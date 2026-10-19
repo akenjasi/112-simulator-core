@@ -15,7 +15,7 @@
 | DDS | `router_dds_cycle.py`, `router_dds.py`; `dds_cycle.py`, `dds_queue.py`, `dds_service_policy.py`; карточки, последовательность, действия, завершение |
 | Кабинет курсанта | `router_student_workspace.py`, `/api/dds/student-workspace`; UI `app/student/profile`, `components/student`, `lib/student-review.ts` |
 | Аналитика/оценка | `router_analytics.py`, `router_ai_analytics.py`, `ai_analytics_access.py`; экспертные оценки и результаты |
-| Нейроотчёты DDS | `router_dds_reports.py` → `dds_report_data.py`, `dds_report_jobs.py`, `dds_report_llm.py`; сохранённый job/snapshot, HTTP inference |
+| Нейроотчёты DDS | `router_dds_reports.py` → `reports.py`, `report_worker.py`, `report_data.py`, `report_runtime.py`, `report_inference.py`; общая очередь преподавателя/студента, admission и отменяемый SSE inference |
 | Оператор/речь | `router_call.py`, `router_asr.py`, `router_telephony.py`; `runtime_router.py`, `dialogue_router.py`, `intent_classifier.py`, `tts_v2.py`, `tts_engine.py` |
 | Интерфейс | `frontend/app`: Next routes; `components`, `hooks`, `lib`, `store`: UI/network/state |
 
@@ -28,7 +28,7 @@
 - `User`, `StudentGroup`, M2M link и исторические JSON membership существуют одновременно. Это не основание удалить одно представление.
 - Учебная работа: `Assignment → ExamSession → IncidentCard`, `TicketResult`, `EvaluationResult`. DDS хранит снимки карточек/действия и очередь в `dynamic_state.dds`.
 - Билеты представлены несколькими форматами (`ScenarioTicket`, `GeneratedTicket`, матрица). Их объединение требует миграции потребителей.
-- `DDSReportJob` сохраняет job/attempt/status/snapshot/result; worker поддерживает один backend-процесс.
+- `ReportJob` сохраняет общую очередь преподавателя/студента; `ReportSchedulerState` — границу автоматической сверки. Прежняя таблица DDS jobs сохраняется и импортируется без удаления строк. Worker поддерживает один backend-процесс.
 - Файлы uploads, TTS cache, recordings и backups находятся в `data`; модели поставляются отдельно. Снимок БД не резервирует все файлы.
 
 Локально основной engine по умолчанию SQLite; основные Compose задают PostgreSQL15. `backend/db/database.py` — совместимый re-export основного engine.

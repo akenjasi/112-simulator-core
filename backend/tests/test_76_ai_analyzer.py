@@ -239,7 +239,7 @@ async def test_worker_queue_processing():
 
 @pytest.mark.asyncio
 async def test_api_trigger_and_get_student_advice():
-    """Test REST API /api/ai-analytics/trigger and /api/ai-analytics/student/{id}."""
+    """No DDS data means no new inference; previous advice stays readable."""
     async with AsyncSessionLocal() as session:
         cadet = User(
             username=f"cadet_api_{uuid.uuid4().hex[:6]}",
@@ -251,6 +251,11 @@ async def test_api_trigger_and_get_student_advice():
         session.add(cadet)
         await session.commit()
         cadet_id = cadet.user_id
+        previous = AIStudentAdvice(cadet_id=cadet_id, analysis_text="Сохранённые рекомендации до обновления",
+                                  model_used="Qwen 3.5 9B", is_read=False)
+        session.add(previous)
+        await session.commit()
+        advice_id = previous.advice_id
 
     token = create_access_token(subject=cadet_id, role="CADET")
     headers = {"Authorization": f"Bearer {token}"}
@@ -262,15 +267,15 @@ async def test_api_trigger_and_get_student_advice():
         )
         assert resp_trigger.status_code == 200
         trigger_data = resp_trigger.json()
-        assert trigger_data["status"] == "completed"
+        assert trigger_data["status"] == "unchanged"
         assert trigger_data["target_id"] == cadet_id
-        advice_id = trigger_data["advice_id"]
+        assert trigger_data["advice_id"] is None
 
         # 2. Get student advice
         resp_get = await client.get(f"/api/ai-analytics/student/{cadet_id}")
         assert resp_get.status_code == 200
         advices = resp_get.json()
-        assert len(advices) >= 1
+        assert len(advices) == 1
         found = next((a for a in advices if a["advice_id"] == advice_id), None)
         assert found is not None
         assert found["is_read"] is False
@@ -310,6 +315,9 @@ async def test_api_group_advice_and_model_info():
         await session.commit()
         teacher_id = teacher.user_id
         group_id = group.group_id
+        session.add(AIGroupAdvice(group_id=group_id, analysis_text="Сохранённый групповой отчёт",
+                                 model_used="Qwen 3.5 9B", is_read=False))
+        await session.commit()
 
     token = create_access_token(subject=teacher_id, role="TEACHER")
     headers = {"Authorization": f"Bearer {token}"}
@@ -321,15 +329,15 @@ async def test_api_group_advice_and_model_info():
         )
         assert resp_trigger.status_code == 200
         data = resp_trigger.json()
-        assert data["status"] == "completed"
+        assert data["status"] == "unchanged"
         assert data["target_type"] == "group"
-        group_advice_id = data["advice_id"]
+        assert data["advice_id"] is None
 
         # 2. Get group advice
         resp_group = await client.get(f"/api/ai-analytics/group/{group_id}")
         assert resp_group.status_code == 200
         reports = resp_group.json()
-        assert len(reports) >= 1
+        assert len(reports) == 1
         assert reports[0]["group_id"] == group_id
 
         # 3. Model info endpoint

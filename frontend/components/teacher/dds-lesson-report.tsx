@@ -27,6 +27,21 @@ export interface DDSLessonReportJob {
   report_text?: string | null
   error_code?: string | null
   model_used?: string | null
+  waiting_reason?: string | null
+  period_start?: string | null
+  period_end?: string | null
+  snapshot_at?: string | null
+}
+
+const WAIT_LABELS: Record<string, string> = {
+  learning_active: "Ожидает завершения занятий", cpu_busy: "Недостаточно ресурсов",
+  memory_low: "Недостаточно ресурсов", metrics_unavailable: "Ожидает проверки ресурсов",
+  idle_window: "Ожидает свободного сервера", runtime_busy: "Ожидает освобождения ИИ",
+  retry_wait: "Ожидает повторной попытки",
+}
+const WAIT_DETAILS: Record<string, string> = {
+  memory_low: "Недостаточно свободной оперативной памяти для модели и резерва сервера.",
+  cpu_busy: "Сервер занят вычислениями. Отчёт продолжит ожидание в очереди.",
 }
 
 export interface DDSLessonReportProps {
@@ -455,7 +470,7 @@ export function DDSLessonReport({ lessonId }: DDSLessonReportProps) {
               )}
               {(jobStatus === "pending" || jobStatus === "running") && (
                 <Badge variant="secondary" className="bg-blue-500/10 text-blue-600 text-xs font-semibold animate-pulse">
-                  {jobStatus === "running" ? "Генерация отчёта" : "В очереди"}
+                  {jobStatus === "running" ? "Генерация отчёта" : WAIT_LABELS[report?.waiting_reason || ""] || "В очереди"}
                 </Badge>
               )}
               {jobStatus === "failed" && (
@@ -537,7 +552,7 @@ export function DDSLessonReport({ lessonId }: DDSLessonReportProps) {
               Нейроотчёт по этому занятию ещё не сформирован
             </p>
             <p className="text-xs text-foreground/75 max-w-xl">
-              Нажмите кнопку ниже, чтобы запустить фоновый анализ занятия локальной нейросетью. Анализ займёт несколько секунд.
+              Отчёт формируется в фоне после завершения занятия. Можно запросить его кнопкой; генерация дождётся окончания учебной работы и свободных ресурсов.
             </p>
           </div>
 
@@ -584,11 +599,12 @@ export function DDSLessonReport({ lessonId }: DDSLessonReportProps) {
               <p className="text-sm font-bold text-foreground">
                 {jobStatus === "running"
                   ? "Нейросеть формирует аналитический отчёт..."
-                  : "Задание поставлено в очередь на обработку..."}
+                  : WAIT_LABELS[report?.waiting_reason || ""] || "Задание поставлено в очередь на обработку..."}
               </p>
               <p className="text-xs text-foreground/75 mt-0.5">
                 Идёт опрос готовности. По завершении отчёт появится здесь автоматически.
               </p>
+              {jobStatus === "pending" && WAIT_DETAILS[report?.waiting_reason || ""] && <p className="text-xs text-foreground/75 mt-1">{WAIT_DETAILS[report?.waiting_reason || ""]}</p>}
             </div>
           </div>
 
@@ -604,6 +620,8 @@ export function DDSLessonReport({ lessonId }: DDSLessonReportProps) {
       {/* 5. Completed State */}
       {jobStatus === "completed" && report && (
         <div className="space-y-4" data-testid="dds-report-completed">
+          {(report.period_start || report.period_end) && <p className="text-xs text-foreground/75">Период занятия: {report.period_start ? new Date(report.period_start).toLocaleString("ru-RU", {timeZone: "Europe/Moscow"}) : "начало не указано"} — {report.period_end ? new Date(report.period_end).toLocaleString("ru-RU", {timeZone: "Europe/Moscow"}) : "окончание не указано"}</p>}
+          {report.snapshot_at && <p className="text-xs text-foreground/75">Данные на {new Date(report.snapshot_at).toLocaleString("ru-RU", {timeZone: "Europe/Moscow"})}. Последующие изменения оценок не переписывают этот отчёт.</p>}
           {/* Prominent Disclaimer Banner */}
           <div
             className="flex items-start gap-3 p-3.5 rounded-xl bg-amber-500/15 border border-amber-500/40 text-foreground shadow-2xs"

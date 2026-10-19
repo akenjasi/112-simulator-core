@@ -233,6 +233,7 @@ export default function AnalyticsPage({ initialTab = "split" }: AnalyticsPagePro
   const [selectedAiGroup, setSelectedAiGroup] = useState<string>("")
   const [isLoadingAiReport, setIsLoadingAiReport] = useState<boolean>(false)
   const [isTriggeringGroupAi, setIsTriggeringGroupAi] = useState<boolean>(false)
+  const [groupAiNotice, setGroupAiNotice] = useState<string | null>(null)
 
   // Lesson history state
   const [lessonsList, setLessonsList] = useState<LessonHistoryItem[]>([])
@@ -383,12 +384,19 @@ export default function AnalyticsPage({ initialTab = "split" }: AnalyticsPagePro
   const handleTriggerGroupAi = async () => {
     if (!selectedAiGroup || selectedAiGroup === "ALL") return
     setIsTriggeringGroupAi(true)
+    setGroupAiNotice(null)
     try {
       const res = await fetch(`/api/ai-analytics/trigger?group_id=${selectedAiGroup}&background=false`, {
         method: "POST",
       })
       if (res.ok) {
+        const result = await res.json()
+        setGroupAiNotice(result.status === "unchanged"
+          ? "Завершённых занятий ДДС для нового отчёта пока нет."
+          : "Запрос принят. Отчёты по занятиям формируются вне учебной работы; открывайте их в результатах соответствующих занятий.")
         await fetchGroupAiReports(selectedAiGroup)
+      } else {
+        setGroupAiNotice("Не удалось запросить отчёты. Повторите попытку.")
       }
     } catch (err) {
       console.warn("Failed to trigger group AI analysis:", err)
@@ -2294,6 +2302,7 @@ export default function AnalyticsPage({ initialTab = "split" }: AnalyticsPagePro
                 <select
                   value={selectedAiGroup}
                   onChange={(e) => {
+                    setGroupAiNotice(null)
                     setSelectedAiGroup(e.target.value)
                     fetchGroupAiReports(e.target.value)
                   }}
@@ -2330,6 +2339,7 @@ export default function AnalyticsPage({ initialTab = "split" }: AnalyticsPagePro
           </CardHeader>
 
           <CardContent className="p-5">
+            {groupAiNotice && <p role="status" className="mb-4 text-sm text-muted-foreground">{groupAiNotice}</p>}
             {isLoadingAiReport ? (
               <div className="text-center py-12">
                 <Loader2 className="h-6 w-6 animate-spin mx-auto text-primary mb-2" />

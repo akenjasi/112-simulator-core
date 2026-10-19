@@ -1,6 +1,6 @@
 "use client"
 
-import React, { useEffect, useState } from "react"
+import React, { useEffect, useRef, useState } from "react"
 import Link from "next/link"
 import { ArrowRight, BookOpen, ChevronDown, ClipboardCheck, Clock3, FileText, RefreshCw, UserRound } from "lucide-react"
 import { ThemeSelect } from "@/components/theme-select"
@@ -48,6 +48,93 @@ export interface UserProfile {
 }
 
 interface SavedAdvice { advice_id: string; analysis_text: string; date: string }
+
+interface StudentReport {
+  job_id: string; status: string; waiting_reason?: string | null; report_text?: string | null
+  period_start?: string | null; period_end?: string | null; snapshot_at?: string | null
+}
+
+const REPORT_WAIT: Record<string, string> = {
+  learning_active: "Ожидает завершения занятий", cpu_busy: "Недостаточно ресурсов",
+  memory_low: "Недостаточно ресурсов", metrics_unavailable: "Ожидает проверки ресурсов",
+  idle_window: "Ожидает свободного сервера", runtime_busy: "Ожидает освобождения ИИ",
+  retry_wait: "Ожидает повторной попытки",
+}
+const REPORT_WAIT_DETAILS: Record<string, string> = {
+  memory_low: "Недостаточно свободной оперативной памяти для модели и резерва сервера.",
+  cpu_busy: "Сервер занят вычислениями. Отчёт продолжит ожидание в очереди.",
+}
+
+function StudentReports() {
+  const [reports, setReports] = useState<StudentReport[]>([])
+  const [error, setError] = useState<string | null>(null)
+  const [notice, setNotice] = useState<string | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [posting, setPosting] = useState(false)
+  const [revision, setRevision] = useState(0)
+  const postLock = useRef(false)
+  const postController = useRef<AbortController | null>(null)
+  useEffect(() => () => postController.current?.abort(), [])
+  useEffect(() => {
+    const controller = new AbortController()
+    let timer: ReturnType<typeof setTimeout> | undefined
+    const load = async () => {
+      try {
+        const token = getStoredToken()
+        const res = await fetch("/api/ai-analytics/students/me/reports", {
+          headers: token ? {Authorization: `Bearer ${token}`} : {}, signal: controller.signal, cache: "no-store",
+        })
+        if (!res.ok) throw new Error()
+        const data = await res.json()
+        if (!Array.isArray(data)) throw new Error()
+        if (!controller.signal.aborted) {
+          setReports(data); setError(null)
+          if (data.some(item => item.status === "pending" || item.status === "running")) timer = setTimeout(load, 10000)
+        }
+      } catch { if (!controller.signal.aborted) setError("Не удалось загрузить отчёты.") }
+      finally { if (!controller.signal.aborted) setLoading(false) }
+    }
+    void load()
+    return () => {controller.abort(); if (timer) clearTimeout(timer)}
+  }, [revision])
+  const requestReport = async () => {
+    if (postLock.current) return
+    postLock.current = true
+    const controller = new AbortController()
+    postController.current = controller
+    setPosting(true); setNotice(null)
+    try {
+      const token = getStoredToken()
+      const res = await fetch("/api/ai-analytics/students/me/reports", {
+        method: "POST", headers: {"Content-Type": "application/json", ...(token ? {Authorization: `Bearer ${token}`} : {})},
+        body: JSON.stringify({retry: true}), signal: controller.signal,
+      })
+      if (!res.ok) throw new Error()
+      if (!controller.signal.aborted) {
+        setNotice(res.status === 204 ? "Новых результатов за расчётный период пока нет." : "Запрос принят. Повторное нажатие не создаёт новый отчёт.")
+        setRevision(value => value + 1)
+      }
+    } catch { if (!controller.signal.aborted) setError("Не удалось запросить отчёт. Повторите попытку.") }
+    finally { postLock.current = false; if (!controller.signal.aborted) setPosting(false) }
+  }
+  const date = (value: string) => new Date(value).toLocaleDateString("ru-RU", {timeZone: "Europe/Moscow"})
+  return <section className="space-y-3" aria-label="Накопительные отчёты ДДС">
+    <h3 className="font-semibold">Отчёт за семь дней</h3>
+    <p className="text-muted-foreground">Обновляется не чаще раза в сутки по завершённым дням. Генерация ждёт окончания занятий и свободных ресурсов.</p>
+    <button type="button" onClick={() => void requestReport()} disabled={posting} className="min-h-10 rounded-lg border px-3 disabled:opacity-50">{posting ? "Отправляем запрос…" : "Сформировать отчёт"}</button>
+    {notice && <p role="status">{notice}</p>}
+    {error && <div role="alert">{error} <button type="button" onClick={() => setRevision(value => value + 1)} className="underline">Повторить загрузку отчётов</button></div>}
+    {loading && <p role="status">Загружаем отчёты…</p>}
+    {!loading && !error && reports.length === 0 && <p>Накопительных отчётов пока нет.</p>}
+    {reports.map(report => <article key={report.job_id} className="rounded-xl border border-border p-4 space-y-2">
+      <p className="font-medium">{report.status === "completed" ? "Готов" : report.status === "failed" ? "Ошибка генерации — можно повторить запрос" : report.status === "running" ? "Формируется" : REPORT_WAIT[report.waiting_reason || ""] || "В очереди"}</p>
+      {report.status === "pending" && REPORT_WAIT_DETAILS[report.waiting_reason || ""] && <p className="text-sm text-muted-foreground">{REPORT_WAIT_DETAILS[report.waiting_reason || ""]}</p>}
+      {report.period_start && report.period_end && <p className="text-xs text-muted-foreground">Период: {date(report.period_start)} — {date(new Date(new Date(report.period_end).getTime() - 1).toISOString())}</p>}
+      {report.snapshot_at && <p className="text-xs text-muted-foreground">Данные на {new Date(report.snapshot_at).toLocaleString("ru-RU", {timeZone: "Europe/Moscow"})}</p>}
+      {report.status === "completed" && <p className="whitespace-pre-wrap leading-relaxed">{report.report_text}</p>}
+    </article>)}
+  </section>
+}
 
 const CRITERIA = [
   {title: "Первичное подтверждение", description: "По каждой службе — в течение 30 секунд от направления карточки сервером."},
@@ -241,7 +328,9 @@ export default function StudentProfilePage() {
               </div>}
               {activeTab === "materials" && <ProfileMaterials />}
               {activeTab === "advice" && <div className="space-y-4 text-sm">
+                <StudentReports />
                 <p className="leading-relaxed text-muted-foreground">Сохранённые рекомендации ИИ могут содержать неточности. Обсуждайте спорные выводы с преподавателем.</p>
+                <h3 className="font-semibold">Прежние рекомендации · история</h3>
                 {adviceStatus === "loading" ? <p role="status">Загружаем рекомендации…</p> : adviceStatus === "error" || !profile?.user_id ? <div role="alert">Не удалось загрузить рекомендации. <button type="button" onClick={() => setAdviceReload(value => value + 1)} className="text-primary underline">Повторить загрузку</button></div> : adviceStatus === "ready" && advices.length === 0 ? <p>Сохранённых рекомендаций пока нет.</p> : advices.map(advice => <article key={advice.advice_id} className="rounded-xl border border-border p-4"><p className="mb-2 text-xs text-muted-foreground">{advice.date}</p><p className="whitespace-pre-wrap leading-relaxed">{advice.analysis_text}</p></article>)}
               </div>}
             </div>

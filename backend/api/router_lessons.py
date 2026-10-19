@@ -1,3 +1,4 @@
+from backend.core.report_runtime import learning_priority
 from copy import deepcopy
 from datetime import datetime, timezone
 from typing import List, Optional
@@ -374,19 +375,99 @@ async def start_lesson(
     if current_user.role != "ADMIN" and lesson.assigned_by != current_user.user_id:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Access denied")
 
-    await lock_assignment(db, lesson_id)
-    lesson = (await db.execute(select(Lesson).where(Lesson.assignment_id == lesson_id).execution_options(populate_existing=True))).scalar_one_or_none()
+    async with learning_priority():
+        await lock_assignment(db, lesson_id)
+        lesson = (await db.execute(select(Lesson).where(Lesson.assignment_id == lesson_id).execution_options(populate_existing=True))).scalar_one_or_none()
 
-    if (lesson.status or "").upper() == "COMPLETED":
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Completed lesson cannot be started")
+        if (lesson.status or "").upper() == "COMPLETED":
+            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Completed lesson cannot be started")
 
-    stmt_group = select(StudentGroup).where(StudentGroup.group_id == lesson.group_id)
-    res_group = await db.execute(stmt_group)
-    group = res_group.scalar_one_or_none()
+        stmt_group = select(StudentGroup).where(StudentGroup.group_id == lesson.group_id)
+        res_group = await db.execute(stmt_group)
+        group = res_group.scalar_one_or_none()
 
-    if lesson.target_role == "DISPATCHER_DDS":
-        if (lesson.status or "").upper() == "ACTIVE":
-            # Idempotent replay: return existing snapshot before checking modified ticket or altered group roster
+        if lesson.target_role == "DISPATCHER_DDS":
+            if (lesson.status or "").upper() == "ACTIVE":
+                # Idempotent replay: return existing snapshot before checking modified ticket or altered group roster
+                cadets_list, total_cadets, total_in_progress, total_passed, total_failed = await _build_cadet_stats(lesson, group, db)
+                overall_progress = round(sum(c.progress for c in cadets_list) / max(total_cadets, 1))
+                return LessonDetailResponse(
+                    id=lesson.id,
+                    group_id=lesson.group_id,
+                    cadet_id=lesson.cadet_id,
+                    group_name=group.group_name if group else None,
+                    teacher_id=lesson.assigned_by,
+                    target_role=lesson.target_role,
+                    mode=lesson.mode,
+                    ticket_ids=lesson.card_pool_ids or ([lesson.scenario_id] if lesson.scenario_id else []),
+                    status=lesson.status,
+                    categories=lesson.categories or [],
+                    complexity=lesson.complexity,
+                    time_limit_seconds=lesson.time_limit_seconds,
+                    error_limit=lesson.error_limit,
+                    teacher_notes=lesson.teacher_notes or "",
+                    created_at=lesson.created_at,
+                    started_at=lesson.started_at,
+                    completed_at=lesson.completed_at,
+                    students=cadets_list,
+                    cadets=cadets_list,
+                    overall_progress=overall_progress,
+                    total_cadets=total_cadets,
+                    total_in_progress=total_in_progress,
+                    total_passed=total_passed,
+                    total_failed=total_failed,
+                )
+
+            pool = await load_pool(db, lesson.card_pool_ids or ([lesson.scenario_id] if lesson.scenario_id else []))
+
+            if lesson.cadet_id:
+                target_cadet = await db.get(User, lesson.cadet_id)
+                if not target_cadet or not target_cadet.is_active or target_cadet.role not in ("CADET", "STUDENT"):
+                    raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Assigned cadet is not active")
+                active_cadets = [target_cadet]
+            else:
+                cadet_user_ids = set(group.cadet_ids or []) if group else set()
+                if group and group.students:
+                    cadet_user_ids.update(u.user_id for u in group.students if getattr(u, "user_id", None))
+                if not cadet_user_ids:
+                    raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Group has no cadets assigned")
+
+                res_cadets = await db.execute(
+                    select(User).where(User.user_id.in_(list(cadet_user_ids)), User.role.in_(["CADET", "STUDENT"]), User.is_active == True)  # noqa: E712
+                )
+                active_cadets = list(res_cadets.scalars().all())
+                if not active_cadets:
+                    raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Group has no active cadets")
+
+            await lock_cadets(db, [student.user_id for student in active_cadets])
+            await require_available(db, [student.user_id for student in active_cadets])
+
+            now_dt = datetime.now(timezone.utc)
+            lesson.status = "ACTIVE"
+            lesson.started_at = now_dt
+            lesson.card_pool_ids = [item["ticket_id"] for item in pool]
+            flag_modified(lesson, "card_pool_ids")
+
+            for student in active_cadets:
+                cadet_session = ExamSession(
+                    session_type="CARD_ACTIONS",
+                    assignment_id=lesson.assignment_id,
+                    cadet_id=student.user_id,
+                    ticket_id=pool[0]["ticket_id"],
+                    status="ACTIVE",
+                    start_time=now_dt,
+                    categories=lesson.categories or [],
+                    complexity=lesson.complexity,
+                    error_limit=lesson.error_limit,
+                    time_limit_seconds=lesson.time_limit_seconds or 30,
+                )
+                db.add(cadet_session)
+                await db.flush()
+
+                await initialize_queue(db, cadet_session, pool, now_dt)
+
+            await db.commit()
+            await db.refresh(lesson)
             cadets_list, total_cadets, total_in_progress, total_passed, total_failed = await _build_cadet_stats(lesson, group, db)
             overall_progress = round(sum(c.progress for c in cadets_list) / max(total_cadets, 1))
             return LessonDetailResponse(
@@ -416,58 +497,52 @@ async def start_lesson(
                 total_failed=total_failed,
             )
 
-        pool = await load_pool(db, lesson.card_pool_ids or ([lesson.scenario_id] if lesson.scenario_id else []))
-
-        if lesson.cadet_id:
-            target_cadet = await db.get(User, lesson.cadet_id)
-            if not target_cadet or not target_cadet.is_active or target_cadet.role not in ("CADET", "STUDENT"):
-                raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Assigned cadet is not active")
-            active_cadets = [target_cadet]
-        else:
-            cadet_user_ids = set(group.cadet_ids or []) if group else set()
-            if group and group.students:
-                cadet_user_ids.update(u.user_id for u in group.students if getattr(u, "user_id", None))
-            if not cadet_user_ids:
-                raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Group has no cadets assigned")
-
-            res_cadets = await db.execute(
-                select(User).where(User.user_id.in_(list(cadet_user_ids)), User.role.in_(["CADET", "STUDENT"]), User.is_active == True)  # noqa: E712
-            )
-            active_cadets = list(res_cadets.scalars().all())
-            if not active_cadets:
-                raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Group has no active cadets")
-
-        await lock_cadets(db, [student.user_id for student in active_cadets])
-        await require_available(db, [student.user_id for student in active_cadets])
-
-        now_dt = datetime.now(timezone.utc)
+        # Legacy start logic for OPERATOR_112
         lesson.status = "ACTIVE"
-        lesson.started_at = now_dt
-        lesson.card_pool_ids = [item["ticket_id"] for item in pool]
-        flag_modified(lesson, "card_pool_ids")
+        lesson.started_at = datetime.now(timezone.utc)
 
-        for student in active_cadets:
-            cadet_session = ExamSession(
-                session_type="CARD_ACTIONS",
-                assignment_id=lesson.assignment_id,
-                cadet_id=student.user_id,
-                ticket_id=pool[0]["ticket_id"],
-                status="ACTIVE",
-                start_time=now_dt,
-                categories=lesson.categories or [],
-                complexity=lesson.complexity,
-                error_limit=lesson.error_limit,
-                time_limit_seconds=lesson.time_limit_seconds or 30,
-            )
-            db.add(cadet_session)
-            await db.flush()
+        group_students = []
+        if lesson.cadet_id:
+            res_c = await db.execute(select(User).where(User.user_id == lesson.cadet_id))
+            c_user = res_c.scalar_one_or_none()
+            if c_user:
+                group_students = [c_user]
+        elif group:
+            if group.students:
+                group_students = list(group.students)
+            elif group.cadet_ids:
+                res_c = await db.execute(select(User).where(User.user_id.in_(group.cadet_ids)))
+                group_students = list(res_c.scalars().all())
 
-            await initialize_queue(db, cadet_session, pool, now_dt)
+        stmt_sess = select(ExamSession).where(ExamSession.assignment_id == lesson.assignment_id)
+        res_sess = await db.execute(stmt_sess)
+        existing_sessions = {s.cadet_id: s for s in res_sess.scalars().all() if s.cadet_id}
+
+        for student in group_students:
+            if student.user_id not in existing_sessions:
+                cadet_session = ExamSession(
+                    session_type=lesson.session_type,
+                    assignment_id=lesson.assignment_id,
+                    cadet_id=student.user_id,
+                    status="ACTIVE",
+                    categories=lesson.categories,
+                    complexity=lesson.complexity,
+                    error_limit=lesson.error_limit,
+                    time_limit_seconds=lesson.time_limit_seconds,
+                    start_time=datetime.now(timezone.utc),
+                )
+                db.add(cadet_session)
+            else:
+                existing_s = existing_sessions[student.user_id]
+                existing_s.status = "ACTIVE"
 
         await db.commit()
         await db.refresh(lesson)
-        cadets_list, total_cadets, total_in_progress, total_passed, total_failed = await _build_cadet_stats(lesson, group, db)
-        overall_progress = round(sum(c.progress for c in cadets_list) / max(total_cadets, 1))
+
+        cadets_list, total_cadets, total_in_progress, total_passed, total_failed = (
+            await _build_cadet_stats(lesson, group, db)
+        )
+
         return LessonDetailResponse(
             id=lesson.id,
             group_id=lesson.group_id,
@@ -488,85 +563,12 @@ async def start_lesson(
             completed_at=lesson.completed_at,
             students=cadets_list,
             cadets=cadets_list,
-            overall_progress=overall_progress,
+            overall_progress=10,
             total_cadets=total_cadets,
             total_in_progress=total_in_progress,
             total_passed=total_passed,
             total_failed=total_failed,
         )
-
-    # Legacy start logic for OPERATOR_112
-    lesson.status = "ACTIVE"
-    lesson.started_at = datetime.now(timezone.utc)
-
-    group_students = []
-    if lesson.cadet_id:
-        res_c = await db.execute(select(User).where(User.user_id == lesson.cadet_id))
-        c_user = res_c.scalar_one_or_none()
-        if c_user:
-            group_students = [c_user]
-    elif group:
-        if group.students:
-            group_students = list(group.students)
-        elif group.cadet_ids:
-            res_c = await db.execute(select(User).where(User.user_id.in_(group.cadet_ids)))
-            group_students = list(res_c.scalars().all())
-
-    stmt_sess = select(ExamSession).where(ExamSession.assignment_id == lesson.assignment_id)
-    res_sess = await db.execute(stmt_sess)
-    existing_sessions = {s.cadet_id: s for s in res_sess.scalars().all() if s.cadet_id}
-
-    for student in group_students:
-        if student.user_id not in existing_sessions:
-            cadet_session = ExamSession(
-                session_type=lesson.session_type,
-                assignment_id=lesson.assignment_id,
-                cadet_id=student.user_id,
-                status="ACTIVE",
-                categories=lesson.categories,
-                complexity=lesson.complexity,
-                error_limit=lesson.error_limit,
-                time_limit_seconds=lesson.time_limit_seconds,
-                start_time=datetime.now(timezone.utc),
-            )
-            db.add(cadet_session)
-        else:
-            existing_s = existing_sessions[student.user_id]
-            existing_s.status = "ACTIVE"
-
-    await db.commit()
-    await db.refresh(lesson)
-
-    cadets_list, total_cadets, total_in_progress, total_passed, total_failed = (
-        await _build_cadet_stats(lesson, group, db)
-    )
-
-    return LessonDetailResponse(
-        id=lesson.id,
-        group_id=lesson.group_id,
-        cadet_id=lesson.cadet_id,
-        group_name=group.group_name if group else None,
-        teacher_id=lesson.assigned_by,
-        target_role=lesson.target_role,
-        mode=lesson.mode,
-        ticket_ids=lesson.card_pool_ids or ([lesson.scenario_id] if lesson.scenario_id else []),
-        status=lesson.status,
-        categories=lesson.categories or [],
-        complexity=lesson.complexity,
-        time_limit_seconds=lesson.time_limit_seconds,
-        error_limit=lesson.error_limit,
-        teacher_notes=lesson.teacher_notes or "",
-        created_at=lesson.created_at,
-        started_at=lesson.started_at,
-        completed_at=lesson.completed_at,
-        students=cadets_list,
-        cadets=cadets_list,
-        overall_progress=10,
-        total_cadets=total_cadets,
-        total_in_progress=total_in_progress,
-        total_passed=total_passed,
-        total_failed=total_failed,
-    )
 
 
 @lessons_router.post(
@@ -654,6 +656,9 @@ async def stop_lesson(
                 state_copy["dds"] = dds_data
                 s.dynamic_state = state_copy
                 flag_modified(s, "dynamic_state")
+
+    from backend.core.reports import enqueue_lesson
+    await enqueue_lesson(db, lesson, now)
 
     await db.commit()
     await db.refresh(lesson)

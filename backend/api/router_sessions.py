@@ -1,3 +1,4 @@
+from backend.core.report_runtime import learning_priority
 from backend.core.access import require_assignment, require_managed_cadet, require_session
 from backend.models.domain_01 import StudentGroup
 import datetime
@@ -94,18 +95,19 @@ async def start_session(
             detail="DDS assignments must be started via /api/v1/lessons/{id}/start",
         )
 
-    exam_session = ExamSession(
-        session_type=assignment.session_type,
-        assignment_id=assignment_id,
-        ticket_id=assignment.scenario_id,
-        cadet_id=req.cadet_id,
-        status="active",
-    )
-    db.add(exam_session)
-    await db.commit()
-    await db.refresh(exam_session)
+    async with learning_priority():
+        exam_session = ExamSession(
+            session_type=assignment.session_type,
+            assignment_id=assignment_id,
+            ticket_id=assignment.scenario_id,
+            cadet_id=req.cadet_id,
+            status="active",
+        )
+        db.add(exam_session)
+        await db.commit()
+        await db.refresh(exam_session)
 
-    return exam_session
+        return exam_session
 
 
 @sessions_router.get(
@@ -391,239 +393,240 @@ async def create_demo_session(
             detail="Демо-сессия оператора 112 доступна только администратору",
         )
 
-    if target_role == "DISPATCHER_DDS":
-        if current_user.role == "CADET":
-            from backend.core.student_workspace import lock_cadets
-            await lock_cadets(db, [current_user.user_id])
-        from backend.core.dds_cycle import incoming_card_from_ticket, is_suitable_dds_ticket, extract_dds_ticket_metadata
+    async with learning_priority():
+        if target_role == "DISPATCHER_DDS":
+            if current_user.role == "CADET":
+                from backend.core.student_workspace import lock_cadets
+                await lock_cadets(db, [current_user.user_id])
+            from backend.core.dds_cycle import incoming_card_from_ticket, is_suitable_dds_ticket, extract_dds_ticket_metadata
 
-        from backend.core.dds_queue import available_for_training, initialize_queue, load_pool
+            from backend.core.dds_queue import available_for_training, initialize_queue, load_pool
 
-        chosen_id = req.ticket_id if req else None
-        if chosen_id:
-            saved_ticket = await db.get(ScenarioTicket, chosen_id)
-            if not is_suitable_dds_ticket(saved_ticket) or not available_for_training(saved_ticket):
-                raise HTTPException(status_code=404, detail="Готовый билет ДДС не найден или удалён")
-        else:
-            candidates = (await db.scalars(select(ScenarioTicket).where(
-                (ScenarioTicket.is_deleted == False) | ScenarioTicket.is_deleted.is_(None)
-            ).order_by(ScenarioTicket.created_at.desc()))).all()
-            suitable = [ticket for ticket in candidates if is_suitable_dds_ticket(ticket) and available_for_training(ticket)]
-            # Prefer explicitly active/published material over unmarked legacy rows.
-            published = [ticket for ticket in suitable if (ticket.workflow_state or {}).get("status") in ("active", "published")]
-            import secrets
-            saved_ticket = secrets.choice(published or suitable) if suitable else None
+            chosen_id = req.ticket_id if req else None
+            if chosen_id:
+                saved_ticket = await db.get(ScenarioTicket, chosen_id)
+                if not is_suitable_dds_ticket(saved_ticket) or not available_for_training(saved_ticket):
+                    raise HTTPException(status_code=404, detail="Готовый билет ДДС не найден или удалён")
+            else:
+                candidates = (await db.scalars(select(ScenarioTicket).where(
+                    (ScenarioTicket.is_deleted == False) | ScenarioTicket.is_deleted.is_(None)
+                ).order_by(ScenarioTicket.created_at.desc()))).all()
+                suitable = [ticket for ticket in candidates if is_suitable_dds_ticket(ticket) and available_for_training(ticket)]
+                # Prefer explicitly active/published material over unmarked legacy rows.
+                published = [ticket for ticket in suitable if (ticket.workflow_state or {}).get("status") in ("active", "published")]
+                import secrets
+                saved_ticket = secrets.choice(published or suitable) if suitable else None
 
-        if saved_ticket:
-            incoming = incoming_card_from_ticket(saved_ticket)
-            category, _, complexity, _ = extract_dds_ticket_metadata(saved_ticket)
-            assignment = Assignment(session_type="CARD_ACTIONS", mode="TRAINING", status="ACTIVE",
-                target_role=target_role, cadet_id=current_user.user_id,
-                assigned_by=current_user.user_id if current_user.role == "TEACHER" else None,
-                scenario_id=saved_ticket.scenario_id, card_pool_ids=[saved_ticket.scenario_id],
-                card_pool_source="self_training",
-                categories=[category], complexity=str(complexity),
-                teacher_notes="Самостоятельная тренировка по сохранённому билету")
-            db.add(assignment)
-            await db.flush()
-            session = ExamSession(assignment_id=assignment.assignment_id, cadet_id=current_user.user_id,
-                ticket_id=saved_ticket.scenario_id, session_type="CARD_ACTIONS", status="ACTIVE",
-                categories=[category], complexity=str(complexity))
-            db.add(session)
-            await db.flush()
-            pool = await load_pool(db, [saved_ticket.scenario_id], training=True)
-            await initialize_queue(db, session, pool,
-                                   datetime.datetime.now(datetime.timezone.utc))
-            # Preserve the legacy demo API's incoming-card origin and active result marker.
-            card = await db.get(IncidentCard, session.dynamic_state["dds"]["card_id"])
-            card.card_origin = "112_CALL"
-            db.add(TicketResult(session_id=session.session_id, ticket_id=saved_ticket.scenario_id,
-                                status="active", is_passed=False))
-            await db.commit()
-            return DemoSessionResponse(session_id=session.session_id, ticket_id=saved_ticket.scenario_id,
-                role=target_role, redirect_url=f"/dds/journal?focus_session_id={session.session_id}&focus_ticket_id={saved_ticket.scenario_id}")
+            if saved_ticket:
+                incoming = incoming_card_from_ticket(saved_ticket)
+                category, _, complexity, _ = extract_dds_ticket_metadata(saved_ticket)
+                assignment = Assignment(session_type="CARD_ACTIONS", mode="TRAINING", status="ACTIVE",
+                    target_role=target_role, cadet_id=current_user.user_id,
+                    assigned_by=current_user.user_id if current_user.role == "TEACHER" else None,
+                    scenario_id=saved_ticket.scenario_id, card_pool_ids=[saved_ticket.scenario_id],
+                    card_pool_source="self_training",
+                    categories=[category], complexity=str(complexity),
+                    teacher_notes="Самостоятельная тренировка по сохранённому билету")
+                db.add(assignment)
+                await db.flush()
+                session = ExamSession(assignment_id=assignment.assignment_id, cadet_id=current_user.user_id,
+                    ticket_id=saved_ticket.scenario_id, session_type="CARD_ACTIONS", status="ACTIVE",
+                    categories=[category], complexity=str(complexity))
+                db.add(session)
+                await db.flush()
+                pool = await load_pool(db, [saved_ticket.scenario_id], training=True)
+                await initialize_queue(db, session, pool,
+                                       datetime.datetime.now(datetime.timezone.utc))
+                # Preserve the legacy demo API's incoming-card origin and active result marker.
+                card = await db.get(IncidentCard, session.dynamic_state["dds"]["card_id"])
+                card.card_origin = "112_CALL"
+                db.add(TicketResult(session_id=session.session_id, ticket_id=saved_ticket.scenario_id,
+                                    status="active", is_passed=False))
+                await db.commit()
+                return DemoSessionResponse(session_id=session.session_id, ticket_id=saved_ticket.scenario_id,
+                    role=target_role, redirect_url=f"/dds/journal?focus_session_id={session.session_id}&focus_ticket_id={saved_ticket.scenario_id}")
 
-        raise HTTPException(status_code=409, detail="Нет доступных подготовленных билетов ДДС")
+            raise HTTPException(status_code=409, detail="Нет доступных подготовленных билетов ДДС")
 
-    import uuid
-    demo_uuid = str(uuid.uuid4())
-    scenario_ticket = ScenarioTicket(
-        scenario_id=demo_uuid,
-        settings={
-            "complexity": 2,
-            "etalon_services": ["01 Пожарные", "02 Полиция", "03 Скорая"],
-            "plot": "Очевидец сообщает о лобовом столкновении двух легковых АМ на пересечении улицы Ленина и улицы Пушкина. Имеются пострадавшие: один без сознания, второй с травмой головы. Сильный запах бензина, открытого горения нет. Требуется реагирование экстренных служб.",
-            "category": "ДТП",
-            "subcategory": "ДТП с пострадавшими",
-            "class": "Экстренная",
-            "visClass": "bg-red-500",
-            "sequence_number": 9999,
-        },
-        ground_truth={
-            "fio": "Смирнов Алексей Иванович",
-            "phone": "+7 999 123-45-67",
-            "street": "улица Ленина, пересечение с улицей Пушкина",
-            "house": "15",
-            "gender": "male",
-            "speaker": "aidar",
-            "injured": "да",
-            "ambulanceRefusal": "нет",
-            "blocked": "нет",
-            "caller_status": "Очевидец",
-            "class": "Экстренная",
-            "visClass": "bg-red-500",
-            # Structured bricks for the dialogue classifier (categories 0-9)
-            "bricks": [
-                {"intent": "intro", "text": "Алло! Помогите! Тут авария!", "emotion": "panic"},
-                {"intent": "address", "text": "Улица Ленина, пересечение с улицей Пушкина, возле дома 15!", "emotion": "panic"},
-                {"intent": "address_details", "text": "Это около большого перекрёстка, напротив магазина, ориентир — светофор.", "emotion": "neutral"},
-                {"intent": "situation", "text": "Две легковые машины столкнулись лоб в лоб. Бензином пахнет сильно, огня пока нет.", "emotion": "panic"},
-                {"intent": "victims", "text": "Да, есть пострадавшие! Один водитель без сознания, весь в крови. Второй ходит, но голову держит.", "emotion": "panic"},
-                {"intent": "caller_id", "text": "Меня зовут Смирнов Алексей Иванович.", "emotion": "neutral"},
-                {"intent": "phone", "text": "Мой номер: плюс семь, девятьсот девяносто девять, сто двадцать три, сорок пять, шестьдесят семь.", "emotion": "neutral"},
-                {"intent": "repeat", "text": "Я повторяю! Улица Ленина, дом пятнадцать! Быстрее приезжайте, вас плохо слышно!", "emotion": "panic"},
-                {"intent": "bureaucracy", "text": "Какие бумаги?! Человек умирает! Высылайте скорее!", "emotion": "panic"},
-                {"intent": "outro", "text": "Хорошо, жду здесь. Поторопитесь, пожалуйста. До свидания.", "emotion": "neutral"},
-            ],
-        },
-        ai_content={
-            "factoids": {
-                "situation_1": "ДТП лобовое столкновение двух легковых автомобилей",
-                "victims_2": "Один водитель без сознания, второй ходит, держится за голову",
-                "danger_3": "Запах бензина, угроза возгорания"
+        import uuid
+        demo_uuid = str(uuid.uuid4())
+        scenario_ticket = ScenarioTicket(
+            scenario_id=demo_uuid,
+            settings={
+                "complexity": 2,
+                "etalon_services": ["01 Пожарные", "02 Полиция", "03 Скорая"],
+                "plot": "Очевидец сообщает о лобовом столкновении двух легковых АМ на пересечении улицы Ленина и улицы Пушкина. Имеются пострадавшие: один без сознания, второй с травмой головы. Сильный запах бензина, открытого горения нет. Требуется реагирование экстренных служб.",
+                "category": "ДТП",
+                "subcategory": "ДТП с пострадавшими",
+                "class": "Экстренная",
+                "visClass": "bg-red-500",
+                "sequence_number": 9999,
             },
-            "plot": "Здравствуйте! Тут страшная авария в городе Москва, на пересечении улицы Ленина и улицы Пушкина, прямо возле дома 15. Две легковые машины столкнулись лоб в лоб. Один водитель без сознания, весь в крови, второй вроде ходит, но держится за голову. Бензином сильно пахнет, но огня пока нет. Пришлите скорее скорую, пожарных и ДПС! Меня зовут Смирнов Алексей Иванович.",
-        },
-        workflow_state={"status": "active"},
-    )
-    db.add(scenario_ticket)
-    await db.flush()
-
-    class DemoTicketObj:
-        def __init__(self, sc):
-            self.ticket_id = sc.scenario_id
-            self.category = sc.settings.get("category", "ДТП")
-            self.subcategory = sc.settings.get("subcategory", "ДТП с пострадавшими")
-            self.complexity = sc.settings.get("complexity", 2)
-            self.plot = sc.settings.get("plot", "")
-            self.factoids = sc.ai_content.get("factoids", {})
-            self.etalon_services = sc.settings.get("etalon_services", [])
-            
-    ticket = DemoTicketObj(scenario_ticket)
-
-    session_type = "CALL_SIMULATION" if target_role == "OPERATOR_112" else "CARD_ACTIONS"
-    cadet_id = current_user.user_id
-
-    assignment = Assignment(
-        session_type=session_type,
-        mode="TRAINING",
-        status="ACTIVE",
-        target_role=target_role,
-        cadet_id=cadet_id,
-        assigned_by=current_user.user_id if current_user.role == "TEACHER" else None,
-        scenario_id=ticket.ticket_id,
-        categories=[ticket.category] if ticket.category else [],
-        complexity=str(ticket.complexity or "1"),
-        teacher_notes="Демо-запуск",
-    )
-    db.add(assignment)
-    await db.flush()
-
-    exam_session = ExamSession(
-        assignment_id=assignment.assignment_id,
-        cadet_id=cadet_id,
-        ticket_id=ticket.ticket_id,
-        session_type=session_type,
-        status="ACTIVE",
-        categories=[ticket.category] if ticket.category else [],
-        complexity=str(ticket.complexity or "1"),
-    )
-    db.add(exam_session)
-    await db.flush()
-
-    tr = TicketResult(
-        session_id=exam_session.session_id,
-        ticket_id=ticket.ticket_id,
-        status="active",
-        is_passed=False,
-    )
-    db.add(tr)
-
-    if target_role == "DISPATCHER_DDS":
-        from backend.core.dds_cycle import sanitize_incoming_card
-
-        # The assigned DDS UI reads a validated snapshot, not the legacy plot/factoids.
-        incoming_card = sanitize_incoming_card({
-            "phones": {"aon": scenario_ticket.ground_truth["phone"]},
-            "incident": {"number": f"ДЕМО-{demo_uuid[:8]}", "operator": "112"},
-            "caller": {
-                "name": scenario_ticket.ground_truth["fio"],
-                "role": scenario_ticket.ground_truth["caller_status"],
-                "address": f"{scenario_ticket.ground_truth['street']}, {scenario_ticket.ground_truth['house']}",
+            ground_truth={
+                "fio": "Смирнов Алексей Иванович",
+                "phone": "+7 999 123-45-67",
+                "street": "улица Ленина, пересечение с улицей Пушкина",
+                "house": "15",
+                "gender": "male",
+                "speaker": "aidar",
+                "injured": "да",
+                "ambulanceRefusal": "нет",
+                "blocked": "нет",
+                "caller_status": "Очевидец",
+                "class": "Экстренная",
+                "visClass": "bg-red-500",
+                # Structured bricks for the dialogue classifier (categories 0-9)
+                "bricks": [
+                    {"intent": "intro", "text": "Алло! Помогите! Тут авария!", "emotion": "panic"},
+                    {"intent": "address", "text": "Улица Ленина, пересечение с улицей Пушкина, возле дома 15!", "emotion": "panic"},
+                    {"intent": "address_details", "text": "Это около большого перекрёстка, напротив магазина, ориентир — светофор.", "emotion": "neutral"},
+                    {"intent": "situation", "text": "Две легковые машины столкнулись лоб в лоб. Бензином пахнет сильно, огня пока нет.", "emotion": "panic"},
+                    {"intent": "victims", "text": "Да, есть пострадавшие! Один водитель без сознания, весь в крови. Второй ходит, но голову держит.", "emotion": "panic"},
+                    {"intent": "caller_id", "text": "Меня зовут Смирнов Алексей Иванович.", "emotion": "neutral"},
+                    {"intent": "phone", "text": "Мой номер: плюс семь, девятьсот девяносто девять, сто двадцать три, сорок пять, шестьдесят семь.", "emotion": "neutral"},
+                    {"intent": "repeat", "text": "Я повторяю! Улица Ленина, дом пятнадцать! Быстрее приезжайте, вас плохо слышно!", "emotion": "panic"},
+                    {"intent": "bureaucracy", "text": "Какие бумаги?! Человек умирает! Высылайте скорее!", "emotion": "panic"},
+                    {"intent": "outro", "text": "Хорошо, жду здесь. Поторопитесь, пожалуйста. До свидания.", "emotion": "neutral"},
+                ],
             },
-            "description": ticket.plot,
-            "statuses": {
-                key: scenario_ticket.ground_truth[key]
-                for key in ("injured", "ambulanceRefusal", "blocked")
+            ai_content={
+                "factoids": {
+                    "situation_1": "ДТП лобовое столкновение двух легковых автомобилей",
+                    "victims_2": "Один водитель без сознания, второй ходит, держится за голову",
+                    "danger_3": "Запах бензина, угроза возгорания"
+                },
+                "plot": "Здравствуйте! Тут страшная авария в городе Москва, на пересечении улицы Ленина и улицы Пушкина, прямо возле дома 15. Две легковые машины столкнулись лоб в лоб. Один водитель без сознания, весь в крови, второй вроде ходит, но держится за голову. Бензином сильно пахнет, но огня пока нет. Пришлите скорее скорую, пожарных и ДПС! Меня зовут Смирнов Алексей Иванович.",
             },
-            "classification": {
-                "section": ticket.category,
-                "title": ticket.subcategory,
-                "class": scenario_ticket.settings["class"],
-                "visClass": scenario_ticket.settings["visClass"],
-            },
-            "services": [
-                {"id": str(index), "name": name, "status": "Получена службой"}
-                for index, name in enumerate(ticket.etalon_services)
-            ],
-        })
-        card = IncidentCard(
-            session_id=exam_session.session_id,
-            scenario_id=ticket.ticket_id,
-            operator_id=cadet_id,
-            card_origin="112_CALL",
-            status="open",
-            filled_data={
-                **deepcopy(incoming_card),
-                "category": ticket.category,
-                "subcategory": ticket.subcategory,
-                "plot": ticket.plot,
-                "factoids": ticket.factoids,
-            },
-            assigned_services={
-                service["name"]: {
-                    "id": service["id"], "status": service["status"], "history": [],
-                }
-                for service in incoming_card["services"]
-            },
+            workflow_state={"status": "active"},
         )
-        db.add(card)
+        db.add(scenario_ticket)
         await db.flush()
-        exam_session.dynamic_state = {
-            "dds": {
-                "incoming_card": incoming_card,
-                "card_id": card.card_id,
-                "actions": [],
-                "submitted_at": None,
+
+        class DemoTicketObj:
+            def __init__(self, sc):
+                self.ticket_id = sc.scenario_id
+                self.category = sc.settings.get("category", "ДТП")
+                self.subcategory = sc.settings.get("subcategory", "ДТП с пострадавшими")
+                self.complexity = sc.settings.get("complexity", 2)
+                self.plot = sc.settings.get("plot", "")
+                self.factoids = sc.ai_content.get("factoids", {})
+                self.etalon_services = sc.settings.get("etalon_services", [])
+            
+        ticket = DemoTicketObj(scenario_ticket)
+
+        session_type = "CALL_SIMULATION" if target_role == "OPERATOR_112" else "CARD_ACTIONS"
+        cadet_id = current_user.user_id
+
+        assignment = Assignment(
+            session_type=session_type,
+            mode="TRAINING",
+            status="ACTIVE",
+            target_role=target_role,
+            cadet_id=cadet_id,
+            assigned_by=current_user.user_id if current_user.role == "TEACHER" else None,
+            scenario_id=ticket.ticket_id,
+            categories=[ticket.category] if ticket.category else [],
+            complexity=str(ticket.complexity or "1"),
+            teacher_notes="Демо-запуск",
+        )
+        db.add(assignment)
+        await db.flush()
+
+        exam_session = ExamSession(
+            assignment_id=assignment.assignment_id,
+            cadet_id=cadet_id,
+            ticket_id=ticket.ticket_id,
+            session_type=session_type,
+            status="ACTIVE",
+            categories=[ticket.category] if ticket.category else [],
+            complexity=str(ticket.complexity or "1"),
+        )
+        db.add(exam_session)
+        await db.flush()
+
+        tr = TicketResult(
+            session_id=exam_session.session_id,
+            ticket_id=ticket.ticket_id,
+            status="active",
+            is_passed=False,
+        )
+        db.add(tr)
+
+        if target_role == "DISPATCHER_DDS":
+            from backend.core.dds_cycle import sanitize_incoming_card
+
+            # The assigned DDS UI reads a validated snapshot, not the legacy plot/factoids.
+            incoming_card = sanitize_incoming_card({
+                "phones": {"aon": scenario_ticket.ground_truth["phone"]},
+                "incident": {"number": f"ДЕМО-{demo_uuid[:8]}", "operator": "112"},
+                "caller": {
+                    "name": scenario_ticket.ground_truth["fio"],
+                    "role": scenario_ticket.ground_truth["caller_status"],
+                    "address": f"{scenario_ticket.ground_truth['street']}, {scenario_ticket.ground_truth['house']}",
+                },
+                "description": ticket.plot,
+                "statuses": {
+                    key: scenario_ticket.ground_truth[key]
+                    for key in ("injured", "ambulanceRefusal", "blocked")
+                },
+                "classification": {
+                    "section": ticket.category,
+                    "title": ticket.subcategory,
+                    "class": scenario_ticket.settings["class"],
+                    "visClass": scenario_ticket.settings["visClass"],
+                },
+                "services": [
+                    {"id": str(index), "name": name, "status": "Получена службой"}
+                    for index, name in enumerate(ticket.etalon_services)
+                ],
+            })
+            card = IncidentCard(
+                session_id=exam_session.session_id,
+                scenario_id=ticket.ticket_id,
+                operator_id=cadet_id,
+                card_origin="112_CALL",
+                status="open",
+                filled_data={
+                    **deepcopy(incoming_card),
+                    "category": ticket.category,
+                    "subcategory": ticket.subcategory,
+                    "plot": ticket.plot,
+                    "factoids": ticket.factoids,
+                },
+                assigned_services={
+                    service["name"]: {
+                        "id": service["id"], "status": service["status"], "history": [],
+                    }
+                    for service in incoming_card["services"]
+                },
+            )
+            db.add(card)
+            await db.flush()
+            exam_session.dynamic_state = {
+                "dds": {
+                    "incoming_card": incoming_card,
+                    "card_id": card.card_id,
+                    "actions": [],
+                    "submitted_at": None,
+                }
             }
-        }
 
-    await db.commit()
-    await db.refresh(exam_session)
+        await db.commit()
+        await db.refresh(exam_session)
 
-    ticket_key = ticket.ticket_id
-    redirect_url = (
-        f"/operator/journal?session_id={exam_session.session_id}&ticket_id={ticket_key}&incoming_call=true"
-        if target_role == "OPERATOR_112" else
-        f"/dds/journal?focus_session_id={exam_session.session_id}&focus_ticket_id={ticket_key}"
-    )
+        ticket_key = ticket.ticket_id
+        redirect_url = (
+            f"/operator/journal?session_id={exam_session.session_id}&ticket_id={ticket_key}&incoming_call=true"
+            if target_role == "OPERATOR_112" else
+            f"/dds/journal?focus_session_id={exam_session.session_id}&focus_ticket_id={ticket_key}"
+        )
 
-    return DemoSessionResponse(
-        session_id=exam_session.session_id,
-        ticket_id=ticket_key,
-        role=target_role,
-        redirect_url=redirect_url,
-    )
+        return DemoSessionResponse(
+            session_id=exam_session.session_id,
+            ticket_id=ticket_key,
+            role=target_role,
+            redirect_url=redirect_url,
+        )
 
 
 @sessions_v1_router.post(
@@ -649,30 +652,31 @@ async def create_session_config(
         raise HTTPException(404, "Group not found")
     if group.teacher_id != current_user.user_id:
         raise HTTPException(403, "Group access denied")
-    exam_session = ExamSession(
-        cadet_id=current_user.user_id,
-        dynamic_state={"legacy_config": {"group_id": config.group_id}},
-        session_type=config.distribution_mode or "live_stream",
-        status="active",
-        categories=config.categories,
-        complexity=config.complexity.value if hasattr(config.complexity, "value") else str(config.complexity),
-        error_limit=config.error_limit,
-        time_limit_seconds=config.time_limit_seconds,
-    )
-    db.add(exam_session)
-    await db.commit()
-    await db.refresh(exam_session)
+    async with learning_priority():
+        exam_session = ExamSession(
+            cadet_id=current_user.user_id,
+            dynamic_state={"legacy_config": {"group_id": config.group_id}},
+            session_type=config.distribution_mode or "live_stream",
+            status="active",
+            categories=config.categories,
+            complexity=config.complexity.value if hasattr(config.complexity, "value") else str(config.complexity),
+            error_limit=config.error_limit,
+            time_limit_seconds=config.time_limit_seconds,
+        )
+        db.add(exam_session)
+        await db.commit()
+        await db.refresh(exam_session)
 
-    return SessionConfigResponse(
-        session_id=exam_session.session_id,
-        group_id=config.group_id,
-        categories=exam_session.categories,
-        complexity=config.complexity,
-        distribution_mode=exam_session.session_type,
-        error_limit=exam_session.error_limit,
-        time_limit_seconds=exam_session.time_limit_seconds,
-        status=exam_session.status,
-    )
+        return SessionConfigResponse(
+            session_id=exam_session.session_id,
+            group_id=config.group_id,
+            categories=exam_session.categories,
+            complexity=config.complexity,
+            distribution_mode=exam_session.session_type,
+            error_limit=exam_session.error_limit,
+            time_limit_seconds=exam_session.time_limit_seconds,
+            status=exam_session.status,
+        )
 
 
 @sessions_v1_router.get(

@@ -1,3 +1,4 @@
+from backend.core.report_runtime import learning_priority
 """Persisted sequential DDS exercises. Queue snapshots never leave the server."""
 from copy import deepcopy
 from datetime import datetime, timezone, timedelta
@@ -300,33 +301,34 @@ async def start_training(db: AsyncSession, payload: DDSTrainingStartPayload, use
 
     if user.role != "CADET":
         raise HTTPException(403, "Self-training requires a cadet")
-    # Serialize retries for this user, not all users, including first insertion.
-    await lock_cadets(db, [user.user_id])
-    sessions = (await db.scalars(select(ExamSession).join(Assignment).where(
-        ExamSession.cadet_id == user.user_id, Assignment.card_pool_source == "self_training"))).all()
-    for session in sessions:
-        data = (session.dynamic_state or {}).get("dds", {})
-        if data.get("start_request_id") == payload.request_id:
-            if [item["ticket_id"] for item in data["queue"]] != payload.ticket_ids:
-                raise HTTPException(409, detail={"code": "DDS_REQUEST_CONFLICT"})
-            return await get_dds_session_state(session.session_id, user, db)
-    pool = await load_pool(db, payload.ticket_ids, training=True)
-    now = datetime.now(timezone.utc)
-    lesson = Assignment(cadet_id=user.user_id, target_role="DISPATCHER_DDS", status="ACTIVE",
-                        scenario_id=payload.ticket_ids[0], card_pool_ids=payload.ticket_ids,
-                        card_pool_source="self_training", started_at=now)
-    db.add(lesson)
-    await db.flush()
-    session = ExamSession(assignment_id=lesson.assignment_id, cadet_id=user.user_id,
-                          ticket_id=payload.ticket_ids[0], session_type="CARD_ACTIONS", status="ACTIVE", start_time=now)
-    db.add(session)
-    await db.flush()
-    await initialize_queue(db, session, pool, now)
-    data = deepcopy(session.dynamic_state["dds"])
-    data["start_request_id"] = payload.request_id
-    store_state(session, data)
-    await db.commit()
-    return await get_dds_session_state(session.session_id, user, db)
+    async with learning_priority():
+        # Serialize retries for this user, not all users, including first insertion.
+        await lock_cadets(db, [user.user_id])
+        sessions = (await db.scalars(select(ExamSession).join(Assignment).where(
+            ExamSession.cadet_id == user.user_id, Assignment.card_pool_source == "self_training"))).all()
+        for session in sessions:
+            data = (session.dynamic_state or {}).get("dds", {})
+            if data.get("start_request_id") == payload.request_id:
+                if [item["ticket_id"] for item in data["queue"]] != payload.ticket_ids:
+                    raise HTTPException(409, detail={"code": "DDS_REQUEST_CONFLICT"})
+                return await get_dds_session_state(session.session_id, user, db)
+        pool = await load_pool(db, payload.ticket_ids, training=True)
+        now = datetime.now(timezone.utc)
+        lesson = Assignment(cadet_id=user.user_id, target_role="DISPATCHER_DDS", status="ACTIVE",
+                            scenario_id=payload.ticket_ids[0], card_pool_ids=payload.ticket_ids,
+                            card_pool_source="self_training", started_at=now)
+        db.add(lesson)
+        await db.flush()
+        session = ExamSession(assignment_id=lesson.assignment_id, cadet_id=user.user_id,
+                              ticket_id=payload.ticket_ids[0], session_type="CARD_ACTIONS", status="ACTIVE", start_time=now)
+        db.add(session)
+        await db.flush()
+        await initialize_queue(db, session, pool, now)
+        data = deepcopy(session.dynamic_state["dds"])
+        data["start_request_id"] = payload.request_id
+        store_state(session, data)
+        await db.commit()
+        return await get_dds_session_state(session.session_id, user, db)
 
 
 def queue_ticket_details(session, evaluations, results):

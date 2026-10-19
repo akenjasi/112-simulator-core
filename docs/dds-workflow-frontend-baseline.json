@@ -242,7 +242,12 @@
       "sha256": "881754c0241596179e2bf5e736bfece2eaab732834bcd9fd8c01ec722115e404",
       "source_revision": "codex/dds-phone-audio-cycle (base e1ef59b)",
       "reason": "Explicit user feedback 2026-10-19: accept inaccurate trainee content, show specific content errors in card review, and record the service response rather than an outgoing instruction."
+    },
+    "components/teacher/dds-lesson-report.tsx": {
+      "sha256": "e8d617fb3d6408fe472268165beb7423aace80d308461b2d37dbfac16b0bad77",
+      "source_revision": "74793c15a6196264713cd7f9f10fc13ac3071cbe",
+      "reason": "Explicit user request 2026-10-19: implement background DDS reports with resource waiting reasons and snapshot/period metadata in the existing teacher report screen. Manual role verification requested by the user: explicitly explain RAM/CPU waiting reasons."
     }
   },
-  "update_policy": "2026-10-19: explicitly reconciled under the user request to repair obsolete tests. Original sha256 values are unchanged. Exact supplemental hashes preserve the integrated changes; these paths are not open-ended exceptions. 2026-10-19: the user explicitly requested the DDS audio-only cycle and teacher review; only the three existing supplemental entries were updated, preserving the original map and guarded path set."
+  "update_policy": "2026-10-19: explicitly reconciled under the user request to repair obsolete tests. Original sha256 values are unchanged. Exact supplemental hashes preserve the integrated changes; these paths are not open-ended exceptions. 2026-10-19: the user explicitly requested the DDS audio-only cycle and teacher review; only the three existing supplemental entries were updated, preserving the original map and guarded path set. 2026-10-19: background report implementation explicitly authorizes the teacher report screen; one exact supplemental hash added, original hash map preserved."
 }

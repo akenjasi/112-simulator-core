@@ -55,6 +55,8 @@ def product_files():
 # The old hash map remains immutable; supplemental entries pin these exact files
 # rather than allowing future arbitrary changes under a permanent allowlist.
 REVIEWED_UPDATES = {
+    # Explicit user-approved background reports; pinned by exact hash, not an allowlist.
+    'components/teacher/dds-lesson-report.tsx',
     'components/student/student-review.tsx',
     'lib/student-review.ts',
     'app/admin/security/page.tsx',

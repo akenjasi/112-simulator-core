@@ -38,3 +38,6 @@ try:
     import backend.models.domain_05  # noqa: F401  (bricks, import jobs)
 except ImportError:
     pass
+
+# Durable report queue (no foreign-key dependency on legacy report storage).
+import backend.models.report_job  # noqa: F401, E402

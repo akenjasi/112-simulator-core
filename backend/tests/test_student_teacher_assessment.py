@@ -13,6 +13,24 @@ from backend.models.domain_04 import IncidentCard, TicketResult
 from backend.tests.test_teacher_grading_acceptance import endpoint, fixture, isolated_tables, request
 
 
+@pytest.mark.parametrize("queue_version", [False, True])
+async def test_student_history_uses_moscow_calendar_time(queue_version):
+    data = await fixture()
+    async with AsyncSessionLocal() as db:
+        session = await db.get(ExamSession, data["session"])
+        # SQLite returns naive UTC; 21:30 UTC belongs to the following Moscow day.
+        session.start_time = datetime(2026, 10, 19, 21, 30)
+        if queue_version:
+            session.dynamic_state = {"dds": {"version": 2,
+                "queue": [{"ticket_id": data["ticket"]}], "current_index": 0,
+                "card_id": data["card"], "completed_cards": [], "actions": []}}
+        await db.commit()
+    response = await request("GET", "/api/v1/students/me/lessons?role=DISPATCHER_DDS", data, actor="cadet", role="CADET")
+    assert response.status_code == 200
+    item = next(item for item in response.json() if item["session_id"] == data["session"])
+    assert item["date"] == "20.10.2026 00:30"
+
+
 @pytest.mark.parametrize(
     ("score",),
     [(0,), (82,)],

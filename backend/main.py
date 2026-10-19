@@ -58,6 +58,7 @@ async def lifespan(app: FastAPI):
     import backend.models.domain_05  # noqa: F401
     import backend.models.domain_06  # noqa: F401
     import backend.models.dds_report_job  # noqa: F401
+    import backend.models.report_job  # noqa: F401
 
     from backend.database import AsyncSessionLocal, engine
     from backend.models.base import Base
@@ -106,14 +107,14 @@ async def lifespan(app: FastAPI):
 
     logger.info("Models warmup complete.")
 
-    from backend.core.dds_report_jobs import dds_report_job_worker
-    await dds_report_job_worker.start()
+    from backend.core.report_worker import report_worker
+    await report_worker.start()
 
     try:
         yield
     finally:
         try:
-            await dds_report_job_worker.stop()
+            await report_worker.stop()
         finally:
             # (Optional) dispose engine on shutdown to release pool connections
             await engine.dispose()

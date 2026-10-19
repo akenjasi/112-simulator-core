@@ -26,6 +26,13 @@ services:
     - '8080'
     - --n-gpu-layers
     - '99'
+    - --sleep-idle-seconds
+    - '10'
+    - --batch-size
+    - '32'
+    - --ubatch-size
+    - '32'
+    - --slots
     - --ctx-size
     - '8192'
     - --parallel

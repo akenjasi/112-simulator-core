@@ -25,12 +25,11 @@ from backend.core.ai_worker import (
     DEFAULT_MODEL_NAME,
     MODEL_FILENAME,
     MODEL_GGUF_URL,
-    ai_worker,
-    run_cadet_analysis,
-    run_group_analysis,
 )
 from backend.core.deps import get_current_user, require_role
 from backend.database import get_db
+from backend.core.report_compat import (durable_advice_queue as ai_worker,
+    queue_student_report as run_cadet_analysis, queue_group_reports as run_group_analysis)
 from backend.models.domain_01 import User, StudentGroup
 from backend.models.domain_03 import AIStudentAdvice, AIGroupAdvice, Assignment
 from backend.core.dds_report_data import (
@@ -200,7 +199,7 @@ async def trigger_ai_analysis(
                 model=model,
             )
             return {
-                "status": "completed",
+                "status": getattr(advice, "status", "completed"),
                 "target_type": "cadet",
                 "target_id": c_id,
                 "advice_id": advice.advice_id,
@@ -214,7 +213,7 @@ async def trigger_ai_analysis(
                 model=model,
             )
             return {
-                "status": "completed",
+                "status": getattr(advice, "status", "completed"),
                 "target_type": "group",
                 "target_id": g_id,
                 "advice_id": advice.advice_id,
