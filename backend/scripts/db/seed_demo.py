@@ -394,8 +394,8 @@ async def seed_classifier(session):
     print("╠══════════════════════════════════════════════════════╣")
     print("║  admin           / admin123    (роль: ADMIN)         ║")
     print("║  teacher         / teacher123  (роль: TEACHER)       ║")
-    print("║  ivanov@test.com / 12345       (роль: CADET)         ║")
-    print("║  petrov@test.com / 12345       (роль: CADET)         ║")
+    print("║  petrov@student.ru / 12345     (роль: CADET)         ║")
+    print("║  sidorov@student.ru / 12345    (роль: CADET)         ║")
     print("╚══════════════════════════════════════════════════════╝")
 
 

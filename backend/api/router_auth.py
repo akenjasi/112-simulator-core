@@ -179,7 +179,7 @@ async def login(
     try:
         body = LoginRequest.model_validate(body).model_dump()
     except ValidationError:
-        raise HTTPException(422, "Invalid login parameters") from None
+        raise HTTPException(422, "Некорректные данные для входа") from None
     username = body.get("username")
     password = body.get("password")
     role = body.get("role")
@@ -187,7 +187,7 @@ async def login(
     if not username or not password:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail="Username and password are required",
+            detail="Укажите логин и пароль",
         )
 
     normalized_role = None
@@ -216,7 +216,7 @@ async def login(
             db.add(user)
             await db.flush()
         if normalized_role and normalized_role != user.role:
-            raise HTTPException(401, "Invalid credentials")
+            raise HTTPException(401, "Неверный логин или пароль")
     else:
         user = await db.scalar(select(User).where(User.username == username))
 
@@ -224,7 +224,7 @@ async def login(
         if user and user.locked_until and _as_utc(user.locked_until) > now:
             raise HTTPException(
                 status_code=status.HTTP_423_LOCKED,
-                detail="Account is temporarily locked",
+                detail="Учётная запись временно заблокирована. Повторите попытку позже.",
             )
 
         valid_role = not normalized_role or (user is not None and user.role == normalized_role)
@@ -250,7 +250,7 @@ async def login(
             await db.commit()
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Invalid credentials",
+                detail="Неверный логин или пароль",
                 headers={"WWW-Authenticate": "Bearer"},
             )
 
@@ -258,12 +258,12 @@ async def login(
     if user.locked_until and _as_utc(user.locked_until) > now:
         raise HTTPException(
             status_code=status.HTTP_423_LOCKED,
-            detail="Account is temporarily locked",
+            detail="Учётная запись временно заблокирована. Повторите попытку позже.",
         )
     if not user.is_active:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Invalid credentials",
+            detail="Неверный логин или пароль",
             headers={"WWW-Authenticate": "Bearer"},
         )
     # Preserve failed second-factor attempts across fresh password challenges.
