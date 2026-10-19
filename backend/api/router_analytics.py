@@ -13,7 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm.attributes import flag_modified
 
 from backend.core.dds_cycle import build_dds_cadet_stats
-from backend.core.gradebook_records import build_attempt_records, dds_state_for_card, historical_record_snapshot, latest_evaluation, resolve_attempt_score_and_status
+from backend.core.gradebook_records import attempt_is_submitted, build_attempt_records, dds_state_for_card, historical_record_snapshot, latest_evaluation, resolve_attempt_score_and_status
 from backend.core.analytics_engine import build_error_heatmap, calculate_trends
 from backend.core.deps import get_current_user, require_role
 from backend.database import get_db
@@ -991,8 +991,36 @@ async def get_record_detail(
         )
         expert_modified_by = log_res.first()
 
+    can_grade = attempt_is_submitted(exam_session, tr, card)
+    active = exam_session and (exam_session.status or "").upper() in ("ACTIVE", "IN_PROGRESS", "INITIALIZED")
+    grading_block_reason = None if can_grade else (
+        "Карточка ещё выполняется и не отправлена на проверку." if active else
+        "Карточка не завершена и не сдана. Экспертная оценка недоступна.")
+    dds_criteria, dds_events = [], []
+    if is_dds and exam_session:
+        from backend.core.dds_exercise import criteria
+        data = dds_state_for_card(exam_session, card.card_id if card else None)
+        saved = error_details if isinstance(error_details, dict) else {}
+        dds_criteria = data.get("criteria") or saved.get("dds_criteria") or criteria(data, closed=not active)
+        dds_events = (data.get("exercise") or {}).get("events") or saved.get("dds_mistakes") or []
+    revision_reason, is_grade_revision = None, False
+    audit = await db.scalar(select(UserActionLog).where(
+        UserActionLog.target_id.in_([v for v in (record_id, tr.result_id if tr else None,
+            card.card_id if card else None, ev.evaluation_id if ev else None) if v]),
+        UserActionLog.action == "GRADE_OVERRIDE").order_by(UserActionLog.timestamp.desc()))
+    if audit:
+        try:
+            audit_details = json.loads(audit.details)
+            is_grade_revision = audit_details.get("was_teacher_graded", audit_details.get("old_score") is not None)
+            revision_reason = audit_details.get("reason") if is_grade_revision else None
+        except (ValueError, TypeError, AttributeError):
+            pass
+
     return RecordDetailResponse(
         record_id=record_id,
+        can_grade=can_grade, grading_block_reason=grading_block_reason,
+        revision_reason=revision_reason, is_grade_revision=bool(is_grade_revision),
+        dds_criteria=dds_criteria, dds_events=dds_events,
         session_id=session_id,
         cadet_id=cadet_id,
         cadet_name=cadet_name,
@@ -1325,23 +1353,8 @@ async def override_record_grade(
                 tr, card, ev = attempt_tr, attempt_card, attempt_ev
                 break
 
-    if exam_session:
-        is_session_active = (exam_session.status or "").upper() in ("ACTIVE", "IN_PROGRESS", "INITIALIZED")
-        is_tr_active = (tr is not None and (tr.status or "").upper() in ("ACTIVE", "IN_PROGRESS"))
-        has_dds = isinstance(exam_session.dynamic_state, dict) and "dds" in exam_session.dynamic_state
-        if has_dds:
-            dds_state = dds_state_for_card(exam_session, card.card_id if card else None)
-            is_submitted = bool(dds_state.get("card_submitted_at") or dds_state.get("submitted_at"))
-        elif tr is not None:
-            is_submitted = not is_tr_active and (tr.score_total is not None or (tr.status or "").upper() in ("COMPLETED", "EVALUATED", "FINISHED", "PASSED", "FAILED"))
-        else:
-            is_submitted = bool(exam_session.end_time is not None or not is_session_active)
-
-        if not is_submitted:
-            raise HTTPException(
-                status_code=status.HTTP_409_CONFLICT,
-                detail="Попытка ещё не сдана (работа не отправлена или сессия активна)",
-            )
+    if exam_session and not attempt_is_submitted(exam_session, tr, card):
+        raise HTTPException(status_code=409, detail="Попытка ещё не сдана. Завершите и отправьте карточку для оценивания.")
 
     curr_score, curr_passed, curr_status, curr_err_cnt, curr_source = resolve_attempt_score_and_status(exam_session, tr, ev)
     old_score = curr_score
@@ -1419,6 +1432,7 @@ async def override_record_grade(
                 "old_score": float(old_score) if old_score is not None else None,
                 "new_score": float(new_score) if new_score is not None else None,
                 "old_is_passed": curr_passed,
+                "was_teacher_graded": is_evaluation_already_expert or is_result_already_expert,
                 "new_is_passed": new_passed,
                 "reason": req.reason,
                 "comment": req.comment,

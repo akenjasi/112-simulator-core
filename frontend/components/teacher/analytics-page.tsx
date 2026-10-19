@@ -432,7 +432,7 @@ export default function AnalyticsPage({ initialTab = "split" }: AnalyticsPagePro
   }, [])
 
   // Fetch session analytics
-  const fetchSessionAnalytics = useCallback(async (sid: string) => {
+  const fetchSessionAnalytics = useCallback(async (sid: string, preferredRecordId?: string) => {
     if (!sid.trim()) return
     setSelectedLessonId("")
     const requestId = ++sessionRequestRef.current
@@ -454,9 +454,11 @@ export default function AnalyticsPage({ initialTab = "split" }: AnalyticsPagePro
         if (requestId !== sessionRequestRef.current) return
         if (data && Array.isArray(data.cadets)) {
           setSessionData(data)
-          const firstCadet = data.cadets[0]
+          const firstCadet = preferredRecordId
+            ? data.cadets.find((c: CadetSummary) => c.records?.some(r => r.record_id === preferredRecordId))
+            : data.cadets[0]
           if (firstCadet && firstCadet.records?.length > 0) {
-            const firstRec = firstCadet.records[0]
+            const firstRec = preferredRecordId ? firstCadet.records.find((r: CadetRecordSummary) => r.record_id === preferredRecordId) : firstCadet.records[0]
             if (firstRec.etalon && firstRec.student_answer) {
               setSelectedRecord({
                 ...firstRec,
@@ -498,7 +500,7 @@ export default function AnalyticsPage({ initialTab = "split" }: AnalyticsPagePro
   }, [loadRecordDetail])
 
   // Fetch lesson analytics & cadets breakdown
-  const handleSelectLesson = useCallback(async (lessonId: string) => {
+  const handleSelectLesson = useCallback(async (lessonId: string, preferredRecordId?: string) => {
     setSelectedLessonId(lessonId)
     setSessionId("")
     const requestId = ++sessionRequestRef.current
@@ -571,9 +573,10 @@ export default function AnalyticsPage({ initialTab = "split" }: AnalyticsPagePro
           cadets: parsedCadets,
         })
 
-        const firstCadetWithRecord = parsedCadets.find((c: any) => c.records && c.records.length > 0)
+        const firstCadetWithRecord = parsedCadets.find((c: any) => preferredRecordId
+          ? c.records?.some((r: any) => r.record_id === preferredRecordId) : c.records && c.records.length > 0)
         if (firstCadetWithRecord) {
-          const firstRec = firstCadetWithRecord.records[0]
+          const firstRec = preferredRecordId ? firstCadetWithRecord.records.find((r: any) => r.record_id === preferredRecordId) : firstCadetWithRecord.records[0]
           if (firstRec.etalon && firstRec.student_answer) {
             setSelectedRecord({
               ...firstRec,
@@ -669,9 +672,9 @@ export default function AnalyticsPage({ initialTab = "split" }: AnalyticsPagePro
   const handleGradingSuccess = useCallback(async () => {
     await fetchLessonsHistory()
     if (selectedLessonId) {
-      await handleSelectLesson(selectedLessonId)
+      await handleSelectLesson(selectedLessonId, selectedRecord?.record_id)
     } else if (sessionId) {
-      await fetchSessionAnalytics(sessionId)
+      await fetchSessionAnalytics(sessionId, selectedRecord?.record_id)
     }
     await fetchChartsData()
     if (selectedRecord?.record_id) {
@@ -728,7 +731,8 @@ export default function AnalyticsPage({ initialTab = "split" }: AnalyticsPagePro
     })
 
     if (!res.ok) {
-      throw new Error(`Ошибка при отправке апелляции (${res.status})`)
+      const error = await res.json().catch(() => null)
+      throw new Error(typeof error?.detail === "string" ? error.detail : `Не удалось сохранить оценку (${res.status})`)
     }
 
     const updatedData = await res.json().catch(() => null)
@@ -794,9 +798,9 @@ export default function AnalyticsPage({ initialTab = "split" }: AnalyticsPagePro
     })
 
     if (selectedLessonId) {
-      await handleSelectLesson(selectedLessonId)
+      await handleSelectLesson(selectedLessonId, recordId)
     } else if (sessionId) {
-      await fetchSessionAnalytics(sessionId)
+      await fetchSessionAnalytics(sessionId, recordId)
     }
     await fetchLessonsHistory()
     await fetchChartsData()

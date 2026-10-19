@@ -244,9 +244,9 @@
       "reason": "Explicit user request 2026-10-19: implement and verify autonomous DDS assessment and recommendations, keeping scripted tickets. Add immediate rule-based attempt feedback and saved incoming notes; preserve teacher grading and original baseline."
     },
     "components/teacher/dds-lesson-report.tsx": {
-      "sha256": "fd3d134e508b1d0b868bce7f9b1fffe9f4b44f7417a861fb5fc77b62566c92a9",
-      "source_revision": "510c092 + user-requested immediate GPU demo recommendations, 2026-10-20",
-      "reason": "Explicit user request: immediate personal LLM recommendations after self-training and teacher-led lessons, progress, persisted results and retry; preserve ordinary queued reports. Exact authorized component changes; original baseline remains unchanged."
+      "sha256": "5031b0743e657b8e98071d18e96eb0755c738791902b53ddbee547d68788c015",
+      "source_revision": "a1e7e74 + explicit teacher demo fixes request, 2026-10-20",
+      "reason": "User explicitly requested the four manually reproduced demo fixes without simplifying the interface: truthful DDS protocol, submission-aware grading, primary assessment labels and explicit immediate launch for older queued reports. Original hash map and negative mutation probes remain unchanged."
     },
     "components/dispatcher/caller-panel.tsx": {
       "sha256": "eac133283f3ab39dcb8ae4981b2968db7869a09415eee883162b3d6713c65470",
@@ -287,6 +287,11 @@
       "sha256": "32620679ff63a133ca361f94c2e39e1b5c6af1b07807a62a532da1d23bb63fa0",
       "source_revision": "510c092 + explicit immediate demo request 2026-10-20",
       "reason": "User explicitly requested an immediate visible report after teacher-led lessons. Mount the existing DDS report component on the completed demo monitoring screen only; preserve all other monitoring logic and the original baseline."
+    },
+    "components/teacher/split-screen.tsx": {
+      "sha256": "ec8737a5bad38faee688e8bb95b44f7cc4b0bd2aa3eafff7c60a70f41067baff",
+      "source_revision": "a1e7e74 + explicit teacher demo fixes request, 2026-10-20",
+      "reason": "User explicitly requested the four manually reproduced demo fixes without simplifying the interface: truthful DDS protocol, submission-aware grading, primary assessment labels and explicit immediate launch for older queued reports. Original hash map and negative mutation probes remain unchanged."
     }
   },
   "update_policy": "2026-10-19: explicitly reconciled under the user request to repair obsolete tests. Original sha256 values are unchanged. Exact supplemental hashes preserve the integrated changes; these paths are not open-ended exceptions. 2026-10-19: the user explicitly requested the DDS audio-only cycle and teacher review; only the three existing supplemental entries were updated, preserving the original map and guarded path set. 2026-10-19: background report implementation explicitly authorizes the teacher report screen; one exact supplemental hash added, original hash map preserved."

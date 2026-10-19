@@ -1,6 +1,8 @@
 "use client"
 
 import { apiFetch as fetch } from "@/lib/api-fetch"
+import { DDSProtocol } from "@/components/dispatcher/dds-protocol"
+import type { DDSCriterion, DDSEvent } from "@/lib/dds-cycle"
 
 import React, { useState } from "react"
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from "@/components/ui/card"
@@ -127,6 +129,11 @@ export interface RecordDetail {
   is_appealed?: boolean
   teacher_comment?: string | null
   revision_reason?: string | null
+  is_grade_revision?: boolean
+  can_grade?: boolean
+  grading_block_reason?: string | null
+  dds_criteria?: DDSCriterion[]
+  dds_events?: DDSEvent[]
   ai_comment?: string | null
   automatic_comment?: string | null
   etalon: Record<string, any>
@@ -199,6 +206,7 @@ export function SplitScreen({ record, onAppeal, onClose, className = "" }: Split
   const [appealReason, setAppealReason] = useState<string>("")
   const [isSaving, setIsSaving] = useState(false)
   const [saveSuccess, setSaveSuccess] = useState<string | null>(null)
+  const [saveError, setSaveError] = useState<string | null>(null)
 
   // Normalize error_details into uniform list
   const normalizedErrors: ErrorDetailItem[] = React.useMemo(() => {
@@ -221,7 +229,9 @@ export function SplitScreen({ record, onAppeal, onClose, className = "" }: Split
       })
     }
     // If it's a key-value object { [field]: "error message" or { message: "...", severity: "..." } }
-    return Object.entries(record.error_details).map(([key, val]) => {
+    return Object.entries(record.error_details)
+      .filter(([key]) => !["dds_criteria", "dds_mistakes"].includes(key))
+      .map(([key, val]) => {
       let msg = ""
       let severity: "error" | "warning" = "error"
       if (typeof val === "object" && val !== null) {
@@ -289,6 +299,8 @@ export function SplitScreen({ record, onAppeal, onClose, className = "" }: Split
   }
 
   const openAppeal = () => {
+    if (!canGrade) return
+    setSaveError(null)
     setAppealStatus(record.status === "failed" ? "failed" : "passed")
     setAppealScore("")
     setAppealComment(record.teacher_comment || "")
@@ -297,16 +309,17 @@ export function SplitScreen({ record, onAppeal, onClose, className = "" }: Split
   }
 
   const handleSaveAppeal = async () => {
-    if (isSaving) return
+    if (isSaving || !canGrade) return
     try {
       setIsSaving(true)
+      setSaveError(null)
       const numScore = appealScore.trim() !== "" ? Number(appealScore) : undefined
       if (numScore !== undefined && (isNaN(numScore) || numScore < 0 || numScore > 100)) {
-        alert("Балл должен быть от 0 до 100")
+        setSaveError("Балл должен быть от 0 до 100")
         return
       }
 
-      const finalReason = appealReason.trim() || appealComment || "Экспертный пересмотр оценки"
+      const finalReason = appealReason.trim() || appealComment || (hasSavedGrade ? "Экспертный пересмотр оценки" : "Первичная экспертная оценка")
 
       if (onAppeal) {
         await onAppeal(record.record_id, {
@@ -334,7 +347,7 @@ export function SplitScreen({ record, onAppeal, onClose, className = "" }: Split
       setIsAppealModalOpen(false)
       setTimeout(() => setSaveSuccess(null), 4000)
     } catch (err: any) {
-      alert(err.message || "Не удалось сохранить апелляцию")
+      setSaveError(err.message || "Не удалось сохранить оценку")
     } finally {
       setIsSaving(false)
     }
@@ -429,6 +442,10 @@ export function SplitScreen({ record, onAppeal, onClose, className = "" }: Split
 
   const teacherScore = record.expert_score !== undefined ? record.expert_score : record.score
   const hasTeacherGrade = teacherScore != null || Boolean(record.expert_modified_at || record.is_appealed)
+  const hasSavedGrade = hasTeacherGrade || record.score != null
+  const canGrade = record.can_grade ?? !["incomplete", "in_progress", "active", "pending", "ungraded"].includes(record.status)
+  const blockedReason = record.grading_block_reason || "Карточка не сдана. Экспертная оценка недоступна."
+  const ungradedLabel = !canGrade ? (record.status === "in_progress" ? "В процессе" : "Не завершено") : "Ожидает проверки"
 
   return (
     <Card className={`w-full shadow-lg border-2 ${className}`} data-testid="split-screen-card">
@@ -449,9 +466,9 @@ export function SplitScreen({ record, onAppeal, onClose, className = "" }: Split
                 <Badge variant="default" className="bg-emerald-600 hover:bg-emerald-700 text-white">
                   <CheckCircle2 className="h-3 w-3 mr-1" /> Зачтено
                 </Badge>
-              ) : record.status === "completed" && record.score == null ? (
+              ) : !["passed", "failed"].includes(record.status) ? (
                 <Badge variant="secondary" className="bg-blue-100 text-blue-800 dark:bg-blue-950 dark:text-blue-300 border-blue-300">
-                  <Clock className="h-3 w-3 mr-1" /> Ожидает проверки
+                  <Clock className="h-3 w-3 mr-1" /> {ungradedLabel}
                 </Badge>
               ) : (
                 <Badge variant="destructive" className="bg-rose-600 hover:bg-rose-700 text-white">
@@ -460,7 +477,7 @@ export function SplitScreen({ record, onAppeal, onClose, className = "" }: Split
               )}
               {record.is_appealed && (
                 <Badge variant="secondary" className="bg-purple-100 text-purple-800 dark:bg-purple-950 dark:text-purple-300 border-purple-300">
-                  <Sparkles className="h-3 w-3 mr-1" /> Апеллировано
+                  <Sparkles className="h-3 w-3 mr-1" /> {record.is_grade_revision ? "Оценка пересмотрена" : "Оценено преподавателем"}
                 </Badge>
               )}
               {record.score != null ? (
@@ -477,6 +494,8 @@ export function SplitScreen({ record, onAppeal, onClose, className = "" }: Split
               variant="default"
               className="bg-amber-600 hover:bg-amber-700 text-white flex items-center gap-1.5"
               onClick={openAppeal}
+              disabled={!canGrade}
+              title={!canGrade ? blockedReason : undefined}
             >
               <RotateCcw className="h-4 w-4" />
               {hasTeacherGrade || record.score != null ? "Изменить оценку" : "Выставить оценку"}
@@ -726,6 +745,8 @@ export function SplitScreen({ record, onAppeal, onClose, className = "" }: Split
                   size="sm"
                   className="bg-amber-600 hover:bg-amber-700 text-white flex items-center gap-1.5 text-xs"
                   onClick={openAppeal}
+              disabled={!canGrade}
+              title={!canGrade ? blockedReason : undefined}
                 >
                   <RotateCcw className="h-3.5 w-3.5" />
                   {hasTeacherGrade || record.score != null ? "Изменить оценку" : "Выставить оценку"}
@@ -769,10 +790,10 @@ export function SplitScreen({ record, onAppeal, onClose, className = "" }: Split
                 <div className="p-4 rounded-md bg-muted/30 border border-border/50 text-muted-foreground text-sm flex items-center justify-between">
                   <div className="flex items-center gap-2">
                     <Clock className="h-4 w-4 text-blue-500" />
-                    <span>Оценка не выставлена (работа завершена курсантом и ожидает проверки)</span>
+                    <span>{canGrade ? "Оценка не выставлена (работа завершена курсантом и ожидает проверки)" : blockedReason}</span>
                   </div>
                   <Badge variant="secondary" className="bg-blue-100 text-blue-800 dark:bg-blue-950 dark:text-blue-300 border-blue-300">
-                    Ожидает проверки
+                    {ungradedLabel}
                   </Badge>
                 </div>
               )}
@@ -786,10 +807,17 @@ export function SplitScreen({ record, onAppeal, onClose, className = "" }: Split
               <div className="flex items-center gap-2 border-b pb-3">
                 <Bot className="h-5 w-5 text-purple-600 dark:text-purple-400" />
                 <h4 className="font-bold text-base text-foreground">
-                  4. Автоматическая проверка ИИ
+                  {record.dds_criteria?.length ? "4. Автоматическая проверка ДДС" : "4. Автоматическая проверка ИИ"}
                 </h4>
               </div>
 
+              {record.dds_criteria && record.dds_criteria.length > 0 && <div data-testid="dds-rules-review">
+                <p className="text-sm text-muted-foreground">Проверка по сохранённым действиям, без числового балла и нейрооценки.</p>
+                <ul className="my-3 space-y-1">{record.dds_criteria.map(criterion => <li key={criterion.key}>
+                  {criterion.label}: <strong>{{completed: "Выполнено", completed_after_correction: "Выполнено после исправления", not_completed: "Не выполнено", not_evaluated: "Не оценено"}[criterion.status]}</strong>
+                </li>)}</ul>
+                <DDSProtocol criteria={record.dds_criteria} events={record.dds_events || []} />
+              </div>}
               {record.automatic_score != null ? (
                 <div className="space-y-3">
                   <div className="flex items-center gap-3">
@@ -813,7 +841,7 @@ export function SplitScreen({ record, onAppeal, onClose, className = "" }: Split
               ) : (
                 <div className="p-4 rounded-md bg-muted/30 border border-border/50 text-muted-foreground text-sm flex items-center gap-2">
                   <Bot className="h-4 w-4 shrink-0 text-muted-foreground" />
-                  <span>Оценка ИИ отсутствует</span>
+                  <span>{record.dds_criteria?.length ? "Числовая оценка ИИ не применяется к пяти критериям ДДС" : "Оценка ИИ отсутствует"}</span>
                 </div>
               )}
 
@@ -1028,7 +1056,7 @@ export function SplitScreen({ record, onAppeal, onClose, className = "" }: Split
               <div className="flex items-center gap-2">
                 <RotateCcw className="h-5 w-5 text-amber-600" />
                 <h3 id="appeal-modal-title" className="text-lg font-bold text-foreground">
-                  Апелляция: Изменение оценки
+                  {hasSavedGrade ? "Апелляция: Изменение оценки" : "Выставление оценки"}
                 </h3>
               </div>
               <Button
@@ -1073,7 +1101,7 @@ export function SplitScreen({ record, onAppeal, onClose, className = "" }: Split
                 />
               </div>
 
-              <div>
+              {hasSavedGrade && <div>
                 <Label htmlFor="appeal-reason-input" className="text-sm font-semibold mb-1 block">
                   Причина пересмотра
                 </Label>
@@ -1086,7 +1114,7 @@ export function SplitScreen({ record, onAppeal, onClose, className = "" }: Split
                   onChange={(e) => setAppealReason(e.target.value)}
                   className="w-full text-sm"
                 />
-              </div>
+              </div>}
 
               <div>
                 <Label htmlFor="appeal-comment-input" className="text-sm font-semibold mb-1 block">
@@ -1104,6 +1132,7 @@ export function SplitScreen({ record, onAppeal, onClose, className = "" }: Split
               </div>
             </div>
 
+            {saveError && <p role="alert" className="text-sm text-destructive">{saveError}</p>}
             <div className="flex items-center justify-end gap-2 border-t pt-4">
               <Button
                 type="button"

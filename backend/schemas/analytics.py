@@ -228,6 +228,12 @@ class RecordDetailResponse(BaseModel):
     evaluation_source: Optional[str] = None
     expert_modified_at: Optional[str] = None
     expert_modified_by: Optional[str] = None
+    can_grade: bool = False
+    grading_block_reason: Optional[str] = None
+    revision_reason: Optional[str] = None
+    is_grade_revision: bool = False
+    dds_criteria: List[Dict[str, Any]] = Field(default_factory=list)
+    dds_events: List[Dict[str, Any]] = Field(default_factory=list)
     etalon: Dict[str, Any] = Field(default_factory=dict)
     student_answer: Dict[str, Any] = Field(default_factory=dict)
     error_details: Any = Field(default_factory=list)

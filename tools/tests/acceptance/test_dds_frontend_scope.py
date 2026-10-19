@@ -55,6 +55,8 @@ def product_files():
 # The old hash map remains immutable; supplemental entries pin these exact files
 # rather than allowing future arbitrary changes under a permanent allowlist.
 REVIEWED_UPDATES = {
+    # Explicit user request 2026-10-20: repair teacher demo grading/protocol; pin the exact fix.
+    'components/teacher/split-screen.tsx',
     # Explicit request 2026-10-20: show immediate GPU demo reports on lesson completion.
     # The exact implementation remains pinned; negative mutation probes still apply.
     'components/teacher/live-dashboard.tsx',

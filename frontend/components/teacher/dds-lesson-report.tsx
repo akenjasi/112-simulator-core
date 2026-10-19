@@ -449,12 +449,15 @@ export function DDSLessonReport({ lessonId }: DDSLessonReportProps) {
     }
   }
 
+  const needsDemoStart = jobStatus === "pending" && report?.execution_mode === "demo"
+  const pendingLabel = needsDemoStart ? "Ожидает запуска в деморежиме" : WAIT_LABELS[report?.waiting_reason || ""] || "В очереди"
+
   return (
     <div
       className="bg-card rounded-2xl border p-5 shadow-xs space-y-4"
       data-testid="dds-lesson-report"
     >
-      {report?.execution_mode === "demo" && <LessonPersonalRecommendations key={lessonId} lessonId={lessonId}/>}
+      {report?.execution_mode === "demo" && <LessonPersonalRecommendations key={`${lessonId}:${report.attempt || 0}`} lessonId={lessonId}/>}
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b pb-3">
         <div className="flex items-center gap-2.5">
@@ -473,7 +476,7 @@ export function DDSLessonReport({ lessonId }: DDSLessonReportProps) {
               )}
               {(jobStatus === "pending" || jobStatus === "running") && (
                 <Badge variant="secondary" className="bg-blue-500/10 text-blue-600 text-xs font-semibold animate-pulse">
-                  {jobStatus === "running" ? "Генерация отчёта" : WAIT_LABELS[report?.waiting_reason || ""] || "В очереди"}
+                  {jobStatus === "running" ? "Генерация отчёта" : pendingLabel}
                 </Badge>
               )}
               {jobStatus === "failed" && (
@@ -602,14 +605,18 @@ export function DDSLessonReport({ lessonId }: DDSLessonReportProps) {
               <p className="text-sm font-bold text-foreground">
                 {jobStatus === "running"
                   ? "Нейросеть формирует аналитический отчёт..."
-                  : WAIT_LABELS[report?.waiting_reason || ""] || "Задание поставлено в очередь на обработку..."}
+                  : pendingLabel}
               </p>
               <p className="text-xs text-foreground/75 mt-0.5">
-                Идёт опрос готовности. По завершении отчёт появится здесь автоматически.
+                {needsDemoStart ? "Этот отчёт ожидал ресурсов до включения деморежима. Запустите анализ на настроенной модели." : "Идёт опрос готовности. По завершении отчёт появится здесь автоматически."}
               </p>
-              {jobStatus === "pending" && WAIT_DETAILS[report?.waiting_reason || ""] && <p className="text-xs text-foreground/75 mt-1">{WAIT_DETAILS[report?.waiting_reason || ""]}</p>}
+              {!needsDemoStart && jobStatus === "pending" && WAIT_DETAILS[report?.waiting_reason || ""] && <p className="text-xs text-foreground/75 mt-1">{WAIT_DETAILS[report?.waiting_reason || ""]}</p>}
             </div>
           </div>
+
+          {needsDemoStart && <Button size="sm" disabled={isSubmitting} onClick={() => handleGenerate(false)}>
+            {isSubmitting ? "Запуск анализа..." : "Запустить анализ ИИ"}
+          </Button>}
 
           {pollingError && (
             <div className="p-2.5 rounded-lg bg-amber-500/10 border border-amber-500/30 text-foreground text-xs flex items-center gap-2">

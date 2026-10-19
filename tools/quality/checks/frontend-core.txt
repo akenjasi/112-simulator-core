@@ -81,3 +81,7 @@ tests/theme.test.tsx
 tests/student-teacher-assessment.test.tsx
 tests/student-report-queue.test.tsx
 tests/dds-cycle/dds-interface-help.test.tsx
+
+# Teacher demo review regressions
+tests/27_teacher/teacher-demo-fixes.test.tsx
+tests/27_teacher/teacher-demo-report.test.tsx

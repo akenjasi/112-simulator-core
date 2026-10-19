@@ -89,6 +89,20 @@ def _score(value):
     return score if math.isfinite(score) and 0 <= score <= 100 else None
 
 
+def attempt_is_submitted(session, ticket_result=None, card=None):
+    """The same submission gate for the review UI and grade mutations."""
+    if session is None:
+        return False
+    if isinstance(session.dynamic_state, dict) and "dds" in session.dynamic_state:
+        data = dds_state_for_card(session, card.card_id if card else None)
+        return bool(data.get("card_submitted_at") or data.get("submitted_at"))
+    if ticket_result is not None:
+        state = (ticket_result.status or "").upper()
+        return state not in ("ACTIVE", "IN_PROGRESS") and (
+            ticket_result.score_total is not None or state in ("COMPLETED", "EVALUATED", "FINISHED", "PASSED", "FAILED"))
+    return bool(session.end_time is not None or (session.status or "").upper() not in ("ACTIVE", "IN_PROGRESS", "INITIALIZED"))
+
+
 def resolve_attempt_score_and_status(session, ticket_result=None, eval_result=None):
     """Use the same saved grade in the overview, record and DDS history."""
     tr = ticket_result
