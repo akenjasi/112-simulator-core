@@ -193,9 +193,8 @@ export function DDSTrainingPhone({exercise, selectedService, onServiceChange, di
   const [audioNotice, setAudioNotice] = useState("")
   const [playing, setPlaying] = useState(false)
   const [answering, setAnswering] = useState<string | null>(null)
-  const [view, setView] = useState<"call" | "directory" | "history">("call")
+  const [view, setView] = useState<"call" | "directory">("call")
   const [directoryPage, setDirectoryPage] = useState(0)
-  const [historyPage, setHistoryPage] = useState(0)
   const [drafts, setDrafts] = useState<Record<string, ReportFields>>({})
   const [brigades, setBrigades] = useState<Record<string, string>>({})
   const departureDrafts = useRef<Record<string, {who: string; content: string}>>({})
@@ -203,7 +202,7 @@ export function DDSTrainingPhone({exercise, selectedService, onServiceChange, di
   const shownIncoming = useRef<string | null>(null)
   const audio = useRef<HTMLAudioElement | null>(null)
   const playbackEpoch = useRef(0)
-  const autoPlay = useRef<{operation: "dial" | "answer"; previous?: string; report?: string} | null>(null)
+  const autoPlay = useRef<{operation: "dial" | "answer"; previous?: string; report?: string; service?: string} | null>(null)
   const commandRef = useRef(command)
   commandRef.current = command
   const sequential = exercise.version === 2
@@ -211,8 +210,7 @@ export function DDSTrainingPhone({exercise, selectedService, onServiceChange, di
   const incoming = exercise.incoming
   const outgoing = exercise.outgoing[selectedService]
   const received = exercise.events.filter(event => event.kind === "answered" || sequential && event.kind === "dialed" && !!event.report_id)
-  const historyIndex = Math.min(historyPage, Math.max(0, received.length - 1))
-  const historical = received[historyIndex]
+  const latestCall = [...exercise.events].reverse().find(event => event.kind === "answered" || event.kind === "dialed")
   const lastAnswered = incoming ? [...received].reverse().find(event => event.report_id === incoming.id) : undefined
   const hasReport = incoming?.direction !== "outgoing" && !incoming?.ringing && (!!lastAnswered || !!incoming?.text)
   const savedNote = incoming ? exercise.notes?.[incoming.id] || "" : ""
@@ -236,7 +234,7 @@ export function DDSTrainingPhone({exercise, selectedService, onServiceChange, di
     // Preserve drafts during polling and window minimization.
     record?.setWhoAccepted(departureDrafts.current[selectedService]?.who || "")
     record?.setSummary(departureDrafts.current[selectedService]?.content || "")
-    setNumber(""); setAudioNotice(""); setPlaying(false)
+    setAudioNotice(""); setPlaying(false)
     playbackEpoch.current++; audio.current?.pause()
   }, [selectedService])
   useEffect(() => {
@@ -250,6 +248,10 @@ export function DDSTrainingPhone({exercise, selectedService, onServiceChange, di
     setOpened(true); setView("call")
     // An arriving call never changes the selected service or accepts itself.
   }, [incoming?.id, incoming?.ringing])
+  useEffect(() => {
+    // Restore the connected service from the server, including after a network retry.
+    if (latestCall?.service_name) onServiceChange(latestCall.service_name)
+  }, [latestCall?.id, latestCall?.service_name])
 
   const play = (path: string | null | undefined, callId?: string) => {
     playbackEpoch.current++; const epoch = playbackEpoch.current
@@ -271,19 +273,30 @@ export function DDSTrainingPhone({exercise, selectedService, onServiceChange, di
   // Only an explicit successful call arms autoplay. Polling, replay and reload do not.
   useEffect(() => {
     const intent = autoPlay.current
-    if (!intent || disabled) return
+    if (!intent || disabled || intent.operation === "dial" && intent.service !== selectedService) return
     const callId = intent.operation === "answer" ? lastAnswered?.id : outgoing?.call_id
     if (!callId || (intent.operation === "answer" ? intent.report !== incoming?.id : callId === intent.previous)) return
     autoPlay.current = null
     play(intent.operation === "answer" ? incoming?.audio : outgoing?.audio, callId)
-  }, [disabled, lastAnswered?.id, outgoing?.call_id, incoming?.id])
+  }, [disabled, lastAnswered?.id, outgoing?.call_id, incoming?.id, selectedService])
 
   const call = async (payload: Command) => {
     autoPlay.current = payload.operation === "answer" ? {operation: "answer", report: payload.report_id}
-      : {operation: "dial", previous: outgoing?.call_id}
+      : {operation: "dial", service: payload.service_name, previous: exercise.outgoing[payload.service_name || ""]?.call_id}
     if (payload.operation === "answer") setAnswering(payload.report_id || null)
-    try {if (!await command(payload)) autoPlay.current = null}
+    try {
+      const accepted = await command(payload)
+      if (!accepted) autoPlay.current = null
+      return accepted
+    }
     finally {setAnswering(null)}
+  }
+  const dial = async () => {
+    const dialedNumber = number.trim()
+    if (disabled || !dialedNumber) return
+    const contact = exercise.contacts.find(contact => contact.number === dialedNumber)
+    const service = contact?.service_name || selectedService
+    if (await call({operation: "dial", number: dialedNumber, service_name: service}) && contact) onServiceChange(service)
   }
   const minimize = () => {setOpened(false); launcher.current?.focus()}
   const answerButton = <button type="button" disabled={disabled || answering === incoming?.id}
@@ -304,7 +317,6 @@ export function DDSTrainingPhone({exercise, selectedService, onServiceChange, di
         <div className="flex gap-2">
           <button type="button" aria-pressed={view === "call"} className={button} onClick={() => setView("call")}>Телефон</button>
           <button type="button" aria-pressed={view === "directory"} className={button} onClick={() => setView("directory")}>Справочник</button>
-          <button type="button" aria-pressed={view === "history"} className={button} onClick={() => {setHistoryPage(Math.max(0, received.length-1)); setView("history")}}>Сообщения</button>
         </div>
         <button type="button" aria-label="Звук входящего звонка" aria-pressed={!ring.muted} onClick={ring.toggle}
           className="flex min-h-9 items-center gap-2 rounded px-2 text-xs text-slate-600 hover:bg-slate-100">
@@ -327,41 +339,26 @@ export function DDSTrainingPhone({exercise, selectedService, onServiceChange, di
           <button type="button" disabled={disabled} title="Подставить номер для набора" className="rounded bg-green-50 px-3 py-2 font-mono text-lg font-semibold text-green-800 disabled:opacity-50"
             onClick={() => {setNumber(contact.number); setView("call")}}>{contact.number}</button>
         </li>)}</ul>
-        <p className="mt-3 text-xs text-slate-500">Выберите номер и проверьте службу перед набором.</p>
+        <p className="mt-3 text-xs text-slate-500">Подставьте номер для набора или запомните его и введите вручную.</p>
         {exercise.contacts.length > 4 && <div className="mt-3 flex justify-between">
           <button type="button" className={button} disabled={directoryPage===0} onClick={() => setDirectoryPage(value=>value-1)}>Предыдущие контакты</button>
           <button type="button" className={button} disabled={(directoryPage+1)*4>=exercise.contacts.length} onClick={() => setDirectoryPage(value=>value+1)}>Следующие контакты</button>
         </div>}
-      </div> : view === "history" ? <div aria-label="Полученные сообщения">
-        {historical ? <><p className="mb-2 font-semibold">{historical.service_name}</p>{!audioOnly && <MessageText text={historical.text || ""}/>}
-          {audioOnly && <p className="whitespace-pre-wrap break-words rounded border border-slate-200 bg-white p-3">Ваша запись: {exercise.notes?.[historical.report_id || ""] || "не сохранена"}</p>}
-          <button type="button" className="mt-3 underline" disabled={disabled} onClick={() => play(historical.audio, historical.id)}>Прослушать сообщение</button>
-          <div className="mt-3 flex items-center justify-between gap-2">
-            <button type="button" className={button} disabled={historyIndex===0} onClick={() => setHistoryPage(historyIndex-1)}>Предыдущее сообщение</button>
-            <span>{historyIndex+1} / {received.length}</span>
-            <button type="button" className={button} disabled={historyIndex===received.length-1} onClick={() => setHistoryPage(historyIndex+1)}>Следующее сообщение</button>
-          </div></> : <p>Принятых сообщений пока нет.</p>}
       </div> : <div className="grid grid-cols-1 gap-5 md:grid-cols-[250px_minmax(0,1fr)]">
         <div className="space-y-3">
-          <label className="block text-xs font-medium">Служба
-            <select aria-label="Служба телефона" value={selectedService} disabled={disabled}
-              onChange={event => onServiceChange(event.target.value)} className="mt-1 min-h-10 w-full rounded border border-[#b4b9bc] bg-white px-2 py-2 text-sm">
-              {[...new Set(exercise.contacts.map(contact=>contact.service_name))].map(name=><option key={name}>{name}</option>)}
-            </select>
-          </label>
           <label className="block text-xs font-medium">Номер телефона
             <input aria-label="Номер учебного телефона" placeholder="Введите номер" value={number} maxLength={24} disabled={disabled}
-              onChange={event=>setNumber(event.target.value)} onKeyDown={event=>{if(event.key==="Enter" && number.trim() && !disabled) void call({operation:"dial",number:number.trim(),service_name:selectedService})}}
+              onChange={event=>setNumber(event.target.value)} onKeyDown={event=>{if(event.key==="Enter") void dial()}}
               className="mt-1 min-h-12 w-full rounded border border-[#b4b9bc] bg-white px-3 py-2 font-mono text-2xl tracking-wider"/>
           </label>
           <button type="button" disabled={disabled || !number.trim()} className="flex min-h-10 w-full items-center justify-center gap-2 rounded bg-green-700 px-4 py-2 font-semibold text-white disabled:opacity-50"
-            onClick={()=>void call({operation:"dial",number:number.trim(),service_name:selectedService})}><Phone size={16}/>Набрать</button>
-          <p className="text-xs leading-relaxed text-slate-500">Условные номера — в справочнике. После доклада сохраните запись и отметьте этап в нижнем блоке службы.</p>
+            onClick={dial}><Phone size={16}/>Набрать</button>
+          <p className="text-xs leading-relaxed text-slate-500">Найдите номер службы в справочнике и наберите его. После доклада сохраните запись и отметьте этап в нижнем блоке службы.</p>
         </div>
         <div className="min-w-0 space-y-3 border-t border-slate-200 pt-4 md:border-t-0 md:border-l md:pt-0 md:pl-5">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <div><h3 className="font-semibold">{hasReport ? "Принятый доклад" : sequential && outgoing ? "Доклад о выезде" : "Телефонограмма"}</h3>
-              <p className="text-xs text-slate-500">{currentService}{currentContact && ` · ${currentContact.number}`}</p></div>
+              <p className="text-xs text-slate-500">{hasReport || outgoing ? `${currentService}${currentContact ? ` · ${currentContact.number}` : ""}` : "Сначала наберите номер службы"}</p></div>
             {(hasReport || outgoing) && <button type="button" disabled={disabled} className={button}
               onClick={()=>play(hasReport ? incoming?.audio : outgoing?.audio, hasReport ? lastAnswered?.id : outgoing?.call_id)}>
               {hasReport || sequential ? "Прослушать доклад" : "Прослушать ответ"}</button>}

@@ -12,15 +12,18 @@ const flush = async () => act(async () => {for(let i=0;i<10;i++) await Promise.r
 beforeEach(() => {localStorage.setItem("token","isolated-ui-token")})
 afterEach(() => {cleanup(); localStorage.clear(); vi.unstubAllGlobals()})
 
-it("dials the chosen number without silently switching the selected service", () => {
+it("determines the service from the dialed directory number without a service selector", async () => {
   const command = vi.fn().mockResolvedValue(true), change = vi.fn()
   render(<DDSTrainingPhone exercise={exercise()} selectedService="Аварийная служба" onServiceChange={change} disabled={false} command={command}/>)
   fireEvent.click(screen.getByRole("button",{name:"☎ Телефон"}))
   fireEvent.click(screen.getByRole("button",{name:"Справочник"}))
   fireEvent.click(screen.getByRole("button",{name:"7001"}))
   fireEvent.click(screen.getByRole("button",{name:"Набрать"}))
-  expect(command).toHaveBeenCalledWith({operation:"dial", number:"7001", service_name:"Аварийная служба"})
-  expect(change).not.toHaveBeenCalled()
+  await flush()
+  expect(command).toHaveBeenCalledWith({operation:"dial", number:"7001", service_name:"Скорая помощь"})
+  expect(change).toHaveBeenCalledWith("Скорая помощь")
+  expect(screen.queryByRole("combobox")).toBeNull()
+  expect(screen.queryByRole("button",{name:"Сообщения"})).toBeNull()
 })
 
 it("answers explicitly and restores the received message without progressing it", () => {
@@ -150,7 +153,7 @@ it("keeps grading out of the workspace and records the phone call in a single fo
   expect(screen.getByText("Сохр. 19.10.2026 в 02:00:00")).toBeTruthy()
   fireEvent.click(screen.getByRole("button",{name:"☎ Телефон"}))
   expect(screen.getAllByLabelText("Кто принял")).toHaveLength(1)
-  expect(screen.getAllByRole("combobox")).toHaveLength(1)
+  expect(screen.queryByRole("combobox")).toBeNull()
   fireEvent.change(screen.getByLabelText("Номер учебного телефона"),{target:{value:"7001"}})
   expect(screen.getByLabelText("АОН заявителя")).toHaveTextContent("+7 900 111-22-33")
   expect(screen.getByLabelText("Предоставленный номер заявителя")).toHaveTextContent("+7 900 444-55-66")
@@ -168,16 +171,20 @@ it("keeps grading out of the workspace and records the phone call in a single fo
   expect(screen.getByRole("button",{name:"Сохранено"})).toBeDisabled()
 })
 
-it("reviews one received report at a time and never accepts or advances it during replay", () => {
+it("offers replay of the current report without the removed message history", async () => {
+  const played = vi.fn().mockResolvedValue(undefined)
+  vi.stubGlobal("Audio", class {pause() {}; play = played})
   const command = vi.fn(), ex = exercise()
-  ex.events = [1,2,3].map(n => ({id:`e${n}`,kind:"answered",at:"2026-10-19T00:00:00Z",card_id:"c",service_name:"Аварийная служба",text:`Доклад ${n}`}))
+  ex.incoming = {id:"r3",contact,ringing:false,text:"Доклад 3",audio:"/api/dds/audio/dds_ivanov_2.wav"}
+  ex.events = [1,2,3].map(n => ({id:`e${n}`,kind:"answered",report_id:`r${n}`,at:"2026-10-19T00:00:00Z",card_id:"c",service_name:"Аварийная служба",text:`Доклад ${n}`}))
   render(<DDSTrainingPhone exercise={ex} selectedService="Аварийная служба" onServiceChange={vi.fn()} disabled={false} command={command}/>)
   fireEvent.click(screen.getByRole("button",{name:"☎ Телефон"}))
-  fireEvent.click(screen.getByRole("button",{name:"Сообщения"}))
   expect(screen.getByText("Доклад 3")).toBeTruthy()
   expect(screen.queryByText("Доклад 1")).toBeNull()
-  fireEvent.click(screen.getByRole("button",{name:"Предыдущее сообщение"}))
-  expect(screen.getByText("Доклад 2")).toBeTruthy()
+  expect(screen.queryByRole("button",{name:"Сообщения"})).toBeNull()
+  expect(screen.queryByRole("button",{name:"Предыдущее сообщение"})).toBeNull()
+  fireEvent.click(screen.getByRole("button",{name:"Прослушать доклад"})); await flush()
+  expect(played).toHaveBeenCalledOnce()
   expect(command).not.toHaveBeenCalled()
 })
 
@@ -256,8 +263,11 @@ it("preserves the report draft during polling, saves it and restores only the tr
   expect(command).toHaveBeenCalledExactlyOnceWith({operation:"note",report_id:"r1",note:"Кто доложил: Иванов\nНомер бригады: 1\nСодержание доклада: Бригада выехала."})
   view.rerender(<DDSTrainingPhone exercise={{...ex,notes:{r1:"Кто доложил: Иванов\nНомер бригады: 1\nСодержание доклада: Бригада выехала."}}} {...props}/> )
   expect(screen.getByRole("button",{name:"Доклад записан"})).toBeDisabled()
-  fireEvent.click(screen.getByRole("button",{name:"Сообщения"}))
-  expect(screen.getByText(/Ваша запись:/)).toHaveTextContent("Иванов Номер бригады: 1 Содержание доклада: Бригада выехала.")
+  fireEvent.click(screen.getByRole("button",{name:"Свернуть телефон"}))
+  fireEvent.click(screen.getByRole("button",{name:"☎ Телефон"}))
+  expect(screen.getByLabelText("Кто доложил")).toHaveValue("Иванов")
+  expect(screen.getByLabelText("Номер бригады в докладе")).toHaveValue("1")
+  expect(screen.getByLabelText("Содержание доклада")).toHaveValue("Бригада выехала.")
 })
 
 it("lets the owning teacher compare a trainee report note with the recording transcript", async () => {

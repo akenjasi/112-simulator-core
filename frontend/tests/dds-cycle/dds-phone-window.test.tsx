@@ -173,3 +173,40 @@ it("keeps the visible incoming notice usable when sound is unavailable", async (
   fireEvent.click(screen.getByRole("button",{name:"Принять звонок"})); await flush()
   expect(controls.command).toHaveBeenCalledExactlyOnceWith({operation:"answer",report_id:"arrival"})
 })
+
+it("dials a manually entered number, switches only on connection and plays the matching service report", async () => {
+  const other = {...contact,id:"b",number:"7001",service_name:"04 Газ"}
+  const played = vi.fn().mockResolvedValue(undefined), paths: string[] = []
+  vi.stubGlobal("Audio", class {constructor(path: string){paths.push(path)} pause() {}; play = played})
+  const command = vi.fn()
+  function Harness() {
+    const [service,setService] = useState(contact.service_name)
+    const [ex,setExercise] = useState<DDSExercise>({...base(),contacts:[contact,other]})
+    return <DDSTrainingPhone exercise={ex} selectedService={service} onServiceChange={setService} disabled={false} command={async payload => {
+      command(payload)
+      if (payload.operation === "dial") setExercise({...ex,
+        incoming:{id:"gas-departure",contact:other,ringing:false,direction:"outgoing",text:null,audio:"/api/dds/audio/dds_petrov_cycle2_0.wav"},
+        outgoing:{[other.service_name]:{contact_id:other.id,call_id:"gas-call",report_id:"gas-departure",text:null,audio:"/api/dds/audio/dds_petrov_cycle2_0.wav"}},
+        events:[{id:"gas-call",kind:"dialed",service_name:other.service_name,report_id:"gas-departure",at:"now",card_id:"card"}]})
+      return true
+    }}/>
+  }
+  render(<Harness/>); open()
+  expect(screen.queryByRole("combobox")).toBeNull()
+  fireEvent.change(screen.getByLabelText("Номер учебного телефона"),{target:{value:"7001"}})
+  fireEvent.keyDown(screen.getByLabelText("Номер учебного телефона"),{key:"Enter"}); await flush()
+  expect(command).toHaveBeenCalledExactlyOnceWith({operation:"dial",number:"7001",service_name:"04 Газ"})
+  expect(screen.getByText("04 Газ · 7001")).toBeTruthy()
+  expect(screen.getByLabelText("Номер учебного телефона")).toHaveValue("7001")
+  expect(paths).toEqual(["/api/dds/audio/dds_petrov_cycle2_0.wav"])
+  expect(played).toHaveBeenCalledOnce()
+})
+
+it("sends unknown numbers for server assessment and preserves the previous context on failed connection", async () => {
+  const controls = props(); controls.command.mockResolvedValue(false)
+  render(<DDSTrainingPhone exercise={base()} {...controls}/>); open()
+  fireEvent.change(screen.getByLabelText("Номер учебного телефона"),{target:{value:"9999"}})
+  fireEvent.click(screen.getByRole("button",{name:"Набрать"})); await flush()
+  expect(controls.command).toHaveBeenCalledExactlyOnceWith({operation:"dial",number:"9999",service_name:contact.service_name})
+  expect(controls.onServiceChange).not.toHaveBeenCalled()
+})
