@@ -2,7 +2,8 @@
 import React from 'react'
 import {act,cleanup,fireEvent,render,screen,waitFor} from '@testing-library/react'
 import {afterEach,beforeEach,describe,expect,it,vi} from 'vitest'
-import LivePage from '@/app/teacher/sessions/live/page'
+import LivePage from '@/components/teacher/live-dashboard'
+import LiveRoute from '@/app/teacher/sessions/live/page'
 vi.mock('next/link',()=>({default:({children,...props}:any)=><a {...props}>{children}</a>}))
 const reply=(body:unknown,status=200)=>new Response(JSON.stringify(body),{status,headers:{'Content-Type':'application/json'}})
 const lesson=(id:string,name='Участник',cadetStatus='COMPLETED')=>({id,status:'ACTIVE',target_role:'DISPATCHER_DDS',group_name:'Группа '+id,total_cadets:1,total_in_progress:cadetStatus==='IN_PROGRESS'?1:0,total_passed:0,total_failed:0,overall_progress:cadetStatus==='COMPLETED'?100:0,teacher_notes:'',students:[{cadet_id:'c-'+id,cadet_name:name,session_id:'s-'+id,status:cadetStatus,current_ticket:'Назначенный билет',in_progress:cadetStatus==='IN_PROGRESS'?1:0,passed:0,failed:0,progress:cadetStatus==='COMPLETED'?100:0,score:null,tickets:[{ticket_id:'t-'+id,title:'Назначенный билет',status:cadetStatus==='COMPLETED'?'ungraded':cadetStatus==='INCOMPLETE'?'incomplete':'in_progress',score:null,errors:[],errors_count:0}]}]})
@@ -10,6 +11,14 @@ let network:ReturnType<typeof vi.fn>
 beforeEach(()=>{window.history.replaceState({},'','/');localStorage.clear();localStorage.setItem('token','a06-live-token');network=vi.fn();vi.stubGlobal('fetch',network)})
 afterEach(()=>{cleanup();vi.unstubAllGlobals();localStorage.clear()})
 describe('Teacher DDS monitor',()=>{
+ it('opens the real route using the lesson ID from its URL without injected props',async()=>{
+  window.history.replaceState({},'', '/teacher/sessions/live?id=lesson-url&source=lesson&status=ACTIVE')
+  network.mockResolvedValue(reply(lesson('lesson-url','Участник из ссылки')))
+  render(<LiveRoute/>);
+  await screen.findByText('Участник из ссылки')
+  expect(network.mock.calls.some(([url])=>String(url)==='/api/v1/lessons/lesson-url')).toBe(true)
+  expect(network.mock.calls.some(([url])=>String(url).includes('/api/v1/sessions/'))).toBe(false)
+ })
  it('404 stays an error and does not become a mock session summary',async()=>{
   network.mockImplementation((url:string)=>Promise.resolve(String(url).includes('/api/v1/lessons/')?reply({},404):reply({status:'ACTIVE',cadets:[{cadet_id:'fake',cadet_name:'MOCK_PERSON_MUST_NOT_APPEAR',score:92,passed:1,failed:0,in_progress:0,progress:100}]})))
   render(<LivePage sessionId="missing-lesson"/>);

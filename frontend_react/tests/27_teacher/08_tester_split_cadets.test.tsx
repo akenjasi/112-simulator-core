@@ -1,7 +1,7 @@
 import React from 'react'
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import AnalyticsPage from '@/app/teacher/analytics/page'
+import AnalyticsPage from '@/components/teacher/analytics-page'
 
 const reply = (body: unknown, status = 200) => ({
   ok: status < 400,

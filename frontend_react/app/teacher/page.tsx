@@ -158,5 +158,3 @@ export default function TeacherMainPage() {
     </div>
   )
 }
-
-export { TeacherMainPage }

@@ -1,7 +1,7 @@
 import React from "react"
 import {cleanup, fireEvent, render, screen, waitFor} from "@testing-library/react"
 import {afterEach, beforeEach, expect, it, vi} from "vitest"
-import AnalyticsPage from "@/app/teacher/analytics/page"
+import AnalyticsPage from "@/components/teacher/analytics-page"
 
 const lessons = [
   {id: "past-001", group_id: "a", group_name: "Группа А", status: "COMPLETED", students: [{cadet_id: "past", cadet_name: "Прошедший", score: 55}]},

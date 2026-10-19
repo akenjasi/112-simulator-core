@@ -2,7 +2,7 @@
 import React from 'react'
 import {cleanup,fireEvent,render,screen} from '@testing-library/react'
 import {afterEach,beforeEach,expect,it,vi} from 'vitest'
-import AnalyticsPage from '@/app/teacher/analytics/page'
+import AnalyticsPage from '@/components/teacher/analytics-page'
 vi.mock('next/link',()=>({default:({children,...props}:any)=><a {...props}>{children}</a>}))
 vi.mock('@/components/teacher/dds-lesson-report',()=>({DDSLessonReport:()=> <div>Отчёт выбранного занятия</div>}))
 const reply=(body:unknown)=>new Response(JSON.stringify(body),{status:200,headers:{'Content-Type':'application/json'}})

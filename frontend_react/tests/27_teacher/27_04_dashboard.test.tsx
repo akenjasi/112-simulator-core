@@ -1,7 +1,7 @@
 import React from 'react';
 import { render, screen, waitFor, fireEvent, act } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import LiveDashboardPage from '@/app/teacher/sessions/live/page';
+import LiveDashboardPage from '@/components/teacher/live-dashboard';
 
 describe('27.4: Live Dashboard', () => {
   const mockStats = {
