@@ -1,5 +1,7 @@
 "use client"
 
+import {DDSExerciseEditor} from "@/components/teacher/dds-exercise-editor"
+
 import { apiFetch as fetch } from "@/lib/api-fetch"
 
 import React, { useState, useEffect, useCallback, useRef } from "react"
@@ -1845,6 +1847,7 @@ export default function TicketsPage() {
             className="bg-background border rounded-xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-y-auto p-6 space-y-6"
             onClick={(e) => e.stopPropagation()}
           >
+            <DDSExerciseEditor key={selectedTicket.ticket_id || selectedTicket.id} ticketId={selectedTicket.ticket_id || selectedTicket.id || ""}/>
             {/* Modal Header */}
             <div className="flex items-start justify-between border-b pb-4">
               <div>

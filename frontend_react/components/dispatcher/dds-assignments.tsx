@@ -119,7 +119,7 @@ export function DDSAssignments() {
             const scoreLabel =
               item.score !== null && item.score !== undefined
                 ? `${item.score}`
-                : "Нет оценки"
+                : item.exercise ? "Протокол критериев" : "Нет оценки"
             const consoleUrl = `/dds?session_id=${encodeURIComponent(
               item.session_id
             )}&ticket_id=${encodeURIComponent(item.ticket_id || "")}`

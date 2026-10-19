@@ -250,7 +250,10 @@ def build_session_state_dict(
         score = get_session_score([ev for ev in evals if ev.card_id == card_id],
                                   [tr for tr in trs if tr.ticket_id == session.ticket_id])
 
+    from backend.core.dds_exercise import projection
+    training = projection(dds_data, editable)
     return {
+        **training,
         "session_id": session.session_id,
         "lesson_id": lesson.assignment_id,
         "ticket_id": session.ticket_id or lesson.scenario_id,
@@ -264,7 +267,7 @@ def build_session_state_dict(
         "incoming_card": incoming_card,
         "actions": actions,
         "allowed_service_statuses": {
-            name: allowed_statuses(current) if editable else [] for name, current in service_statuses.items()
+            name: (["Принята", "Не принята", "Начало реагирования", "Прибытие", "Проведение работ", "Работы завершены", "Отказ от выполнения работ"] if dds_data.get("exercise") and current not in ("Работы завершены", "Отказ от выполнения работ", "Не принята") else [] if dds_data.get("exercise") and current == "Не принята" else allowed_statuses(current)) if editable else [] for name, current in service_statuses.items()
         },
         "submitted_at": submitted_at,
         "score": score,
@@ -356,6 +359,15 @@ async def apply_dds_action(
         raise HTTPException(409, detail={"code": "DDS_CARD_ID_REQUIRED"})
     target_card = payload.card_id or dds_data.get("card_id")
 
+    if dds_data.get("exercise") or any(item.get("exercise") for item in archived_cards(dds_data)):
+        from backend.core.dds_phone import saved_request, attempt_result
+        wire = payload.model_dump(exclude_none=True)
+        saved = saved_request(dds_data, wire)
+        if saved:
+            result = await get_dds_session_state(session_id, current_user, db)
+            result["last_attempt"] = attempt_result(saved)
+            return result
+
     # 4. Check for idempotent retry or request_id conflict
     all_actions = [(dds_data.get("card_id"), a) for a in existing_actions]
     all_actions.extend((item["card_id"], action) for item in archived_cards(dds_data)
@@ -420,6 +432,16 @@ async def apply_dds_action(
         )
 
     service_statuses = current_service_statuses(dds_data.get("incoming_card", {}), assigned_svcs, existing_actions)
+    if dds_data.get("exercise"):
+        from backend.core.dds_exercise import action_issue, now_utc
+        from backend.core.dds_phone import record
+        reason = action_issue(dds_data, payload, service_statuses.get(payload.service_name, ""))
+        if reason:
+            from backend.core.dds_queue import store_state
+            record(dds_data, payload.model_dump(exclude_none=True), now_utc().isoformat(), reason)
+            store_state(session, dds_data)
+            await db.commit()
+            return await get_dds_session_state(session_id, current_user, db)
     error = action_error(service_statuses.get(payload.service_name, ""), payload)
     if error:
         raise HTTPException(status_code=error[0], detail={"code": error[1]})
@@ -428,7 +450,8 @@ async def apply_dds_action(
         raise HTTPException(409, detail={"code": "DDS_DISPATCH_REQUIRED"})
 
     # 7. Record action with server-generated actor_id and timestamp into dynamic_state.dds.actions
-    server_now = datetime.now(timezone.utc).isoformat()
+    from backend.core.dds_exercise import now_utc
+    server_now = now_utc().isoformat()
     action_record = {
         "request_id": payload.request_id,
         "kind": payload.kind,
@@ -450,6 +473,11 @@ async def apply_dds_action(
         action_record["summary"] = payload.summary
 
     existing_actions.append(action_record)
+    if dds_data.get("exercise"):
+        from backend.core.dds_exercise import accepted_action
+        from backend.core.dds_phone import record
+        record(dds_data, payload.model_dump(exclude_none=True), server_now)
+        accepted_action(dds_data, payload, server_now)
     dds_data["actions"] = existing_actions
 
     state_copy = deepcopy(session.dynamic_state or {})
@@ -550,6 +578,8 @@ async def get_dds_session_state(
     active_card = await db.get(IncidentCard, current_id) if selected_id != current_id else card
     result = build_session_state_dict(session, lesson, active_card, evals, trs)
     if archived:
+        from backend.core.dds_exercise import projection
+        result.update(projection(archived, False))
         # Build a read projection, never replace or modify the active ORM session state.
         result.update(card_id=archived["card_id"], ticket_id=archived["ticket_id"],
                       incoming_card=deepcopy(archived["incoming_card"]), actions=deepcopy(archived["actions"]),

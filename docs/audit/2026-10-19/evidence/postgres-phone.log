@@ -1,0 +1,21 @@
+Model file not found: /home/orborus/Desktop/hakaton/112-simulator-core/models/gigaam-v3-ctc-Q8_0.gguf
+Загрузка модели на cpu...
+Готово!
+PASS test_complete_two_services_with_evidence_and_corrected_errors {}
+PASS test_phone_ownership_idempotency_unknown_and_wrong_contact {}
+PASS test_plan_validation {'change': 'duplicate'}
+PASS test_plan_validation {'change': 'missing_stage'}
+PASS test_plan_validation {'change': 'empty_result'}
+PASS test_plan_validation {'change': 'external_audio'}
+PASS test_plan_validation {'change': 'limit'}
+PASS test_confirmation_boundary_is_server_time {'seconds': 30, 'expected': 'completed'}
+PASS test_confirmation_boundary_is_server_time {'seconds': 30.001, 'expected': 'not_completed'}
+PASS test_rejected_action_retry_after_another_action_keeps_original_outcome {}
+PASS test_two_tabs_answer_once_restore_and_early_finish {}
+PASS test_configuration_is_snapshot_and_legacy_criteria_are_ungraded {}
+PASS test_criteria_reset_between_cards_and_archive_keeps_protocol {}
+PASS test_teacher_report_contains_criteria_without_exposing_future_plan {}
+PASS test_refusal_requires_reason_is_saved_and_does_not_invent_successful_reports {}
+Network error communicating with LLM service for lesson_id=lesson_test_101: ConnectError
+PASS test_criteria_report_does_not_need_numeric_scores_and_llm_outage_is_explicit {}
+PostgreSQL 15: 16 phone acceptance cases passed

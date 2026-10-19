@@ -2,9 +2,9 @@
 
 import React, { useState, useEffect, useCallback, useRef } from "react"
 import Link from "next/link"
-import {fetchDDSSessionState, fetchDDSCard, postDDSAction, finishDDSSession, completeDDSCard,
+import {fetchDDSSessionState, fetchDDSCard, postDDSAction, finishDDSSession, completeDDSCard, postDDSPhone,
   DDSRequestError, ddsBlockerMessage, getStoredToken,
-  type DDSSessionState, type DDSActionPayload, type DDSFinishPayload} from "@/lib/dds-cycle"
+  type DDSPhonePayload, type DDSSessionState, type DDSActionPayload, type DDSFinishPayload} from "@/lib/dds-cycle"
 import { TopBar } from "@/components/dispatcher/top-bar"
 import { CallerPanel } from "@/components/dispatcher/caller-panel"
 import { IncidentPanel } from "@/components/dispatcher/incident-panel"
@@ -13,8 +13,11 @@ import { getDDSServiceResponse } from "@/lib/dds-service-response"
 import { DispatchPanel } from "@/components/dispatcher/dispatch-panel"
 import { getDDSWorkingCard } from "@/lib/dds-working-card"
 
+import {DDSTrainingPhone} from "./dds-training-phone"
+
 interface Props { sessionId: string; ticketId?: string; cardId?: string }
 type PendingMutation =
+  | { type: "phone"; payload: DDSPhonePayload }
   | { type: "action"; payload: DDSActionPayload }
   | { type: "finish"; payload: DDSFinishPayload }
   | { type: "complete"; cardId: string; payload: {request_id: string} }
@@ -90,18 +93,41 @@ export function DDSAssignedConsole({sessionId, ticketId, cardId}: Props) {
   const isReadOnly = isCompleted || sessionState?.readonly === true
   const hasPending = pendingMutation !== null
 
+  useEffect(() => {
+    if (!sessionState?.exercise || isReadOnly) return
+    let alive = true
+    let polling = false
+    const timer = setInterval(async () => {
+      if (polling || isSavingRef.current || pendingRef.current || document.visibilityState === "hidden") return
+      polling = true
+      const epoch = epochRef.current
+      try {
+        const state = cardId ? await fetchDDSCard(sessionId, cardId) : await fetchDDSSessionState(sessionId)
+        if (alive && epoch === epochRef.current && !isSavingRef.current) acceptState(state)
+      } catch { /* Explicit actions and reload retain error reporting; polling never discards local drafts. */ }
+      finally {polling = false}
+    }, 1000)
+    return () => {alive = false; clearInterval(timer)}
+  }, [sessionId, cardId, !!sessionState?.exercise, isReadOnly, acceptState])
+
   const sendMutation = async (mutation: PendingMutation): Promise<boolean> => {
     if (isSavingRef.current || !sessionState) return false
     isSavingRef.current = true; setIsSaving(true); setActionError(null)
-    const epoch = epochRef.current
+    const epoch = ++epochRef.current
+    getControllerRef.current?.abort()
     postControllerRef.current?.abort()
     const controller = new AbortController(); postControllerRef.current = controller
     try {
-      const updated = mutation.type === "action" ? await postDDSAction(sessionId, mutation.payload, controller.signal)
+      const updated = mutation.type === "phone" ? await postDDSPhone(sessionId, mutation.payload, controller.signal)
+        : mutation.type === "action" ? await postDDSAction(sessionId, mutation.payload, controller.signal)
         : mutation.type === "complete" ? await completeDDSCard(sessionId, mutation.cardId, mutation.payload, controller.signal)
         : await finishDDSSession(sessionId, mutation.payload, controller.signal)
       if (epochRef.current !== epoch) return false
       acceptState(updated); setActionError(null); setPendingMutation(null); pendingRef.current = null
+      const requestId = mutation.type === "finish" ? null : mutation.payload.request_id
+      if (updated.last_attempt?.request_id === requestId && !updated.last_attempt.accepted) {
+        setActionError(updated.last_attempt.message); return false
+      }
       if (mutation.type === "action" && mutation.payload.kind === "dispatch") {setWhoAccepted(""); setSummary("")}
       return true
     } catch (error: any) {
@@ -130,7 +156,7 @@ export function DDSAssignedConsole({sessionId, ticketId, cardId}: Props) {
   }
   const handleFinish = () => {if (!blocked()) void sendMutation({type: "finish", payload: {}})}
   const handleComplete = () => {
-    if (!blocked() && sessionState?.can_complete) void sendMutation({type: "complete", cardId: sessionState.card_id, payload: {request_id: crypto.randomUUID()}})
+    if (!blocked() && (sessionState?.can_complete || sessionState?.exercise)) void sendMutation({type: "complete", cardId: sessionState.card_id, payload: {request_id: crypto.randomUUID()}})
   }
   const handleRetry = () => {if (!isSavingRef.current && pendingRef.current) void sendMutation(pendingRef.current)}
   const handleRefresh = () => {
@@ -189,7 +215,7 @@ export function DDSAssignedConsole({sessionId, ticketId, cardId}: Props) {
   const displayedIndex = historyIndex >= 0 ? historyIndex : sessionState.current_index ?? 0
   const completionNotice = sessionState.readonly && !isCompleted ? "Карточка завершена: просмотр истории" : isCompleted
     ? sessionState.submitted_at
-      ? `Выполнено. ${sessionState.score == null ? "Нет оценки" : `Оценка: ${sessionState.score}`}`
+      ? `Выполнено. ${sessionState.score == null ? (sessionState.exercise ? "Результаты сохранены" : "Нет оценки") : `Оценка: ${sessionState.score}`}`
       : "Занятие завершено. Выполнение не завершено. Нет оценки"
     : null
 
@@ -199,7 +225,7 @@ export function DDSAssignedConsole({sessionId, ticketId, cardId}: Props) {
         <div className="flex items-center gap-3">
           <span className="font-bold text-xs 2xl:text-sm text-[#4ade80] flex items-center gap-1.5">
             <span className="h-2.5 w-2.5 rounded-full bg-[#4ade80]" />
-            {isCompleted ? "Смена завершена (ДДС-112)" : "Смена активна (ДДС-112)"}
+            {sessionState.exercise ? (isCompleted ? "Занятие завершено · ДДС" : "Учебное занятие · ДДС") : (isCompleted ? "Смена завершена (ДДС-112)" : "Смена активна (ДДС-112)")}
           </span>
           <div aria-label={`Норматив принятия: ${responseService}`} className={`flex items-center gap-1.5 px-2 py-0.5 rounded font-mono font-bold text-xs border ml-2 ${response.overdue ? "bg-red-600 text-white border-red-500" : "bg-emerald-900/40 text-emerald-400 border-emerald-500/50"}`}
             title={`${responseService}: ${response.responded ? "Первичное решение сохранено; время дальнейших работ не относится к нормативу принятия" : remaining === null ? "Время начала не получено от сервера" : "30 секунд от получения карточки до решения этой службы"}`}>
@@ -209,10 +235,10 @@ export function DDSAssignedConsole({sessionId, ticketId, cardId}: Props) {
         </div>
         <div className="flex items-center gap-2">
           <span className="text-xs">Карточка {displayedIndex + 1} из {sessionState.total_cards ?? 1} · Закрыто: {sessionState.completed_cards ?? 0}</span>
-          <Link href="/student/lobby" className="px-3 py-1.5 text-xs bg-slate-700 hover:bg-slate-600 text-white rounded font-medium">← В Лобби</Link>
+          <Link href="/student/profile" className="px-3 py-1.5 text-xs bg-slate-700 hover:bg-slate-600 text-white rounded font-medium">← В личный кабинет</Link>
           <button type="button" onClick={handleFinish} disabled={mutationDisabled}
             className="px-4 py-1.5 text-xs 2xl:text-sm bg-red-600 hover:bg-red-700 text-white rounded font-bold transition shadow disabled:opacity-50">
-            Завершить смену
+            {sessionState.exercise ? "Завершить занятие досрочно" : "Завершить смену"}
           </button>
         </div>
       </div>
@@ -225,20 +251,25 @@ export function DDSAssignedConsole({sessionId, ticketId, cardId}: Props) {
       <TopBar data={card} />
       <div className="flex flex-1 min-h-0 gap-3 px-2 py-1 overflow-hidden" data-testid="dds-reference-columns">
         <CallerPanel data={card} />
-        <div className="flex flex-1 min-w-0 flex-col gap-2 overflow-y-auto pr-2 pb-2">
+        <div className="flex flex-1 min-w-0 min-h-0 flex-col gap-2 overflow-hidden pr-2 pb-2">
           <IncidentPanel data={card} />
-          <DispatchPanel
-            key={`${sessionId}-${sessionState.card_id}`}
-            isCardAccepted={acceptedServices.length > 0}
-            acceptedServices={acceptedServices}
-            disabled={mutationDisabled}
-            whoAccepted={whoAccepted} setWhoAccepted={setWhoAccepted}
-            summary={summary} setSummary={setSummary}
-            services={workingCard.services}
-            selectedServiceName={selectedService} onServiceChange={setSelectedService}
-            calledServices={Object.keys(dispatches)} savedDispatches={dispatches}
-            onServiceSaved={handleSaveDispatch}
-          />
+          {sessionState.exercise ? <DDSTrainingPhone key={`phone-${sessionState.card_id}`} exercise={sessionState.exercise}
+            selectedService={selectedService} onServiceChange={setSelectedService} disabled={mutationDisabled}
+            command={payload => sendMutation({type: "phone", payload: {...payload, request_id: crypto.randomUUID(), card_id: sessionState.card_id}})}
+            record={{accepted: acceptedServices.includes(selectedService), whoAccepted, setWhoAccepted, summary, setSummary,
+              saved: dispatches[selectedService], onSave: () => handleSaveDispatch(selectedService, whoAccepted, summary)}}/>
+            : <DispatchPanel
+              key={`${sessionId}-${sessionState.card_id}`}
+              isCardAccepted={acceptedServices.length > 0}
+              acceptedServices={acceptedServices}
+              disabled={mutationDisabled}
+              whoAccepted={whoAccepted} setWhoAccepted={setWhoAccepted}
+              summary={summary} setSummary={setSummary}
+              services={workingCard.services}
+              selectedServiceName={selectedService} onServiceChange={setSelectedService}
+              calledServices={Object.keys(dispatches)} savedDispatches={dispatches}
+              onServiceSaved={handleSaveDispatch}
+            />}
         </div>
       </div>
       <div className="shrink-0 z-50 w-full">
@@ -247,7 +278,7 @@ export function DDSAssignedConsole({sessionId, ticketId, cardId}: Props) {
           closeHref="/dds/journal"
           disabledReason={isCompleted ? "Занятие завершено: доступен только просмотр" : "Дождитесь сохранения действия или повторите неудавшийся запрос"}
           onStatusChange={(serviceName, status, comment, orderNumber) => handleSaveStatus({serviceName, status, comment, orderNumber})}
-          completionDisabled={!sessionState.can_complete}
+          completionDisabled={!sessionState.exercise && !sessionState.can_complete}
           completionReason={(sessionState.completion_blockers || []).map(ddsBlockerMessage).join("; ") || undefined}
           onNextCard={handleComplete}/>
       </div>

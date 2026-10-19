@@ -1,0 +1,420 @@
+...................FFFF.F....................FFFF....F.................. [ 11%]
+................................F......FF..F..FF.FF...FF...FF...F....... [ 23%]
+F......FFFFFF...........F.....FF.FFFF......FFFF......................... [ 34%]
+....................................................FF................F. [ 46%]
+..........F............................................................. [ 58%]
+........................................................................ [ 69%]
+.....................FFFF......................F...FFF.................. [ 81%]
+........................................................................ [ 92%]
+.......................................FF...                             [100%]
+==================================== ERRORS ====================================
+__________________ ERROR collecting tests/test_30_tts_fix.py ___________________
+ImportError while importing test module '/home/orborus/Desktop/hakaton/112-simulator-core/tests/test_30_tts_fix.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/usr/lib64/python3.14/importlib/__init__.py:88: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests/test_30_tts_fix.py:2: in <module>
+    from backend.core.tts_v2 import SileroTTSV2, tts_engine_v2
+E   ImportError: cannot import name 'SileroTTSV2' from 'backend.core.tts_v2' (/home/orborus/Desktop/hakaton/112-simulator-core/backend/core/tts_v2.py)
+=================================== FAILURES ===================================
+____________________________ test_get_session_state ____________________________
+tests/16_test_api_session_state.py:51: in test_get_session_state
+    assert res.status_code == 200
+E   assert 403 == 200
+E    +  where 403 = <Response [403 Forbidden]>.status_code
+_____________________________ test_session_message _____________________________
+tests/17_test_api_session_message.py:52: in test_session_message
+    assert res.status_code == 200
+E   assert 403 == 200
+E    +  where 403 = <Response [403 Forbidden]>.status_code
+___________________________ test_session_submit_card ___________________________
+tests/18_test_api_session_submit_card.py:54: in test_session_submit_card
+    assert res.status_code == 200
+E   assert 403 == 200
+E    +  where 403 = <Response [403 Forbidden]>.status_code
+______________________ test_scenario_generate_and_compile ______________________
+tests/19_test_api_scenarios_generate.py:30: in test_scenario_generate_and_compile
+    assert res.status_code == 200
+E   assert 403 == 200
+E    +  where 403 = <Response [403 Forbidden]>.status_code
+___________________________ test_session_message_ai ____________________________
+tests/21_test_api_session_message_ai.py:65: in test_session_message_ai
+    assert res.status_code == 200
+E   assert 403 == 200
+E    +  where 403 = <Response [403 Forbidden]>.status_code
+________________________ test_lesson_state_transitions _________________________
+tests/api/test_lessons_flow.py:60: in test_lesson_state_transitions
+    assert res_create.status_code == 201, f"Failed to create lesson: {res_create.text}"
+E   AssertionError: Failed to create lesson: {"detail":"Создание уроков для оператора 112 отключено администратором"}
+E   assert 403 == 201
+E    +  where 403 = <Response [403 Forbidden]>.status_code
+__________________ test_create_lesson_success_default_waiting __________________
+tests/api/test_lessons_setup.py:52: in test_create_lesson_success_default_waiting
+    assert res.status_code == 201, res.text
+E   AssertionError: {"detail":"Создание уроков для оператора 112 отключено администратором"}
+E   assert 403 == 201
+E    +  where 403 = <Response [403 Forbidden]>.status_code
+______________________ test_create_lesson_dispatcher_role ______________________
+tests/api/test_lessons_setup.py:91: in test_create_lesson_dispatcher_role
+    assert res.status_code == 201, res.text
+E   AssertionError: {"detail":"Создание занятий ДДС разрешено только преподавателю этой группы"}
+E   assert 403 == 201
+E    +  where 403 = <Response [403 Forbidden]>.status_code
+_________________ test_create_lesson_empty_categories_allowed __________________
+tests/api/test_lessons_setup.py:118: in test_create_lesson_empty_categories_allowed
+    assert res.status_code == 201, res.text
+E   AssertionError: {"detail":"Создание уроков для оператора 112 отключено администратором"}
+E   assert 403 == 201
+E    +  where 403 = <Response [403 Forbidden]>.status_code
+__________________________ test_get_lesson_and_stats ___________________________
+tests/api/test_lessons_setup.py:192: in test_get_lesson_and_stats
+    assert res.status_code == 201
+E   assert 403 == 201
+E    +  where 403 = <Response [403 Forbidden]>.status_code
+______________________ test_reset_user_password_endpoint _______________________
+tests/test_29_refactor.py:113: in test_reset_user_password_endpoint
+    assert len(new_pwd) == 5
+E   AssertionError: assert 12 == 5
+E    +  where 12 = len('EOOSMSv8CYP1')
+______________________ test_api_tickets_generate_and_get _______________________
+tests/test_30_tickets.py:129: in test_api_tickets_generate_and_get
+    assert res_post.status_code == 202
+E   assert 403 == 202
+E    +  where 403 = <Response [403 Forbidden]>.status_code
+______________ test_api_tickets_unauthenticated_and_v1_endpoints _______________
+tests/test_30_tickets.py:174: in test_api_tickets_unauthenticated_and_v1_endpoints
+    assert res_v1_gen.status_code == 202
+E   assert 401 == 202
+E    +  where 401 = <Response [401 Unauthorized]>.status_code
+_______________________ test_api_tickets_audio_endpoint ________________________
+tests/test_30_tickets.py:248: in test_api_tickets_audio_endpoint
+    assert "номер 7 9 9 9 8 8 8 7 7 6 6" in captured_texts
+E   AssertionError: assert 'номер 7 9 9 9 8 8 8 7 7 6 6' in ['Алло, слушайте... Горит склад на улице Ленина', 'Петров Петр', 'номер плюс семь, девятьсот девяносто девять, восемьсот восемьдесят восемь, семьдесят семь, шестьдесят шесть', 'улица Ленина, дом пятнадцать']
+_______________________ test_tts_phone_number_formatting _______________________
+tests/test_31_ticket_polish.py:45: in test_tts_phone_number_formatting
+    assert clean == "7 9 4 4 3 7 5 9 2 5 5"
+E   AssertionError: assert 'плюс семь, д...ятьдесят пять' == '7 9 4 4 3 7 5 9 2 5 5'
+E     
+E     - 7 9 4 4 3 7 5 9 2 5 5
+E     + плюс семь, девятьсот сорок четыре, триста семьдесят пять, девяносто два, пятьдесят пять
+_________________________ test_ticket_delete_endpoint __________________________
+tests/test_31_ticket_polish.py:79: in test_ticket_delete_endpoint
+    assert res.status_code == 200
+E   assert 403 == 200
+E    +  where 403 = <Response [403 Forbidden]>.status_code
+____________________________ test_address_expansion ____________________________
+tests/test_32_ticket_fixes.py:46: in test_address_expansion
+    assert expand_address_for_tts("ул. Ленина, д. 5") == "улица Ленина, дом 5"
+E   AssertionError: assert 'улица Ленина, дом пять' == 'улица Ленина, дом 5'
+E     
+E     - улица Ленина, дом 5
+E     ?                   ^
+E     + улица Ленина, дом пять
+E     ?                   ^^^^
+____________________________ test_tts_phone_spacing ____________________________
+tests/test_32_ticket_fixes.py:65: in test_tts_phone_spacing
+    assert format_phone_for_tts("+79443759255") == "7 9 4 4 3 7 5 9 2 5 5"
+E   AssertionError: assert 'плюс семь, д...ятьдесят пять' == '7 9 4 4 3 7 5 9 2 5 5'
+E     
+E     - 7 9 4 4 3 7 5 9 2 5 5
+E     + плюс семь, девятьсот сорок четыре, триста семьдесят пять, девяносто два, пятьдесят пять
+__________________________ test_tts_only_digits_crash __________________________
+tests/test_33_tts_crash.py:15: in test_tts_only_digits_crash
+    audio = tts_engine_v2.synthesize("номер 7 9 1 7 4 5 4 1 9 9 7")
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+backend/core/tts_v2.py:140: in synthesize
+    subprocess.run(cmd_tts, input=text_clean, text=True, check=True, env=env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+/usr/lib64/python3.14/subprocess.py:577: in run
+    raise CalledProcessError(retcode, process.args,
+E   subprocess.CalledProcessError: Command '['/home/orborus/Desktop/hakaton/112-simulator-core/backend/core/qwen_tts/qwen-tts', '--model', '/home/orborus/Desktop/hakaton/112-simulator-core/backend/core/qwen_tts/models/qwen-talker-0.6b-base-Q4_K_M.gguf', '--codec', '/home/orborus/Desktop/hakaton/112-simulator-core/backend/core/qwen_tts/models/qwen-tokenizer-12hz-Q4_K_M.gguf', '--lang', 'Russian', '--ref-wav', '/home/orborus/Desktop/hakaton/112-simulator-core/backend/core/qwen_tts/voices/references/male_1_dmitri.wav', '-o', '/tmp/tmpmcp2r4qi/raw.wav']' returned non-zero exit status 1.
+
+During handling of the above exception, another exception occurred:
+tests/test_33_tts_crash.py:18: in test_tts_only_digits_crash
+    pytest.fail(f"Слово 'номер' должно было предотвратить краш: {e}")
+E   Failed: Слово 'номер' должно было предотвратить краш: Command '['/home/orborus/Desktop/hakaton/112-simulator-core/backend/core/qwen_tts/qwen-tts', '--model', '/home/orborus/Desktop/hakaton/112-simulator-core/backend/core/qwen_tts/models/qwen-talker-0.6b-base-Q4_K_M.gguf', '--codec', '/home/orborus/Desktop/hakaton/112-simulator-core/backend/core/qwen_tts/models/qwen-tokenizer-12hz-Q4_K_M.gguf', '--lang', 'Russian', '--ref-wav', '/home/orborus/Desktop/hakaton/112-simulator-core/backend/core/qwen_tts/voices/references/male_1_dmitri.wav', '-o', '/tmp/tmpmcp2r4qi/raw.wav']' returned non-zero exit status 1.
+__________________ test_ticket_audio_phone_prefix_in_endpoint __________________
+tests/test_33_tts_crash.py:54: in test_ticket_audio_phone_prefix_in_endpoint
+    assert any(t.startswith("номер 7 9 1 7 4 5 4 1 9 9 7") for t in texts)
+E   assert False
+E    +  where False = any(<generator object test_ticket_audio_phone_prefix_in_endpoint.<locals>.<genexpr> at 0x7f5f8ffcbae0>)
+__________________________ test_patch_ticket_endpoint __________________________
+tests/test_35_ticket_ui.py:115: in test_patch_ticket_endpoint
+    assert res.status_code == 200, res.text
+E   AssertionError: {"detail":"Access denied. Required roles: ['TEACHER']"}
+E   assert 403 == 200
+E    +  where 403 = <Response [403 Forbidden]>.status_code
+____________________ test_create_dds_lesson_waiting_status _____________________
+tests/test_41_lessons_setup.py:49: in test_create_dds_lesson_waiting_status
+    assert res.status_code == 201, res.text
+E   AssertionError: {"detail":"Создание занятий ДДС разрешено только преподавателю этой группы"}
+E   assert 403 == 201
+E    +  where 403 = <Response [403 Forbidden]>.status_code
+________________________ test_lesson_state_transitions _________________________
+tests/test_42_lessons_flow.py:60: in test_lesson_state_transitions
+    assert res_create.status_code == 201, f"Failed to create lesson: {res_create.text}"
+E   AssertionError: Failed to create lesson: {"detail":"Создание занятий ДДС разрешено только преподавателю этой группы"}
+E   assert 403 == 201
+E    +  where 403 = <Response [403 Forbidden]>.status_code
+__________________ test_demo_session_creation_defaults_to_dds __________________
+tests/test_47_student_stats.py:201: in test_demo_session_creation_defaults_to_dds
+    assert response.status_code == 200, f"Error: {response.text}"
+E   AssertionError: Error: {"detail":"Нет доступных подготовленных билетов ДДС"}
+E   assert 409 == 200
+E    +  where 409 = <Response [409 Conflict]>.status_code
+_________________________ test_evaluate_perfect_score __________________________
+tests/test_50_operator_evaluation.py:61: in test_evaluate_perfect_score
+    assert res.status_code == 200
+E   assert 403 == 200
+E    +  where 403 = <Response [403 Forbidden]>.status_code
+__________________________ test_evaluate_time_penalty __________________________
+tests/test_50_operator_evaluation.py:84: in test_evaluate_time_penalty
+    assert res.status_code == 200
+E   assert 403 == 200
+E    +  where 403 = <Response [403 Forbidden]>.status_code
+________________________ test_evaluate_missing_service _________________________
+tests/test_50_operator_evaluation.py:105: in test_evaluate_missing_service
+    assert res.status_code == 200
+E   assert 403 == 200
+E    +  where 403 = <Response [403 Forbidden]>.status_code
+_______________________ test_start_call_and_status_flow ________________________
+tests/test_62_telephony.py:22: in test_start_call_and_status_flow
+    assert resp.status_code == 200, resp.text
+E   AssertionError: {"detail":"Not authenticated"}
+E   assert 401 == 200
+E    +  where 401 = <Response [401 Unauthorized]>.status_code
+___________________________ test_play_audio_endpoint ___________________________
+tests/test_62_telephony.py:47: in test_play_audio_endpoint
+    assert resp.status_code == 200
+E   assert 401 == 200
+E    +  where 401 = <Response [401 Unauthorized]>.status_code
+_____________________________ test_hangup_endpoint _____________________________
+tests/test_62_telephony.py:62: in test_hangup_endpoint
+    assert resp.status_code == 200
+E   assert 401 == 200
+E    +  where 401 = <Response [401 Unauthorized]>.status_code
+_____________________ test_dummy_data_seeder_and_analytics _____________________
+tests/test_75_analytics.py:77: in test_dummy_data_seeder_and_analytics
+    assert len(ticket_results) >= 55 * 10, f"Expected at least 550 ticket results, found {len(ticket_results)}"
+E   AssertionError: Expected at least 550 ticket results, found 0
+E   assert 0 >= (55 * 10)
+E    +  where 0 = len([])
+_____________________ test_api_group_advice_and_model_info _____________________
+tests/test_76_ai_analyzer.py:320: in test_api_group_advice_and_model_info
+    assert resp_trigger.status_code == 200
+E   assert 403 == 200
+E    +  where 403 = <Response [403 Forbidden]>.status_code
+__________________________ test_batch_import_tickets ___________________________
+tests/test_77_import_tickets.py:63: in test_batch_import_tickets
+    assert res_upload.status_code == 200
+E   assert 403 == 200
+E    +  where 403 = <Response [403 Forbidden]>.status_code
+____________________ test_upload_tickets_validation_errors _____________________
+tests/test_77_import_tickets.py:130: in test_upload_tickets_validation_errors
+    assert res.status_code == 200
+E   assert 403 == 200
+E    +  where 403 = <Response [403 Forbidden]>.status_code
+__________________ test_upload_invalid_file_format_and_empty ___________________
+tests/test_77_import_tickets.py:146: in test_upload_invalid_file_format_and_empty
+    assert res.status_code == 400
+E   assert 403 == 400
+E    +  where 403 = <Response [403 Forbidden]>.status_code
+__________________________ test_spo112_gateway_export __________________________
+tests/test_79_integration.py:22: in test_spo112_gateway_export
+    assert response.status_code == 200
+E   assert 401 == 200
+E    +  where 401 = <Response [401 Unauthorized]>.status_code
+__________________________ test_asterisk_ari_adapter ___________________________
+tests/test_79_integration.py:45: in test_asterisk_ari_adapter
+    assert response.status_code == 200
+E   assert 401 == 200
+E    +  where 401 = <Response [401 Unauthorized]>.status_code
+__________________________ test_scenario_soft_delete ___________________________
+tests/test_84_scenarios_soft_delete.py:29: in test_scenario_soft_delete
+    assert response.status_code == 200
+E   assert 401 == 200
+E    +  where 401 = <Response [401 Unauthorized]>.status_code
+_________________________ test_ticket_refine_endpoint __________________________
+tests/test_85_refine_scenario.py:38: in test_ticket_refine_endpoint
+    assert response.status_code == 200
+E   assert 401 == 200
+E    +  where 401 = <Response [401 Unauthorized]>.status_code
+____________________________ test_refine_ai_advice _____________________________
+tests/test_86_refine_ai_advice.py:44: in test_refine_ai_advice
+    assert response.status_code == 200
+E   assert 403 == 200
+E    +  where 403 = <Response [403 Forbidden]>.status_code
+______________________ test_telephony_real_event_handling ______________________
+tests/test_87_telephony_events.py:28: in test_telephony_real_event_handling
+    mock_wait.assert_awaited_once_with("1002", timeout=30.0)
+/usr/lib64/python3.14/unittest/mock.py:2397: in assert_awaited_once_with
+    raise AssertionError(msg)
+E   AssertionError: Expected wait_for_answer to have been awaited once. Awaited 0 times.
+__________________________ test_api_generate_factoids __________________________
+tests/test_api.py:40: in test_api_generate_factoids
+    assert response.status_code == 200, "Эндпоинт должен вернуть 200 OK"
+E   AssertionError: Эндпоинт должен вернуть 200 OK
+E   assert 403 == 200
+E    +  where 403 = <Response [403 Forbidden]>.status_code
+___________________________ test_api_compile_ticket ____________________________
+tests/test_api.py:55: in test_api_compile_ticket
+    assert response.status_code == 200, "Эндпоинт должен вернуть 200 OK"
+E   AssertionError: Эндпоинт должен вернуть 200 OK
+E   assert 403 == 200
+E    +  where 403 = <Response [403 Forbidden]>.status_code
+__ test_completed_ungraded_and_teacher_stop_are_honest_in_history_and_report ___
+tests/test_dds_cycle_acceptance.py:182: in test_completed_ungraded_and_teacher_stop_are_honest_in_history_and_report
+    assert people[d["cadets"][0][0]]["status"] == "COMPLETED"
+E   AssertionError: assert 'INCOMPLETE' == 'COMPLETED'
+E     
+E     - COMPLETED
+E     ?         -
+E     + INCOMPLETE
+E     ? ++
+_ test_ticket_catalog_and_creation_are_protected_and_missing_ticket_start_is_atomic _
+tests/test_dds_cycle_acceptance.py:270: in test_ticket_catalog_and_creation_are_protected_and_missing_ticket_start_is_atomic
+    lesson = await create(d, ticket=False)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests/test_dds_cycle_acceptance.py:65: in create
+    assert r.status_code == 201, r.text
+E   AssertionError: {"detail":{"code":"DDS_INVALID_POOL"}}
+E   assert 422 == 201
+E    +  where 422 = <Response [422 Unprocessable Entity]>.status_code
+_ test_selected_saved_ticket_supplies_exact_services_without_new_ticket_or_secrets[/api/v1/sessions/demo-False] _
+tests/test_dds_saved_tickets.py:48: in test_selected_saved_ticket_supplies_exact_services_without_new_ticket_or_secrets
+    assert saved.status_code==200,saved.text
+E   AssertionError: {"detail":{"code":"DDS_DISPATCH_REQUIRED"}}
+E   assert 409 == 200
+E    +  where 409 = <Response [409 Conflict]>.status_code
+_ test_selected_saved_ticket_supplies_exact_services_without_new_ticket_or_secrets[/api/v1/sessions/demo-True] _
+tests/test_dds_saved_tickets.py:48: in test_selected_saved_ticket_supplies_exact_services_without_new_ticket_or_secrets
+    assert saved.status_code==200,saved.text
+E   AssertionError: {"detail":{"code":"DDS_DISPATCH_REQUIRED"}}
+E   assert 409 == 200
+E    +  where 409 = <Response [409 Conflict]>.status_code
+_ test_selected_saved_ticket_supplies_exact_services_without_new_ticket_or_secrets[/api/v2/sessions/demo-False] _
+tests/test_dds_saved_tickets.py:48: in test_selected_saved_ticket_supplies_exact_services_without_new_ticket_or_secrets
+    assert saved.status_code==200,saved.text
+E   AssertionError: {"detail":{"code":"DDS_DISPATCH_REQUIRED"}}
+E   assert 409 == 200
+E    +  where 409 = <Response [409 Conflict]>.status_code
+_ test_selected_saved_ticket_supplies_exact_services_without_new_ticket_or_secrets[/api/v2/sessions/demo-True] _
+tests/test_dds_saved_tickets.py:48: in test_selected_saved_ticket_supplies_exact_services_without_new_ticket_or_secrets
+    assert saved.status_code==200,saved.text
+E   AssertionError: {"detail":{"code":"DDS_DISPATCH_REQUIRED"}}
+E   assert 409 == 200
+E    +  where 409 = <Response [409 Conflict]>.status_code
+_ test_terminal_service_is_read_only_but_original_retries_succeed[\u0420\u0430\u0431\u043e\u0442\u044b \u0437\u0430\u0432\u0435\u0440\u0448\u0435\u043d\u044b] _
+tests/test_dds_service_policy.py:78: in test_terminal_service_is_read_only_but_original_retries_succeed
+    assert result.status_code == 200, result.text
+E   AssertionError: {"detail":{"code":"DDS_DISPATCH_REQUIRED"}}
+E   assert 409 == 200
+E    +  where 409 = <Response [409 Conflict]>.status_code
+_ test_intermediate_progress_is_sequential_with_comment_supplements[\u041d\u0430\u0447\u0430\u043b\u043e \u0440\u0435\u0430\u0433\u0438\u0440\u043e\u0432\u0430\u043d\u0438\u044f] _
+tests/test_dds_service_policy.py:134: in test_intermediate_progress_is_sequential_with_comment_supplements
+    assert (await request("POST", path, users["cadets"][0], json=action(status=target))).status_code == 200
+E   assert 409 == 200
+E    +  where 409 = <Response [409 Conflict]>.status_code
+_ test_intermediate_progress_is_sequential_with_comment_supplements[\u041f\u0440\u0438\u0431\u044b\u0442\u0438\u0435] _
+tests/test_dds_service_policy.py:134: in test_intermediate_progress_is_sequential_with_comment_supplements
+    assert (await request("POST", path, users["cadets"][0], json=action(status=target))).status_code == 200
+E   assert 409 == 200
+E    +  where 409 = <Response [409 Conflict]>.status_code
+_ test_intermediate_progress_is_sequential_with_comment_supplements[\u041f\u0440\u043e\u0432\u0435\u0434\u0435\u043d\u0438\u0435 \u0440\u0430\u0431\u043e\u0442] _
+tests/test_dds_service_policy.py:134: in test_intermediate_progress_is_sequential_with_comment_supplements
+    assert (await request("POST", path, users["cadets"][0], json=action(status=target))).status_code == 200
+E   assert 409 == 200
+E    +  where 409 = <Response [409 Conflict]>.status_code
+____ test_lobby_demo_card_actions_finish_and_reload[/api/v1/sessions/demo] _____
+tests/test_student_dds_demo_flow.py:64: in test_lobby_demo_card_actions_finish_and_reload
+    assert finished.json()["submitted_at"]
+E   assert None
+____ test_lobby_demo_card_actions_finish_and_reload[/api/v2/sessions/demo] _____
+tests/test_student_dds_demo_flow.py:64: in test_lobby_demo_card_actions_finish_and_reload
+    assert finished.json()["submitted_at"]
+E   assert None
+=============================== warnings summary ===============================
+../../../.local/lib/python3.14/site-packages/ldap3/utils/asn1.py:50
+  /home/orborus/.local/lib/python3.14/site-packages/ldap3/utils/asn1.py:50: DeprecationWarning: tagMap is deprecated. Please use TAG_MAP instead.
+    from pyasn1.codec.ber.encoder import tagMap, typeMap, AbstractItemEncoder
+
+../../../.local/lib/python3.14/site-packages/ldap3/utils/asn1.py:50
+  /home/orborus/.local/lib/python3.14/site-packages/ldap3/utils/asn1.py:50: DeprecationWarning: typeMap is deprecated. Please use TYPE_MAP instead.
+    from pyasn1.codec.ber.encoder import tagMap, typeMap, AbstractItemEncoder
+
+tests/test_admin_journal.py::test_validation_errors_return_422
+tests/test_admin_journal.py::test_validation_errors_return_422
+tests/test_admin_journal.py::test_validation_errors_return_422
+tests/test_admin_journal.py::test_validation_errors_return_422
+  /home/orborus/Desktop/hakaton/112-simulator-core/backend/api/router_audit.py:75: DeprecationWarning: 'HTTP_422_UNPROCESSABLE_ENTITY' is deprecated. Use 'HTTP_422_UNPROCESSABLE_CONTENT' instead.
+    from_dt = parse_iso_datetime(from_at)
+
+tests/test_admin_journal.py::test_validation_errors_return_422
+tests/test_admin_journal.py::test_validation_errors_return_422
+  /home/orborus/.local/lib/python3.14/site-packages/fastapi/routing.py:328: DeprecationWarning: 'HTTP_422_UNPROCESSABLE_ENTITY' is deprecated. Use 'HTTP_422_UNPROCESSABLE_CONTENT' instead.
+    return await dependant.call(**values)
+
+tests/test_admin_journal.py::test_validation_errors_return_422
+  /home/orborus/Desktop/hakaton/112-simulator-core/backend/main.py:337: DeprecationWarning: 'HTTP_422_UNPROCESSABLE_ENTITY' is deprecated. Use 'HTTP_422_UNPROCESSABLE_CONTENT' instead.
+    logs = await get_audit_logs(
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+FAILED tests/16_test_api_session_state.py::test_get_session_state - assert 40...
+FAILED tests/17_test_api_session_message.py::test_session_message - assert 40...
+FAILED tests/18_test_api_session_submit_card.py::test_session_submit_card - a...
+FAILED tests/19_test_api_scenarios_generate.py::test_scenario_generate_and_compile
+FAILED tests/21_test_api_session_message_ai.py::test_session_message_ai - ass...
+FAILED tests/api/test_lessons_flow.py::test_lesson_state_transitions - Assert...
+FAILED tests/api/test_lessons_setup.py::test_create_lesson_success_default_waiting
+FAILED tests/api/test_lessons_setup.py::test_create_lesson_dispatcher_role - ...
+FAILED tests/api/test_lessons_setup.py::test_create_lesson_empty_categories_allowed
+FAILED tests/api/test_lessons_setup.py::test_get_lesson_and_stats - assert 40...
+FAILED tests/test_29_refactor.py::test_reset_user_password_endpoint - Asserti...
+FAILED tests/test_30_tickets.py::test_api_tickets_generate_and_get - assert 4...
+FAILED tests/test_30_tickets.py::test_api_tickets_unauthenticated_and_v1_endpoints
+FAILED tests/test_30_tickets.py::test_api_tickets_audio_endpoint - AssertionE...
+FAILED tests/test_31_ticket_polish.py::test_tts_phone_number_formatting - Ass...
+FAILED tests/test_31_ticket_polish.py::test_ticket_delete_endpoint - assert 4...
+FAILED tests/test_32_ticket_fixes.py::test_address_expansion - AssertionError...
+FAILED tests/test_32_ticket_fixes.py::test_tts_phone_spacing - AssertionError...
+FAILED tests/test_33_tts_crash.py::test_tts_only_digits_crash - Failed: Слово...
+FAILED tests/test_33_tts_crash.py::test_ticket_audio_phone_prefix_in_endpoint
+FAILED tests/test_35_ticket_ui.py::test_patch_ticket_endpoint - AssertionErro...
+FAILED tests/test_41_lessons_setup.py::test_create_dds_lesson_waiting_status
+FAILED tests/test_42_lessons_flow.py::test_lesson_state_transitions - Asserti...
+FAILED tests/test_47_student_stats.py::test_demo_session_creation_defaults_to_dds
+FAILED tests/test_50_operator_evaluation.py::test_evaluate_perfect_score - as...
+FAILED tests/test_50_operator_evaluation.py::test_evaluate_time_penalty - ass...
+FAILED tests/test_50_operator_evaluation.py::test_evaluate_missing_service - ...
+FAILED tests/test_62_telephony.py::test_start_call_and_status_flow - Assertio...
+FAILED tests/test_62_telephony.py::test_play_audio_endpoint - assert 401 == 200
+FAILED tests/test_62_telephony.py::test_hangup_endpoint - assert 401 == 200
+FAILED tests/test_75_analytics.py::test_dummy_data_seeder_and_analytics - Ass...
+FAILED tests/test_76_ai_analyzer.py::test_api_group_advice_and_model_info - a...
+FAILED tests/test_77_import_tickets.py::test_batch_import_tickets - assert 40...
+FAILED tests/test_77_import_tickets.py::test_upload_tickets_validation_errors
+FAILED tests/test_77_import_tickets.py::test_upload_invalid_file_format_and_empty
+FAILED tests/test_79_integration.py::test_spo112_gateway_export - assert 401 ...
+FAILED tests/test_79_integration.py::test_asterisk_ari_adapter - assert 401 =...
+FAILED tests/test_84_scenarios_soft_delete.py::test_scenario_soft_delete - as...
+FAILED tests/test_85_refine_scenario.py::test_ticket_refine_endpoint - assert...
+FAILED tests/test_86_refine_ai_advice.py::test_refine_ai_advice - assert 403 ...
+FAILED tests/test_87_telephony_events.py::test_telephony_real_event_handling
+FAILED tests/test_api.py::test_api_generate_factoids - AssertionError: Эндпои...
+FAILED tests/test_api.py::test_api_compile_ticket - AssertionError: Эндпоинт ...
+FAILED tests/test_dds_cycle_acceptance.py::test_completed_ungraded_and_teacher_stop_are_honest_in_history_and_report
+FAILED tests/test_dds_cycle_acceptance.py::test_ticket_catalog_and_creation_are_protected_and_missing_ticket_start_is_atomic
+FAILED tests/test_dds_saved_tickets.py::test_selected_saved_ticket_supplies_exact_services_without_new_ticket_or_secrets[/api/v1/sessions/demo-False]
+FAILED tests/test_dds_saved_tickets.py::test_selected_saved_ticket_supplies_exact_services_without_new_ticket_or_secrets[/api/v1/sessions/demo-True]
+FAILED tests/test_dds_saved_tickets.py::test_selected_saved_ticket_supplies_exact_services_without_new_ticket_or_secrets[/api/v2/sessions/demo-False]
+FAILED tests/test_dds_saved_tickets.py::test_selected_saved_ticket_supplies_exact_services_without_new_ticket_or_secrets[/api/v2/sessions/demo-True]
+FAILED tests/test_dds_service_policy.py::test_terminal_service_is_read_only_but_original_retries_succeed[\u0420\u0430\u0431\u043e\u0442\u044b \u0437\u0430\u0432\u0435\u0440\u0448\u0435\u043d\u044b]
+FAILED tests/test_dds_service_policy.py::test_intermediate_progress_is_sequential_with_comment_supplements[\u041d\u0430\u0447\u0430\u043b\u043e \u0440\u0435\u0430\u0433\u0438\u0440\u043e\u0432\u0430\u043d\u0438\u044f]
+FAILED tests/test_dds_service_policy.py::test_intermediate_progress_is_sequential_with_comment_supplements[\u041f\u0440\u0438\u0431\u044b\u0442\u0438\u0435]
+FAILED tests/test_dds_service_policy.py::test_intermediate_progress_is_sequential_with_comment_supplements[\u041f\u0440\u043e\u0432\u0435\u0434\u0435\u043d\u0438\u0435 \u0440\u0430\u0431\u043e\u0442]
+FAILED tests/test_student_dds_demo_flow.py::test_lobby_demo_card_actions_finish_and_reload[/api/v1/sessions/demo]
+FAILED tests/test_student_dds_demo_flow.py::test_lobby_demo_card_actions_finish_and_reload[/api/v2/sessions/demo]
+ERROR tests/test_30_tts_fix.py
+55 failed, 565 passed, 9 warnings, 1 error in 89.12s (0:01:29)

@@ -59,6 +59,30 @@ export interface DDSActionPayload {
 
 export type DDSFinishPayload = Record<string, never>
 
+export interface DDSContact {
+  id: string; service_name: string; number: string; full_name: string; position: string; brigade: string
+}
+export interface DDSEvent {
+  id: string; kind: string; at: string; card_id: string; service_name?: string;
+  report_id?: string; text?: string; audio?: string | null; message?: string; reason?: string;
+  result?: string; delay_seconds?: number; action?: Record<string, unknown>
+}
+export interface DDSCriterion {
+  key: string; label: string; status: "completed" | "completed_after_correction" | "not_completed" | "not_evaluated";
+  evidence: Record<string, unknown>[]
+}
+export interface DDSPhonePayload {
+  request_id: string; card_id: string; operation: "dial" | "answer" | "audio";
+  service_name?: string; number?: string; report_id?: string; call_id?: string;
+  audio_result?: "played" | "unavailable"
+}
+export interface DDSExercise {
+  source: "prepared"; contacts: DDSContact[]; events: DDSEvent[]; refused_services?: string[];
+  incoming: {id: string; contact: DDSContact; ringing: boolean; text: string | null; audio: string | null} | null;
+  due_at: string | null; processed_reports: number; total_reports: number;
+  outgoing: Record<string, {contact_id: string; call_id: string; text: string; audio: string | null}>
+}
+
 export interface DDSSessionState {
   session_id: string
   lesson_id: string
@@ -82,6 +106,9 @@ export interface DDSSessionState {
   cards?: {card_id: string; ticket_id: string; status: string; submitted_at?: string | null}[]
   readonly?: boolean
   stop_reason?: string | null
+  exercise?: DDSExercise | null
+  criteria?: DDSCriterion[]
+  last_attempt?: {request_id: string; accepted: boolean; reason?: string; message: string} | null
 }
 
 export interface DDSTicketSummary {
@@ -331,7 +358,16 @@ export function validateDDSSessionState(
     !item || typeof item.code !== "string" || typeof item.service_name !== "string"))) {
     throw new Error("Некорректный ответ: неверные условия закрытия")
   }
+  if (obj.exercise != null && (!Array.isArray(obj.exercise.contacts) || !Array.isArray(obj.exercise.events)
+    || typeof obj.exercise.outgoing !== "object" || obj.exercise.source !== "prepared")) {
+    throw new Error("Некорректный ответ: состояние учебного телефона")
+  }
+  if (obj.criteria !== undefined && (!Array.isArray(obj.criteria) || obj.criteria.some((c: any) =>
+    !c || typeof c.key !== "string" || typeof c.label !== "string" || !["completed", "completed_after_correction", "not_completed", "not_evaluated"].includes(c.status) || !Array.isArray(c.evidence)))) {
+    throw new Error("Некорректный ответ: критерии ДДС")
+  }
   return {
+    exercise: obj.exercise ?? null, criteria: obj.criteria ?? [], last_attempt: obj.last_attempt ?? null,
     session_id: obj.session_id,
     lesson_id: obj.lesson_id,
     ticket_id: obj.ticket_id,
@@ -668,4 +704,9 @@ export async function fetchDDSTrainingTickets(signal?: AbortSignal) {
 
 export async function startDDSTraining(payload: {request_id: string; ticket_ids: string[]}, signal?: AbortSignal) {
   return validateDDSSessionState(await ddsRequest("/api/dds/training", payload, signal))
+}
+
+
+export async function postDDSPhone(sessionId: string, payload: DDSPhonePayload, signal?: AbortSignal) {
+  return validateDDSSessionState(await ddsRequest(`/api/dds/sessions/${encodeURIComponent(sessionId)}/phone`, payload, signal), sessionId)
 }

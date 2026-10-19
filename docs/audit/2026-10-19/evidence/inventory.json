@@ -1,0 +1,3142 @@
+[
+  {
+    "path": ".gitignore",
+    "lines": 16,
+    "sha256": "ae196420c401c2024a108c6f0097cfcc194dd5a5eda2acbdcee3e51f9149fc68"
+  },
+  {
+    "path": "DOCKER.md",
+    "lines": 191,
+    "sha256": "bcfde17900668b5e9216db80b4c9c0a9ed2e2ec20d2fcaa341d0f6024559c7ff"
+  },
+  {
+    "path": "Dockerfile",
+    "lines": 51,
+    "sha256": "00ada0c9f7f98fb019545443240aace0aaf774260a873462f11326bc8385cb46"
+  },
+  {
+    "path": "Dockerfile.frontend",
+    "lines": 45,
+    "sha256": "754c64fc93b39ad7ae194b79755189a564aebb8da395f4f585c75cbfcf0662cf"
+  },
+  {
+    "path": "MIGRATION_LOG.md",
+    "lines": 208,
+    "sha256": "acc6f304be53eebbaf49c52333e3624348998fc65c963c03b0b20e36ebdf04db"
+  },
+  {
+    "path": "Modelfile",
+    "lines": 1,
+    "sha256": "73ac39f922e0d4ea5eeed106a93cf1b5d3434b769ddbfaf24e8855cbeb559257"
+  },
+  {
+    "path": "PROJECT_STRUCTURE.md",
+    "lines": 52,
+    "sha256": "e865ed42149dd71431446b95bb3102b194c0e1dd79a98f2f9bb1bf8b0d751eb3"
+  },
+  {
+    "path": "README.md",
+    "lines": 83,
+    "sha256": "544a0c352c72a9107b47138f1d2a3b0933b3004753fcb0e599c3fc1b74effc23"
+  },
+  {
+    "path": "RECOVERY.md",
+    "lines": 58,
+    "sha256": "d2b3d887cb0c7bd32c5f57f760b453a477fa421654d41cf602f1d3fb9fb0b2ad"
+  },
+  {
+    "path": "check_db.py",
+    "lines": 12,
+    "sha256": "aca3b849bd75d876af5788363a0693d5d0789630d66bcedecc0fd26c723b1351"
+  },
+  {
+    "path": "check_schema.py",
+    "lines": 19,
+    "sha256": "3a971b1f95608f2f7470bd2a3db147c9d13b498e4cbd687ff53f291344a01b79"
+  },
+  {
+    "path": "docker-compose.prod.yml",
+    "lines": 80,
+    "sha256": "3204e84c2ff737e205af3aa2a284cc7cc2a9f27de04be0be91aed9dd57f78c8d"
+  },
+  {
+    "path": "fix_db.py",
+    "lines": 16,
+    "sha256": "afd9be4f13475080e918befbf70f2520a7c1992b0449bce5aeefe7298efcfa91"
+  },
+  {
+    "path": "generate_static_tts.py",
+    "lines": 28,
+    "sha256": "8d51149f599d44199e1a5c034341003743f0c8cf27cfecebc8f9edb9c0339b68"
+  },
+  {
+    "path": "pytest.ini",
+    "lines": 7,
+    "sha256": "3ba4504fa340a1e225e4da87dc30928eed61e760bb98ca9487ee3fa6d4bc8a6a"
+  },
+  {
+    "path": "requirements.lock",
+    "lines": 52,
+    "sha256": "08012895170e2168f0625fb7cd9de6e81454aa40704844daa67db9daffaa2dc9"
+  },
+  {
+    "path": "requirements.txt",
+    "lines": 54,
+    "sha256": "a98f2a2cdcc70c352cbeae5cf82358b4db971e618bf47f5b18beb9c0fec8e09e"
+  },
+  {
+    "path": "run.sh",
+    "lines": 52,
+    "sha256": "04381933ea7d2e0f67d24c06f449e423c10080f61c5a6c6467a52f47f66d7e4d"
+  },
+  {
+    "path": "setup_env.py",
+    "lines": 46,
+    "sha256": "e5912d9170efc189bcb9b2748da0776d44658c62b0f5596dda46b46cdecb99fb"
+  },
+  {
+    "path": "update_docker_compose.py",
+    "lines": 68,
+    "sha256": "02b4a7ff526eb6b2039da9f8a33ce39321af4bc56d9939f3a0b543db33bf9e9b"
+  },
+  {
+    "path": "update_docker_md.py",
+    "lines": 21,
+    "sha256": "15ee9a21b0a1d270d30bcf67f5ae090f91123c1f9eac8fe874bd735fd63956b9"
+  },
+  {
+    "path": "update_readme.py",
+    "lines": 16,
+    "sha256": "32e52494cdfa70591eb0ee71183a1d0aebf4f1dfa683345716cf1b0778b1ca58"
+  },
+  {
+    "path": "AGENTS.md",
+    "lines": 0,
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+    "path": ".env.llm.example",
+    "lines": 34,
+    "sha256": "91263117fd099b082f6ca76efd963ab695cf59d3ca8cec31c7d886c16e772c3d"
+  },
+  {
+    "path": "docker-compose.llm.yml",
+    "lines": 47,
+    "sha256": "6845d88433e10ff75117451c7a5a8d6784b448f464b712b5399009301fc2dd3e"
+  },
+  {
+    "path": "seed.py",
+    "lines": 401,
+    "sha256": "5e06d0945c902bec41890568a6dc9c755d8b39796c0b9294929c7669dc6e5fa3"
+  },
+  {
+    "path": ".dockerignore",
+    "lines": 68,
+    "sha256": "8bdfa5295b7de5bcda071f34dff81f991cf9e785a09584327169bc7f80bb5c4a"
+  },
+  {
+    "path": ".env.example",
+    "lines": 45,
+    "sha256": "8e57ad1a4e1cd0b2847cbe5caeeec942be7f78dbd529611d2498db20f0c4b2fb"
+  },
+  {
+    "path": "docker-compose.yml",
+    "lines": 100,
+    "sha256": "9a7e9a400df14e882b71ef58e5744f3763cc8574bcd39b22f6b72055c1b33731"
+  },
+  {
+    "path": "Dockerfile.backend",
+    "lines": 97,
+    "sha256": "98d7a4b22dbf993f1d6a26c0d035293ae9f655e78e86e1fc2bcb460c92d41d4b"
+  },
+  {
+    "path": "backend/__init__.py",
+    "lines": 1,
+    "sha256": "df1b010cddd3419961749132a43c4f9fe2e33ef64db89dec67f75002c3f5bf44"
+  },
+  {
+    "path": "backend/database.py",
+    "lines": 28,
+    "sha256": "547021e9ba68f7b54cfaa514939f3140e2254321626d90d875424e495d39dff0"
+  },
+  {
+    "path": "backend/main.py",
+    "lines": 383,
+    "sha256": "d8de5afb4d7d8eee2ec9bb74956a2b14da8207811d6655acd7248e6dfc2d5063"
+  },
+  {
+    "path": "certs/server.crt",
+    "lines": 22,
+    "sha256": "c1a240d90140f601cf06716b12b6450dfb5802ffd107b82f072de22461ed9ae8"
+  },
+  {
+    "path": "certs/server.key",
+    "lines": 28,
+    "sha256": "d4bfdabe83f980697b56f8b0bc8f744292a9ffd10bb3c9ca290466ccd1e6a073"
+  },
+  {
+    "path": "docker/nginx.conf",
+    "lines": 128,
+    "sha256": "60828239f5e05a030094779a2f80b9ac2e99912850ddad49c7e8b3ee11731b6a"
+  },
+  {
+    "path": "docs/112_Simulator_Technical_Documentation.docx",
+    "lines": 485,
+    "sha256": "def7ce6b5a0a946f7289137065ba3d9b40f7690b7f6d4b439f7cf40f6fe84719"
+  },
+  {
+    "path": "docs/backlog_features.md",
+    "lines": 19,
+    "sha256": "1a710ffb6d98c13c00d66234da50a3f9f8c2aa094d1f914aed8f605e69cc2610"
+  },
+  {
+    "path": "docs/migration_agent_prompt.md",
+    "lines": 35,
+    "sha256": "436295b98b2db1d7c63c311d681612e6292d9cf12db56f67b5ffd9dadbb4597b"
+  },
+  {
+    "path": "docs/dds-lesson-cycle-ui.md",
+    "lines": 91,
+    "sha256": "07b16b131cbc304124f778175a525184c2010f52e90a730bce1f78559717f8ad"
+  },
+  {
+    "path": "docs/dds-lesson-cycle.md",
+    "lines": 208,
+    "sha256": "5b74fe0526b91d8c149efaa7137ce20a269e1ca49f320eaf62b3d717059e547b"
+  },
+  {
+    "path": "docs/dds-qwen-runtime.md",
+    "lines": 131,
+    "sha256": "e9411465b503247519eda0da4816744704fcc6626d433235f015f2afa1b71260"
+  },
+  {
+    "path": "docs/dds-report-data.md",
+    "lines": 31,
+    "sha256": "eebc11d608efd5916f31e127bd3a7bebcc8d047aa29217a2286fa660dc601a5a"
+  },
+  {
+    "path": "docs/dds-report-jobs.md",
+    "lines": 197,
+    "sha256": "e62edde7289f1a040b1d2be253c7d53c5313a386346f1be5b6acc0e8a17429ab"
+  },
+  {
+    "path": "docs/dds-report-teacher-ui.md",
+    "lines": 121,
+    "sha256": "048e711aab40233f2ec43d343bc0ea77827f7d6def39b893b9fe500c92e9bcf3"
+  },
+  {
+    "path": "docs/admin-backup-worker-brief.md",
+    "lines": 188,
+    "sha256": "51ec1c3df65e77bcdf34743794218925dce512e52e49b91e15270d094716b499"
+  },
+  {
+    "path": "docs/admin-journal-worker-brief.md",
+    "lines": 198,
+    "sha256": "bf86c472412c4438ba350a492cc2fb65f38ca49dae25ec6f8c06c9bd37886ba6"
+  },
+  {
+    "path": "docs/system-status-worker-brief.md",
+    "lines": 100,
+    "sha256": "ab972caf77284230f0b20fd99a837110d58835d6d3ad3b556df28274e1487341"
+  },
+  {
+    "path": "docs/admin-access-restrictions.md",
+    "lines": 71,
+    "sha256": "4c8f1a7bc50117c301064ae9861e059c29a95b65475a9dedc7f1e9cfe0b2b189"
+  },
+  {
+    "path": "docs/quality-gate.md",
+    "lines": 136,
+    "sha256": "77c0a4a25bf6779c823720d180b6f94eb32a2167205cf585e1c6c99335482ae8"
+  },
+  {
+    "path": "docs/testing.md",
+    "lines": 114,
+    "sha256": "a76121d44ce4350bc0d20f3a72b7b2e042180546ff2d83a76027d9953d8dcd1d"
+  },
+  {
+    "path": "docs/admin-integrity-and-quality-worker-brief.md",
+    "lines": 199,
+    "sha256": "094cdbf0639a8868617cf585a2bae9eb5efdd5fbdeb28dc8044f0380d20b81f9"
+  },
+  {
+    "path": "docs/admin-integrity-review-followup.md",
+    "lines": 48,
+    "sha256": "ea82a916557f521aa2c69954e5edc2bd489ff1fb597d1385472d1ebb6328e4ca"
+  },
+  {
+    "path": "docs/admin-integrity-review.md",
+    "lines": 84,
+    "sha256": "adb2868bd1dfabe7689ce76c0f13957fb3bfeedb340b543480d640c665b15a11"
+  },
+  {
+    "path": "docs/dds-sequential-workflow.md",
+    "lines": 121,
+    "sha256": "de0cf119e0ef223a601902cb11cd216cba7c7a059957b1e9cf02bc4d040c9513"
+  },
+  {
+    "path": "docs/dds-phone-training.md",
+    "lines": 60,
+    "sha256": "f169baa58b9a9ef4eceee305f05aa401d2aa901d8052f1995e4a54e5383f11b6"
+  },
+  {
+    "path": "frontend_react/.gitignore",
+    "lines": 15,
+    "sha256": "3ee4a17710aeba66f84ce4d040d4f44a90041b210b9583a09257346f0316bf61"
+  },
+  {
+    "path": "frontend_react/AGENTS.md",
+    "lines": 9,
+    "sha256": "63f2c50380ed6303237cce215ce27af1d620d094c215e28d1b1538a3c070e3bb"
+  },
+  {
+    "path": "frontend_react/CLAUDE.md",
+    "lines": 1,
+    "sha256": "336cc4fbf19beaada7ccf9986414fa91851a8d7a07dfb3ccbe800a69eed0ab49"
+  },
+  {
+    "path": "frontend_react/components.json",
+    "lines": 21,
+    "sha256": "1301860ec7b710eaa7455957545ee4e756e361215cb29cc4cce2192eb47e45fb"
+  },
+  {
+    "path": "frontend_react/package-lock.json",
+    "lines": 9045,
+    "sha256": "b05ef762802d87187db42cf52f82935b29829dc0b8e35a9af7ac286e52efd052"
+  },
+  {
+    "path": "frontend_react/postcss.config.mjs",
+    "lines": 8,
+    "sha256": "54b5708e687b8c9ecc8dbeebf29801dbec1213f890c5e018d7ca9c1541a6f7e3"
+  },
+  {
+    "path": "frontend_react/scale_ui.py",
+    "lines": 46,
+    "sha256": "aac7bf4b7d4b09b96ea51094995bffed28e2cbc0b1ba46d05f3b6784d25455ec"
+  },
+  {
+    "path": "frontend_react/tsconfig.json",
+    "lines": 33,
+    "sha256": "f2fc3309a966ecb35a51a17b2b7ab03c92d88b7c663ddbed5cb626f597c83277"
+  },
+  {
+    "path": "frontend_react/tsconfig.tsbuildinfo",
+    "lines": 1,
+    "sha256": "58e5d875acf0a483b5ddefc55b5f180aa15ad7e7af0cbaabec83b30861293a23"
+  },
+  {
+    "path": "frontend_react/next.config.mjs",
+    "lines": 37,
+    "sha256": "7c5234e09cbf4659743ff4ee56e1d9d82103c0d0d5a1cc3df879da413af69f57"
+  },
+  {
+    "path": "frontend_react/package.json",
+    "lines": 52,
+    "sha256": "3544c6a36f9ff1b70b243f1c90223da2dd0a551a6e33d7c535e36d53cd87c4eb"
+  },
+  {
+    "path": "frontend_react/next-env.d.ts",
+    "lines": 7,
+    "sha256": "0f70629890b72a0a82e91972cc032c04b658b26c265373cb711cf576bfbf8fcc"
+  },
+  {
+    "path": "frontend_react/vitest.config.mts",
+    "lines": 13,
+    "sha256": "135ec8d35fbd1e6a286dc5501b404ad8389c86976a801c4127568ff17bd3c10c"
+  },
+  {
+    "path": "frontend_react/vitest.setup.ts",
+    "lines": 23,
+    "sha256": "03dbe84ee129d90f10f8ea252c0a942ede22f5a99a43b91fdd3df11868923d01"
+  },
+  {
+    "path": "prompts/01_worker_database.txt",
+    "lines": 11,
+    "sha256": "193be2f148cbe60b8a131b312fa6e4a7a0fe76fccc5c4a416baeb63181c77d61"
+  },
+  {
+    "path": "prompts/02_worker_user_model.txt",
+    "lines": 17,
+    "sha256": "9527da6a9612bf3c86c9dec53dbd02863dcd18a835d4c39708a8e06f12766c33"
+  },
+  {
+    "path": "prompts/03_worker_student_group_model.txt",
+    "lines": 14,
+    "sha256": "7043ec2b161183bd22617b20e465d59d23a7c4e548dbd62a0c2f2a309ec8a6d1"
+  },
+  {
+    "path": "prompts/04_worker_user_action_log_model.txt",
+    "lines": 13,
+    "sha256": "d8ffb3443909b04147a6829969ffd38670f2baf62d0c60a03515bd72e8b00adc"
+  },
+  {
+    "path": "prompts/05_worker_scenario_ticket.txt",
+    "lines": 17,
+    "sha256": "e560e88310eb9035b940829044846ca7a6e7be93c4719105e5540cd4a912e5b1"
+  },
+  {
+    "path": "prompts/06_worker_domain_03.txt",
+    "lines": 23,
+    "sha256": "c928321105d80996a98ca1945bfdc5c13b97ee36fbef3fc383c946fb03532815"
+  },
+  {
+    "path": "prompts/07_worker_domain_04.txt",
+    "lines": 22,
+    "sha256": "7a3513538f9ebdde326cfd5d52d954711ddfdbe032e6584018a219fa5c81712e"
+  },
+  {
+    "path": "prompts/08_worker_domain_05_jobs.txt",
+    "lines": 20,
+    "sha256": "a9b8a505b29f8f1bf387f3226295b0a67237e5bfcb8678a61e7220c154f31d18"
+  },
+  {
+    "path": "prompts/09_worker_api_init.txt",
+    "lines": 15,
+    "sha256": "0994ab089d4c988f5573bcc9319561d51b6965be5d0a8b4915072fca4344d5a2"
+  },
+  {
+    "path": "prompts/10_worker_api_auth.txt",
+    "lines": 24,
+    "sha256": "d2f2fc36ad7ce2be13bbd329dc6b4e1fc881a294932277ad090564801e2f83d7"
+  },
+  {
+    "path": "prompts/11_worker_api_users.txt",
+    "lines": 22,
+    "sha256": "32840805b2fd2952704c8f3324407f6f67a49e165a68145f3c615c4be9f35537"
+  },
+  {
+    "path": "prompts/12_worker_api_groups.txt",
+    "lines": 22,
+    "sha256": "173ac68c07cf7ff9967ead2b684603d4c4f877601fccca04d76e6929413f55b3"
+  },
+  {
+    "path": "prompts/13_worker_api_scenarios.txt",
+    "lines": 22,
+    "sha256": "fc287f13d2c2366dd4904f8f9892ae5d7649a6979b1a693d848b7f533a3f8052"
+  },
+  {
+    "path": "prompts/14_worker_api_assignments.txt",
+    "lines": 22,
+    "sha256": "6a9c0b4b12aa82bc84db5ad03d3663d0e3ab5de0f653450a50293552cdd12bdf"
+  },
+  {
+    "path": "prompts/15_worker_api_sessions.txt",
+    "lines": 27,
+    "sha256": "541ae15b1c169125655c74d9fba4fc73ce02bfd90f5d98b6a15d6e509cc20ab7"
+  },
+  {
+    "path": "prompts/16_worker_api_session_state.txt",
+    "lines": 20,
+    "sha256": "ad273b6c0b61bba026f0135218b9d7a93a373272ec258009a98b48b08643950d"
+  },
+  {
+    "path": "prompts/17_worker_api_session_message.txt",
+    "lines": 23,
+    "sha256": "8df5535a05fa1f1792cdeeae25f5c2fac192836871bf1672dcf0d80c4cf95466"
+  },
+  {
+    "path": "prompts/18_worker_api_session_submit_card.txt",
+    "lines": 24,
+    "sha256": "5fbab6df00a556159edcec9b8e095b33952fe22dce43b54cd16c68463ca02db3"
+  },
+  {
+    "path": "prompts/19_worker_api_scenarios_generate.txt",
+    "lines": 13,
+    "sha256": "f7030edba2ac715b99ff363daa0b8d6361a2913e6fa89ddf66f18d6bce934b26"
+  },
+  {
+    "path": "prompts/20_worker_api_scenarios_sse.txt",
+    "lines": 17,
+    "sha256": "95912e4e5dbcc78d80dd272e4516f4b8473fa278ac2483aa1e37680b0f092319"
+  },
+  {
+    "path": "prompts/21_worker_api_session_message_ai.txt",
+    "lines": 18,
+    "sha256": "fdc60b7751a37ae268f7de5190cc878ede76f0d9865c0ab26d5a682ccb00ba53"
+  },
+  {
+    "path": "prompts/22_worker_api_scenarios_sse_ai.txt",
+    "lines": 19,
+    "sha256": "59ef39e954813052f4015e5f246f0597d534e45a682203dfb5f229d0f58d655e"
+  },
+  {
+    "path": "prompts/23_worker_api_cors.txt",
+    "lines": 9,
+    "sha256": "5219e02e9221120aa3901cff06f395c30a0a568e68cbe80e641131936811615f"
+  },
+  {
+    "path": "prompts/27_00_teacher_layout.md",
+    "lines": 37,
+    "sha256": "a6637e899ce45ecee4c6ae3974194b8f09b83c98ccdc6b201d46087d5ad4f9b0"
+  },
+  {
+    "path": "prompts/27_01_teacher_groups.md",
+    "lines": 25,
+    "sha256": "30fe7a129b673e97c64f8fb4528a0b270ef27c571c35dba2c2e6c9ebf475b835"
+  },
+  {
+    "path": "prompts/27_02_teacher_tickets.md",
+    "lines": 25,
+    "sha256": "3b0c5c19732a8a9d18163d3d30ae7111053d2bf0eb555e3d55a3dc4ced2d5546"
+  },
+  {
+    "path": "prompts/27_03_teacher_session.md",
+    "lines": 25,
+    "sha256": "25115901aea0cbd69d9b07bd54ec24e6cbb77dc13e2822445460632fcde5f6e4"
+  },
+  {
+    "path": "prompts/27_04_teacher_dashboard.md",
+    "lines": 22,
+    "sha256": "3ec5f761a2fce2d1cbde8a1911608393e85d7e2514346d9bd4a30c39b6134814"
+  },
+  {
+    "path": "prompts/27_05_teacher_analytics.md",
+    "lines": 27,
+    "sha256": "fa250493a135c057e32c327d52992e9e9f257da04cecaf0c18ab152367576f09"
+  },
+  {
+    "path": "prompts/27_06_teacher_knowledge.md",
+    "lines": 21,
+    "sha256": "435706bc51211a329afb161fdd3072ac965e8ad7e1adde7921e97133c59f5927"
+  },
+  {
+    "path": "prompts/dds_sla.md",
+    "lines": 41,
+    "sha256": "75fedd8742efc0a0942b68d61e3e29ce8ae282d4b5407015d8f65a2c3d57913e"
+  },
+  {
+    "path": "prompts/migration_architect_prompt.md",
+    "lines": 56,
+    "sha256": "2c710de6f4734581fea2d1539b16f6513141163d3b02c83df5dd401ab174ee3a"
+  },
+  {
+    "path": "prompts/migration_builder_prompt.md",
+    "lines": 30,
+    "sha256": "8b2954684bf8d7609d9ffc9f2a26cc5b5911a3cf6a7c734732c402c1861e4d9d"
+  },
+  {
+    "path": "prompts/prompt_01_classifier.md",
+    "lines": 39,
+    "sha256": "31e857de2770d9f0b1087708313cddc8a1b7e5563275d101d4044a20755c7936"
+  },
+  {
+    "path": "prompts/prompt_01_rbac.md",
+    "lines": 27,
+    "sha256": "a829a99be8db0664f1eb1be59b812d2059dcf8008b429a27026e528f43fd9dda"
+  },
+  {
+    "path": "prompts/prompt_02_reports.md",
+    "lines": 41,
+    "sha256": "c4aa14d8dac5710365ebfc59b085e7658e94eb811b3d6887634fa5f21b606fba"
+  },
+  {
+    "path": "prompts/prompt_03_analytics.md",
+    "lines": 32,
+    "sha256": "19cf8ada228771864f457eb94fe557949baa39e8eed7beeef8be639bd842740f"
+  },
+  {
+    "path": "prompts/prompt_25_audit.md",
+    "lines": 29,
+    "sha256": "6e00d33bf9301b7c7bd6ae83faf85b01300964b7582c3912071f5ddfbfbbbf83"
+  },
+  {
+    "path": "prompts/prompt_26_admin.md",
+    "lines": 30,
+    "sha256": "f564842db061eb73ac230d13c0bf00633d1226508b64812694e8a53c935e205d"
+  },
+  {
+    "path": "prompts/prompt_27_csv.md",
+    "lines": 41,
+    "sha256": "7c4bfe65dd29751971f2534000b00fc57093cba037b288414d3c38b834121164"
+  },
+  {
+    "path": "prompts/prompt_27_entities.md",
+    "lines": 37,
+    "sha256": "9df34e15498cd47b063c830dcc9112e0bbf9f2cfa757163b97ce25257e538127"
+  },
+  {
+    "path": "prompts/prompt_27_evaluator.md",
+    "lines": 34,
+    "sha256": "759865b13e67c5bc08f6b1758143b01ab7288415dca9f4d8746019a75cd9b1ea"
+  },
+  {
+    "path": "prompts/prompt_27_faker.md",
+    "lines": 48,
+    "sha256": "bd12d4977a5bc2e9ad2951ac7a12faf3a85ac4d16c1f31b2f89415273ba3ad93"
+  },
+  {
+    "path": "prompts/prompt_27_frontend_react.md",
+    "lines": 46,
+    "sha256": "70c43244d79d856d7f5c9ef1152b2498fdb03ac948b2c362414c4f7415edd9d7"
+  },
+  {
+    "path": "prompts/prompt_27_generator.md",
+    "lines": 50,
+    "sha256": "d500dde6c8cce45ecd0f64dc38cf121aacd87ad76f5c34775771b2fcb910a4c5"
+  },
+  {
+    "path": "prompts/prompt_27_session.md",
+    "lines": 36,
+    "sha256": "b6f0a4695e2e7143006c9dde07c6888378bc96395ae146eec04f8f5a01823a47"
+  },
+  {
+    "path": "prompts/prompt_27_storage.md",
+    "lines": 33,
+    "sha256": "06af53e8ca8a2cba92e37cc1a61e4bcc3ac4032c20055fabecbd9ae65cf3850c"
+  },
+  {
+    "path": "prompts/prompt_28_students.md",
+    "lines": 34,
+    "sha256": "5e835a6af38ac2a1970dce111addb0400031d690de7dcd7a503c157cf67e9af6"
+  },
+  {
+    "path": "prompts/prompt_29_students_refactor.md",
+    "lines": 35,
+    "sha256": "97a87fcddc94a27f4da44a7caa751e020116ca01a3c687168f705eba1a7cb362"
+  },
+  {
+    "path": "prompts/prompt_30_2_tickets_audio.md",
+    "lines": 33,
+    "sha256": "9ee13a0e7278848cd2cd7c95d34e2c889608aa9eb4173cca2703d8b743caf74f"
+  },
+  {
+    "path": "prompts/prompt_30_3_tts_fix.md",
+    "lines": 31,
+    "sha256": "396c26bb7c908597253d43a4240b6aff10973925cb22b583e5ae1b783cc52c38"
+  },
+  {
+    "path": "prompts/prompt_30_frontend_tickets.md",
+    "lines": 31,
+    "sha256": "4a38c63acb59c67017c3057d80871cdceba41f26eaabeb69db20a174720e3416"
+  },
+  {
+    "path": "prompts/prompt_30_status_patch.md",
+    "lines": 30,
+    "sha256": "7a4bd7bc4962ac9f7ab9020bfa751bd8c8e56a07168751b57a4d70f6e9ceae90"
+  },
+  {
+    "path": "prompts/prompt_30_tickets.md",
+    "lines": 47,
+    "sha256": "6a5e9017f484c67d81ace3e1d4c8aa9ec60ccbf19c82dd16e0fb38f90b16c20f"
+  },
+  {
+    "path": "prompts/prompt_31_ticket_polish.md",
+    "lines": 34,
+    "sha256": "b4613767615c9134d253478d413fdd9bb04178253c0dd10bced76fa6c7b74345"
+  },
+  {
+    "path": "prompts/prompt_32_ticket_final_fixes.md",
+    "lines": 29,
+    "sha256": "b2dac43e267ea4a7888b4791884a8e6c41d16eb1284aabc2767ebb4addfe2bc7"
+  },
+  {
+    "path": "prompts/prompt_33_tts_no_letters_crash.md",
+    "lines": 32,
+    "sha256": "3ec07338dbe50fdda661a31ee46f764fce3f016a46534fa457bb1b112c70172b"
+  },
+  {
+    "path": "prompts/prompt_34_students_ui_fixes.md",
+    "lines": 19,
+    "sha256": "a72942abcb7468a461c6002947412961a883d551db5a6a905b454a7b573932d0"
+  },
+  {
+    "path": "prompts/prompt_35_ticket_ui_fixes.md",
+    "lines": 46,
+    "sha256": "3997e4f540e1149c8d1199904b262fdf585a283dacec71c5aadcd7490342436b"
+  },
+  {
+    "path": "prompts/prompt_36_ticket_edit.md",
+    "lines": 25,
+    "sha256": "8e191261ce2f7a22b5944691120140478740ab40f8c6a902ebda89f47002c9b1"
+  },
+  {
+    "path": "prompts/prompt_37_ticket_edit_advanced.md",
+    "lines": 31,
+    "sha256": "b7212cb9bda76906c7452fecc41013089f4aee604d80348330be481cd5e48510"
+  },
+  {
+    "path": "prompts/prompt_38_ticket_services_auto.md",
+    "lines": 17,
+    "sha256": "12f52c3dfa117c5d048ebb0a31ff74f059cba9582655c7feefb0d642e161df9b"
+  },
+  {
+    "path": "prompts/prompt_39_frontend_fixes.md",
+    "lines": 20,
+    "sha256": "443f1b4a52d32e52297a5bc6e1b63321a28a0a176f700dfc970bfad16d56a7c0"
+  },
+  {
+    "path": "prompts/prompt_40_ticket_ui_tweaks.md",
+    "lines": 6,
+    "sha256": "a1d95e85ec63122a03b7ec230084783892ac2f051f3015886effa1df33116a44"
+  },
+  {
+    "path": "prompts/prompt_41_session_setup.md",
+    "lines": 42,
+    "sha256": "61bee471b4f0d2160552eb6518941c0506e32bc28b0192e913c3b43b9b8754ce"
+  },
+  {
+    "path": "prompts/prompt_42_session_flow.md",
+    "lines": 39,
+    "sha256": "9beb9f715b164d459d278874faf1e64364a4ef5d42e9c29fcbca7452c643320d"
+  },
+  {
+    "path": "prompts/prompt_43_session_ui_tweaks.md",
+    "lines": 22,
+    "sha256": "d69ed31dec89d8fa4474d10fd630cabb797c438ed5b32a664e7b29d9acbffbcb"
+  },
+  {
+    "path": "prompts/prompt_44_analytics_and_live.md",
+    "lines": 24,
+    "sha256": "1fa2eb780daef533f024a2df9dd63ea5da57d4de642bbaefb80c2dd324d0de9e"
+  },
+  {
+    "path": "prompts/prompt_45_session_ui_compact.md",
+    "lines": 25,
+    "sha256": "b3c2580c01bd7733717f9f0b989a0d7c7e938bf4847f8c3862a8489724d483d1"
+  },
+  {
+    "path": "prompts/prompt_46_session_ui_polish_and_bugfix.md",
+    "lines": 19,
+    "sha256": "0706b630253488111fdcfb9398301063e6805c6d88974aef16b17fe9e3d91e75"
+  },
+  {
+    "path": "prompts/prompt_47_student_backend.md",
+    "lines": 29,
+    "sha256": "21e85c4685880aecd73e59f3816bbccb9f3edc3f601541c28c80aa37f1fa91d2"
+  },
+  {
+    "path": "prompts/prompt_48_student_profile_ui.md",
+    "lines": 23,
+    "sha256": "4ef414a9d545d0b44177041d644a08becfadc9fac0dae1b4634653fae52fc4f0"
+  },
+  {
+    "path": "prompts/prompt_49_profile_enhancements.md",
+    "lines": 37,
+    "sha256": "d3136d869a067b726890c68a55c490a1ace35225a7eb64855a2025820bc0102b"
+  },
+  {
+    "path": "prompts/task_01_factoids.md",
+    "lines": 28,
+    "sha256": "5e99414449458df9ce84ccb4aef647c489ffad926298244d2a3c9520b6b5f6c4"
+  },
+  {
+    "path": "prompts/task_02_bricks.md",
+    "lines": 32,
+    "sha256": "950b8d9524aca6d054769d5786bf55e8cd27fc87da3f65b0c95256e902d24fa6"
+  },
+  {
+    "path": "prompts/task_03_router.md",
+    "lines": 27,
+    "sha256": "7350ad708275d3254f95ffffd987a7c1478c5c37fa4aecf432098f0d4d766389"
+  },
+  {
+    "path": "prompts/task_04_classifier.md",
+    "lines": 21,
+    "sha256": "d7ed239de14efd94a71c851235013a76db1294917d31cf4f8fc2635cc2e9bc6e"
+  },
+  {
+    "path": "prompts/task_05_tts.md",
+    "lines": 22,
+    "sha256": "70b11d6448da294c1b4b0edff7658d6b0b3ad1e01f4cfd9e05ac6a6d419fe1b8"
+  },
+  {
+    "path": "prompts/task_06_api.md",
+    "lines": 27,
+    "sha256": "e79950c261cdc46ea78a60289a2a39703e41356a1ee8da50a6a825afec44d8d5"
+  },
+  {
+    "path": "prompts/task_07_ai_clients.md",
+    "lines": 28,
+    "sha256": "72018d214c4a8341575b04c26c0d096a4f2285d7639cd1737db4330f5f0cc9dd"
+  },
+  {
+    "path": "prompts/task_08_database.md",
+    "lines": 23,
+    "sha256": "5e5110f2670b00976a05f4c65ec6d8ec3f44f33031acc2d3a59b7e4876f37b28"
+  },
+  {
+    "path": "prompts/task_09_runtime_api.md",
+    "lines": 24,
+    "sha256": "4568bac23dbd8f7f96c9d7c5d4bfa69d62c79fd04c6c0fabd33df53e13189307"
+  },
+  {
+    "path": "prompts/task_50_operator_arm.md",
+    "lines": 60,
+    "sha256": "e281c8b14f6f9d5d065ea0db2c0cd1c2039a072a159b3f48960da4adbed6c07f"
+  },
+  {
+    "path": "prompts/task_51_backend.md",
+    "lines": 45,
+    "sha256": "68957b63b75d7e072c0f38b98b08cc46fc9c744cb1520c3958f2c79e78d02859"
+  },
+  {
+    "path": "prompts/task_52_frontend_main_screen.md",
+    "lines": 36,
+    "sha256": "ed1ed9fc98d9a6c520f5c489f9eade474447aee9edb9689cd0108ad84b23ca6f"
+  },
+  {
+    "path": "prompts/task_54_frontend_ekp.md",
+    "lines": 46,
+    "sha256": "27fb3bca752c9a4d377561d9d0ca931f13980b917b9b7928848a5bc14b00d0d7"
+  },
+  {
+    "path": "prompts/task_55_frontend_ekp_initial_state.md",
+    "lines": 29,
+    "sha256": "9e2bbb20e76c55b6f4fb8ff27d7f9bb12eb211206b915b74ad210c6240ab58da"
+  },
+  {
+    "path": "prompts/task_56_frontend_services.md",
+    "lines": 62,
+    "sha256": "62b051325ee25b3347a16c8ae2fac3395cba171ac5caea218f6429a58fe8ba60"
+  },
+  {
+    "path": "prompts/task_57_frontend_fixes.md",
+    "lines": 35,
+    "sha256": "52e500a8691b6a16746080e5fdd9546c8af98aa1bf92f6ab13b6d02c434b42f9"
+  },
+  {
+    "path": "prompts/task_58_frontend_ux_improvements.md",
+    "lines": 53,
+    "sha256": "313959b55e1ce2230cc939bf0a4f8a6505987c0baa909ea7a0c867d3096f14d6"
+  },
+  {
+    "path": "prompts/task_59_frontend_validation_access.md",
+    "lines": 32,
+    "sha256": "4b97c8dbf9cecade9b389999a18103727179f79832a1460c51757b811d138848"
+  },
+  {
+    "path": "prompts/task_60_student_lobby_and_audio.md",
+    "lines": 29,
+    "sha256": "430e7336c1f2c87b3c03dcbd0916166ffa64608840d4e41b69908337b98bde1c"
+  },
+  {
+    "path": "prompts/task_61_asr_microservice.md",
+    "lines": 31,
+    "sha256": "814ccd2dceee9ae98101d2d3d6e4b15ff59189c04be2c014c8c5978812178dca"
+  },
+  {
+    "path": "prompts/task_61_asr_streaming_update.md",
+    "lines": 22,
+    "sha256": "268d0e45a4620fcf7e907dc11e39734eed1ebde1eebe9445f070b0ced312b8f5"
+  },
+  {
+    "path": "prompts/task_62_voip_architecture.md",
+    "lines": 29,
+    "sha256": "e467d26cc3a3a7fef784cafc147dba141d464a52cda66612620da6d587ebb50b"
+  },
+  {
+    "path": "prompts/task_63_voicebot_loop.md",
+    "lines": 28,
+    "sha256": "925eff6ba231e0d9a4ff396cae91abb06798ad7878558603657c6f7e8cac169a"
+  },
+  {
+    "path": "prompts/task_70_export_excel_pdf.md",
+    "lines": 19,
+    "sha256": "28f79b72538c7e77c41d0eae27b6e0b80179774972b8e8defd82c8b6960832a1"
+  },
+  {
+    "path": "prompts/task_71_admin_panel.md",
+    "lines": 21,
+    "sha256": "8e9b8879f99367e7412262db6cf6f36fc3bf6e97443371f0eab4e8755a6dd1e4"
+  },
+  {
+    "path": "prompts/task_72_audit_grades.md",
+    "lines": 22,
+    "sha256": "bdd818d9bbe33018cddb7e1728a77bf05beee61f58a86d92395b886c4e94a58f"
+  },
+  {
+    "path": "prompts/task_73_frontend_resilience.md",
+    "lines": 17,
+    "sha256": "6c5100da4c32163763cbcd186b6c38bd9fc87b8477d4ed3af9a818e7e8a73931"
+  },
+  {
+    "path": "prompts/task_74_2fa.md",
+    "lines": 21,
+    "sha256": "c2f1f2eade38aaa299f4a9e95d1704e48ef0fd805aff083368a6def8e99b5f9b"
+  },
+  {
+    "path": "prompts/task_75_analytics.md",
+    "lines": 18,
+    "sha256": "49e7e29485dd3b15567f56c32fb388562f05cccb2d05a27a34f8642d2d841a1e"
+  },
+  {
+    "path": "prompts/task_76_ai_analyzer.md",
+    "lines": 19,
+    "sha256": "ca85203249d60196efa67eb691a0c0d0948eea585acb0340448ebca8957c1e24"
+  },
+  {
+    "path": "prompts/task_77_batch_import.md",
+    "lines": 17,
+    "sha256": "ce0273281efc06954e6f16532aa229e1e9a664ca145164a674619ac263fb11a7"
+  },
+  {
+    "path": "prompts/task_78_mobile_adaptive.md",
+    "lines": 15,
+    "sha256": "c54b11d09d7c748e6c4a1b61953f8a922f0cbda0139401ef482e084563d241e2"
+  },
+  {
+    "path": "prompts/task_79_integration.md",
+    "lines": 28,
+    "sha256": "0a3a9976d7d596de68af12d71bbf94fab5af8a88e2a2b598600bfb6b644aaa5e"
+  },
+  {
+    "path": "prompts/task_80_postgres.md",
+    "lines": 26,
+    "sha256": "80ceb3cb5c091c1ece82ff30daab8ed272c3d5a3ee24be835ec068fbab3a51b0"
+  },
+  {
+    "path": "prompts/task_81_nginx_ssl.md",
+    "lines": 27,
+    "sha256": "77e8a43bd4e1195e6c25ad78163aa3ab615242000361c5e475404664240a438a"
+  },
+  {
+    "path": "prompts/task_82_ldap.md",
+    "lines": 25,
+    "sha256": "c263cf8c8b5dce23e635bfb28f5d953161e85bc823ca4cf81c604b23ba0cc4dd"
+  },
+  {
+    "path": "prompts/task_83_admin_security.md",
+    "lines": 26,
+    "sha256": "2d82bdcf1cda9c06715d808a2764fd296a49525033bd5bafbd2a9aef0745c377"
+  },
+  {
+    "path": "prompts/task_84_scenarios_soft_delete.md",
+    "lines": 20,
+    "sha256": "9bc62170f8cd22abc37604ea5e3cbb7792e454fb0ba302670c99c5d84eeb61a6"
+  },
+  {
+    "path": "prompts/task_85_refine_scenario.md",
+    "lines": 20,
+    "sha256": "25c92972e0e0b47d5b80fe66ceb9b8302864248f16caa30c2b0eb038c706e9b8"
+  },
+  {
+    "path": "prompts/task_86_refine_ai_advice.md",
+    "lines": 18,
+    "sha256": "25e51a0feb0ecca7efba114b03a1c852dcac563440df8df460b70a796c53ff60"
+  },
+  {
+    "path": "prompts/task_87_telephony_events.md",
+    "lines": 20,
+    "sha256": "c8674a54ad2a008dc733abb41632eebd418318e46d0a72a1cd9ebb9b16684854"
+  },
+  {
+    "path": "scripts/__init__.py",
+    "lines": 1,
+    "sha256": "75924ea96eedb3fc71ea866b0853dc99def0902ee45796fbee961c7ee9c5c79f"
+  },
+  {
+    "path": "scripts/download_models.sh",
+    "lines": 48,
+    "sha256": "6da3b6b7612b48c5e8b343ac565fe8383192458274676d480ad88fcca5d92a19"
+  },
+  {
+    "path": "scripts/generate_certs.sh",
+    "lines": 16,
+    "sha256": "c1a627fc45e8fba0c8e1384882e2edb529adafda48c1261e661d7ac610067a5b"
+  },
+  {
+    "path": "scripts/init.sh",
+    "lines": 54,
+    "sha256": "91b8141f91de9b78e92be3be4b65ecda294bbd72abb05a266d97335e2617a9d1"
+  },
+  {
+    "path": "scripts/pack_release.sh",
+    "lines": 32,
+    "sha256": "7370e6c3344978746661826e0560d4c5c372b5fd70cef5228573b118216e9a5f"
+  },
+  {
+    "path": "scripts/seed.py",
+    "lines": 497,
+    "sha256": "0332d9349c4b4da51eb087401f142f74e2add3de91b9dbf0d09e9a3c576a67ed"
+  },
+  {
+    "path": "scripts/backup_db.py",
+    "lines": 318,
+    "sha256": "2bd3ffc0bbd0d5f6cd22e7b4248613b969f8ebd79f188add13c1d49c0c393996"
+  },
+  {
+    "path": "scripts/test_pg_backup_restore.sh",
+    "lines": 123,
+    "sha256": "b8717ed9281d3f2c3bb9bfe2c42f92349072402d1330200ad3bfb096a4e6e9b0"
+  },
+  {
+    "path": "scripts/verify_build.sh",
+    "lines": 282,
+    "sha256": "c15fa3cea65de80fd733c712074dbde99bf4d29856732eda848ca01197cb1cb6"
+  },
+  {
+    "path": "scripts/check_dds_queue_postgres.py",
+    "lines": 83,
+    "sha256": "6f7b3bafa90eef2a169a0038bdec8a60eecad895bca19b6a20772cd7aa6e6f3f"
+  },
+  {
+    "path": "scripts/check_dds_phone_postgres.py",
+    "lines": 95,
+    "sha256": "4fa775c4f3de157501e1d8d62182adc0a3e5a0155c071acec6d1a6d70c3c124c"
+  },
+  {
+    "path": "tests/01_test_database.py",
+    "lines": 22,
+    "sha256": "b09faedc1dc5c8244b003841342cdd2f9b2d855967e1d6fd6118c3ef93dde7e2"
+  },
+  {
+    "path": "tests/02_test_user_model.py",
+    "lines": 45,
+    "sha256": "51d5c8865b7a8b59883771d99e034031b60e01ff3dd7fcdeba1dd9a55653e16e"
+  },
+  {
+    "path": "tests/03_test_student_group_model.py",
+    "lines": 35,
+    "sha256": "c4ce378612d9d2c234943224750205d2d50a3678d081447e21ff4505394ec712"
+  },
+  {
+    "path": "tests/04_test_user_action_log_model.py",
+    "lines": 32,
+    "sha256": "5d658b7a870d62843705d42e751d56f951538720dfef202b5f38e5e335c4b349"
+  },
+  {
+    "path": "tests/05_test_scenario_ticket_model.py",
+    "lines": 42,
+    "sha256": "ce83aa112e19366575e60870c45a861b1d35757bf9c7a831ef4367cbf1e75af0"
+  },
+  {
+    "path": "tests/06_test_domain_03_models.py",
+    "lines": 76,
+    "sha256": "82d9a6ebee04f9245097cf6ce6e83f34011848c4c89f001529cb34a50a0a295c"
+  },
+  {
+    "path": "tests/07_test_domain_04_models.py",
+    "lines": 61,
+    "sha256": "f41e7e085dfcda6a84ab0e6352908c3d40e1d97aa31ae0f520dfcae3278cdac4"
+  },
+  {
+    "path": "tests/08_test_domain_05_and_jobs.py",
+    "lines": 46,
+    "sha256": "a336222db7df5ff9d83ef8fb9106929abc7fea049f8bef607fdf831f3b903050"
+  },
+  {
+    "path": "tests/09_test_api_health.py",
+    "lines": 11,
+    "sha256": "ea9894076c11bef6ce785fe7d8c75cbf16956bffd59d1c2b5947a22aa6f3f085"
+  },
+  {
+    "path": "tests/10_test_api_auth.py",
+    "lines": 64,
+    "sha256": "5cb36fa7c29868f663531b9ca2a54a838cbdf20c79f0ab4073a63059ef4dbb4e"
+  },
+  {
+    "path": "tests/11_test_api_users.py",
+    "lines": 35,
+    "sha256": "5596c6e5c910aee300305aa8e4d6156a3ab771ca7a7d59fafae041b0e783e55c"
+  },
+  {
+    "path": "tests/12_test_api_groups.py",
+    "lines": 62,
+    "sha256": "82ad28713d90f348c9fdcbc4cf0fc2769c8371ff40be0df2cec530a1f843dee1"
+  },
+  {
+    "path": "tests/16_test_api_session_state.py",
+    "lines": 56,
+    "sha256": "7dc669199f22da8bbaaeba0310dcff604163dde357876b0951e6acac199fab08"
+  },
+  {
+    "path": "tests/17_test_api_session_message.py",
+    "lines": 63,
+    "sha256": "d979398a887c497db26f9960fca7026773db553db003cf6e0deffd137aef62a0"
+  },
+  {
+    "path": "tests/18_test_api_session_submit_card.py",
+    "lines": 62,
+    "sha256": "482b06030e3ec0dff01d3e3cf80d937ab9c42d8df593a9d7ff054f48cc04eb03"
+  },
+  {
+    "path": "tests/19_test_api_scenarios_generate.py",
+    "lines": 38,
+    "sha256": "066b2be399a655423e0cd8728713316ca4e7f906b50f967a9e85009f2bf08b99"
+  },
+  {
+    "path": "tests/20_test_api_scenarios_sse.py",
+    "lines": 37,
+    "sha256": "7a0276e29db8eb28f2c92493d82a9d85587dd5d9e7895d42f5448db7ff7cded9"
+  },
+  {
+    "path": "tests/21_test_api_session_message_ai.py",
+    "lines": 75,
+    "sha256": "7c449d11daa9118827c116b415659b454f7a84183cb09910ceff66f6d2fa0581"
+  },
+  {
+    "path": "tests/22_test_api_scenarios_sse_ai.py",
+    "lines": 41,
+    "sha256": "39fb4b4e5b63451060a17cf9a976c243b8297123706da950d008d5d36dd1edbe"
+  },
+  {
+    "path": "tests/23_test_cors.py",
+    "lines": 12,
+    "sha256": "d51944d76e8bddfda9dadcacfcbc29091cb5ce69bccdeabf734438c9da83140d"
+  },
+  {
+    "path": "tests/24_test_api_rbac.py",
+    "lines": 181,
+    "sha256": "067bf9e140e06cf622f34c80ed9c8e2fa2817d8686325cf81dcdf1f4a4afaf57"
+  },
+  {
+    "path": "tests/25_test_audit_middleware.py",
+    "lines": 153,
+    "sha256": "ddeddec0354436b92137a89d146065809055f8597c4e8a8bb69ac72cb1af34c6"
+  },
+  {
+    "path": "tests/__init__.py",
+    "lines": 0,
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+    "path": "tests/test_01_classifier.py",
+    "lines": 43,
+    "sha256": "06cea3f1a5f50753be0a66a89e1d6e1e55de95e58c48c55746b820ad8a848038"
+  },
+  {
+    "path": "tests/test_02_reports.py",
+    "lines": 39,
+    "sha256": "bff5e5e1a525c1d0786eee21597cbcb56ac96f84eb01b0295bfb0c29aec4446b"
+  },
+  {
+    "path": "tests/test_03_analytics.py",
+    "lines": 29,
+    "sha256": "50cd8b2997b5b71eb4e52811764a392ebeef11fd5085a2501c3b49456116da20"
+  },
+  {
+    "path": "tests/test_27_complexity.py",
+    "lines": 55,
+    "sha256": "eeddf0fe4ec71f7f546eb5f6e48b2f5db3ee81b27332589be725517bd4db97aa"
+  },
+  {
+    "path": "tests/test_27_csv_parser.py",
+    "lines": 35,
+    "sha256": "97c8e00e7e81e387053b5f795e78021185ea312a8c8e7fb0dccb4245f087113e"
+  },
+  {
+    "path": "tests/test_27_evaluator.py",
+    "lines": 187,
+    "sha256": "73e1a680ac0305a4da412b3a497a63c6ca50890b72bfbf6606f8bb4057346a5b"
+  },
+  {
+    "path": "tests/test_27_faker.py",
+    "lines": 81,
+    "sha256": "b842cc345f6d39e6527e67089043e58e2af106f6cab037f2235c4c6074f02f11"
+  },
+  {
+    "path": "tests/test_27_generator.py",
+    "lines": 98,
+    "sha256": "651feba11022677448ebe78cb0efa7759d438d776e72813a6987ddd0af014446"
+  },
+  {
+    "path": "tests/test_27_session_schema.py",
+    "lines": 43,
+    "sha256": "150192592ef54459707c65c8910e228dd9f412bf0726ef5277dce73e94c07215"
+  },
+  {
+    "path": "tests/test_27_storage.py",
+    "lines": 17,
+    "sha256": "7cd73edc9395f2583cfb5e3804142ef09163b1129b82bd17fafacd34514dbdd6"
+  },
+  {
+    "path": "tests/test_28_students.py",
+    "lines": 215,
+    "sha256": "1ac40a7e947eddd871d7d4d258988abd72ff40f8f0a18be0a8a19d4cebcea46b"
+  },
+  {
+    "path": "tests/test_29_refactor.py",
+    "lines": 175,
+    "sha256": "4d7b5eff8e6c7c118e5a51dcdb4f373c406e1726b85106872b7e601bd58d96cb"
+  },
+  {
+    "path": "tests/test_30_audio_endpoint.py",
+    "lines": 36,
+    "sha256": "3a12931af7de26c281c506352b213628e84ddf120151aa7f27f52f7f8ab378ee"
+  },
+  {
+    "path": "tests/test_30_tickets.py",
+    "lines": 260,
+    "sha256": "cc5e5a0823057397b13598f0cbbce699c875033d38a8aa3356043474d86261c6"
+  },
+  {
+    "path": "tests/test_30_tts_fix.py",
+    "lines": 44,
+    "sha256": "6936630b5c5a1a45a610d412c0223d41491409b02c808d96d164fcaa9fb1bb88"
+  },
+  {
+    "path": "tests/test_31_ticket_polish.py",
+    "lines": 125,
+    "sha256": "c81cc7ac76936be5c563eaf485edd86bc96eb9d85c7b445639537768369d3f97"
+  },
+  {
+    "path": "tests/test_32_ticket_fixes.py",
+    "lines": 133,
+    "sha256": "690e4737d3102855b54de483512341e574d5894d5fd3e2cd1845382993b40f7e"
+  },
+  {
+    "path": "tests/test_33_tts_crash.py",
+    "lines": 55,
+    "sha256": "f0bab7506c1273d92781e076c25ba440bccec3d887b2768aa51e50ceeaefead8"
+  },
+  {
+    "path": "tests/test_35_ticket_ui.py",
+    "lines": 130,
+    "sha256": "e5c9951ed60aed030113aefb5f7d4866d4ad08011e72377f5a032a779aaba060"
+  },
+  {
+    "path": "tests/test_41_lessons_setup.py",
+    "lines": 108,
+    "sha256": "13cb217275c86ffa34eb959e6d3f0e1e1883a858cf4801981e6cfd6f562eff47"
+  },
+  {
+    "path": "tests/test_43_groups_student_count.py",
+    "lines": 47,
+    "sha256": "ff7bf2e7d41f3737c127ccd202fdad6ae65aed048338c0e1aa0e827f2e5ba602"
+  },
+  {
+    "path": "tests/test_43_session_ui.py",
+    "lines": 43,
+    "sha256": "016ee47d66b1cd2b4f6e81c676886a1b22ac2da7f7b7c2fae35a992d2ad296ed"
+  },
+  {
+    "path": "tests/test_44_analytics.py",
+    "lines": 9,
+    "sha256": "918a1a71a2a4d92bfb598bfe2ef4787233c17e4ebb798507dbd10289ed9b4296"
+  },
+  {
+    "path": "tests/test_45_ticket_counts.py",
+    "lines": 58,
+    "sha256": "dfe5f192e30234871bb28cd0b1ac56e53a71d764eb5bd77fd27980adab8677e9"
+  },
+  {
+    "path": "tests/test_49_profile_enhancements.py",
+    "lines": 31,
+    "sha256": "f2948fd840bb67873c4213a707a391a0b98856eb7ad97b9061cec2b87d7ac6d8"
+  },
+  {
+    "path": "tests/test_50_operator_evaluation.py",
+    "lines": 108,
+    "sha256": "9cd90c88e524c43c67e6f1ef6eb767231fc6b8292ee6fd9fddb7643114cd0c12"
+  },
+  {
+    "path": "tests/test_62_telephony.py",
+    "lines": 98,
+    "sha256": "31b2ebc5691823198b5fa7da14a21f9106b76002cf76e9a6ce0be2dd4033cc3b"
+  },
+  {
+    "path": "tests/test_70_export_excel.py",
+    "lines": 205,
+    "sha256": "a553fd104c0ff12aa56c7d86e8cd36e1c756510434a3cc0bbf8e59ed7fcc87a6"
+  },
+  {
+    "path": "tests/test_72_audit_grades.py",
+    "lines": 211,
+    "sha256": "08464978b93fae9ae7e3c969702fcc26a025f400c1da2ddf9ae2d9ca2f98376b"
+  },
+  {
+    "path": "tests/test_74_2fa.py",
+    "lines": 159,
+    "sha256": "9ae894597467e54e2e3f861e07a75ecd69a5095059bd5a6e961c5f0d1f0bff05"
+  },
+  {
+    "path": "tests/test_75_analytics.py",
+    "lines": 184,
+    "sha256": "daff9150560d08118711e0d005de8c2d8a2ee6fd117f1b6e7b963d5ba1720c32"
+  },
+  {
+    "path": "tests/test_76_ai_analyzer.py",
+    "lines": 339,
+    "sha256": "d26d98688c7a8670e8376ba349babbf831f5eb853c5f073606f428424bccaf56"
+  },
+  {
+    "path": "tests/test_77_import_tickets.py",
+    "lines": 160,
+    "sha256": "3dd2edb2972b955d0c6c38805d1769f3e9e636c1c7ad7e6719a325d09da3031c"
+  },
+  {
+    "path": "tests/test_79_integration.py",
+    "lines": 48,
+    "sha256": "36cc6be661bd112c11a4951c752cbf63542fd681a66d6a88e45dda1e720ade22"
+  },
+  {
+    "path": "tests/test_80_postgres.py",
+    "lines": 16,
+    "sha256": "b1fd0f37b502fd03758dbea6267c3ad7dfc1ea1a9af83d93027ddfdeb135c64a"
+  },
+  {
+    "path": "tests/test_81_nginx_ssl.py",
+    "lines": 25,
+    "sha256": "381d9c75d989773fd396935489f766978dbc22efd5bdd8c4b2f507146173751f"
+  },
+  {
+    "path": "tests/test_82_ldap.py",
+    "lines": 45,
+    "sha256": "3b19f9461a622d880a19b964b2439694ae61e44f38ca82de624e4098998d5716"
+  },
+  {
+    "path": "tests/test_83_admin_security.py",
+    "lines": 17,
+    "sha256": "98bf9d0389da045bd3e5ce26b2aa1313d7c164028fba7f16359b87479431ecf9"
+  },
+  {
+    "path": "tests/test_84_scenarios_soft_delete.py",
+    "lines": 52,
+    "sha256": "32a0fad67184e5a0226c1b8b3654002655b0368387cc3965d7d1798d46d4312c"
+  },
+  {
+    "path": "tests/test_85_refine_scenario.py",
+    "lines": 49,
+    "sha256": "a625249bb62d9b70ac72b5db472cc4fe3bfba85e74cbb909e64742af0042d8e7"
+  },
+  {
+    "path": "tests/test_86_refine_ai_advice.py",
+    "lines": 55,
+    "sha256": "a90c9a6ae745f8d87b425612d85844dda50f6a82ba46bdac6e0a53b5b0149623"
+  },
+  {
+    "path": "tests/test_87_telephony_events.py",
+    "lines": 29,
+    "sha256": "655743bd03dbfd2d907c75890476699833b199178bb58872d1ddaef441b3a8ef"
+  },
+  {
+    "path": "tests/test_ai_clients.py",
+    "lines": 27,
+    "sha256": "f5451ff2025863b4739740eab1cde3fecdc47c9eca707cf59c549d343e26cd50"
+  },
+  {
+    "path": "tests/test_analytics_api.py",
+    "lines": 238,
+    "sha256": "036a6ee798ae0ec86ab52ac5d4e7bb2a40b2adcd8c86294ecf1c9136f0ab3fcf"
+  },
+  {
+    "path": "tests/test_api.py",
+    "lines": 58,
+    "sha256": "8fe26813e820ef8ee36b14d8454d4196932024d9883bbe5bd09850ba6952933c"
+  },
+  {
+    "path": "tests/test_auth_required.py",
+    "lines": 52,
+    "sha256": "0ea0ac552229dda77537d0ec92c60b870ee7dee8b057d12731741d55b38c9054"
+  },
+  {
+    "path": "tests/test_auth_session_model.py",
+    "lines": 49,
+    "sha256": "f342c36118ef7c95c5018aaf93f3c60d6d449edea8392d1479bd9e5080f48bd0"
+  },
+  {
+    "path": "tests/test_bricks_compiler.py",
+    "lines": 32,
+    "sha256": "6de0450b3958d280d4b593d422524906e8db1c217d68a69dd084664057b15800"
+  },
+  {
+    "path": "tests/test_classifier.py",
+    "lines": 9,
+    "sha256": "b2c8fd33c61115ad5faedadbec5a2c4371a75308ca61a8cfbf177febe7db38bf"
+  },
+  {
+    "path": "tests/test_database.py",
+    "lines": 33,
+    "sha256": "93422d02078e3fd59895eafc66934f37b3061e16f7e4be733a5a5ebccdfaf334"
+  },
+  {
+    "path": "tests/test_factoids_llm.py",
+    "lines": 27,
+    "sha256": "1ef47c7e584f7e36682f0dff462735f07214ddc6ae8230e96f0d406f5c366027"
+  },
+  {
+    "path": "tests/test_initial_admin.py",
+    "lines": 46,
+    "sha256": "4b7deffc3dcd160e7300d6c69cfa1e4c6d6d60b3be3c502cb36a551ad2a1f7fb"
+  },
+  {
+    "path": "tests/test_router.py",
+    "lines": 34,
+    "sha256": "26e4ad4cb22966ef5637fdb075b3774939e2914a526be38b3f802e351531ff40"
+  },
+  {
+    "path": "tests/test_runtime_api.py",
+    "lines": 41,
+    "sha256": "c448d7b22a84b083548e28cb599adf83aef310559a9fa1c660ec5a6b8d522eca"
+  },
+  {
+    "path": "tests/test_sla_monitor.py",
+    "lines": 57,
+    "sha256": "08bff5220098511d9bb9656797be5a2ba561fe0efc4ebbd9002f0c47739b58fa"
+  },
+  {
+    "path": "tests/test_tts.py",
+    "lines": 11,
+    "sha256": "5be219bcd384cffa7156cd009a0ec6ed9eda2050390e5a006741945b5946092c"
+  },
+  {
+    "path": "tests/test_dds_cycle_acceptance.py",
+    "lines": 457,
+    "sha256": "8c6e2dd0fc913376d3391662ed35cff4c8bc4c467bd79ae0c1d373231db1ad09"
+  },
+  {
+    "path": "tests/test_dds_report_data_acceptance.py",
+    "lines": 163,
+    "sha256": "147fcdd9945a26ef7668931639b6a815de9f64dce64f26fdfc30636ba9f82a12"
+  },
+  {
+    "path": "tests/test_dds_report_data_unit.py",
+    "lines": 268,
+    "sha256": "738c6359313181eb46084e3f1cff6333dd783cbe1854eeba67da9598ac0e96da"
+  },
+  {
+    "path": "tests/test_dds_report_jobs_acceptance.py",
+    "lines": 403,
+    "sha256": "405ade81f1e9decacedeb3141fba72967d4263430b823903fd89ee084ae3b3f9"
+  },
+  {
+    "path": "tests/test_dds_report_jobs_unit.py",
+    "lines": 487,
+    "sha256": "5b2a19f36760610ab5ae4da2c1bad7800ad2228e61e883a31be6a838edc4ca39"
+  },
+  {
+    "path": "tests/test_dds_report_llm_acceptance.py",
+    "lines": 161,
+    "sha256": "510ba005edab7bbfc12f92f9336395a5dbb410e15bf4859cf2d67a69e0f8a18f"
+  },
+  {
+    "path": "tests/test_dds_report_llm_unit.py",
+    "lines": 617,
+    "sha256": "b8538c0519f8b9be8bfe3c6bb8902a384eb81d54a5e5db712ceb1948d7c9522e"
+  },
+  {
+    "path": "tests/test_47_student_stats.py",
+    "lines": 330,
+    "sha256": "8656bec251fa42bddfa3e2a4124a50a1552cc7fb901115d653a852ca37229603"
+  },
+  {
+    "path": "tests/13_test_api_scenarios.py",
+    "lines": 34,
+    "sha256": "42734afb523fe161e1ebb168a56e337f0ddb74ea1107efa5454c1b86b4592a7f"
+  },
+  {
+    "path": "tests/14_test_api_assignments.py",
+    "lines": 56,
+    "sha256": "f41d97265275a1d29b44c6f0cd0d662b89f02d4177f99e54e1e0bdf6e146541a"
+  },
+  {
+    "path": "tests/15_test_api_sessions.py",
+    "lines": 54,
+    "sha256": "07f07e7c959155444d8e5bd899bbbbacd6ef7cd9d5b40e12813c3ac9ccc69921"
+  },
+  {
+    "path": "tests/26_test_admin_tools.py",
+    "lines": 138,
+    "sha256": "0bf6bcd6d3e979ab9c32c9a575de2555772c9af54aef136e5373f05316895496"
+  },
+  {
+    "path": "tests/test_42_lessons_flow.py",
+    "lines": 139,
+    "sha256": "86445a46fa7daf659efd2b5cdf2e53b41b277f30962fed766f7171b70c5bffe8"
+  },
+  {
+    "path": "tests/test_admin_backups.py",
+    "lines": 369,
+    "sha256": "1847b514ec3b1e1d9d5dc38316765f158e7fc837d2d0b10dda63229b2915abc7"
+  },
+  {
+    "path": "tests/test_admin_journal.py",
+    "lines": 436,
+    "sha256": "7f0dc9e709d026a7c3ce3241b119daa8578c7d7abc64e2acd9ad4e9e3ac35008"
+  },
+  {
+    "path": "tests/test_admin_journal_review.py",
+    "lines": 48,
+    "sha256": "86bbb2b0ea720429fdb26ee122973f8a0d619ba23515066591f8e1dab7224b36"
+  },
+  {
+    "path": "tests/test_admin_restrictions.py",
+    "lines": 285,
+    "sha256": "2019891065928120b2dd919562ee525ba60c10a6f3e5105f2eb6b8c8854ce5cb"
+  },
+  {
+    "path": "tests/test_auth_session_lifecycle.py",
+    "lines": 163,
+    "sha256": "5e0c115ce01882dcfef6c8159a2bc8224d2ecbe8fd42f0dd5899d0285352628e"
+  },
+  {
+    "path": "tests/test_password_reset.py",
+    "lines": 130,
+    "sha256": "8d6e4e3416501c29af3a5296155bc9d1b83fb65a054323bcb642dcded67be978"
+  },
+  {
+    "path": "tests/conftest.py",
+    "lines": 167,
+    "sha256": "9575c202100a0ed0ac239f30f73787fbebb6a0dd2ab17c402afc0ab8e453e1e9"
+  },
+  {
+    "path": "tests/test_merge_security_regressions.py",
+    "lines": 152,
+    "sha256": "2b7ae9a753e2b7f62400ab3826fcb5515881be4108b6ea0bac6d3e2b816ee78e"
+  },
+  {
+    "path": "tests/test_group_ticket_review.py",
+    "lines": 99,
+    "sha256": "721efcedabda2512ae90420cbfa7cae8cd16ebebc3cd8ab1f917fca406d90f78"
+  },
+  {
+    "path": "tests/test_student_dds_demo_flow.py",
+    "lines": 99,
+    "sha256": "a522507243e87597d10f4b13dcb49346e013a81e1ccb6f8f02435c917d29cdb8"
+  },
+  {
+    "path": "tests/test_dds_service_policy.py",
+    "lines": 146,
+    "sha256": "a1398e62a83f6ea7d30bba28f9a48749615b0e7300318fc34769123262ecb1a5"
+  },
+  {
+    "path": "tests/test_dds_saved_tickets.py",
+    "lines": 108,
+    "sha256": "291db9528e1929d0d2377594557df0050085259f44af3911d03a9a87d1e67213"
+  },
+  {
+    "path": "tests/test_admin_backups_review.py",
+    "lines": 64,
+    "sha256": "7d6e45052606f23b61078572eb4ca55c9a112f64652246c7c7cd81e8cc367122"
+  },
+  {
+    "path": "tests/test_integrity.py",
+    "lines": 281,
+    "sha256": "4b0c9f85ba8ed0c0a41d4457fbfde2b9b76619f03f471b120cfcf26d1e80b604"
+  },
+  {
+    "path": "tests/test_integrity_review.py",
+    "lines": 111,
+    "sha256": "fb7ac74d5b1ea58519a04446d364abcfc2eefae13954aade276f0950c0d7589f"
+  },
+  {
+    "path": "tests/test_dds_queue.py",
+    "lines": 491,
+    "sha256": "c3ae6eca80891cc633e4042e28926e6b9f4fbe9cf3189982bd9d39958e9f57aa"
+  },
+  {
+    "path": "tests/test_dds_phone_training.py",
+    "lines": 303,
+    "sha256": "ce7cf3ac78b5f28b90240076a3336b42bd0c1e9b7ec54a72d1d16357b7c2a57a"
+  },
+  {
+    "path": "tools_tests/README.md",
+    "lines": 17,
+    "sha256": "c340d8029901219b6a28f98d09f1b17e26afa6b939defca771bdb7639db5900a"
+  },
+  {
+    "path": "tools_tests/SHA256SUMS",
+    "lines": 151,
+    "sha256": "fb712950fc52920eb7bfd432606528d62b89e5c8a2daab4d5d87733e9be6062e"
+  },
+  {
+    "path": "tools_tests/__init__.py",
+    "lines": 1,
+    "sha256": "7261670e089deb14f12773f33a4341ca57eed881d6034dd933dd6caeca709bcd"
+  },
+  {
+    "path": "tools_tests/probe_support.py",
+    "lines": 169,
+    "sha256": "b9f3d4a2a1182390d315dc136ac1dd63638abc7a88b59cc84995a14ab1157fb3"
+  },
+  {
+    "path": "tools_tests/pytest.ini",
+    "lines": 6,
+    "sha256": "b269f31b167b0b5d78149e6a5f504faebe7e21ecaeb16548240763eeb8a319ca"
+  },
+  {
+    "path": "tools_tests/requirements.txt",
+    "lines": 4,
+    "sha256": "d0e93d7f26b4205d1ffdf30e41f495865623e5c94b528f85ab629f54f28ac59a"
+  },
+  {
+    "path": "tools_tests/test_ai_analytics_ownership_acceptance.py",
+    "lines": 362,
+    "sha256": "b607f033d1e201f70de4d2c7eaf65cd4ef45faf488e5912594762ec88ebf9bcf"
+  },
+  {
+    "path": "tools_tests/test_quality_gate.py",
+    "lines": 219,
+    "sha256": "33a0e9fd8ce9f19eccd81b3f689f4781b53c35d9c8ec6c1c24825df0c485f68d"
+  },
+  {
+    "path": "tools_tests/test_verification_runner.py",
+    "lines": 221,
+    "sha256": "b80e7cc3ba1f777ef67db965d51367490cac940dd2776401584ccf70bcea6be0"
+  },
+  {
+    "path": ".github/workflows/quality.yml",
+    "lines": 51,
+    "sha256": "4e13eb6d7a676f970eb062a9920803cd2028cbd00860054b3cac0481bd03a172"
+  },
+  {
+    "path": "tools_tests/acceptance-manifests/backend-core.txt",
+    "lines": 22,
+    "sha256": "bc53b937fb6b2cfdddd9496436fd1c7a9c124cbb059e0b3d3fa2075e9179b23e"
+  },
+  {
+    "path": "tools_tests/acceptance-manifests/frontend-core.txt",
+    "lines": 24,
+    "sha256": "d10db1ed9d8543b8f999bef7972a47cebb2e317ee57c7b1eea99e1a720042cbd"
+  },
+  {
+    "path": "tests/api/__init__.py",
+    "lines": 0,
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+    "path": "tests/api/test_lessons_flow.py",
+    "lines": 139,
+    "sha256": "99e31a6a78443b78bb56c62d3214b8c48b2627e1c8c5c1c0c0a5a4246bf8f01b"
+  },
+  {
+    "path": "tests/api/test_lessons_setup.py",
+    "lines": 208,
+    "sha256": "26306cf5f97f8e45082ae528ad82e6cf960f26208563b885a5a08fea0300500d"
+  },
+  {
+    "path": "scripts/checks/backend-core.txt",
+    "lines": 28,
+    "sha256": "165f25686dbcac260086c0d403b3f072ffa8251e689d30f69631a4aeec38dd0b"
+  },
+  {
+    "path": "scripts/checks/frontend-core.txt",
+    "lines": 41,
+    "sha256": "fa9d034dfa09b7b478dcedd789f70fa79b878d5c22a0db5e99d9a150d118e195"
+  },
+  {
+    "path": "frontend_react/app/globals.css",
+    "lines": 194,
+    "sha256": "efd2e14c6154c6787396bbaeddce174c2b31f93c561de973c54600492539d2f8"
+  },
+  {
+    "path": "frontend_react/app/layout.tsx",
+    "lines": 49,
+    "sha256": "003a21597f8f17a21efd7db47a52e46bcf16220e987da713f2ee53780e5cf17c"
+  },
+  {
+    "path": "frontend_react/app/page.tsx",
+    "lines": 66,
+    "sha256": "fca3741ea12d86b9345c7103468275c12e278cc1a70495de6a6a13245139924d"
+  },
+  {
+    "path": "frontend_react/components/SystemStatus.tsx",
+    "lines": 75,
+    "sha256": "83e4473487fb5c7cbd0111448f7fcfd94b952cc98e22b123668511b066620dce"
+  },
+  {
+    "path": "frontend_react/components/tutorial.tsx",
+    "lines": 80,
+    "sha256": "2f06b7b9a648071085f3b200d9f1cb630ebe80127881f8da2b5cf4e7f8c332f6"
+  },
+  {
+    "path": "frontend_react/hooks/useSystemStatus.ts",
+    "lines": 109,
+    "sha256": "74d046a4da60de49187ea3f55f14207e115a9db971c32158ac977678747eb9de"
+  },
+  {
+    "path": "frontend_react/hooks/useTelephony.ts",
+    "lines": 472,
+    "sha256": "d85e0e4cae34b37005fd483d4ccd89f03ce9f7048e4bedf4e86117bb6dfed451"
+  },
+  {
+    "path": "frontend_react/lib/auth-session.ts",
+    "lines": 36,
+    "sha256": "5da026c4048926da979718c98b716076a51763fc9d9e53c09d1d19a681449b78"
+  },
+  {
+    "path": "frontend_react/lib/dds-scenarios.ts",
+    "lines": 319,
+    "sha256": "e0f0d4412ca9ef52aa8c09aa21394e77c2193ef7f6e68226d417ff6e733d5526"
+  },
+  {
+    "path": "frontend_react/lib/dispatcher-data.ts",
+    "lines": 156,
+    "sha256": "7031332e719f3897c14d4d9a165690a4df9f4037601ae6dfb76b9d995e92ebae"
+  },
+  {
+    "path": "frontend_react/lib/utils.ts",
+    "lines": 6,
+    "sha256": "e46429536f43f5910f5b2b0c50bb2769b510a4558bb4b5d20a3b0a9091dbf7c3"
+  },
+  {
+    "path": "frontend_react/lib/api-fetch.ts",
+    "lines": 20,
+    "sha256": "b62a33fa35e97a2356c48a66bd4db4da6a1aa98e466bb486421d164445ddb0b2"
+  },
+  {
+    "path": "frontend_react/lib/dds-cycle.ts",
+    "lines": 712,
+    "sha256": "6216403be5efffa05e525ad7f175fe07422da503ce7c914fa397754b7783a135"
+  },
+  {
+    "path": "frontend_react/lib/dds-working-card.ts",
+    "lines": 37,
+    "sha256": "27573f77ef198925a79aed3221e769c13668c45a55e7e1a429eaf066cc46159d"
+  },
+  {
+    "path": "frontend_react/lib/dds-service-response.ts",
+    "lines": 15,
+    "sha256": "8f9cb30f185f84014a1dc23d256d462c8c1e979601750ea83bbd3571c7a3b2c5"
+  },
+  {
+    "path": "frontend_react/lib/admin-api.ts",
+    "lines": 301,
+    "sha256": "3c6f4454b0e64f2b1e7b6180840a207c33e5402e212025f286e26d716a03f78e"
+  },
+  {
+    "path": "frontend_react/public/apple-icon.png",
+    "lines": 16,
+    "sha256": "da678942d4656a903f61000551cc51c09464d7a223faaae304e8210e1ca19257"
+  },
+  {
+    "path": "frontend_react/public/icon-dark-32x32.png",
+    "lines": 9,
+    "sha256": "8a1570b2955c3748b6844356a7487d88c60f9f1e699e870a3452a3decd1ba03c"
+  },
+  {
+    "path": "frontend_react/public/icon-light-32x32.png",
+    "lines": 12,
+    "sha256": "83145e5bb033ace23cd8e7fbb63e7c39733aaf58f8a7280d7800995cced6f7c2"
+  },
+  {
+    "path": "frontend_react/public/icon.svg",
+    "lines": 26,
+    "sha256": "263f117c0c69a44d3206a5702105c178ebaa164bca325f3c3973a13bd948f1bf"
+  },
+  {
+    "path": "frontend_react/public/placeholder-logo.png",
+    "lines": 5,
+    "sha256": "d7c39d978af643ba9525de6fb8171e0f834882db4110c82ecad0df3f4f69551a"
+  },
+  {
+    "path": "frontend_react/public/placeholder-logo.svg",
+    "lines": 1,
+    "sha256": "19a9e968f4656d52a4c249b4056117ad109370ba9da51cdc630ddded74cec73b"
+  },
+  {
+    "path": "frontend_react/public/placeholder-user.jpg",
+    "lines": 13,
+    "sha256": "22be067d748175598a5e00123902f5c8332dd7f101de03dfb92ec08d85bb5e53"
+  },
+  {
+    "path": "frontend_react/public/placeholder.jpg",
+    "lines": 12,
+    "sha256": "14be0c7aa11cca1e78f0966176b286a6d36d00ec64be027775dfeb33d8e2dfdf"
+  },
+  {
+    "path": "frontend_react/public/placeholder.svg",
+    "lines": 1,
+    "sha256": "64badf7aabda0b9630b87020ffb6095cb858ccbcf66b355c2aa08b1063954d3b"
+  },
+  {
+    "path": "frontend_react/store/useCallStore.ts",
+    "lines": 331,
+    "sha256": "b94d5e7ae3f42159e0216ab5a63d4f71bf55218cc20b4e4e3f8b43ff9f9824d3"
+  },
+  {
+    "path": "frontend_react/tests/56_services_modal_and_calc.test.tsx",
+    "lines": 192,
+    "sha256": "253e829385313f26a1f717ef907488da6ae3f9b6394b725332f2e3edf0bc71fe"
+  },
+  {
+    "path": "frontend_react/tests/57_frontend_fixes.test.tsx",
+    "lines": 176,
+    "sha256": "3cbfeecafecc4b1dee71fc264ea6a2c5608fa2de5d4153eb01c0fff3d6b76ea2"
+  },
+  {
+    "path": "frontend_react/tests/58_frontend_ux_improvements.test.tsx",
+    "lines": 307,
+    "sha256": "1718437fc02c03afe08b8e4f5f2222afd2aeec85e7247281da3ae6237c19daa9"
+  },
+  {
+    "path": "frontend_react/tests/59_route_guard_and_validation.test.tsx",
+    "lines": 218,
+    "sha256": "2f8a0d9474be5b50804e2096e41a0d7e6ea0cc2e91179ae4623dbf4583040de5"
+  },
+  {
+    "path": "frontend_react/tests/74_2fa_frontend.test.tsx",
+    "lines": 120,
+    "sha256": "4ed7d8e118698e78be39fd6d5838d1d60af0b8c9aaf8a89531dcf842af3a0fbd"
+  },
+  {
+    "path": "frontend_react/tests/75_charts.test.tsx",
+    "lines": 125,
+    "sha256": "3b2267854d67b75a0bb7595641f1836864497f465d9679892a459061e5cda48e"
+  },
+  {
+    "path": "frontend_react/tests/auth_entry.test.tsx",
+    "lines": 49,
+    "sha256": "30e0728df24a33250306fecc779363271a061440c1eb6c70f37e9e107193cab9"
+  },
+  {
+    "path": "frontend_react/tests/auth_guard.test.tsx",
+    "lines": 61,
+    "sha256": "07fdd8adf4e38a53efb22848bb0b33d1fe7fc7ed17420cb0f21885b7f6704326"
+  },
+  {
+    "path": "frontend_react/tests/incident-classifier.test.tsx",
+    "lines": 79,
+    "sha256": "f6f1a787a1249e9ccc0ca8f7f57837c2dfcd228a94dce8229d317d0da6be88e4"
+  },
+  {
+    "path": "frontend_react/tests/websocket_resilience.test.ts",
+    "lines": 229,
+    "sha256": "2457b20aacf3db3f1ebc1b915f6b28e8e85d1b2cc7549c3942d95467696dd5dc"
+  },
+  {
+    "path": "frontend_react/tests/admin_backups.test.tsx",
+    "lines": 391,
+    "sha256": "e565df56b31e82fdaccf841e4ccd1be1cfe7f951d84798643309f6672b7f669f"
+  },
+  {
+    "path": "frontend_react/tests/admin_journal.test.tsx",
+    "lines": 376,
+    "sha256": "6bce93d3c37401345a512309b2f854061baa45dd26278522cb43f0f74a542ac0"
+  },
+  {
+    "path": "frontend_react/tests/admin_journal_review.test.tsx",
+    "lines": 67,
+    "sha256": "116809d1eb03edecabd555764a87355392fde3000059267461758bf76ea6e802"
+  },
+  {
+    "path": "frontend_react/tests/api_fetch.test.ts",
+    "lines": 32,
+    "sha256": "56b641532bf26e16776fc7354353cefa3488e421b83aec3f67dec1cca4cddf2a"
+  },
+  {
+    "path": "frontend_react/tests/logout.test.tsx",
+    "lines": 59,
+    "sha256": "e8c397a3b5fa1f94fc6d286c0817baeb7e472d3b9b07bfb32fc2420f8869a689"
+  },
+  {
+    "path": "frontend_react/tests/password_reset_api.test.ts",
+    "lines": 69,
+    "sha256": "9e7b62dafe9616799ca637f9b18e5cde6473a64eb1560b450de868dc409cc890"
+  },
+  {
+    "path": "frontend_react/tests/system_status.test.tsx",
+    "lines": 216,
+    "sha256": "3cacb5cf6845dd134e634cab9195990da39d0b1fe589c2f7581564c638a403b0"
+  },
+  {
+    "path": "frontend_react/tests/admin_panel.test.tsx",
+    "lines": 315,
+    "sha256": "df8c0591a15ad7e20b69c306174ecfe4039979f443d2c5629409cc4af4470ace"
+  },
+  {
+    "path": "frontend_react/tests/p3_component_contracts.acceptance.test.tsx",
+    "lines": 67,
+    "sha256": "06eb4fbcb31374ce3fb77be2685a213b47c64eb231905a4255acaae7afaa9bf9"
+  },
+  {
+    "path": "frontend_react/tests/group-ticket-review.test.tsx",
+    "lines": 82,
+    "sha256": "aa7fd578b2e4e2ddaad29526f8a793be3763d961accb07fda0090cec62fbe501"
+  },
+  {
+    "path": "frontend_react/tests/62_telephony.test.tsx",
+    "lines": 200,
+    "sha256": "44f15b7224cf2ea2ec4eb3eefb7f9c977c0c2bf66eb484b60f6bde1d677202b6"
+  },
+  {
+    "path": "frontend_react/tests/admin_integrity_review.test.tsx",
+    "lines": 50,
+    "sha256": "47125ce971234429cc9aa8cf575035c849b48e86301acd2e3ada8ba5c92a1e63"
+  },
+  {
+    "path": "frontend_react/tests/admin_load_history.test.tsx",
+    "lines": 53,
+    "sha256": "b2b93e39f109a152180f351d157aff9cf1afa5530eb5bac5272a6d080b578b48"
+  },
+  {
+    "path": "frontend_react/tests/admin_metrics_and_integrity.test.tsx",
+    "lines": 343,
+    "sha256": "2f12ec0c9b1e21c59675095f7b41300f137eec7c6bdce510af8289a08b808efe"
+  },
+  {
+    "path": "frontend_react/tests/mobile_adaptive.test.tsx",
+    "lines": 376,
+    "sha256": "46e43943729568326972f4a2ad9003e60cfd002c6891cc40e106588af4cba255"
+  },
+  {
+    "path": "frontend_react/tests/operator_and_tutorial.test.tsx",
+    "lines": 130,
+    "sha256": "c8f28f6ed2cc77aa4f052ea6fff473ec1797b05c7cbf60002b7fc2f9cdb9deb5"
+  },
+  {
+    "path": "frontend_react/tests/telephony_lifecycle.test.tsx",
+    "lines": 168,
+    "sha256": "2c684c8e9e46daf0f8bbffafed8fd6352193536de1ff09ac55405a4e843c73ea"
+  },
+  {
+    "path": "frontend_react/tests/student-profile-home.test.tsx",
+    "lines": 180,
+    "sha256": "b4e0c88dc7b0f6430c8911cdd44bbc811261d9aa822437375cacc3911cbdf4af"
+  },
+  {
+    "path": "frontend_react/tests/27_teacher/27_00_layout.test.tsx",
+    "lines": 26,
+    "sha256": "e58cb318e04b9eaf2312d8b433d2548e3c5df0d4f4c0907aeaf3ca170f54dd24"
+  },
+  {
+    "path": "frontend_react/tests/27_teacher/27_01_groups.test.tsx",
+    "lines": 364,
+    "sha256": "d30a4e7cf889eb1682bb1f6480c497792ef41ec09f6ee738a0ff681ad278d56e"
+  },
+  {
+    "path": "frontend_react/tests/27_teacher/27_03_session.test.tsx",
+    "lines": 499,
+    "sha256": "e1f6c107f5af7eec174f58e32ef5f66789ea37ade310f54b29afe3107b295ce3"
+  },
+  {
+    "path": "frontend_react/tests/27_teacher/27_05_analytics.test.tsx",
+    "lines": 294,
+    "sha256": "078de7822daaaeffb61462693696e77612f99a492b95f298a17c6f07a730425d"
+  },
+  {
+    "path": "frontend_react/tests/27_teacher/27_06_knowledge.test.tsx",
+    "lines": 290,
+    "sha256": "0ddf951fca5e3b6a40fa4e7c9dae11639429134edd1321515f97fba644815c32"
+  },
+  {
+    "path": "frontend_react/tests/27_teacher/dds-lesson-report.acceptance.test.tsx",
+    "lines": 192,
+    "sha256": "6f8ab3901a3986cf54c306875fe8ada065a64dfe73548ee2190e532d9e701cad"
+  },
+  {
+    "path": "frontend_react/tests/27_teacher/dds-lesson-report.test.tsx",
+    "lines": 641,
+    "sha256": "7225617023f971418e52c747fced3a880bf293a52a19365f351144a65eb4a365"
+  },
+  {
+    "path": "frontend_react/tests/27_teacher/27_02_tickets.test.tsx",
+    "lines": 1158,
+    "sha256": "75cae233426d318b26a5e65ed216702fcfe620d5ead762042ba621532fa484d9"
+  },
+  {
+    "path": "frontend_react/tests/27_teacher/27_04_dashboard.test.tsx",
+    "lines": 179,
+    "sha256": "319d0daccff9e2be95bcf6899f8b2b746f40a2616ea30f8801dc224aed16e9a4"
+  },
+  {
+    "path": "frontend_react/tests/48_student/48_student.test.tsx",
+    "lines": 279,
+    "sha256": "820bc21f5cf95552ff1bc67d128107069195c988dc6b7e193a5299b4bb2a5eff"
+  },
+  {
+    "path": "frontend_react/tests/52_journal/incident-journal.test.tsx",
+    "lines": 195,
+    "sha256": "e903c644fa0874ce95134cf2aea50482fd57ab8de4e2c93d7238db086a66102c"
+  },
+  {
+    "path": "frontend_react/tests/dds-cycle/dds-cycle-validation.test.ts",
+    "lines": 26,
+    "sha256": "258e63dd1c1a0b8d276a68d46925b0507120e60abda7fa456decc5cd56462ff5"
+  },
+  {
+    "path": "frontend_react/tests/dds-cycle/dds-cycle.acceptance.test.tsx",
+    "lines": 152,
+    "sha256": "a35eca9cd2675a4758ef17df88f1d621c8a8e64290553ef36751b3f4565852bd"
+  },
+  {
+    "path": "frontend_react/tests/dds-cycle/dds-route.acceptance.test.tsx",
+    "lines": 37,
+    "sha256": "6e94b7b1476a52843de93811c35df11be85109ff8d506d6835af759de6a302cc"
+  },
+  {
+    "path": "frontend_react/tests/dds-cycle/teacher-history.acceptance.test.tsx",
+    "lines": 26,
+    "sha256": "29827af6224bc5ecf7f02ae1972e82ade6c312fb88b3fd692c6948e465218a82"
+  },
+  {
+    "path": "frontend_react/tests/dds-cycle/teacher-live.acceptance.test.tsx",
+    "lines": 61,
+    "sha256": "a8a0a02db02ac09742c710745845b5728c803758d11dfcac94cb1dd9b0db0100"
+  },
+  {
+    "path": "frontend_react/tests/dds-cycle/services-menu.test.tsx",
+    "lines": 64,
+    "sha256": "4cdf98fd157bd8ed102a7c616465469c83a233042aa0d1e6dfb63b6d671b3397"
+  },
+  {
+    "path": "frontend_react/tests/dds-cycle/demo-services.test.tsx",
+    "lines": 31,
+    "sha256": "77e98111f352fe7a1dc4c5cb15bef9ec88e5ec818e60d9e16f2c45447a0a27d7"
+  },
+  {
+    "path": "frontend_react/tests/dds-cycle/assigned-services-menu.test.tsx",
+    "lines": 78,
+    "sha256": "ffd1d9b39720669cd8be0e3b2de2b2bfeedabe34d6cd1c22347c1ca3510dd21e"
+  },
+  {
+    "path": "frontend_react/tests/dds-cycle/reference-layout.test.tsx",
+    "lines": 89,
+    "sha256": "d5bdc4168824c5e9bc11222919a172d054b550ecf3485ae3608df68625175624"
+  },
+  {
+    "path": "frontend_react/tests/dds-cycle/service-policy.test.tsx",
+    "lines": 61,
+    "sha256": "dcaf2b7f400d64e08b2469766b8c7d96642f1d6685eab3aecb24433ed5e92f13"
+  },
+  {
+    "path": "frontend_react/tests/dds-cycle/service-response.test.tsx",
+    "lines": 49,
+    "sha256": "12b4b936b3f774c80d9ab0da4f27b4cfb1188bd51f646233aee444d061ef47b1"
+  },
+  {
+    "path": "frontend_react/tests/dds-cycle/incident-list.test.tsx",
+    "lines": 124,
+    "sha256": "ccfc2d0eb2e81949c773b1cd3c624681f028391e3f3dc91d148ac85e0cd56479"
+  },
+  {
+    "path": "frontend_react/tests/dds-cycle/dds-queue-ui.test.tsx",
+    "lines": 110,
+    "sha256": "d3be177cfaed4342b278ec88e1033b1cbca03225f763aca7533887a6e37054d7"
+  },
+  {
+    "path": "frontend_react/tests/dds-cycle/dds-phone-training.test.tsx",
+    "lines": 197,
+    "sha256": "bb0d99fe7fc99c629f99a6fb4def5936a29675c3f8950b633270210b1dbab052"
+  },
+  {
+    "path": "frontend_react/components/auth/RequireAuth.tsx",
+    "lines": 140,
+    "sha256": "b288ebbc7166e158a2d504718d7384950db94328a7600c5d5b49f13c5588e5c8"
+  },
+  {
+    "path": "frontend_react/components/auth/LogoutButton.tsx",
+    "lines": 57,
+    "sha256": "24af0c7a52ce9da9cfbfd7183b89d7e8123b2e969cccd1663c474ccd1a47897c"
+  },
+  {
+    "path": "frontend_react/components/dispatcher/caller-panel.tsx",
+    "lines": 81,
+    "sha256": "588b69e388980b0c17537011c039b98cc0df94c2166a889249750a209c390c5e"
+  },
+  {
+    "path": "frontend_react/components/dispatcher/dispatch-panel.tsx",
+    "lines": 354,
+    "sha256": "9ed4c3fd8e5d0ce4c06e079819e633aef38f458c27e56bbb023f19d322b8244e"
+  },
+  {
+    "path": "frontend_react/components/dispatcher/incident-panel.tsx",
+    "lines": 75,
+    "sha256": "5b926c3f2807c94239389cab346af06155ac654700606bf0049c3815d415ab62"
+  },
+  {
+    "path": "frontend_react/components/dispatcher/services-bar.tsx",
+    "lines": 421,
+    "sha256": "3ee45637b77782235924b71e0ecd6727f4438a8857667523cdec009ef67314de"
+  },
+  {
+    "path": "frontend_react/components/dispatcher/top-bar.tsx",
+    "lines": 151,
+    "sha256": "9cfb25291e1359085fd8fdb9d8c6e989f0cb8f2dba4ec38871194f3a8371e86a"
+  },
+  {
+    "path": "frontend_react/components/dispatcher/dds-assigned-console.tsx",
+    "lines": 287,
+    "sha256": "9ba1f892a2c76a1114b2b7d3cdb63e2935570a96a5a09151a7b13da6638a6aca"
+  },
+  {
+    "path": "frontend_react/components/dispatcher/dds-assignments.tsx",
+    "lines": 165,
+    "sha256": "d2edb8fe42be95ecc66488697ea3113a5a5ba0acefd6335b96ebb4df510e7ec0"
+  },
+  {
+    "path": "frontend_react/components/dispatcher/ordered-dds-tickets.tsx",
+    "lines": 33,
+    "sha256": "c55916c97f88d4d03fb871d7c05aa48f18c57779541f98a9cc40c79e2a88a76f"
+  },
+  {
+    "path": "frontend_react/components/dispatcher/dds-self-training.tsx",
+    "lines": 69,
+    "sha256": "5d78fa7abe8b1bd368406d838b35096cfe0c6b56af70024ac844e33ce938058a"
+  },
+  {
+    "path": "frontend_react/components/dispatcher/dds-protocol.tsx",
+    "lines": 30,
+    "sha256": "0a3309073dcfdee6ff0af6bfc0eba80be2b1fc97254c36103eed6e95c151c1e6"
+  },
+  {
+    "path": "frontend_react/components/dispatcher/dds-training-phone.tsx",
+    "lines": 135,
+    "sha256": "f3ff4cdf33bd1c00c4b97dd0f1ff947ed95977101b84bde71b9479640eedf66c"
+  },
+  {
+    "path": "frontend_react/components/operator/AddServiceModal.tsx",
+    "lines": 138,
+    "sha256": "039d219866ff21b2deed739eb144f6242e03d1923f84a2f1738f75fa23a7be47"
+  },
+  {
+    "path": "frontend_react/components/operator/bottom-bar.tsx",
+    "lines": 204,
+    "sha256": "86f75ca6f60f9e65da2cd9ffceb0f31c4b8aa45c21ce85b5442492786a74b888"
+  },
+  {
+    "path": "frontend_react/components/operator/incident-classifier.tsx",
+    "lines": 2,
+    "sha256": "7b8cfdb3d5560e219acfec65d5b0fbf9508d8a49efa5e4c9be98d82e50ee1b48"
+  },
+  {
+    "path": "frontend_react/components/operator/right-panel.tsx",
+    "lines": 160,
+    "sha256": "3fd73331db8456fdc0fd8aa907168918780328e1d9ac3adf725616159763ed13"
+  },
+  {
+    "path": "frontend_react/components/operator/services-data.ts",
+    "lines": 330,
+    "sha256": "827fb747aca90a75b30bc59d37fe9076e86f53dfdba7eec5abfe83cc6c404940"
+  },
+  {
+    "path": "frontend_react/components/operator/IncidentClassifier.tsx",
+    "lines": 1127,
+    "sha256": "de19347c269ea7e095802e2bd20c847826578b4bfa5e10fbeedfea1f8eb19470"
+  },
+  {
+    "path": "frontend_react/components/operator/left-panel.tsx",
+    "lines": 739,
+    "sha256": "03dd196f231cad738c5d3a64ab5ce4fb0f22946c0ff2943acf626976a4a11a35"
+  },
+  {
+    "path": "frontend_react/components/operator/top-bar.tsx",
+    "lines": 315,
+    "sha256": "d63d8a5f0c6ab2ed67d93485ede930536fbac7609acadc255d97de3b7665f50b"
+  },
+  {
+    "path": "frontend_react/components/teacher/dds-lesson-report.tsx",
+    "lines": 741,
+    "sha256": "0e17b8eb6bb89610de196c295a74f8ca5d15bfc47ab119fe196f03072a70ae92"
+  },
+  {
+    "path": "frontend_react/components/teacher/split-screen.tsx",
+    "lines": 470,
+    "sha256": "f8a2cefef8dab07a9e82b8b424964b683740d060595d53df58d4041c4d888c2e"
+  },
+  {
+    "path": "frontend_react/components/teacher/dds-exercise-editor.tsx",
+    "lines": 81,
+    "sha256": "89c0850d8db9f1847fb2916e03eba2f0b469ddeba216ed8a956d94abc7f04c31"
+  },
+  {
+    "path": "frontend_react/components/teacher/dds-lesson-protocol.tsx",
+    "lines": 30,
+    "sha256": "8e9ff2e6481c8aeae98ddcda153c6d7a98697cb17ffcf4c15d40e01762855c13"
+  },
+  {
+    "path": "frontend_react/components/ui/badge.tsx",
+    "lines": 28,
+    "sha256": "313db4c15e8f6d6e7b93d52ac5e2550f072ac3f6f725e369fc2452fb0f8cdee1"
+  },
+  {
+    "path": "frontend_react/components/ui/button.tsx",
+    "lines": 58,
+    "sha256": "4e679215c9c8480ea8b876cf74d77c1225da544adaf6acba43634a434275a69d"
+  },
+  {
+    "path": "frontend_react/components/ui/card.tsx",
+    "lines": 62,
+    "sha256": "4cebfd923954b59102d7b50f77b3e055e1e81aa3975a8b213be4c23873d8f4a2"
+  },
+  {
+    "path": "frontend_react/components/ui/dropzone.tsx",
+    "lines": 155,
+    "sha256": "da567c7d9285015955aa4dec65302c624b3bf71327f6714d2997d5121f8abd50"
+  },
+  {
+    "path": "frontend_react/components/ui/input.tsx",
+    "lines": 17,
+    "sha256": "fb9fce0ace4ef01333e193c0aecb984cc8f3bb1c577675df976d1c8832d4fa76"
+  },
+  {
+    "path": "frontend_react/components/ui/label.tsx",
+    "lines": 14,
+    "sha256": "4a64280a53330e850f5420fc0e3d61402f1bb0cf85b97cb96a879dd55e77bf10"
+  },
+  {
+    "path": "frontend_react/components/ui/progress.tsx",
+    "lines": 26,
+    "sha256": "7515ff73bdf6a8a960be805d84f141df07bb59d3d00b12cf0160e7d6f6df8be9"
+  },
+  {
+    "path": "frontend_react/components/ui/radio-group.tsx",
+    "lines": 84,
+    "sha256": "3d9829b51c67d7780b325367bc346eea27e99ccb4a5da7f3d8d7ec19d8f7d0fb"
+  },
+  {
+    "path": "frontend_react/components/ui/select.tsx",
+    "lines": 86,
+    "sha256": "e513f8ce3a77cc123125191e9137b58c6f10245df54b8378c10795df2e49dcb2"
+  },
+  {
+    "path": "frontend_react/components/ui/table.tsx",
+    "lines": 87,
+    "sha256": "22ff54195fec49baf48e4bfd7f0d3e34474d00925d5163278738e9341b0277c0"
+  },
+  {
+    "path": "frontend_react/components/ui/textarea.tsx",
+    "lines": 15,
+    "sha256": "2def6fc4deb4684bbf5eda4e74b9cacf2894e2e002b26e11065068f0394b8b23"
+  },
+  {
+    "path": "frontend_react/components/student/profile-assignments.tsx",
+    "lines": 81,
+    "sha256": "f0064c5a017d6754e509df21b6e23e40a683f2b9f2c6b9b17c37cbe7d940a0d7"
+  },
+  {
+    "path": "frontend_react/app/admin/layout.tsx",
+    "lines": 251,
+    "sha256": "25d9bf66d60f47a6ed40f43993a8a634f6dde71eba428342493db072ff113006"
+  },
+  {
+    "path": "frontend_react/app/admin/page.tsx",
+    "lines": 531,
+    "sha256": "7b0eefb30781196591f86d4960e0968cc23c0bd4670b83d1ea1f5f889156ff38"
+  },
+  {
+    "path": "frontend_react/app/dds/page.tsx",
+    "lines": 714,
+    "sha256": "2d0860f670a8975f701c50e76a59d6efaa29da1c7fa4693f985a6ca8685decfb"
+  },
+  {
+    "path": "frontend_react/app/login/page.tsx",
+    "lines": 334,
+    "sha256": "aee05daeb0d0cf50f5e69308df02d4386e32e877fc5d9069775d3a4ad1ead941"
+  },
+  {
+    "path": "frontend_react/app/operator/page.tsx",
+    "lines": 1043,
+    "sha256": "0bf5a26f83a5c16c0e94094a14a88059506c6518298394057c2403a7d4fdb4a8"
+  },
+  {
+    "path": "frontend_react/app/student/layout.tsx",
+    "lines": 18,
+    "sha256": "d05ff2675767fd48ae42ac33cd6c391548ccb8ef1e92d1449195385f9e027503"
+  },
+  {
+    "path": "frontend_react/app/teacher/page.tsx",
+    "lines": 162,
+    "sha256": "35325ea152f4b672b854d5b2a4a62bbbea2eb30a1c11090ab1b8838a0fc67e00"
+  },
+  {
+    "path": "frontend_react/app/teacher/layout.tsx",
+    "lines": 257,
+    "sha256": "80ef7014c6e24321a357d4a2ebb768e162f8118a1b114ce0718154666af0f211"
+  },
+  {
+    "path": "frontend_react/app/teacher/analytics/page.tsx",
+    "lines": 2450,
+    "sha256": "a8010e17d8036f4db514d0f6eb66369d0328289367cb2486b21bbabfe45c4485"
+  },
+  {
+    "path": "frontend_react/app/teacher/groups/page.tsx",
+    "lines": 1681,
+    "sha256": "cdbf6b86c6a00f7b1efa672abb0037430e1150194bf886025ac1926230e651cd"
+  },
+  {
+    "path": "frontend_react/app/teacher/knowledge/page.tsx",
+    "lines": 645,
+    "sha256": "da8f4d661b62427209820a5087426946ea9753fa340683cd057ba4d15dfeda4b"
+  },
+  {
+    "path": "frontend_react/app/teacher/profile/page.tsx",
+    "lines": 435,
+    "sha256": "141bb72db287b8cee58b643fac68d210bbcf8a95470b4f1bd808a9b93fb8a7bf"
+  },
+  {
+    "path": "frontend_react/app/teacher/sessions/page.tsx",
+    "lines": 5,
+    "sha256": "e8e6d9de39af41c993c4a2bf4647a846393eeba542dd64435c12ceffce066461"
+  },
+  {
+    "path": "frontend_react/app/teacher/tickets/page.tsx",
+    "lines": 2507,
+    "sha256": "39f83289495648209ad8449b06b87cbdb1ea2a83513e388aecc7fea008940cad"
+  },
+  {
+    "path": "frontend_react/app/teacher/sessions/live/layout.tsx",
+    "lines": 3,
+    "sha256": "1af4ec4e75f82f37f59b7054e6c7d09c3abf9f297933650d04a6232d4fa852df"
+  },
+  {
+    "path": "frontend_react/app/teacher/sessions/live/page.tsx",
+    "lines": 1117,
+    "sha256": "d488e7a0fbd15de22fb82ef0fbfa11e1b88eebc996b7a9f6fbd4255870cc6a0c"
+  },
+  {
+    "path": "frontend_react/app/teacher/sessions/new/page.tsx",
+    "lines": 1579,
+    "sha256": "4edf72386891973876f0ba368a97827d3445f2a2f3b81c0a00ec382a5e654f3f"
+  },
+  {
+    "path": "frontend_react/app/student/lobby/page.tsx",
+    "lines": 14,
+    "sha256": "ccad5954e1fe710b5fb99e89009535a897f308f01b2d4aec1d4d3a5611de9752"
+  },
+  {
+    "path": "frontend_react/app/student/profile/page.tsx",
+    "lines": 215,
+    "sha256": "c9647f431fc97a5739657f0ac77783f0acfa62c8ecba77bda120b2dec0c86cf1"
+  },
+  {
+    "path": "frontend_react/app/operator/journal/page.tsx",
+    "lines": 1253,
+    "sha256": "1f87972aa4fe49a761c9fa501260e58a3e2356eb54471bf2d51fe19bc32e9288"
+  },
+  {
+    "path": "frontend_react/app/dds/journal/page.tsx",
+    "lines": 980,
+    "sha256": "a535e882ceecd349a5e8301f9a97da6bfdeb03c7b09160cd761859fd95a7ced3"
+  },
+  {
+    "path": "frontend_react/app/admin/profile/page.tsx",
+    "lines": 441,
+    "sha256": "ba193725e77ec6f139086f8193685ad79108462a07420d4fa7ebca9b9782f75a"
+  },
+  {
+    "path": "frontend_react/app/admin/security/page.tsx",
+    "lines": 193,
+    "sha256": "c15b081efa29636804c0263a21c524f370e79bbba7e584bed0d3d9028c77a0ce"
+  },
+  {
+    "path": "frontend_react/app/admin/system/page.tsx",
+    "lines": 642,
+    "sha256": "aaff91729c14014fe27312cd475dc58b303ba97cfa351cd5de531710c1e3065f"
+  },
+  {
+    "path": "frontend_react/app/admin/users/page.tsx",
+    "lines": 746,
+    "sha256": "4c8bbd9225598c141b85bd1494feef77230a443b85f20beec4f11270884f5542"
+  },
+  {
+    "path": "frontend_react/app/admin/logs/page.tsx",
+    "lines": 704,
+    "sha256": "c1d173b1b3959a5e92b72feb3ba2c20b5cb9e67f2da7e7e728b5b5e79df6a776"
+  },
+  {
+    "path": "docs/architecture/01_identity_and_roles.md",
+    "lines": 94,
+    "sha256": "ced0ba232a02cfd81d068d52faec4777f41f4df20e6e0961ccd31f9cb9590291"
+  },
+  {
+    "path": "docs/architecture/02_scenario_management.md",
+    "lines": 251,
+    "sha256": "a0693741bc74f3493ede6a5ca644229fe2359f44b7c126e196d778c67be0ac60"
+  },
+  {
+    "path": "docs/architecture/03_simulation_runtime.md",
+    "lines": 164,
+    "sha256": "99f26019ec3002cbfc2f85df5f4a6b0893411bb629bf057503ae49f8d1981fa9"
+  },
+  {
+    "path": "docs/architecture/04_assessment_and_dds.md",
+    "lines": 208,
+    "sha256": "f654ea652fba3d27eec7dbca7068ec08baad61bf7fa69713fbecb1cdd44b4c97"
+  },
+  {
+    "path": "docs/architecture/05_dialogue_engine.md",
+    "lines": 353,
+    "sha256": "ed61eadc943db66bdb1819816af3ff5b8d7c8c53ba4cf50dddfb8f3927a4f448"
+  },
+  {
+    "path": "docs/architecture/06_api_contracts.md",
+    "lines": 398,
+    "sha256": "7dec2b1d53b0d0034e37bed0b7ebe8d7201dedf6d1170d94776e03672194ac46"
+  },
+  {
+    "path": "docs/architecture/07_database_schema.md",
+    "lines": 1041,
+    "sha256": "1c895025e1caf3e186c9db749d168fcacb4a769f1f0968bf65611c1fff465c27"
+  },
+  {
+    "path": "docs/architecture/README.md",
+    "lines": 44,
+    "sha256": "d424c73143d5ce7fbcacf247bd09c7515a89958a723951ed5357ea5f146b1134"
+  },
+  {
+    "path": "docs/project-context/START.md",
+    "lines": 119,
+    "sha256": "02c4a4949868252c5d4e549b563bffc8a34c789f02c6459318afacfbc361ea0e"
+  },
+  {
+    "path": "docs/project-context/DECISIONS.md",
+    "lines": 25,
+    "sha256": "aa7d1351c36e8e4070fddd7ca5f6d42254445cc86ea19b745363da670a0740de"
+  },
+  {
+    "path": "docs/project-context/OPEN-QUESTIONS.md",
+    "lines": 39,
+    "sha256": "35a9743338f8c3f974ad9e2868593d671089390c0e206367b921e41f8fc9f107"
+  },
+  {
+    "path": "docs/project-context/REQUIREMENTS.md",
+    "lines": 142,
+    "sha256": "edc959c35ee9272b177fdec3a4d277b8eb37e151938c0638a032bad11f3d6fec"
+  },
+  {
+    "path": "docs/project-context/ORGANIZER-RECOMMENDATIONS.md",
+    "lines": 41,
+    "sha256": "af68723c19a8503b67f94654b88d5c3d89b4a19a798f799e99a82c962c8ad346"
+  },
+  {
+    "path": "docs/project-context/REVIEW.md",
+    "lines": 77,
+    "sha256": "2d53d5439f7cec6ef98d29546075edba2e60a56655495e9d05898e87a123ed36"
+  },
+  {
+    "path": "docs/project-context/TASKS.md",
+    "lines": 66,
+    "sha256": "748e823ae430fb532c8399faa83f439e043a51e978eb4b2bfb322227cae5dd9e"
+  },
+  {
+    "path": "docs/project-context/PRIORITIES.md",
+    "lines": 48,
+    "sha256": "493e817a92be4457b620517a7ed40668eb80bcb3c00d6e9d4c0335adc92c5093"
+  },
+  {
+    "path": "docs/project-context/HANDOFF.md",
+    "lines": 77,
+    "sha256": "0f01b5aaf45ce809cddb8976b8ef529e920970dda96be95c39953189c94f26e7"
+  },
+  {
+    "path": "docs/project-context/TEST-READINESS-20261017.md",
+    "lines": 112,
+    "sha256": "e9349ba56b7f25035abe54eca73bebc0933a745d26e311f34a731e766e45d6a8"
+  },
+  {
+    "path": "docs/project-context/sources/01-tz-sections-1-8.txt",
+    "lines": 195,
+    "sha256": "cd6a569f3f18a21fffe4d2e5ab6f97e74bfb0982cabde0d6326f17f202d93c27"
+  },
+  {
+    "path": "docs/project-context/sources/03-tz-sections-11-17.txt",
+    "lines": 134,
+    "sha256": "b43d7c3996f4843ca22bc983a1a82a49cc9b58b3e90bf04b6f02d2aa3c8236f9"
+  },
+  {
+    "path": "docs/project-context/sources/README.md",
+    "lines": 14,
+    "sha256": "69859abedf30057294df4b2ceb97b38f1d80590cee41ca1418ab8ea5aef415ea"
+  },
+  {
+    "path": "docs/project-context/sources/02-tz-section-9.txt",
+    "lines": 27,
+    "sha256": "f409ab0ef0e9e1a94ef1c8e69eb737d16470ee9bf24112f8f291432f5f0acf71"
+  },
+  {
+    "path": "docs/project-context/sources/04-user-roles.txt",
+    "lines": 115,
+    "sha256": "32c3718e9936b251221f19dd7c51e0569a1df188e22c933478b2d0c7b90dfcfa"
+  },
+  {
+    "path": "docs/project-context/sources/05-tz-section-10.txt",
+    "lines": 62,
+    "sha256": "b40764c77439cef6e62a4152b9cbdc36f51eae2cee654ea272333e2cf9a3bf77"
+  },
+  {
+    "path": "docs/project-context/sources/06-organizer-recommendations.txt",
+    "lines": 41,
+    "sha256": "c5f9dba0c9e859a4fa25b89e5e2c9b641384be77f33e7b4bc2ef381d42ad8eb8"
+  },
+  {
+    "path": "docs/project-context/sources/07-external-audit-2026-10-16.txt",
+    "lines": 45,
+    "sha256": "98d9b362666bc0a042e7f1dd9ace644b8abb42a10ec880c4a73c3941c05e212c"
+  },
+  {
+    "path": "docs/project-context/tasks/A-02.md",
+    "lines": 66,
+    "sha256": "34fa62020903dae4d6502c0bd8e1a9405ebb534b92c46c91601e263ce3c0a551"
+  },
+  {
+    "path": "docs/project-context/tasks/A-03.md",
+    "lines": 27,
+    "sha256": "48454576ce3f5904b147a712f2114a0ae99bd52152873886a55d1db81124d270"
+  },
+  {
+    "path": "docs/project-context/tasks/A-04.md",
+    "lines": 33,
+    "sha256": "ffa6fa566d7eace2a09fd130c902af14c10cb662b9cf9dc810e4e0b310f34b51"
+  },
+  {
+    "path": "docs/project-context/tasks/A-05.md",
+    "lines": 39,
+    "sha256": "93fd8106c3492796f311b30f4178b534344013ba7673c30a8b41e4b55ba772f1"
+  },
+  {
+    "path": "docs/project-context/tasks/A-06.md",
+    "lines": 120,
+    "sha256": "22297ceeb47e38f52983350ecce4d77dd375698424d6d51cf36d49234ea5ae86"
+  },
+  {
+    "path": "docs/project-context/tasks/MERGE-SECURITY-20261017.md",
+    "lines": 90,
+    "sha256": "d05b6cc96896b5d7af9b331ee74601087b1a8a6bcc129303808606d203bad79d"
+  },
+  {
+    "path": "docs/project-context/tasks/P1-ACCESS-WORKER.md",
+    "lines": 43,
+    "sha256": "1f4e54f7bb99cedf55fa6e7908a9bf14202a0270aeb9ad1b177a855a02735d0b"
+  },
+  {
+    "path": "docs/project-context/tasks/P2-TEST-RUNNER-WORKER.md",
+    "lines": 48,
+    "sha256": "82f1de10ede1c916a53269bf34d32d6ba2e18ca435b72a26c33f96c3f41d25ee"
+  },
+  {
+    "path": "docs/project-context/tasks/P3-QUALITY-GATE-WORKER.md",
+    "lines": 50,
+    "sha256": "b5a62f7c36e2441a080d20c9f6c50f32125f94c4ec0cceee1e917c60c8447a03"
+  },
+  {
+    "path": "docs/project-context/tasks/P1-P3-COORDINATION.md",
+    "lines": 23,
+    "sha256": "242cace81c2b7b5aa6f1aa63c88f781763934bad703da75a49a0a4bbd1be4592"
+  },
+  {
+    "path": "docs/project-context/tasks/ANTIGRAVITY-PROMPTS.md",
+    "lines": 39,
+    "sha256": "a4a387bb8441ed8f1f0ed75a116d91949eab34df0b6e01dbc33f4dcd33db62c1"
+  },
+  {
+    "path": "docs/project-context/tasks/P1-P3-TEST-BASELINE.md",
+    "lines": 57,
+    "sha256": "5f8cb92310948da3b9561bc23e15d58f5329d68a01d694a13a1ec3f0e630ef55"
+  },
+  {
+    "path": "docs/project-context/tasks/P1-P3-REVIEW-20261017.md",
+    "lines": 62,
+    "sha256": "ea22c0eaf0d824ce5859f0b532aabeb9615b8ff904718886b28ed1496fae543b"
+  },
+  {
+    "path": "docs/project-context/tasks/P1-P3-FOLLOWUP-REVIEW-20261017.md",
+    "lines": 53,
+    "sha256": "5f84e8513acf66ee2f3c8204c405ce325ee315620a2dfe88d38f82df4f713e12"
+  },
+  {
+    "path": "docs/project-context/tasks/P1-P3-FINAL-REVIEW-20261017.md",
+    "lines": 20,
+    "sha256": "d015bd29e421d11b737adff5bd8b475e16c7e5938512da87d049e6869026b567"
+  },
+  {
+    "path": "docs/project-context/tasks/GROUPS-DDS-CATALOG-REVIEW-20261017.md",
+    "lines": 32,
+    "sha256": "155203027e8fa22fac73791a7e4dc298b05eb21d9d5e48dabe85febec8b32892"
+  },
+  {
+    "path": "docs/project-context/tasks/GROUPS-DDS-CATALOG-FIX-20261017.md",
+    "lines": 29,
+    "sha256": "f26049156c6d66f7d9092dbeb8d66f50e1f696f73d801eb69a7e83a47adc69b6"
+  },
+  {
+    "path": "docs/project-context/tasks/STUDENT-DDS-DEMO-START-20261017.md",
+    "lines": 26,
+    "sha256": "3453f51f471d7c4ca7478fcdffd63dd694051a2d5893a26f24cb0bcc8921fa97"
+  },
+  {
+    "path": "docs/project-context/tasks/DDS-SERVICES-MENU-20261017.md",
+    "lines": 47,
+    "sha256": "19bfce18d681094dc82c4bf3e263ac44b932d2753fbd9ea59b810c80b4d3b3d7"
+  },
+  {
+    "path": "docs/project-context/tasks/SAVED-INCIDENT-CARD-REVIEW-20261017.md",
+    "lines": 67,
+    "sha256": "4c9303eb1b13d5d567fc53f9190c625dcdf1b0a78a7e4847bb1507d5ef80c74f"
+  },
+  {
+    "path": "docs/project-context/tasks/DDS-OPERATOR-SPEC-20261017.md",
+    "lines": 144,
+    "sha256": "fde02fd2e1ab0d80b24f84a97b0b4c3bdc375689db01fa48939039440e50e0b0"
+  },
+  {
+    "path": "docs/project-context/tasks/DDS-REFERENCE-RESTORE-20261017.md",
+    "lines": 44,
+    "sha256": "eb21aa4bb12a8fb150b2aacaaf8e76f3b88470c6e2585e4841d01493671cb356"
+  },
+  {
+    "path": "docs/project-context/tasks/DDS-STATUS-POLICY-STEP1-20261017.md",
+    "lines": 62,
+    "sha256": "0f87a629018b016d8217b5af0bb620809143eff82a26c8c9130367659fd58eb6"
+  },
+  {
+    "path": "docs/project-context/tasks/DDS-SEQUENTIAL-TICKETS-SLA-20261018.md",
+    "lines": 57,
+    "sha256": "1f55c50580dcee1a47fdb9eee3a223119d86b0ca01a293c4c09cb5bb586f531c"
+  },
+  {
+    "path": "docs/project-context/tasks/DDS-DIRECT-WORKPLACE-LIST-20261018.md",
+    "lines": 54,
+    "sha256": "ae7c500a5b50b2c02bba8d2444918e9e2b893ed882f1b2103fc9071329222280"
+  },
+  {
+    "path": "docs/project-context/tasks/DDS-DEMO-LIST-PENCILS-20261018.md",
+    "lines": 61,
+    "sha256": "d8ada0b73f8b20dbe22b0d8af216d2b63f0e2627799b4b86dfe1d956afd0aaa0"
+  },
+  {
+    "path": "docs/project-context/tasks/DDS-MAIN-MERGE-20261018.md",
+    "lines": 46,
+    "sha256": "1bcd2fad5b1c8c03dae86baa9faf6e09256a1d4224280cfa53be87f43c663787"
+  },
+  {
+    "path": "docs/project-context/tasks/DDS-LIVE-WORKFLOW-STEP1-20261018.md",
+    "lines": 60,
+    "sha256": "d71e5b44d0338f9c31a73b73cafaed326e3eaad7e87d4dddd4302c8d2f9c2069"
+  },
+  {
+    "path": "docs/project-context/tasks/DDS-LIVE-WORKFLOW-UI-20261018.md",
+    "lines": 57,
+    "sha256": "6b09f85d90f7cc00912340f66a4b8d5503c8ab41f89aadbf9d538f0d2bdcc255"
+  },
+  {
+    "path": "docs/project-context/tasks/STUDENT-PROFILE-HOME-20261019.md",
+    "lines": 64,
+    "sha256": "aef2a3af5b000947da0597a00da1c67c92351790f9fd41a2bd35562426dfef4d"
+  },
+  {
+    "path": "docs/project-context/tasks/DDS-PHONE-TRAINING-20261019.md",
+    "lines": 91,
+    "sha256": "a0f148d0d3cdc543065f170d95971f0a509801ad03f9bcd1ab0aeeccc621c8cc"
+  },
+  {
+    "path": "docs/project-context/tasks/STUDENT-CURRENT-LESSON-DIALOG-20261019.md",
+    "lines": 66,
+    "sha256": "d73153a5f9023462b66c0d8f39b39fafc115af72be5895cd9b17cdd61ec1ea8d"
+  },
+  {
+    "path": "docs/project-context/tasks/STUDENT-ATTEMPT-REVIEW-20261019.md",
+    "lines": 36,
+    "sha256": "9c459225f11e069779406a7fad73d8268c36e87ee4b9041e2ca2b62074b98010"
+  },
+  {
+    "path": "docs/project-context/tasks/NEXT-ROUTE-TYPES-20261019.md",
+    "lines": 29,
+    "sha256": "890c976b8ac5b2c84a142a98376660d2ec383f4c505801460ea5a63ba1d7f1fa"
+  },
+  {
+    "path": "backend/api/router_asr.py",
+    "lines": 470,
+    "sha256": "0c59791673e4c71d6d7e7d0634bda12d9aeb9818386f335586c255bd275b771e"
+  },
+  {
+    "path": "backend/api/router_auth.py",
+    "lines": 500,
+    "sha256": "ab8f1eaf5ba76f1c9d6bff3ffb42f832fc434eec515ded57f82ad0af0d43bede"
+  },
+  {
+    "path": "backend/api/router_classifier.py",
+    "lines": 383,
+    "sha256": "7344aa26ce653424f0bde78083669d1948193cb93a5e21aaec1d3fada1c931fc"
+  },
+  {
+    "path": "backend/api/router_generator.py",
+    "lines": 10,
+    "sha256": "632a327d7a9420451aae51f8dd7724d635df804b8b14dd289c892ae3e03c2cc9"
+  },
+  {
+    "path": "backend/api/router_dds_reports.py",
+    "lines": 318,
+    "sha256": "c851f968c94a836f6cc9b7eeb5d23250eaa783081e83162a6234bd34aea281c6"
+  },
+  {
+    "path": "backend/api/router_analytics.py",
+    "lines": 1092,
+    "sha256": "b26bdfe173a0dc6cda30aa44855f270f56fea4e44452ec24f8d20a21bdb4d03b"
+  },
+  {
+    "path": "backend/api/router_assignments.py",
+    "lines": 52,
+    "sha256": "4b11ef4c39fb5066984283469805574df60a64e7e51c668186db6fe259804052"
+  },
+  {
+    "path": "backend/api/router_audit.py",
+    "lines": 174,
+    "sha256": "c7c7c5739a07eddae65995c28e88a62e2ba8a600f6b32d9467bf36c2b66c2e2e"
+  },
+  {
+    "path": "backend/api/router_call.py",
+    "lines": 134,
+    "sha256": "e3b81476a88482e549abe53c13cf0678d33ee9ebe7f730c2a9483bddcba764fe"
+  },
+  {
+    "path": "backend/api/router_dds.py",
+    "lines": 288,
+    "sha256": "340db270315874d8206f4a2a02829f19c0bba7f950ba3290411d3be5f307c9a2"
+  },
+  {
+    "path": "backend/api/router_integration.py",
+    "lines": 28,
+    "sha256": "c5ad4eb1c50ad9c0d72283c8b6ee0dd01e8fa9d6713d87774c68502b4baf54e9"
+  },
+  {
+    "path": "backend/api/router_knowledge.py",
+    "lines": 158,
+    "sha256": "18cb324058c0af3976b6803de8724369354bfffc5e551e3883262f420622201b"
+  },
+  {
+    "path": "backend/api/router_lessons.py",
+    "lines": 953,
+    "sha256": "3eee4abf3a348add99dfb1637239e90e42491e670b8492e354ac60db7b0873cd"
+  },
+  {
+    "path": "backend/api/router_reports.py",
+    "lines": 386,
+    "sha256": "eab0d410004cb71acdb1b64bc88c1ecdeee581191c57655f512998a03ac28362"
+  },
+  {
+    "path": "backend/api/router_scenario.py",
+    "lines": 24,
+    "sha256": "d7d954af932574542073ea63e539dad5d4ecc32f9277b3fa35797cc2969e01cc"
+  },
+  {
+    "path": "backend/api/router_scenarios.py",
+    "lines": 118,
+    "sha256": "ba1d1cd69a0628df0554144fbaeb0507725a813dc066c18de2b9c8e162a8576a"
+  },
+  {
+    "path": "backend/api/router_telephony.py",
+    "lines": 416,
+    "sha256": "845cfe1dc870979eb7ebb4a4beac46a632613420e8b2a534ce37611ad05e5896"
+  },
+  {
+    "path": "backend/api/router_users.py",
+    "lines": 296,
+    "sha256": "f3e148f9c83f16486f9855e6507860690b6d24a45637a22e36a68a35af91b47e"
+  },
+  {
+    "path": "backend/api/router_sessions.py",
+    "lines": 856,
+    "sha256": "905bec1792d7add9773a7c020fecec5bb228e7b597739ea29e44820fb1358cd5"
+  },
+  {
+    "path": "backend/api/router_ai_analytics.py",
+    "lines": 592,
+    "sha256": "5c54a51e8652b4a488b381f41085099ceb3e46f64ce551d7feee3e65ecb1faea"
+  },
+  {
+    "path": "backend/api/router_dds_cycle.py",
+    "lines": 266,
+    "sha256": "5a47d35dfb298a4fd471655194a87680bbeeb4135741e758183050c552e42411"
+  },
+  {
+    "path": "backend/api/router_groups.py",
+    "lines": 834,
+    "sha256": "02d36f3d2e63fc7004dc6e7b1ef6ccda7eedb99036d4c34098ccb175b40dc156"
+  },
+  {
+    "path": "backend/api/router_tickets.py",
+    "lines": 1370,
+    "sha256": "c158508803e5ad67addab92918b20e17578fd27b56b14c12104ce5e0be59bbe2"
+  },
+  {
+    "path": "backend/api/router_admin.py",
+    "lines": 368,
+    "sha256": "f1e0a03d9d8839530527df4c75bc07f3d2abd5c8e286f47ea7e01656ff5b6cf1"
+  },
+  {
+    "path": "backend/bin/libggml-base.so.0",
+    "lines": 5140,
+    "sha256": "875357341611b4e72985857a6329c6ea9575c9a710432d7041ee1b7f5547f152"
+  },
+  {
+    "path": "backend/bin/libggml-cpu.so.0",
+    "lines": 6487,
+    "sha256": "f1280e08e48fb24048731db5921df87820b731eed0a9a811ab1565cfd6fe9c2e"
+  },
+  {
+    "path": "backend/bin/libggml.so.0",
+    "lines": 162,
+    "sha256": "c8a935625df705f8b2e616f1ec518d7b477e9017f95373089cf81e66ab29c9a8"
+  },
+  {
+    "path": "backend/bin/transcribe-cli",
+    "lines": 13460,
+    "sha256": "2b858546f04f5d57b8a93717d093e46820a4f3a09a0b380cb41717fe5a3a6ca7"
+  },
+  {
+    "path": "backend/core/analytics_engine.py",
+    "lines": 111,
+    "sha256": "92afd669eb79bd187ceeb9e051c56bb194588bad4338d6e2766928ddeb261e6b"
+  },
+  {
+    "path": "backend/core/audit_middleware.py",
+    "lines": 60,
+    "sha256": "c52abe96f7807fa9d0f66ae4296b707394afa14514d91c421fd56e602acd5574"
+  },
+  {
+    "path": "backend/core/auth_sessions.py",
+    "lines": 91,
+    "sha256": "a0605d78069525f8420ce2eec84d8a579e249ca0ef25703a2c0c57be45bcea2a"
+  },
+  {
+    "path": "backend/core/bootstrap.py",
+    "lines": 39,
+    "sha256": "36394d514fef1a7f890a21cd51ffe553266b7c85e2d84d85a82ebb208b9c3bcb"
+  },
+  {
+    "path": "backend/core/bricks_compiler.py",
+    "lines": 105,
+    "sha256": "84a16bc42781f320cd432029e32002e61c0daf2d3825d91a1cb0f8952ff05eb3"
+  },
+  {
+    "path": "backend/core/classifier_rules.py",
+    "lines": 29,
+    "sha256": "46ba8cb695be12ee0fb022796cea85ceaae9c11d1fa1c0237fc4ea262a4b211e"
+  },
+  {
+    "path": "backend/core/complexity.py",
+    "lines": 29,
+    "sha256": "0b1fbd75e49ddd750c521a81a258b4c57e50c9ec2fc7a4f79ab18660b15d455e"
+  },
+  {
+    "path": "backend/core/csv_parser.py",
+    "lines": 44,
+    "sha256": "e7d8a3c9d8fe8455311c5e80ba9084fa88aef259931f66ab3a6c6341b5d74fd6"
+  },
+  {
+    "path": "backend/core/deps.py",
+    "lines": 111,
+    "sha256": "2e25681d2d9550792ca920233746c9b0e7c522fb97ed1d448744fd73367e61e0"
+  },
+  {
+    "path": "backend/core/dialogue_router.py",
+    "lines": 25,
+    "sha256": "137726cb8e7f5fd736e08ef2405c7804d3e839b8477d9020233025c09e92121c"
+  },
+  {
+    "path": "backend/core/evaluator.py",
+    "lines": 52,
+    "sha256": "824b89cfa73eb888035d1dc7ec91a5fd12db3efe26b8938305db6680599ed906"
+  },
+  {
+    "path": "backend/core/factoid_generator.py",
+    "lines": 314,
+    "sha256": "668bab1802f6208f62a7e16532e067927f8b5308388e3754c1e1275475934868"
+  },
+  {
+    "path": "backend/core/factoids_llm.py",
+    "lines": 119,
+    "sha256": "9326aceed6736739e27225d29a3a2d54ced7063db2ce63e466040aa3e2e35cd3"
+  },
+  {
+    "path": "backend/core/faker.py",
+    "lines": 217,
+    "sha256": "83777dc4ca16d7c725cbeb87dcfc74e2f6fe9c689c6caeb518d435bb3321c46d"
+  },
+  {
+    "path": "backend/core/file_storage.py",
+    "lines": 26,
+    "sha256": "5d8ef3d4fbf27f6c41ed9e18ad8dc4dfb7f521118eb2715c23c296ee809404f0"
+  },
+  {
+    "path": "backend/core/intent_classifier.py",
+    "lines": 82,
+    "sha256": "6e5e29623abe86951e519fab13b32ebdd0d407627ea097b694378d79caea5d95"
+  },
+  {
+    "path": "backend/core/ldap_adapter.py",
+    "lines": 42,
+    "sha256": "8d719243a16c14e06a469a608e2ddf5495167f337d92f4686d68d5240f9b64b8"
+  },
+  {
+    "path": "backend/core/reports_engine.py",
+    "lines": 400,
+    "sha256": "94b7d15779eabeddd782b839382d0de888a8af47e25b6e4a2939a5845cccf668"
+  },
+  {
+    "path": "backend/core/runtime_router.py",
+    "lines": 439,
+    "sha256": "94faa079ec16fd332250a9fa6f2cee1ff046d13af5888b6c35b5108d72b1cc95"
+  },
+  {
+    "path": "backend/core/security.py",
+    "lines": 107,
+    "sha256": "86c443adfbdd3f76f599614e1a6414bf6b89316439f5094e7aa561afd5c50e5d"
+  },
+  {
+    "path": "backend/core/sla_monitor.py",
+    "lines": 89,
+    "sha256": "6b9344d907e10d6a9193e7accfd1a6a2b475948a437dc6c6b02920d88a1c83ab"
+  },
+  {
+    "path": "backend/core/spo_gateway.py",
+    "lines": 62,
+    "sha256": "fc7b79569269b336aefab45d2112bac225e3d374ed0a34835e7042b70ceb9c14"
+  },
+  {
+    "path": "backend/core/telephony_adapter.py",
+    "lines": 156,
+    "sha256": "64faecb44eea8945b8f3acf75b04a8ec0764dc7670ea974351e526f32e622279"
+  },
+  {
+    "path": "backend/core/text_normalization.py",
+    "lines": 85,
+    "sha256": "b8012c4fc596f5d92cd0483a50c78efd86bdc1e86eff6356ea860acb803e7b49"
+  },
+  {
+    "path": "backend/core/ticket_generator.py",
+    "lines": 107,
+    "sha256": "032474b7051c5facbc1dd6b27563d0a39221effb9df4e3135af5ebd6e2a2cf95"
+  },
+  {
+    "path": "backend/core/tts_engine.py",
+    "lines": 19,
+    "sha256": "a3f068c603aa8e254ea7acf84150825d45305dd7cabc163b0df53539115ddb25"
+  },
+  {
+    "path": "backend/core/tts_v2.py",
+    "lines": 191,
+    "sha256": "79a38f038ef677f720b9422de496d8fbc0300bc7a35a184908faeed00b27e92d"
+  },
+  {
+    "path": "backend/core/dds_report_data.py",
+    "lines": 379,
+    "sha256": "61a2a77c4bb8426048045264ec3b79508831cab01b3ae8b9d08210aaf85fd19e"
+  },
+  {
+    "path": "backend/core/dds_report_jobs.py",
+    "lines": 394,
+    "sha256": "d677d15ecc55eecc4b12f0a02ada8374bc818b65ecacbc15f02982f0b4c98e84"
+  },
+  {
+    "path": "backend/core/dds_report_llm.py",
+    "lines": 431,
+    "sha256": "c9e19573ec59611867d6244c903f17f96ed9942291cbee3c3204d71adceb1f8a"
+  },
+  {
+    "path": "backend/core/ai_worker.py",
+    "lines": 487,
+    "sha256": "b9aea2e583a5141399646275f64b5ab6794a5ab82a9e77e4b48ae2c900725d76"
+  },
+  {
+    "path": "backend/core/ai_analytics_access.py",
+    "lines": 84,
+    "sha256": "4474702e42efdc291e2c666f55928088efd7db618fc418848e4d9e09d5129328"
+  },
+  {
+    "path": "backend/core/dds_cycle.py",
+    "lines": 1093,
+    "sha256": "456fb1ffbf00fe45f05a2863c80c3db5ef08ebd7374b943b19787f52279ebf67"
+  },
+  {
+    "path": "backend/core/dds_service_policy.py",
+    "lines": 60,
+    "sha256": "d32beeff8a1b7a79b30d057049416c296970f60efafd4c996d88520db1663b24"
+  },
+  {
+    "path": "backend/core/__init__.py",
+    "lines": 12,
+    "sha256": "87f8e4ea8d7065cfd0a0c741b515f7ecac354a1ebd775abb326cc923bd0f192a"
+  },
+  {
+    "path": "backend/core/integrity.py",
+    "lines": 580,
+    "sha256": "4c153bd41d4caa409ddc8bf08f40a75c2b85063bbf23d1b2455ef397ed146e8a"
+  },
+  {
+    "path": "backend/core/dds_queue.py",
+    "lines": 320,
+    "sha256": "ebc120e7a987174fc44af944dadbda238520cc5d4981111e03af68dff94184ad"
+  },
+  {
+    "path": "backend/core/dds_exercise.py",
+    "lines": 221,
+    "sha256": "3088201b43ae3188e4111178f214a5e50dbc68aeff2f12ede6125e3d8435afe5"
+  },
+  {
+    "path": "backend/core/dds_phone.py",
+    "lines": 99,
+    "sha256": "f43bbe01d3ecf1f08546bbc420a8ba9db62981ec22010bbef93feaf41c5e65bc"
+  },
+  {
+    "path": "backend/db/__init__.py",
+    "lines": 1,
+    "sha256": "fa2cd952011286d6f9d957037bbf21dbec4f1b4226d560e42951f2f1d31f83bf"
+  },
+  {
+    "path": "backend/db/database.py",
+    "lines": 30,
+    "sha256": "31918e21a210fe0b2c839061a4a0dfb62737de69c49f01d367f01ec6c30c0cc3"
+  },
+  {
+    "path": "backend/schemas/__init__.py",
+    "lines": 1,
+    "sha256": "af083a7a2b520d46cfd354b491f51469d52c517db2661fe820c81adc21a28c24"
+  },
+  {
+    "path": "backend/schemas/analytics.py",
+    "lines": 201,
+    "sha256": "47a25089c7c2f49b6b8869c68aa4dcc876c3a4ed742f663c6281a9d4f3ee0e92"
+  },
+  {
+    "path": "backend/schemas/assignments.py",
+    "lines": 22,
+    "sha256": "a4ed71ec54dabf79c64ab9630269f3858254ff35cccdd21e99c217b0e5be79c4"
+  },
+  {
+    "path": "backend/schemas/auth.py",
+    "lines": 46,
+    "sha256": "729364e6af28e70df93533e459753776f2e6a83a7c0d192ec11e9dd2d60da9b5"
+  },
+  {
+    "path": "backend/schemas/bricks.py",
+    "lines": 46,
+    "sha256": "4d4f0937c4b6345d7c6fdcf42bd4c434108bed775e449523617b3de6c4fb27ae"
+  },
+  {
+    "path": "backend/schemas/classifier.py",
+    "lines": 45,
+    "sha256": "41ca7883957214c01f91f0a75beb05c6e09a93e17cf6b4524ab2e95cdc01bc77"
+  },
+  {
+    "path": "backend/schemas/dds.py",
+    "lines": 26,
+    "sha256": "5899ba4a16903dff329d59f837ce2375cea87af580bf6914b2d1b22e4870be4f"
+  },
+  {
+    "path": "backend/schemas/domain_01.py",
+    "lines": 80,
+    "sha256": "cb20e5ca16ea3091c7ac4ee93d33e15e259ace51be14d883a1c62ea04e7844bc"
+  },
+  {
+    "path": "backend/schemas/domain_02.py",
+    "lines": 63,
+    "sha256": "3e87b1a3b41a231e6aa889ac42cf35c313ec7638ea69db774b730d4a556113d7"
+  },
+  {
+    "path": "backend/schemas/domain_03.py",
+    "lines": 53,
+    "sha256": "c14b8f743f1ccdea8ec3bc0d410ffe9f116bcd5f665fdee0c2a0e677d675ea00"
+  },
+  {
+    "path": "backend/schemas/domain_04.py",
+    "lines": 74,
+    "sha256": "3b70b1658d561ed639d5aa38806e955d84d34fa56cfd3d45a05b1e53b947a734"
+  },
+  {
+    "path": "backend/schemas/factoids.py",
+    "lines": 29,
+    "sha256": "75b86eebc00299402105e03261147e5f20f72cd44532e4618714db68fd0eed4c"
+  },
+  {
+    "path": "backend/schemas/faker.py",
+    "lines": 29,
+    "sha256": "af9cf7e67d65d0dd93be308d80c3475499505d5f4a837ff83ad9604fb6ecbfb6"
+  },
+  {
+    "path": "backend/schemas/generator.py",
+    "lines": 24,
+    "sha256": "520e0e8ee515428cc4ddcecf22df2c8502802161596e3a044d585bea78e3ec6c"
+  },
+  {
+    "path": "backend/schemas/reports.py",
+    "lines": 77,
+    "sha256": "55e08946d3304324ec01d92206400cbb933b84ad38e9301cc86c3bca9a5cd807"
+  },
+  {
+    "path": "backend/schemas/router.py",
+    "lines": 6,
+    "sha256": "2beb3f4d3bed605c4e3336e9a8584ee2c1c8fad2a3765854558ac118cbf1cacb"
+  },
+  {
+    "path": "backend/schemas/scenarios.py",
+    "lines": 22,
+    "sha256": "7e94a3e5b5c02633fa18e31bcf72ac9272b56c063e99823f67bc70b395910a7b"
+  },
+  {
+    "path": "backend/schemas/sessions.py",
+    "lines": 71,
+    "sha256": "b10f3a85ca8c1e970bb5e78b03830ae766c0d11b90bbabf6996e31ec7ea9cd60"
+  },
+  {
+    "path": "backend/schemas/tickets.py",
+    "lines": 21,
+    "sha256": "17986c4074cb7f55ce7ebd22614ab95f3ed9d89248f63065990ae77bc6bde834"
+  },
+  {
+    "path": "backend/schemas/lessons.py",
+    "lines": 161,
+    "sha256": "265f1b158c8ea248c6781ce28e050ed02df0f968384311bb0c08657372e21d37"
+  },
+  {
+    "path": "backend/schemas/students.py",
+    "lines": 87,
+    "sha256": "82cd9665d6387971f5faf8ccffcc1d9d2c92790ec395e5c33b6f5990b224d457"
+  },
+  {
+    "path": "backend/schemas/audit.py",
+    "lines": 31,
+    "sha256": "469f8e3226e2f89cc0c1925e44506be4a7702d97105d5828c8df431839096194"
+  },
+  {
+    "path": "backend/schemas/users.py",
+    "lines": 36,
+    "sha256": "d40012d084b10df3ea6d857e3be90954d7396cebfe1a62a486ab841a213041f1"
+  },
+  {
+    "path": "backend/schemas/dds_cycle.py",
+    "lines": 235,
+    "sha256": "91ba285107e5b0baf663c4dd309a94dfac1a599b33f8bcb312c49a6efee34288"
+  },
+  {
+    "path": "backend/schemas/groups.py",
+    "lines": 56,
+    "sha256": "ea726867ff27c056dd7a99034dcb2acb46ce0a2124e59753edb2a9434ca0f4dd"
+  },
+  {
+    "path": "backend/schemas/admin.py",
+    "lines": 44,
+    "sha256": "255b2a9827131cb261ecf98b4b5597e947b7e9e51f598b2628ca1755502033d8"
+  },
+  {
+    "path": "backend/schemas/dds_exercise.py",
+    "lines": 97,
+    "sha256": "90c5cd6ce8c52f40e1bcc570b1b11e880fd81e3b20dc8032ca69b3e9e1107103"
+  },
+  {
+    "path": "backend/scripts/setup_asr.sh",
+    "lines": 61,
+    "sha256": "5f453e035f6b87d61aac930528bfa3db11a66f9511848119ba2562fb60ae5c40"
+  },
+  {
+    "path": "backend/templates/report_layout.html",
+    "lines": 420,
+    "sha256": "079c77a69a7cf13238cefbe65800cd62de2c6b272f2e04545f3162f735a5107f"
+  },
+  {
+    "path": "backend/transcribe_cpp/__init__.py",
+    "lines": 1524,
+    "sha256": "8811b55ce89391b7cbf8c6b1ddf1135398892a1e1229c11891f77a4bfb08443c"
+  },
+  {
+    "path": "backend/transcribe_cpp/_abi.py",
+    "lines": 77,
+    "sha256": "8f98f6015353b6851d5b6003fe3a57925ee9b1a393ca488552d945254d03c8b0"
+  },
+  {
+    "path": "backend/transcribe_cpp/_generated.py",
+    "lines": 436,
+    "sha256": "5333a70e0adf8b9ff2d14ec7308760277de55035a5c791ae7d7de1658c588e40"
+  },
+  {
+    "path": "backend/transcribe_cpp/_library.py",
+    "lines": 386,
+    "sha256": "cce7021c4cd3c2a27fdf9625646d2e0db9ac2f6442a8ac5722f97a94d1d3e7b1"
+  },
+  {
+    "path": "backend/transcribe_cpp/errors.py",
+    "lines": 164,
+    "sha256": "907a28f5aa9b83b6ef8469fca3e864f0f6bb3c596d8f7bb911fce9fcdbca0851"
+  },
+  {
+    "path": "backend/transcribe_cpp/py.typed",
+    "lines": 0,
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+    "path": "backend/core/qwen_tts/qwen-tts",
+    "lines": 1139,
+    "sha256": "7ea8b4be0a51db9e968d356cb0c0e9422ec8a3eb6e77619c5086e36b68de009f"
+  }
+]

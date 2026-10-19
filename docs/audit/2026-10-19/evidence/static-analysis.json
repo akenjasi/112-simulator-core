@@ -1,0 +1,230 @@
+[
+  {
+    "cell": null,
+    "code": "S106",
+    "end_location": {
+      "column": 28,
+      "row": 111
+    },
+    "filename": "/home/orborus/Desktop/hakaton/112-simulator-core/backend/api/router_auth.py",
+    "fix": null,
+    "location": {
+      "column": 9,
+      "row": 111
+    },
+    "message": "Possible hardcoded password assigned to argument: \"token_type\"",
+    "name": "hardcoded-password-func-arg",
+    "noqa_row": 111,
+    "severity": "error",
+    "url": "https://docs.astral.sh/ruff/rules/hardcoded-password-func-arg"
+  },
+  {
+    "cell": null,
+    "code": "S311",
+    "end_location": {
+      "column": 51,
+      "row": 453
+    },
+    "filename": "/home/orborus/Desktop/hakaton/112-simulator-core/backend/api/router_groups.py",
+    "fix": null,
+    "location": {
+      "column": 23,
+      "row": 453
+    },
+    "message": "Standard pseudo-random generators are not suitable for cryptographic purposes",
+    "name": "suspicious-non-cryptographic-random-usage",
+    "noqa_row": 453,
+    "severity": "error",
+    "url": "https://docs.astral.sh/ruff/rules/suspicious-non-cryptographic-random-usage"
+  },
+  {
+    "cell": null,
+    "code": "S108",
+    "end_location": {
+      "column": 36,
+      "row": 239
+    },
+    "filename": "/home/orborus/Desktop/hakaton/112-simulator-core/backend/api/router_reports.py",
+    "fix": null,
+    "location": {
+      "column": 24,
+      "row": 239
+    },
+    "message": "Probable insecure usage of temporary file or directory: \"/tmp/report_\"",
+    "name": "hardcoded-temp-file",
+    "noqa_row": 239,
+    "severity": "error",
+    "url": "https://docs.astral.sh/ruff/rules/hardcoded-temp-file"
+  },
+  {
+    "cell": null,
+    "code": "S108",
+    "end_location": {
+      "column": 36,
+      "row": 243
+    },
+    "filename": "/home/orborus/Desktop/hakaton/112-simulator-core/backend/api/router_reports.py",
+    "fix": null,
+    "location": {
+      "column": 24,
+      "row": 243
+    },
+    "message": "Probable insecure usage of temporary file or directory: \"/tmp/report_\"",
+    "name": "hardcoded-temp-file",
+    "noqa_row": 243,
+    "severity": "error",
+    "url": "https://docs.astral.sh/ruff/rules/hardcoded-temp-file"
+  },
+  {
+    "cell": null,
+    "code": "S108",
+    "end_location": {
+      "column": 37,
+      "row": 248
+    },
+    "filename": "/home/orborus/Desktop/hakaton/112-simulator-core/backend/api/router_reports.py",
+    "fix": null,
+    "location": {
+      "column": 25,
+      "row": 248
+    },
+    "message": "Probable insecure usage of temporary file or directory: \"/tmp/report_\"",
+    "name": "hardcoded-temp-file",
+    "noqa_row": 248,
+    "severity": "error",
+    "url": "https://docs.astral.sh/ruff/rules/hardcoded-temp-file"
+  },
+  {
+    "cell": null,
+    "code": "S311",
+    "end_location": {
+      "column": 45,
+      "row": 196
+    },
+    "filename": "/home/orborus/Desktop/hakaton/112-simulator-core/backend/api/router_tickets.py",
+    "fix": null,
+    "location": {
+      "column": 15,
+      "row": 196
+    },
+    "message": "Standard pseudo-random generators are not suitable for cryptographic purposes",
+    "name": "suspicious-non-cryptographic-random-usage",
+    "noqa_row": 196,
+    "severity": "error",
+    "url": "https://docs.astral.sh/ruff/rules/suspicious-non-cryptographic-random-usage"
+  },
+  {
+    "cell": null,
+    "code": "S311",
+    "end_location": {
+      "column": 70,
+      "row": 249
+    },
+    "filename": "/home/orborus/Desktop/hakaton/112-simulator-core/backend/api/router_tickets.py",
+    "fix": null,
+    "location": {
+      "column": 27,
+      "row": 249
+    },
+    "message": "Standard pseudo-random generators are not suitable for cryptographic purposes",
+    "name": "suspicious-non-cryptographic-random-usage",
+    "noqa_row": 249,
+    "severity": "error",
+    "url": "https://docs.astral.sh/ruff/rules/suspicious-non-cryptographic-random-usage"
+  },
+  {
+    "cell": null,
+    "code": "S311",
+    "end_location": {
+      "column": 42,
+      "row": 133
+    },
+    "filename": "/home/orborus/Desktop/hakaton/112-simulator-core/backend/core/faker.py",
+    "fix": null,
+    "location": {
+      "column": 23,
+      "row": 133
+    },
+    "message": "Standard pseudo-random generators are not suitable for cryptographic purposes",
+    "name": "suspicious-non-cryptographic-random-usage",
+    "noqa_row": 133,
+    "severity": "error",
+    "url": "https://docs.astral.sh/ruff/rules/suspicious-non-cryptographic-random-usage"
+  },
+  {
+    "cell": null,
+    "code": "S311",
+    "end_location": {
+      "column": 52,
+      "row": 49
+    },
+    "filename": "/home/orborus/Desktop/hakaton/112-simulator-core/backend/core/ticket_generator.py",
+    "fix": null,
+    "location": {
+      "column": 28,
+      "row": 49
+    },
+    "message": "Standard pseudo-random generators are not suitable for cryptographic purposes",
+    "name": "suspicious-non-cryptographic-random-usage",
+    "noqa_row": 49,
+    "severity": "error",
+    "url": "https://docs.astral.sh/ruff/rules/suspicious-non-cryptographic-random-usage"
+  },
+  {
+    "cell": null,
+    "code": "S324",
+    "end_location": {
+      "column": 32,
+      "row": 114
+    },
+    "filename": "/home/orborus/Desktop/hakaton/112-simulator-core/backend/core/tts_v2.py",
+    "fix": null,
+    "location": {
+      "column": 21,
+      "row": 114
+    },
+    "message": "Probable use of insecure hash functions in `hashlib`: `md5`",
+    "name": "hashlib-insecure-hash-function",
+    "noqa_row": 114,
+    "severity": "error",
+    "url": "https://docs.astral.sh/ruff/rules/hashlib-insecure-hash-function"
+  },
+  {
+    "cell": null,
+    "code": "S105",
+    "end_location": {
+      "column": 31,
+      "row": 39
+    },
+    "filename": "/home/orborus/Desktop/hakaton/112-simulator-core/backend/schemas/auth.py",
+    "fix": null,
+    "location": {
+      "column": 23,
+      "row": 39
+    },
+    "message": "Possible hardcoded password assigned to: \"token_type\"",
+    "name": "hardcoded-password-string",
+    "noqa_row": 39,
+    "severity": "error",
+    "url": "https://docs.astral.sh/ruff/rules/hardcoded-password-string"
+  },
+  {
+    "cell": null,
+    "code": "S311",
+    "end_location": {
+      "column": 28,
+      "row": 188
+    },
+    "filename": "/home/orborus/Desktop/hakaton/112-simulator-core/scripts/seed.py",
+    "fix": null,
+    "location": {
+      "column": 11,
+      "row": 188
+    },
+    "message": "Standard pseudo-random generators are not suitable for cryptographic purposes",
+    "name": "suspicious-non-cryptographic-random-usage",
+    "noqa_row": 188,
+    "severity": "error",
+    "url": "https://docs.astral.sh/ruff/rules/suspicious-non-cryptographic-random-usage"
+  }
+]

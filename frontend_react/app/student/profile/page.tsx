@@ -1,95 +1,12 @@
 "use client"
 
-import React, { useState, useEffect, useCallback } from "react"
+import React, { useEffect, useState } from "react"
 import Link from "next/link"
-import {
-  Card,
-  CardHeader,
-  CardTitle,
-  CardDescription,
-  CardContent,
-  CardFooter,
-} from "@/components/ui/card"
-import { Button } from "@/components/ui/button"
-import { Badge } from "@/components/ui/badge"
+import { ArrowDown, ArrowRight, BookOpen, ChevronDown, ClipboardCheck, Clock3, FileText, RefreshCw, UserRound } from "lucide-react"
 import { LogoutButton } from "@/components/auth/LogoutButton"
-import {
-  Radar,
-  RadarChart,
-  PolarGrid,
-  PolarAngleAxis,
-  PolarRadiusAxis,
-  ResponsiveContainer,
-  Tooltip,
-} from "recharts"
-import {
-  Radio,
-  Award,
-  AlertTriangle,
-  AlertOctagon,
-  ChevronDown,
-  ChevronUp,
-  RefreshCw,
-  Clock,
-  CheckCircle2,
-  XCircle,
-  FileText,
-  ArrowRight,
-  TrendingUp,
-  TrendingDown,
-  Download,
-  BookOpen,
-  Target,
-  Sparkles,
-  Bot,
-  Activity,
-} from "lucide-react"
+import { ProfileAssignments } from "@/components/student/profile-assignments"
+import { DDSSelfTraining } from "@/components/dispatcher/dds-self-training"
 import { getStoredToken } from "@/lib/auth-session"
-
-const getAuthHeaders = (): Record<string, string> => {
-  const token = getStoredToken()
-  return token ? { Authorization: `Bearer ${token}` } : {}
-}
-
-export interface AIAdviceItem {
-  id: string
-  advice_id: string
-  cadet_id?: string
-  analysis_text: string
-  date: string
-  is_read: boolean
-  model_used: string
-}
-
-export interface CompetenceItem {
-  category: string
-  score: number
-}
-
-export interface TopErrorItem {
-  text: string
-  frequency_percent: number
-  is_fatal: boolean
-}
-
-export interface StudentStats {
-  average_score: number
-  average_score_week: number
-  average_score_month?: number
-  average_score_all_time: number
-  average_score_7_days: number
-  score_trend: number
-  average_processing_time_seconds: number
-  time_trend: number
-  service_accuracy_percent: number
-  graded_cards?: number | null
-  cards_solved: number
-  lessons_completed: number
-  competence_matrix: CompetenceItem[]
-  top_errors: TopErrorItem[]
-  student_id?: string
-  full_name?: string
-}
 
 export interface HistoryTicket {
   ticket_id: string
@@ -97,10 +14,10 @@ export interface HistoryTicket {
   title: string
   category?: string
   status: string
-  score?: number
+  score?: number | null
   errors_count: number
   errors: string[]
-  completed_at?: string
+  completed_at?: string | null
 }
 
 export interface HistoryLesson {
@@ -110,7 +27,7 @@ export interface HistoryLesson {
   target_role: string
   session_type: string
   status: string
-  score?: number
+  score?: number | null
   date?: string
   tickets: HistoryTicket[]
 }
@@ -123,1213 +40,176 @@ export interface UserProfile {
   role: string
 }
 
-interface ReferenceDoc {
-  id: string
-  title: string
-  size: string
-  tag: string
-  description: string
+interface SavedAdvice { advice_id: string; analysis_text: string; date: string }
+
+const CRITERIA = [
+  {title: "Первичное подтверждение", description: "По каждой службе — в течение 30 секунд от направления карточки сервером."},
+  {title: "Соответствие службе", description: "Действие относится к службе, от которой поступил доклад."},
+  {title: "Соответствие этапу", description: "Выбранный статус подтверждён полученным сообщением."},
+  {title: "Точность записей", description: "Исполнитель, номер бригады и результат соответствуют учебным сведениям."},
+  {title: "Завершение", description: "Получен заключительный доклад и записан результат."},
+]
+
+function lessonTitle(lesson: HistoryLesson) {
+  if (lesson.title && !/^(Занятие|Урок)\s*#/i.test(lesson.title)) return lesson.title
+  const ticketTitle = lesson.tickets?.[0]?.title
+  return ticketTitle && !/^(Билет|Карточка)\s*#/i.test(ticketTitle) ? ticketTitle : "Занятие ДДС"
 }
 
-const REFERENCE_DOCS: ReferenceDoc[] = [
-  {
-    id: "doc-1",
-    title: "Алгоритм опроса при ДТП.pdf",
-    size: "1.8 МБ",
-    tag: "Оператор 112",
-    description: "Пошаговый регламент первичного сбора сведений о пострадавших и перекрытии полос",
-  },
-  {
-    id: "doc-2",
-    title: "Памятка по службам.pdf",
-    size: "840 КБ",
-    tag: "Маршрутизация",
-    description: "Критерии одновременного привлечения 01, 02, 03, 04 и аварийно-спасательных отрядов",
-  },
-  {
-    id: "doc-3",
-    title: "Классификатор происшествий Системы-112.pdf",
-    size: "3.2 МБ",
-    tag: "Справочник",
-    description: "Стандартизированные наименования и категоризация угроз для карточки вызова",
-  },
-  {
-    id: "doc-4",
-    title: "Регламент межведомственного взаимодействия ДДС.pdf",
-    size: "1.4 МБ",
-    tag: "Диспетчер ДДС",
-    description: "Порядок передачи сведений реагирующим бригадам и временные нормативы SLA",
-  },
-]
+function ticketStatus(ticket: HistoryTicket) {
+  return ({pending: "Не поступала", in_progress: "В работе", incomplete: "Не завершена", ungraded: "Завершена", completed: "Завершена", passed: "Завершена", failed: "Завершена"} as Record<string, string>)[ticket.status] || "Статус не указан"
+}
 
-const DEFAULT_CATEGORIES: CompetenceItem[] = [
-  { category: "ДТП", score: 0 },
-  { category: "Пожары", score: 0 },
-  { category: "ЖКХ", score: 0 },
-  { category: "Медицина", score: 0 },
-  { category: "Правопорядок", score: 0 },
-  { category: "Газ / Взрывы", score: 0 },
-]
+function lessonStatus(status: string) {
+  return ({COMPLETED: "Завершено", ACTIVE: "В процессе", IN_PROGRESS: "В процессе", INCOMPLETE: "Завершено досрочно", CANCELLED: "Отменено", PENDING: "Ожидает начала"} as Record<string, string>)[status] || "Статус не указан"
+}
 
 export default function StudentProfilePage() {
-  const role = "DISPATCHER_DDS" as const
-  const [activeTab, setActiveTab] = useState<"lessons" | "docs" | "ai_advice">("lessons")
-  const [userProfile, setUserProfile] = useState<UserProfile>({
-    username: "",
-    full_name: "",
-    student_id: "",
-    role: "CADET",
-  })
-
-  const [aiAdvices, setAiAdvices] = useState<AIAdviceItem[]>([])
-  const [isLoadingAi, setIsLoadingAi] = useState<boolean>(false)
-  const [isTriggeringAi, setIsTriggeringAi] = useState<boolean>(false)
-  const [aiProgressStep, setAiProgressStep] = useState<number>(0)
-  const [aiProgressMessage, setAiProgressMessage] = useState<string>("")
-  const [aiError, setAiError] = useState<string | null>(null)
-  const [aiSuccessMessage, setAiSuccessMessage] = useState<string | null>(null)
-
-  const [stats, setStats] = useState<StudentStats>({
-    average_score: 0,
-    average_score_week: 0,
-    average_score_all_time: 0,
-    average_score_7_days: 0,
-    score_trend: 0,
-    average_processing_time_seconds: 0,
-    time_trend: 0,
-    service_accuracy_percent: 0,
-    cards_solved: 0,
-    lessons_completed: 0,
-    competence_matrix: [],
-    top_errors: [],
-  })
-
+  const [profile, setProfile] = useState<UserProfile | null>(null)
+  const [profileError, setProfileError] = useState(false)
   const [lessons, setLessons] = useState<HistoryLesson[]>([])
-  const [expandedLessonId, setExpandedLessonId] = useState<string | null>(null)
-  const [isLoading, setIsLoading] = useState<boolean>(true)
+  const [historyError, setHistoryError] = useState<string | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [reload, setReload] = useState(0)
+  const [showAll, setShowAll] = useState(false)
+  const [showTraining, setShowTraining] = useState(false)
+  const [activeTab, setActiveTab] = useState<"history" | "materials" | "advice">("history")
+  const [advices, setAdvices] = useState<SavedAdvice[]>([])
+  const [adviceStatus, setAdviceStatus] = useState<"idle" | "loading" | "ready" | "error">("idle")
+  const [adviceReload, setAdviceReload] = useState(0)
 
-  // Fetch AI advice for cadet
-  const loadAiAdvice = useCallback(async (cadetId?: string) => {
-    const idToUse = cadetId || userProfile.user_id
-    if (!idToUse) return
-    setIsLoadingAi(true)
-    try {
-      const res = await fetch(`/api/ai-analytics/student/${idToUse}`, {
-        headers: getAuthHeaders(),
-      })
-      if (res.ok) {
-        const data = await res.json()
-        setAiAdvices(Array.isArray(data) ? data : [])
-      }
-    } catch (err) {
-      console.warn("Could not load AI advice:", err)
-    } finally {
-      setIsLoadingAi(false)
-    }
-  }, [userProfile.user_id])
-
-  const handleTriggerAiAnalysis = async () => {
-    setAiError(null)
-    setAiSuccessMessage(null)
-
-    const token = getStoredToken()
-    const idToUse = userProfile.user_id
-
-    if (!token && !idToUse) {
-      setAiError("Требуется авторизация. Пожалуйста, выполните вход в систему под учетной записью курсанта.")
-      return
-    }
-
-    setIsTriggeringAi(true)
-    setAiProgressStep(1)
-    setAiProgressMessage("Сбор логов тренировочных сессий и диалогов...")
-
-    const timer1 = setTimeout(() => {
-      setAiProgressStep(2)
-      setAiProgressMessage("Передача контекста и инференс нейросетью Qwen 2.5 9B...")
-    }, 1500)
-
-    const timer2 = setTimeout(() => {
-      setAiProgressStep(3)
-      setAiProgressMessage("Формирование структурированных методических рекомендаций...")
-    }, 7000)
-
-    try {
-      const url = idToUse
-        ? `/api/ai-analytics/trigger?cadet_id=${idToUse}&background=true`
-        : `/api/ai-analytics/trigger?background=true`
-
-      const res = await fetch(url, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          ...getAuthHeaders(),
-        },
-      })
-
-      if (!res.ok) {
-        const errJson = await res.json().catch(() => null)
-        const errMsg =
-          errJson?.detail ||
-          errJson?.message ||
-          (res.status === 401
-            ? "Сессия авторизации истекла. Войдите в систему повторно."
-            : res.status === 404
-            ? "Для вашего профиля не найдено данных сессий. Пройдите хотя бы одну тренировку."
-            : `Не удалось сформировать отчет (код ошибки: ${res.status}).`)
-        setAiError(errMsg)
-        setIsTriggeringAi(false)
-        return
-      }
-
-      const result = await res.json()
-      if (result.status === "warning") {
-        setAiError(result.message || "Нет завершенных тренировок для формирования анализа.")
-        setIsTriggeringAi(false)
-        return
-      }
-
-      // Record known advice IDs before generation
-      const initialIds = new Set(aiAdvices.map((a) => a.advice_id))
-      const targetCadetId = idToUse || result.target_id || (result.tasks && result.tasks[0]?.target_id)
-
-      // Poll every 2.5s until the new advice appears (up to 45s)
-      let completed = false
-      const maxAttempts = 18
-      for (let attempt = 0; attempt < maxAttempts; attempt++) {
-        await new Promise((resolve) => setTimeout(resolve, 2500))
-        try {
-          const checkRes = await fetch(`/api/ai-analytics/student/${targetCadetId}`, {
-            headers: getAuthHeaders(),
-          })
-          if (checkRes.ok) {
-            const list: AIAdviceItem[] = await checkRes.json()
-            if (Array.isArray(list)) {
-              const hasNew = list.some((item) => !initialIds.has(item.advice_id))
-              if (hasNew || list.length > aiAdvices.length) {
-                setAiAdvices(list)
-                completed = true
-                break
-              }
-            }
-          }
-        } catch {
-          // ignore transient poll error
-        }
-      }
-
-      if (completed) {
-        setAiSuccessMessage("Методические рекомендации успешно обновлены нейросетью Qwen 2.5 9B!")
-      } else {
-        await loadAiAdvice(targetCadetId)
-        setAiSuccessMessage("Анализ обрабатывается. Если отчет не отобразился сразу, обновите список через несколько секунд.")
-      }
-    } catch (err: any) {
-      console.warn("Failed to trigger AI analysis:", err)
-      setAiError(err?.message || "Ошибка сетевого соединения с сервером нейроаналитики.")
-    } finally {
-      clearTimeout(timer1)
-      clearTimeout(timer2)
-      setIsTriggeringAi(false)
-      setAiProgressStep(0)
-      setAiProgressMessage("")
-    }
-  }
-
-  const handleMarkAdviceRead = async (adviceId: string) => {
-    try {
-      const res = await fetch(`/api/ai-analytics/student/advice/${adviceId}/read`, {
-        method: "PATCH",
-        headers: getAuthHeaders(),
-      })
-      if (res.ok) {
-        setAiAdvices((prev) =>
-          prev.map((item) =>
-            item.advice_id === adviceId ? { ...item, is_read: true } : item
-          )
-        )
-      }
-    } catch (err) {
-      console.warn("Failed to mark advice as read:", err)
-    }
-  }
-
-  // Fetch student profile & current user info
-  const loadProfile = useCallback(async () => {
-    try {
-      const headers = getAuthHeaders()
-      const res = await fetch("/api/v1/users/me", { headers })
-      if (res.ok) {
-        const data = await res.json()
-        setUserProfile((prev) => ({
-          ...prev,
-          user_id: data.user_id,
-          student_id: data.student_id || prev.student_id || "",
-          username: data.username || prev.username,
-          full_name: data.full_name || prev.full_name || data.username || "Курсант",
-          role: data.role || prev.role,
-        }))
-        if (data.user_id) {
-          loadAiAdvice(data.user_id)
-        }
-      }
-    } catch {
-      // Keep state
-    }
-  }, [loadAiAdvice])
-
-  // Fetch statistics based on active role
-  const loadStats = useCallback(async (currentRole: string) => {
-    try {
-      const res = await fetch(`/api/v1/students/me/stats?role=${currentRole}`, {
-        headers: getAuthHeaders(),
-      })
-      if (res.ok) {
-        const data = await res.json()
-
-        const formattedErrors: TopErrorItem[] = Array.isArray(data.top_errors)
-          ? data.top_errors.map((e: any) =>
-              typeof e === "string"
-                ? { text: e, frequency_percent: 50, is_fatal: false }
-                : {
-                    text: e.text || "Ошибка",
-                    frequency_percent: e.frequency_percent ?? 50,
-                    is_fatal: Boolean(e.is_fatal),
-                  }
-            )
-          : []
-
-        setStats({
-          graded_cards: data.graded_cards,
-          average_score: data.average_score ?? 0,
-          average_score_week: data.average_score_week ?? 0,
-          average_score_all_time: data.average_score_all_time ?? data.average_score ?? 0,
-          average_score_7_days:
-            data.average_score_7_days ?? data.average_score_week ?? data.average_score ?? 0,
-          score_trend: data.score_trend ?? 0,
-          average_processing_time_seconds: data.average_processing_time_seconds ?? 0,
-          time_trend: data.time_trend ?? 0,
-          service_accuracy_percent: data.service_accuracy_percent ?? 0,
-          cards_solved: data.cards_solved ?? 0,
-          lessons_completed: data.lessons_completed ?? 0,
-          competence_matrix:
-            data.competence_matrix && data.competence_matrix.length > 0
-              ? data.competence_matrix
-              : [],
-          top_errors: formattedErrors,
-          student_id: data.student_id,
-          full_name: data.full_name,
-        })
-
-        if (data.student_id || data.full_name) {
-          setUserProfile((prev) => ({
-            ...prev,
-            student_id: data.student_id || prev.student_id,
-            full_name: data.full_name || prev.full_name,
-          }))
-        }
-      }
-    } catch {
-      // Keep state
-    }
-  }, [])
-
-  // Fetch lessons history based on active role
-  const loadLessons = useCallback(async (currentRole: string) => {
-    try {
-      const res = await fetch(`/api/v1/students/me/lessons?role=${currentRole}`, {
-        headers: getAuthHeaders(),
-      })
-      if (res.ok) {
-        const data = await res.json()
-        if (Array.isArray(data)) {
-          setLessons(data)
-          if (data.length > 0 && !expandedLessonId) {
-            setExpandedLessonId(data[0].session_id)
-          }
-        }
-      }
-    } catch {
-      // Keep state
-    }
-  }, [expandedLessonId])
-
-  // Initial data load and on role toggle
   useEffect(() => {
-    setIsLoading(true)
-    Promise.all([loadProfile(), loadStats(role), loadLessons(role)]).finally(() => {
-      setIsLoading(false)
-    })
-  }, [role, loadProfile, loadStats, loadLessons])
+    const controller = new AbortController()
+    const headers: Record<string, string> = {}
+    const token = getStoredToken()
+    if (token) headers.Authorization = `Bearer ${token}`
+    setLoading(true)
+    setProfileError(false)
+    const loadProfile = async () => {
+      try {
+        const res = await fetch("/api/v1/users/me", {headers, signal: controller.signal, cache: "no-store"})
+        if (!res.ok) throw new Error()
+        const data = await res.json()
+        if (!controller.signal.aborted) setProfile(data)
+      } catch { if (!controller.signal.aborted) setProfileError(true) }
+    }
+    const loadHistory = async () => {
+      try {
+        const res = await fetch("/api/v1/students/me/lessons?role=DISPATCHER_DDS", {headers, signal: controller.signal, cache: "no-store"})
+        if (!res.ok) throw new Error()
+        const data = await res.json()
+        if (!Array.isArray(data)) throw new Error()
+        if (!controller.signal.aborted) {setLessons(data); setHistoryError(null)}
+      } catch { if (!controller.signal.aborted) setHistoryError("Не удалось загрузить историю занятий. Попробуйте ещё раз.") }
+    }
+    void Promise.all([loadProfile(), loadHistory()]).finally(() => {if (!controller.signal.aborted) setLoading(false)})
+    return () => controller.abort()
+  }, [reload])
 
-  const toggleLesson = (sessionId: string) => {
-    setExpandedLessonId((prev) => (prev === sessionId ? null : sessionId))
-  }
+  useEffect(() => {
+    if (activeTab !== "advice" || !profile?.user_id) return
+    const controller = new AbortController()
+    setAdviceStatus("loading")
+    const token = getStoredToken()
+    void fetch(`/api/ai-analytics/student/${encodeURIComponent(profile.user_id)}`, {
+      headers: token ? {Authorization: `Bearer ${token}`} : {}, signal: controller.signal, cache: "no-store",
+    }).then(async res => {
+      if (!res.ok) throw new Error()
+      const data = await res.json()
+      if (!Array.isArray(data)) throw new Error()
+      if (!controller.signal.aborted) {setAdvices(data); setAdviceStatus("ready")}
+    }).catch(() => {if (!controller.signal.aborted) setAdviceStatus("error")})
+    return () => controller.abort()
+  }, [activeTab, profile?.user_id, adviceReload])
 
-  // Error color calculation: from yellow (rare) to dark red (frequent) - no green!
-  const getErrorBarClass = (freq: number) => {
-    if (freq >= 80) return "bg-red-700 dark:bg-red-600"
-    if (freq >= 55) return "bg-red-500 dark:bg-red-500"
-    if (freq >= 35) return "bg-amber-500 dark:bg-amber-500"
-    return "bg-yellow-500 dark:bg-yellow-400"
-  }
+  useEffect(() => {
+    if (showTraining) {
+      const catalog = document.getElementById("training-catalog")
+      catalog?.scrollIntoView?.({behavior: "smooth", block: "start"})
+      catalog?.focus({preventScroll: true})
+    }
+  }, [showTraining])
 
-  const getErrorTextClass = (freq: number) => {
-    if (freq >= 80) return "text-red-700 dark:text-red-400 font-bold"
-    if (freq >= 55) return "text-red-600 dark:text-red-400 font-bold"
-    if (freq >= 35) return "text-amber-600 dark:text-amber-400 font-bold"
-    return "text-yellow-600 dark:text-yellow-400 font-bold"
-  }
-
-  const fatalErrors = stats.top_errors.filter((e) => e.is_fatal)
-  const minorErrors = stats.top_errors.filter((e) => !e.is_fatal)
-
-  return (
-    <div className="min-h-screen bg-slate-50 dark:bg-slate-950 text-foreground flex flex-col justify-between">
-      {/* 1. Ultra-compact horizontal header row (no avatar, FIO + short ID + role toggle) */}
-      <header className="border-b bg-card sticky top-0 z-30 shadow-xs">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 min-h-14 py-2 flex flex-wrap items-center justify-between gap-2 sm:gap-3">
-          {/* Left: Brand badge, FIO and short student ID */}
-          <div className="flex items-center gap-3 min-w-0">
-            <div className="h-8 w-8 rounded-lg bg-primary text-primary-foreground flex items-center justify-center font-black text-sm shrink-0 shadow-xs">
-              112
-            </div>
-            <div className="flex items-center gap-2 truncate">
-              <span className="font-bold text-sm text-foreground truncate">
-                {userProfile.full_name || userProfile.username || "Курсант"}
-              </span>
-              {userProfile.student_id ? (
-                <Badge
-                  variant="outline"
-                  className="font-mono text-[11px] font-bold px-2 py-0 border-primary/30 text-primary shrink-0 bg-primary/5"
-                >
-                  ID: {userProfile.student_id}
-                </Badge>
-              ) : null}
-              <span className="hidden md:inline-block text-xs text-muted-foreground">• Личный кабинет курсанта</span>
-            </div>
+  return <div className="min-h-screen bg-slate-50 text-foreground dark:bg-slate-950">
+    <a href="#main-content" className="sr-only focus:not-sr-only focus:absolute focus:z-50 focus:rounded focus:bg-card focus:p-3">Перейти к содержимому</a>
+    <header className="border-b border-border bg-card">
+      <div className="mx-auto flex min-h-20 max-w-[1440px] items-center justify-between gap-4 px-5 py-4 sm:px-8">
+        <div className="flex items-center gap-3">
+          <span aria-hidden="true" className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary text-base font-bold text-primary-foreground">112</span>
+          <div><p className="text-sm font-semibold sm:text-base">Тренажёр Системы-112</p><p className="mt-0.5 text-xs text-muted-foreground">Обучение диспетчера ДДС</p></div>
+        </div>
+        <details className="relative">
+          <summary className="flex min-h-11 cursor-pointer list-none items-center gap-2 rounded-lg border border-border px-3 py-2 text-sm hover:bg-muted focus-visible:outline-2 focus-visible:outline-ring [&::-webkit-details-marker]:hidden">
+            <UserRound className="h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" /><span className="hidden max-w-80 truncate sm:inline">{profile?.full_name || profile?.username || "Профиль"}</span><span className="sm:hidden">Профиль</span><ChevronDown className="h-4 w-4 text-muted-foreground" aria-hidden="true" />
+          </summary>
+          <div className="absolute right-0 z-40 mt-2 w-72 max-w-[calc(100vw-2.5rem)] space-y-4 rounded-xl border border-border bg-card p-4 shadow-lg">
+            <div><p className="font-medium">{profile?.full_name || profile?.username || "Профиль курсанта"}</p><p className="mt-1 text-sm text-muted-foreground">Курсант · Диспетчер ДДС</p></div>
+            <LogoutButton />
           </div>
+        </details>
+      </div>
+    </header>
 
-          {/* Center / Right: Fixed dispatcher role and quick actions */}
-          <div className="flex flex-wrap items-center justify-end gap-2 shrink-0">
-            <Badge variant="outline" className="hidden lg:flex items-center gap-1.5 px-3 py-1 text-xs font-semibold">
-              <Radio className="h-3.5 w-3.5" />
-              <span>Диспетчер ДДС</span>
-            </Badge>
+    <main id="main-content" className="mx-auto max-w-[1440px] px-5 py-7 sm:px-8 sm:py-8">
+      <div className="mb-7 flex flex-col justify-between gap-4 sm:flex-row sm:items-end">
+        <div><h1 className="text-3xl font-semibold tracking-tight">Личный кабинет курсанта</h1><p className="mt-2 text-sm leading-relaxed text-muted-foreground sm:text-base">Продолжайте занятия с преподавателем или тренируйтесь самостоятельно.</p></div>
+        {profile?.student_id && <p className="shrink-0 text-sm text-muted-foreground">Код курсанта: <span className="ml-1 rounded-md border border-border bg-card px-2.5 py-1.5 font-mono font-semibold text-foreground">{profile.student_id}</span></p>}
+      </div>
+      {profileError && <p role="alert" className="mb-5 rounded-xl border border-destructive/25 bg-card p-4 text-sm">Не удалось загрузить профиль. <button type="button" onClick={() => setReload(value => value + 1)} className="text-primary underline">Повторить</button></p>}
 
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => {
-                setIsLoading(true)
-                Promise.all([loadProfile(), loadStats(role), loadLessons(role)]).finally(() =>
-                  setIsLoading(false)
-                )
-              }}
-              className="h-8 px-2.5 text-xs gap-1.5"
-              title="Обновить данные"
-            >
-              <RefreshCw className={`h-3.5 w-3.5 ${isLoading ? "animate-spin" : ""}`} />
-              <span className="hidden sm:inline">Обновить</span>
-            </Button>
-
-            <Link href="/student/lobby">
-              <Button size="sm" className="h-8 px-3 text-xs font-semibold gap-1.5 shadow-xs">
-                <span>В лобби</span>
-                <ArrowRight className="h-3.5 w-3.5" />
-              </Button>
-            </Link>
-
-            <LogoutButton compact />
-          </div>
-        </div>
-      </header>
-
-      {/* Main Content Area - Clean, tightly spaced to fit on screen */}
-      <main className="max-w-7xl w-full mx-auto px-4 sm:px-6 py-4 space-y-4 flex-1">
-        {/* Section 1: Practical Metrics with Trends (Month score removed) */}
-        <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-          {/* Metric 1: Average Score All-time */}
-          <Card className="border shadow-2xs p-3">
-            <div className="flex items-center justify-between text-muted-foreground">
-              <span className="text-[11px] font-semibold uppercase tracking-wider">
-                За всё время
-              </span>
-              <Award className="h-4 w-4 text-primary" />
+      <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_340px] xl:grid-cols-[minmax(0,1fr)_360px]">
+        <div className="contents lg:block lg:min-w-0 lg:space-y-6">
+          <ProfileAssignments />
+          <section id="learning-history" aria-labelledby="history-heading" className="order-3 scroll-mt-6 overflow-hidden lg:order-none rounded-2xl border border-border bg-card shadow-xs">
+            <div className="flex items-center justify-between gap-3 px-5 pt-5 sm:px-6 sm:pt-6">
+              <h2 id="history-heading" className="text-xl font-semibold tracking-tight">Последние результаты</h2>
+              <button type="button" aria-label="Обновить историю занятий" disabled={loading} onClick={() => setReload(value => value + 1)} className="rounded-lg p-2 text-muted-foreground hover:bg-muted focus-visible:outline-2 focus-visible:outline-ring disabled:opacity-50"><RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} aria-hidden="true" /></button>
             </div>
-            <div className="mt-1">
-              <div className="text-2xl font-black text-foreground">
-                {(stats.graded_cards === 0 || stats.cards_solved === 0) ? "—" : stats.average_score_all_time.toFixed(1)}
-                {stats.cards_solved > 0 && <span className="text-xs font-normal text-muted-foreground"> / 100</span>}
-              </div>
-              <p className="text-[11px] text-muted-foreground mt-0.5">Общая успеваемость за курс</p>
+            <nav aria-label="Результаты и материалы" className="mt-4 flex flex-wrap gap-1 border-b border-border px-4 sm:px-5">
+              {([{id: "history", label: "История занятий", Icon: Clock3}, {id: "materials", label: "Материалы", Icon: BookOpen}, {id: "advice", label: "Рекомендации ИИ", Icon: FileText}] as const).map(({id, label, Icon}) => <button type="button" key={id} aria-current={activeTab === id ? "page" : undefined} onClick={() => setActiveTab(id)} className={`inline-flex min-h-11 items-center gap-2 border-b-2 px-3 py-3 text-sm font-medium focus-visible:outline-2 focus-visible:outline-ring ${activeTab === id ? "border-primary text-primary" : "border-transparent text-muted-foreground hover:text-foreground"}`}><Icon className="h-4 w-4" aria-hidden="true" />{label}</button>)}
+            </nav>
+            <div className="p-5 sm:p-6">
+              {activeTab === "history" && <div aria-busy={loading}>
+                {historyError ? <div role="alert" className="space-y-2 text-sm"><p>{historyError}</p><button type="button" onClick={() => setReload(value => value + 1)} className="font-medium text-primary underline">Повторить загрузку истории</button></div> : loading ? <p role="status" className="py-5 text-sm text-muted-foreground">Загружаем историю занятий…</p> : lessons.length === 0 ? <div className="py-3"><p className="font-medium">История занятий пока пуста</p><p className="mt-2 text-sm leading-relaxed text-muted-foreground">После первого занятия здесь появятся карточки и сохранённые результаты. Начните с назначенного занятия или самостоятельной тренировки.</p></div> : <>
+                  <p className="mb-4 text-sm text-muted-foreground">Откройте занятие, чтобы посмотреть карточки и замечания.</p>
+                  <div className="space-y-3">{(showAll ? lessons : lessons.slice(0, 3)).map(lesson => <details key={lesson.session_id} className="group rounded-xl border border-border bg-background">
+                    <summary className="flex cursor-pointer list-none items-center justify-between gap-3 rounded-xl p-4 hover:bg-muted/30 focus-visible:outline-2 focus-visible:outline-ring [&::-webkit-details-marker]:hidden">
+                      <div className="min-w-0"><h3 className="text-sm font-semibold leading-relaxed">{lessonTitle(lesson)}</h3><p className="mt-1.5 flex flex-wrap gap-x-3 gap-y-1 text-xs text-muted-foreground">{lesson.date && <span>{lesson.date}</span>}<span>Карточек: {lesson.tickets?.length ?? 0}</span><span>{lessonStatus(lesson.status)}</span></p></div><ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground transition-transform group-open:rotate-180" aria-hidden="true" />
+                    </summary>
+                    <div className="space-y-3 border-t border-border p-4">
+                      {lesson.tickets?.length ? lesson.tickets.map((ticket, index) => <article key={ticket.card_id || `${ticket.ticket_id}-${index}`} className="rounded-lg border border-border p-4">
+                        <div className="flex flex-wrap items-start justify-between gap-2"><h4 className="text-sm font-medium">{ticket.title || `Карточка ${index + 1}`}</h4><span className="rounded-md bg-muted px-2 py-1 text-xs text-muted-foreground">{ticketStatus(ticket)}</span></div>
+                        {(ticket.errors?.length > 0 || ticket.errors_count > 0) ? <div className="mt-3 text-sm"><p className="font-medium text-destructive">Ошибок в сохранённой проверке: {Math.max(ticket.errors_count || 0, ticket.errors?.length || 0)}</p>{ticket.errors?.length > 0 && <ul className="mt-2 list-disc space-y-1 pl-5 text-muted-foreground">{ticket.errors.map((error, i) => <li key={i}>{error}</li>)}</ul>}</div> : <p className="mt-3 text-sm leading-relaxed text-muted-foreground">{ticket.card_id ? "Результаты проверки по критериям смотрите в карточке." : "Результаты проверки по критериям пока недоступны."}</p>}
+                        {ticket.card_id && <Link className="mt-3 inline-flex min-h-10 items-center gap-2 text-sm font-medium text-primary underline-offset-4 hover:underline focus-visible:outline-2 focus-visible:outline-ring" href={`/dds?${new URLSearchParams({session_id: lesson.session_id, ticket_id: ticket.ticket_id, card_id: ticket.card_id})}`}>Открыть карточку<ArrowRight className="h-4 w-4" aria-hidden="true" /></Link>}
+                      </article>) : <p className="text-sm text-muted-foreground">Подробности по карточкам пока недоступны.</p>}
+                      <p className="break-all text-xs text-muted-foreground">Номер занятия: {lesson.session_id}</p>
+                    </div>
+                  </details>)}</div>
+                  {lessons.length > 3 && <button type="button" onClick={() => setShowAll(value => !value)} className="mt-4 min-h-10 text-sm font-medium text-primary hover:underline">{showAll ? "Показать последние" : `Вся история занятий (${lessons.length})`}</button>}
+                </>}
+              </div>}
+              {activeTab === "materials" && <div className="py-3"><p className="font-medium">Справочные материалы пока не опубликованы</p><p className="mt-2 text-sm leading-relaxed text-muted-foreground">Уточните у преподавателя, какие инструкции и регламенты использовать для подготовки.</p></div>}
+              {activeTab === "advice" && <div className="space-y-4 text-sm">
+                <p className="leading-relaxed text-muted-foreground">Сохранённые рекомендации ИИ могут содержать неточности. Обсуждайте спорные выводы с преподавателем.</p>
+                {adviceStatus === "loading" ? <p role="status">Загружаем рекомендации…</p> : adviceStatus === "error" || !profile?.user_id ? <div role="alert">Не удалось загрузить рекомендации. <button type="button" onClick={() => setAdviceReload(value => value + 1)} className="text-primary underline">Повторить загрузку</button></div> : adviceStatus === "ready" && advices.length === 0 ? <p>Сохранённых рекомендаций пока нет.</p> : advices.map(advice => <article key={advice.advice_id} className="rounded-xl border border-border p-4"><p className="mb-2 text-xs text-muted-foreground">{advice.date}</p><p className="whitespace-pre-wrap leading-relaxed">{advice.analysis_text}</p></article>)}
+              </div>}
             </div>
-          </Card>
-
-          {/* Metric 2: Average Score 7 Days with Trend */}
-          <Card className="border shadow-2xs p-3">
-            <div className="flex items-center justify-between text-muted-foreground">
-              <span className="text-[11px] font-semibold uppercase tracking-wider">
-                За 7 дней
-              </span>
-              <div className="flex items-center gap-1 font-mono text-xs font-bold">
-                {stats.cards_solved === 0 ? (
-                  <span className="text-muted-foreground font-normal">—</span>
-                ) : stats.score_trend >= 0 ? (
-                  <span className="text-emerald-600 dark:text-emerald-400 flex items-center">
-                    <TrendingUp className="h-3.5 w-3.5 mr-0.5 inline" />
-                    +{stats.score_trend > 0 ? stats.score_trend : 0}%
-                  </span>
-                ) : (
-                  <span className="text-red-600 dark:text-red-400 flex items-center">
-                    <TrendingDown className="h-3.5 w-3.5 mr-0.5 inline" />
-                    {stats.score_trend}%
-                  </span>
-                )}
-              </div>
-            </div>
-            <div className="mt-1">
-              <div className="text-2xl font-black text-foreground">
-                {(stats.graded_cards === 0 || stats.cards_solved === 0) ? "—" : stats.average_score_7_days.toFixed(1)}
-                {stats.cards_solved > 0 && <span className="text-xs font-normal text-muted-foreground"> / 100</span>}
-              </div>
-              <p className="text-[11px] text-muted-foreground mt-0.5">Текущий недельный срез</p>
-            </div>
-          </Card>
-
-          {/* Metric 3: Solved Cards Count */}
-          <Card className="border shadow-2xs p-3">
-            <div className="flex items-center justify-between text-muted-foreground">
-              <span className="text-[11px] font-semibold uppercase tracking-wider">
-                Решено карточек
-              </span>
-              <Target className="h-4 w-4 text-blue-500" />
-            </div>
-            <div className="mt-1">
-              <div className="text-2xl font-black text-foreground">
-                {stats.cards_solved}
-              </div>
-              <p className="text-[11px] text-muted-foreground mt-0.5">Всего билетов и заданий</p>
-            </div>
-          </Card>
-
-          {/* Metric 4: Average Processing Time with Trend */}
-          <Card className="border shadow-2xs p-3">
-            <div className="flex items-center justify-between text-muted-foreground">
-              <span className="text-[11px] font-semibold uppercase tracking-wider">
-                Время обработки
-              </span>
-              <div className="flex items-center gap-1 font-mono text-xs font-bold">
-                {stats.cards_solved === 0 || stats.average_processing_time_seconds === 0 ? (
-                  <span className="text-muted-foreground font-normal">—</span>
-                ) : stats.time_trend <= 0 ? (
-                  <span className="text-emerald-600 dark:text-emerald-400 flex items-center">
-                    <TrendingDown className="h-3.5 w-3.5 mr-0.5 inline" />
-                    {stats.time_trend} сек
-                  </span>
-                ) : (
-                  <span className="text-red-600 dark:text-red-400 flex items-center">
-                    <TrendingUp className="h-3.5 w-3.5 mr-0.5 inline" />
-                    +{stats.time_trend} сек
-                  </span>
-                )}
-              </div>
-            </div>
-            <div className="mt-1">
-              <div className="text-2xl font-black text-foreground">
-                {stats.cards_solved === 0 || stats.average_processing_time_seconds === 0 ? (
-                  "—"
-                ) : (
-                  <>
-                    {stats.average_processing_time_seconds}{" "}
-                    <span className="text-xs font-normal text-muted-foreground">сек</span>
-                  </>
-                )}
-              </div>
-              <p className="text-[11px] text-muted-foreground mt-0.5">В среднем на карточку</p>
-            </div>
-          </Card>
-
+          </section>
         </div>
 
-        {/* Section 2: Competence Matrix & Top Errors (Fatal vs Minor) */}
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
-          {/* Competence Matrix (RadarChart) */}
-          <Card className="lg:col-span-6 border shadow-xs flex flex-col justify-between">
-            <CardHeader className="py-3 px-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <CardTitle className="text-sm font-bold flex items-center gap-2">
-                    <span>Матрица компетенций</span>
-                    <Badge variant="outline" className="text-[10px] font-normal">
-                      Диспетчер ДДС
-                    </Badge>
-                  </CardTitle>
-                  <CardDescription className="text-xs mt-0.5">
-                    Успеваемость по категориям происшествий (0 – 100 баллов)
-                  </CardDescription>
-                </div>
-              </div>
-            </CardHeader>
-
-            <CardContent
-              className="h-[250px] w-full flex items-center justify-center p-2"
-              data-testid="radar-container"
-            >
-              {stats.cards_solved > 0 &&
-              stats.competence_matrix &&
-              stats.competence_matrix.length > 0 &&
-              stats.competence_matrix.some((c) => c.score > 0) ? (
-                <ResponsiveContainer width="100%" height="100%">
-                  <RadarChart cx="50%" cy="50%" outerRadius="75%" data={stats.competence_matrix}>
-                    <PolarGrid stroke="#94a3b8" strokeDasharray="3 3" opacity={0.35} />
-                    <PolarAngleAxis
-                      dataKey="category"
-                      tick={{ fill: "currentColor", fontSize: 11, fontWeight: 600 }}
-                    />
-                    <PolarRadiusAxis
-                      angle={30}
-                      domain={[0, 100]}
-                      tick={{ fill: "#64748b", fontSize: 9 }}
-                      stroke="#94a3b8"
-                      opacity={0.3}
-                    />
-                    <Tooltip
-                      formatter={(val: any) => [`${val} баллов`, "Успеваемость"]}
-                      contentStyle={{
-                        backgroundColor: "#0f172a",
-                        borderColor: "#334155",
-                        borderRadius: "8px",
-                        color: "#f8fafc",
-                        fontSize: "12px",
-                      }}
-                      itemStyle={{ color: "#38bdf8" }}
-                      labelStyle={{ color: "#f8fafc", fontWeight: 600 }}
-                    />
-                    <Radar
-                      name="Успеваемость"
-                      dataKey="score"
-                      stroke="#2563eb"
-                      fill="#3b82f6"
-                      fillOpacity={0.4}
-                      strokeWidth={2}
-                    />
-                  </RadarChart>
-                </ResponsiveContainer>
-              ) : (
-                <div className="flex flex-col items-center justify-center text-center text-muted-foreground text-xs py-8 gap-2">
-                  <Activity className="h-8 w-8 text-muted-foreground/30" />
-                  <span className="font-semibold text-foreground">Нет данных для построения матрицы компетенций</span>
-                  <span className="text-[11px] text-muted-foreground max-w-xs">
-                    Матрица сформируется автоматически после решения первых тренировочных заданий
-                  </span>
-                </div>
-              )}
-            </CardContent>
-            <CardFooter className="border-t py-1.5 px-4 bg-muted/20 text-[11px] text-muted-foreground flex justify-between">
-              <span>Норматив: не менее 75 баллов</span>
-              <span>Формируется по результатам сданных билетов</span>
-            </CardFooter>
-          </Card>
-
-          {/* Top Errors: Split into Fatal and Minor */}
-          <Card className="lg:col-span-6 border shadow-xs flex flex-col justify-between">
-            <CardHeader className="py-3 px-4">
-              <div className="flex items-center justify-between">
-                <CardTitle className="text-sm font-bold flex items-center gap-2 text-foreground">
-                  <AlertTriangle className="h-4 w-4 text-red-500" />
-                  <span>Топ частых ошибок</span>
-                </CardTitle>
-                <div className="flex items-center gap-1.5 text-[11px]">
-                  <span className="flex items-center gap-1 text-red-600 dark:text-red-400 font-semibold">
-                    <span className="h-2 w-2 rounded-full bg-red-600 inline-block" /> Фатальные
-                  </span>
-                  <span className="text-muted-foreground">•</span>
-                  <span className="flex items-center gap-1 text-amber-600 dark:text-amber-400 font-semibold">
-                    <span className="h-2 w-2 rounded-full bg-amber-500 inline-block" /> Мелкие
-                  </span>
-                </div>
-              </div>
-            </CardHeader>
-
-            <CardContent className="space-y-3 px-4 py-2 flex-1">
-              {stats.top_errors && stats.top_errors.length > 0 ? (
-                <div className="space-y-3">
-                  {/* Block 1: Fatal Errors */}
-                  <div className="space-y-1.5">
-                    <div className="text-xs font-bold text-red-700 dark:text-red-400 flex items-center gap-1 uppercase tracking-wider">
-                      <AlertOctagon className="h-3.5 w-3.5" />
-                      <span>Фатальные ошибки ({fatalErrors.length})</span>
-                    </div>
-
-                    {fatalErrors.length > 0 ? (
-                      fatalErrors.map((err, idx) => (
-                        <div key={idx} className="p-2 rounded-lg border border-red-200 dark:border-red-950/60 bg-red-50/40 dark:bg-red-950/20 space-y-1">
-                          <div className="flex items-start justify-between gap-2 text-xs">
-                            <span className="font-semibold text-foreground leading-tight">
-                              {err.text}
-                            </span>
-                            <span className={`font-mono text-xs ${getErrorTextClass(err.frequency_percent)} shrink-0`}>
-                              {err.frequency_percent}%
-                            </span>
-                          </div>
-                          <div className="w-full bg-slate-200 dark:bg-slate-800 h-1.5 rounded-full overflow-hidden">
-                            <div
-                              className={`h-full rounded-full transition-all ${getErrorBarClass(err.frequency_percent)}`}
-                              style={{ width: `${err.frequency_percent}%` }}
-                            />
-                          </div>
-                        </div>
-                      ))
-                    ) : (
-                      <div className="text-xs text-muted-foreground italic py-1">
-                        Фатальных ошибок не зафиксировано
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Block 2: Minor Errors */}
-                  <div className="space-y-1.5">
-                    <div className="text-xs font-bold text-amber-700 dark:text-amber-400 flex items-center gap-1 uppercase tracking-wider">
-                      <AlertTriangle className="h-3.5 w-3.5" />
-                      <span>Мелкие недочеты ({minorErrors.length})</span>
-                    </div>
-
-                    {minorErrors.length > 0 ? (
-                      minorErrors.map((err, idx) => (
-                        <div key={idx} className="p-2 rounded-lg border border-amber-200 dark:border-amber-950/60 bg-amber-50/30 dark:bg-amber-950/20 space-y-1">
-                          <div className="flex items-start justify-between gap-2 text-xs">
-                            <span className="font-medium text-foreground leading-tight">
-                              {err.text}
-                            </span>
-                            <span className={`font-mono text-xs ${getErrorTextClass(err.frequency_percent)} shrink-0`}>
-                              {err.frequency_percent}%
-                            </span>
-                          </div>
-                          <div className="w-full bg-slate-200 dark:bg-slate-800 h-1.5 rounded-full overflow-hidden">
-                            <div
-                              className={`h-full rounded-full transition-all ${getErrorBarClass(err.frequency_percent)}`}
-                              style={{ width: `${err.frequency_percent}%` }}
-                            />
-                          </div>
-                        </div>
-                      ))
-                    ) : (
-                      <div className="text-xs text-muted-foreground italic py-1">
-                        Мелких недочетов не зафиксировано
-                      </div>
-                    )}
-                  </div>
-                </div>
-              ) : (
-                <div className="flex flex-col items-center justify-center text-center text-muted-foreground text-xs py-10 gap-2">
-                  <Clock className="h-8 w-8 text-muted-foreground" />
-                  <span className="font-semibold text-foreground">Замечаний не зафиксировано</span>
-                  <span className="text-[11px] text-muted-foreground max-w-xs">
-                    {(stats.graded_cards ?? stats.cards_solved) === 0
-                      ? "Пройдите тренировочные билеты для формирования персональной статистики."
-                      : "В сохранённых результатах замечаний нет."}
-                  </span>
-                </div>
-              )}
-            </CardContent>
-
-            <CardFooter className="border-t py-1.5 px-4 bg-muted/20 text-[11px] text-muted-foreground">
-              Цветовая индикация: от желтого (редко) до темно-красного (критично)
-            </CardFooter>
-          </Card>
-        </div>
-
-        {/* Section 3: Tabs - Training History & Reference Materials */}
-        <Card className="border shadow-xs">
-          <CardHeader className="py-2.5 px-4 border-b bg-muted/10">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={() => setActiveTab("lessons")}
-                  className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-bold transition-colors cursor-pointer ${
-                    activeTab === "lessons"
-                      ? "bg-background text-primary shadow-xs ring-1 ring-border"
-                      : "text-muted-foreground hover:text-foreground"
-                  }`}
-                >
-                  <FileText className="h-3.5 w-3.5" />
-                  <span>История обучения и билеты</span>
-                  <Badge variant="secondary" className="text-[10px] px-1.5 py-0">
-                    {lessons.length}
-                  </Badge>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => setActiveTab("docs")}
-                  className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-bold transition-colors cursor-pointer ${
-                    activeTab === "docs"
-                      ? "bg-background text-primary shadow-xs ring-1 ring-border"
-                      : "text-muted-foreground hover:text-foreground"
-                  }`}
-                >
-                  <BookOpen className="h-3.5 w-3.5" />
-                  <span>Справочные материалы</span>
-                  <Badge variant="secondary" className="text-[10px] px-1.5 py-0">
-                    {REFERENCE_DOCS.length}
-                  </Badge>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => setActiveTab("ai_advice")}
-                  className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-bold transition-colors cursor-pointer ${
-                    activeTab === "ai_advice"
-                      ? "bg-background text-primary shadow-xs ring-1 ring-border"
-                      : "text-muted-foreground hover:text-foreground"
-                  }`}
-                >
-                  <Sparkles className="h-3.5 w-3.5 text-amber-500" />
-                  <span>Советы ИИ</span>
-                  <Badge variant="secondary" className="text-[10px] px-1.5 py-0 bg-amber-500/10 text-amber-700 dark:text-amber-400">
-                    Qwen 9B
-                  </Badge>
-                  {aiAdvices.filter((a) => !a.is_read).length > 0 && (
-                    <span className="h-2 w-2 rounded-full bg-red-500" />
-                  )}
-                </button>
-              </div>
-
-              <span className="text-[11px] text-muted-foreground hidden sm:inline">
-                {activeTab === "lessons"
-                  ? "Протоколы завершенных занятий и оценки"
-                  : activeTab === "docs"
-                  ? "Методические инструкции и регламенты"
-                  : "Интеллектуальный разбор диалогов и методические указания нейросети"}
-              </span>
-            </div>
-          </CardHeader>
-
-          <CardContent className="p-4">
-            {/* Tab 1: Lessons Accordion */}
-            {activeTab === "lessons" && (
-              <div className="space-y-2.5">
-                {lessons.length === 0 ? (
-                  <div className="text-center py-8 border-2 border-dashed rounded-xl bg-muted/20">
-                    <FileText className="h-8 w-8 mx-auto text-muted-foreground/40 mb-2" />
-                    <p className="text-sm font-semibold text-foreground">
-                      История занятий пока пуста
-                    </p>
-                    <p className="text-xs text-muted-foreground max-w-sm mx-auto mt-1 mb-3">
-                      Пройдите первый урок в тренажере или выполните тестовый запуск в лобби
-                    </p>
-                    <Link href="/student/lobby">
-                      <Button size="sm" variant="default" className="text-xs font-semibold gap-2">
-                        <span>Перейти в лобби</span>
-                        <ArrowRight className="h-3.5 w-3.5" />
-                      </Button>
-                    </Link>
-                  </div>
-                ) : (
-                  lessons.map((lesson) => {
-                    const isExpanded = expandedLessonId === lesson.session_id
-                    const score = lesson.score
-                    const isPassed = score !== undefined && score !== null ? score >= 70 : true
-
-                    return (
-                      <div
-                        key={lesson.session_id}
-                        className="border rounded-xl overflow-hidden transition-all bg-card"
-                      >
-                        {/* Accordion Header */}
-                        <button
-                          type="button"
-                          onClick={() => toggleLesson(lesson.session_id)}
-                          className="w-full p-3 flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 text-left hover:bg-muted/40 transition-colors cursor-pointer"
-                        >
-                          <div className="flex items-center gap-3">
-                            <div
-                              className={`h-8 w-8 rounded-lg flex items-center justify-center shrink-0 ${
-                                score == null ? "bg-slate-100 text-slate-500" : isPassed
-                                  ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
-                                  : "bg-red-500/10 text-red-600 dark:text-red-400"
-                              }`}
-                            >
-                              {score == null ? <Clock className="h-4 w-4"/> : isPassed ? (
-                                <CheckCircle2 className="h-4 w-4" />
-                              ) : (
-                                <XCircle className="h-4 w-4" />
-                              )}
-                            </div>
-
-                            <div>
-                              <div className="font-bold text-xs sm:text-sm text-foreground flex items-center gap-2">
-                                <span>{lesson.title || `Урок #${lesson.session_id.slice(0, 8)}`}</span>
-                                <Badge variant="outline" className="text-[10px] font-normal py-0">
-                                  {lesson.target_role === "DISPATCHER_DDS" ? "ДДС" : "112"}
-                                </Badge>
-                              </div>
-                              <div className="text-[11px] text-muted-foreground flex items-center gap-2 mt-0.5">
-                                {lesson.date && (
-                                  <span className="flex items-center gap-1">
-                                    <Clock className="h-3 w-3" />
-                                    {lesson.date}
-                                  </span>
-                                )}
-                                <span>• Билетов: {lesson.tickets ? lesson.tickets.length : 0}</span>
-                              </div>
-                            </div>
-                          </div>
-
-                          <div className="flex items-center gap-3 self-end sm:self-center">
-                            {score !== undefined && score !== null && (
-                              <div className="text-right">
-                                <span className="text-[10px] text-muted-foreground block">Оценка</span>
-                                <span
-                                  className={`text-sm font-extrabold font-mono ${
-                                    isPassed
-                                      ? "text-emerald-600 dark:text-emerald-400"
-                                      : "text-red-600 dark:text-red-400"
-                                  }`}
-                                >
-                                  {score.toFixed(1)} / 100
-                                </span>
-                              </div>
-                            )}
-
-                            <div className="p-1 rounded-md text-muted-foreground">
-                              {isExpanded ? (
-                                <ChevronUp className="h-4 w-4" />
-                              ) : (
-                                <ChevronDown className="h-4 w-4" />
-                              )}
-                            </div>
-                          </div>
-                        </button>
-
-                        {/* Accordion Body: Tickets List */}
-                        {isExpanded && (
-                          <div className="p-3 border-t bg-muted/15 space-y-2">
-                            <div className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider">
-                              Результаты билетов в уроке:
-                            </div>
-
-                            {lesson.tickets && lesson.tickets.length > 0 ? (
-                              <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5">
-                                {lesson.tickets.map((ticket, tIdx) => {
-                                  const tScore = ticket.score ?? 0
-                                  const tPassed = ticket.status === "passed" || tScore >= 70
-
-                                  return (
-                                    <div
-                                      key={ticket.ticket_id || tIdx}
-                                      className="p-2.5 rounded-lg border bg-background space-y-1.5 shadow-2xs"
-                                    >
-                                      <div className="flex items-start justify-between gap-2">
-                                        <div>
-                                          <div className="font-semibold text-xs text-foreground">
-                                            {ticket.title || `Билет #${ticket.ticket_id?.slice(0, 8)}`}
-                                          </div>
-                                          {ticket.category && (
-                                            <Badge variant="secondary" className="text-[10px] mt-0.5 py-0">
-                                              {ticket.category}
-                                            </Badge>
-                                          )}
-                                        </div>
-                                        <Badge
-                                          variant="outline"
-                                          className={`text-[10px] font-mono font-bold py-0 ${
-                                            ticket.score == null ? "border-slate-300 text-slate-600" : tPassed
-                                              ? "border-emerald-500/50 text-emerald-600 dark:text-emerald-400 bg-emerald-500/10"
-                                              : "border-red-500/50 text-red-600 dark:text-red-400 bg-red-500/10"
-                                          }`}
-                                        >
-                                          {ticket.score !== undefined && ticket.score !== null
-                                            ? `${ticket.score.toFixed(0)} б.`
-                                            : ({ungraded: "Нет оценки", incomplete: "Не завершено", pending: "Не получена", in_progress: "В работе", passed: "Сдан", failed: "Не сдан"} as Record<string, string>)[ticket.status] || "Нет оценки"}
-                                        </Badge>
-                                      </div>
-
-                                      {ticket.card_id && <Link className="text-xs text-primary underline" href={`/dds?${new URLSearchParams({session_id: lesson.session_id, ticket_id: ticket.ticket_id, card_id: ticket.card_id})}`}>Открыть карточку</Link>}
-                                      {/* Ticket Errors */}
-                                      {ticket.errors && ticket.errors.length > 0 ? (
-                                        <div className="pt-1 border-t space-y-0.5">
-                                          <div className="text-[11px] font-semibold text-red-600 dark:text-red-400 flex items-center gap-1">
-                                            <AlertTriangle className="h-3 w-3" />
-                                            <span>Ошибки ({ticket.errors.length}):</span>
-                                          </div>
-                                          <ul className="text-[11px] text-muted-foreground list-disc pl-4 space-y-0.5">
-                                            {ticket.errors.map((err, eIdx) => (
-                                              <li key={eIdx}>{err}</li>
-                                            ))}
-                                          </ul>
-                                        </div>
-                                      ) : (
-                                        <div className="pt-1 text-[11px] text-emerald-600 dark:text-emerald-400 flex items-center gap-1">
-                                          <CheckCircle2 className="h-3 w-3" />
-                                          <span>{ticket.score == null ? "Оценивание не выполнено" : "Ошибок не зафиксировано"}</span>
-                                        </div>
-                                      )}
-                                    </div>
-                                  )
-                                })}
-                              </div>
-                            ) : (
-                              <div className="text-xs text-muted-foreground py-1">
-                                Нет детализированных записей по билетам для этого занятия.
-                              </div>
-                            )}
-                          </div>
-                        )}
-                      </div>
-                    )
-                  })
-                )}
-              </div>
-            )}
-
-            {/* Tab 2: Reference Materials (Stub Section) */}
-            {activeTab === "docs" && (
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                {REFERENCE_DOCS.map((doc) => (
-                  <div
-                    key={doc.id}
-                    className="p-3 rounded-xl border bg-card hover:border-primary/50 transition-colors flex items-start justify-between gap-3 shadow-2xs group"
-                  >
-                    <div className="flex items-start gap-3">
-                      <div className="h-10 w-10 rounded-lg bg-red-500/10 text-red-600 dark:text-red-400 flex items-center justify-center shrink-0">
-                        <FileText className="h-5 w-5" />
-                      </div>
-                      <div>
-                        <div className="font-bold text-xs sm:text-sm text-foreground group-hover:text-primary transition-colors">
-                          {doc.title}
-                        </div>
-                        <p className="text-[11px] text-muted-foreground mt-0.5 leading-snug">
-                          {doc.description}
-                        </p>
-                        <div className="flex items-center gap-2 mt-2">
-                          <Badge variant="outline" className="text-[10px] py-0 font-normal">
-                            {doc.tag}
-                          </Badge>
-                          <span className="text-[10px] text-muted-foreground font-mono">
-                            {doc.size}
-                          </span>
-                        </div>
-                      </div>
-                    </div>
-
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="h-8 px-2 text-xs shrink-0 text-muted-foreground hover:text-foreground gap-1"
-                      onClick={() => alert(`Загрузка документа: ${doc.title}`)}
-                      title="Скачать документ"
-                    >
-                      <Download className="h-3.5 w-3.5" />
-                      <span className="hidden sm:inline">Открыть</span>
-                    </Button>
-                  </div>
-                ))}
-              </div>
-            )}
-
-            {/* Tab 3: AI Advice (Qwen 2.5 9B) */}
-            {activeTab === "ai_advice" && (
-              <div className="space-y-4">
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 p-3.5 rounded-xl border bg-gradient-to-r from-amber-500/10 via-primary/5 to-transparent">
-                  <div className="flex items-center gap-3">
-                    <div className="h-10 w-10 rounded-xl bg-amber-500/20 text-amber-600 dark:text-amber-400 flex items-center justify-center shrink-0">
-                      <Sparkles className="h-5 w-5" />
-                    </div>
-                    <div>
-                      <h4 className="font-bold text-sm text-foreground flex items-center gap-2">
-                        Глубокий анализ сессий
-                        <Badge variant="outline" className="border-amber-500/40 text-amber-600 dark:text-amber-400 text-[10px]">
-                          Qwen 2.5 9B
-                        </Badge>
-                      </h4>
-                      <p className="text-xs text-muted-foreground">
-                        Автономный разбор речевых логов, выявление ошибок адресации и персональные методические советы
-                      </p>
-                    </div>
-                  </div>
-
-                  <Button
-                    size="sm"
-                    onClick={handleTriggerAiAnalysis}
-                    disabled={isTriggeringAi}
-                    className="shrink-0 gap-2 text-xs font-semibold cursor-pointer bg-primary hover:bg-primary/90"
-                  >
-                    {isTriggeringAi ? (
-                      <>
-                        <RefreshCw className="h-3.5 w-3.5 animate-spin" />
-                        <span>Формирование отчета...</span>
-                      </>
-                    ) : (
-                      <>
-                        <Bot className="h-3.5 w-3.5" />
-                        <span>Запросить анализ ИИ</span>
-                      </>
-                    )}
-                  </Button>
-                </div>
-
-                {/* Error Banner */}
-                {aiError && (
-                  <div className="p-4 rounded-xl border border-red-500/40 bg-red-500/10 text-red-700 dark:text-red-400 flex items-start gap-3 shadow-xs animate-in fade-in duration-200">
-                    <AlertTriangle className="h-5 w-5 shrink-0 mt-0.5 text-red-600 dark:text-red-400" />
-                    <div className="space-y-1 text-xs">
-                      <p className="font-semibold text-sm">Не удалось сформировать анализ</p>
-                      <p className="text-foreground/90">{aiError}</p>
-                    </div>
-                  </div>
-                )}
-
-                {/* Success Banner */}
-                {aiSuccessMessage && (
-                  <div className="p-4 rounded-xl border border-emerald-500/40 bg-emerald-500/10 text-emerald-800 dark:text-emerald-300 flex items-start gap-3 shadow-xs animate-in fade-in duration-200">
-                    <CheckCircle2 className="h-5 w-5 shrink-0 mt-0.5 text-emerald-600 dark:text-emerald-400" />
-                    <div className="space-y-1 text-xs">
-                      <p className="font-semibold text-sm">Анализ завершен</p>
-                      <p className="text-foreground/90">{aiSuccessMessage}</p>
-                    </div>
-                  </div>
-                )}
-
-                {/* Multi-step Visual Progress Box (User-friendly, no raw logs) */}
-                {isTriggeringAi && (
-                  <div className="p-4 rounded-xl border border-amber-500/40 bg-amber-500/5 shadow-xs space-y-3.5 animate-in fade-in duration-200">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2.5">
-                        <RefreshCw className="h-4 w-4 animate-spin text-amber-500" />
-                        <span className="font-semibold text-xs text-foreground">
-                          {aiProgressMessage || "Идет анализ тренировок..."}
-                        </span>
-                      </div>
-                      <Badge variant="outline" className="border-amber-500/30 text-amber-600 dark:text-amber-400 text-[10px]">
-                        Нейросеть активна
-                      </Badge>
-                    </div>
-
-                    {/* Step indicator */}
-                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-[11px]">
-                      <div
-                        className={`p-2.5 rounded-lg border text-center transition-all ${
-                          aiProgressStep >= 1
-                            ? "bg-amber-500/20 border-amber-500/50 text-foreground font-semibold"
-                            : "bg-muted/30 border-border text-muted-foreground"
-                        }`}
-                      >
-                        1. Сбор логов и сессий
-                      </div>
-                      <div
-                        className={`p-2.5 rounded-lg border text-center transition-all ${
-                          aiProgressStep >= 2
-                            ? "bg-amber-500/20 border-amber-500/50 text-foreground font-semibold"
-                            : "bg-muted/30 border-border text-muted-foreground"
-                        }`}
-                      >
-                        2. Инференс Qwen 2.5 9B
-                      </div>
-                      <div
-                        className={`p-2.5 rounded-lg border text-center transition-all ${
-                          aiProgressStep >= 3
-                            ? "bg-amber-500/20 border-amber-500/50 text-foreground font-semibold"
-                            : "bg-muted/30 border-border text-muted-foreground"
-                        }`}
-                      >
-                        3. Методический отчет
-                      </div>
-                    </div>
-
-                    <p className="text-[11px] text-muted-foreground">
-                      Нейросеть Qwen сопоставляет хронометраж и реплики диалогов с регламентом Системы-112, выделяет ошибки адресации и формирует персональные рекомендации.
-                    </p>
-                  </div>
-                )}
-
-                {isLoadingAi ? (
-                  <div className="text-center py-10">
-                    <RefreshCw className="h-6 w-6 animate-spin mx-auto text-primary mb-2" />
-                    <p className="text-xs text-muted-foreground">Загрузка рекомендаций нейросети...</p>
-                  </div>
-                ) : aiAdvices.length === 0 ? (
-                  <div className="text-center py-10 border-2 border-dashed rounded-xl bg-muted/20 space-y-2">
-                    <Bot className="h-10 w-10 mx-auto text-muted-foreground/40 mb-1" />
-                    <p className="text-sm font-semibold text-foreground">Пока нет рекомендаций от ИИ</p>
-                    <p className="text-xs text-muted-foreground max-w-md mx-auto">
-                      Пройдите несколько тренировочных сессий или нажмите кнопку «Запросить анализ ИИ» выше для формирования первичного методического отчета.
-                    </p>
-                  </div>
-                ) : (
-                  <div className="space-y-3">
-                    {aiAdvices.map((adv) => (
-                      <div
-                        key={adv.advice_id}
-                        className={`p-4 rounded-xl border transition-all shadow-2xs ${
-                          adv.is_read
-                            ? "bg-card border-border/70"
-                            : "bg-amber-500/5 border-amber-500/30 ring-1 ring-amber-500/20"
-                        }`}
-                      >
-                        <div className="flex items-center justify-between gap-2 border-b pb-2 mb-3">
-                          <div className="flex items-center gap-2">
-                            <Bot className="h-4 w-4 text-amber-500" />
-                            <span className="font-semibold text-xs text-foreground">
-                              Методический отчет ИИ
-                            </span>
-                            <Badge variant="outline" className="text-[10px] py-0 font-mono">
-                              {adv.model_used || "Qwen 3.5 9B"}
-                            </Badge>
-                            {!adv.is_read ? (
-                              <Badge className="bg-amber-500 text-white text-[10px] py-0">
-                                Новое
-                              </Badge>
-                            ) : (
-                              <Badge variant="secondary" className="text-[10px] py-0 text-muted-foreground">
-                                Прочитано
-                              </Badge>
-                            )}
-                          </div>
-
-                          <div className="flex items-center gap-2">
-                            <span className="text-[11px] text-muted-foreground">
-                              {new Date(adv.date).toLocaleString("ru-RU", {
-                                day: "numeric",
-                                month: "short",
-                                hour: "2-digit",
-                                minute: "2-digit",
-                              })}
-                            </span>
-                            {!adv.is_read && (
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                onClick={() => handleMarkAdviceRead(adv.advice_id)}
-                                className="h-7 px-2 text-[11px] text-muted-foreground hover:text-foreground cursor-pointer"
-                              >
-                                <CheckCircle2 className="h-3.5 w-3.5 mr-1 text-emerald-500" />
-                                <span>Прочитано</span>
-                              </Button>
-                            )}
-                          </div>
-                        </div>
-
-                        <div className="text-xs sm:text-sm text-foreground/90 whitespace-pre-wrap leading-relaxed font-sans">
-                          {adv.analysis_text}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            )}
-          </CardContent>
-        </Card>
-      </main>
-
-      {/* Footer */}
-      <footer className="border-t py-3 text-center text-xs text-muted-foreground bg-card/50">
-        Автоматизированный комплекс Системы-112 • Личный кабинет курсанта
-      </footer>
-    </div>
-  )
+        <aside className="contents lg:block lg:space-y-6">
+          <section aria-labelledby="practice-heading" className="order-2 rounded-2xl border border-primary/20 lg:order-none bg-primary/5 p-5 sm:p-6">
+            <BookOpen className="mb-4 h-6 w-6 text-primary" aria-hidden="true" /><h2 id="practice-heading" className="text-xl font-semibold tracking-tight">Самостоятельная тренировка</h2><p className="mt-3 text-sm leading-relaxed text-muted-foreground">Выберите учебные задания и отработайте действия диспетчера в своём темпе.</p>
+            <button type="button" aria-expanded={showTraining} aria-controls="training-catalog" onClick={() => setShowTraining(value => !value)} className="mt-5 inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-lg border border-primary/30 bg-card px-4 py-2.5 text-sm font-semibold text-primary hover:bg-primary/5 focus-visible:outline-2 focus-visible:outline-ring">{showTraining ? "Скрыть выбор заданий" : "Выбрать задания"}<ArrowDown className="h-4 w-4" aria-hidden="true" /></button>
+          </section>
+          <section aria-labelledby="criteria-heading" className="order-4 rounded-2xl border border-border bg-card p-5 shadow-xs sm:p-6 lg:order-none">
+            <ClipboardCheck className="mb-3 h-5 w-5 text-muted-foreground" aria-hidden="true" /><h2 id="criteria-heading" className="text-lg font-semibold">Что проверяется в карточке</h2><p className="mt-2 text-sm leading-relaxed text-muted-foreground">Пять критериев без общего балла. Раскройте критерий, чтобы узнать правило.</p>
+            <ol className="mt-5 space-y-4">{CRITERIA.map((criterion, i) => <li key={criterion.title} className="flex gap-3"><span aria-hidden="true" className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-muted text-xs font-medium text-muted-foreground">{i + 1}</span><details className="min-w-0 flex-1"><summary className="flex cursor-pointer list-none items-start justify-between gap-2 rounded text-sm font-medium focus-visible:outline-2 focus-visible:outline-ring [&::-webkit-details-marker]:hidden"><h3>{criterion.title}</h3><ChevronDown className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" /></summary><p className="mt-2 text-sm leading-relaxed text-muted-foreground">{criterion.description}</p></details></li>)}</ol>
+          </section>
+        </aside>
+      </div>
+      {showTraining && <section id="training-catalog" aria-label="Выбор заданий для тренировки" tabIndex={-1} className="mt-6 scroll-mt-6 rounded-xl focus-visible:outline-2 focus-visible:outline-ring"><DDSSelfTraining /></section>}
+    </main>
+    <footer className="mx-auto max-w-[1440px] px-5 pb-6 text-xs text-muted-foreground sm:px-8">Тренажёр Системы-112 · Учебный режим ДДС</footer>
+  </div>
 }
-

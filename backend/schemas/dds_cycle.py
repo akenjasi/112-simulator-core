@@ -226,6 +226,9 @@ class DDSSessionStateResponse(BaseModel):
     completion_blockers: List[Dict[str, str]] = Field(default_factory=list)
     cards: List[Dict[str, Any]] = Field(default_factory=list)
     readonly: bool = False
+    exercise: Optional[Dict[str, Any]] = None
+    criteria: List[Dict[str, Any]] = Field(default_factory=list)
+    last_attempt: Optional[Dict[str, Any]] = None
     stopped_at: Optional[str] = None
     stop_reason: Optional[str] = None
 

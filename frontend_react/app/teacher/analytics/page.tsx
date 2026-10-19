@@ -22,6 +22,7 @@ import {
   RecordDetail,
   ErrorDetailItem,
 } from "@/components/teacher/split-screen"
+import {DDSLessonProtocol} from "@/components/teacher/dds-lesson-protocol"
 import { DDSLessonReport } from "@/components/teacher/dds-lesson-report"
 import { getStoredToken } from "@/lib/auth-session"
 import {
@@ -1795,7 +1796,7 @@ export default function AnalyticsPage({ initialTab = "all" }: AnalyticsPageProps
                       <div className="border-t bg-muted/10 p-5 space-y-6 animate-in fade-in-50 duration-150">
                         {/* DDS Lesson Report for COMPLETED DISPATCHER_DDS */}
                         {isCompleted && lesson.target_role === "DISPATCHER_DDS" && (
-                          <DDSLessonReport lessonId={lesson.id} />
+                          <><DDSLessonProtocol lessonId={lesson.id}/><DDSLessonReport lessonId={lesson.id} /></>
                         )}
 
                         {/* 1. Teacher Notes Block */}

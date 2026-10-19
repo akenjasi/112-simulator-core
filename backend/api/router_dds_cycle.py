@@ -226,3 +226,41 @@ async def finish_session_endpoint(
         db=db,
     )
     return DDSSessionStateResponse.model_validate(state)
+
+
+from backend.schemas.dds_exercise import ExercisePlan, PhoneCommand
+from backend.core.dds_phone import phone_command
+from backend.core.dds_exercise import validated_plan
+
+
+@router_dds_cycle.post("/sessions/{session_id}/phone", response_model=DDSSessionStateResponse)
+async def post_phone(session_id: str, payload: PhoneCommand,
+                     user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    return await phone_command(db, session_id, payload, user)
+
+
+@router_dds_cycle.get("/tickets/{ticket_id}/exercise", dependencies=[Depends(require_role("TEACHER", "ADMIN"))])
+async def get_exercise_plan(ticket_id: str, db: AsyncSession = Depends(get_db)):
+    from backend.core.dds_cycle import incoming_card_from_ticket
+    ticket = await db.get(ScenarioTicket, ticket_id)
+    if not ticket or ticket.is_deleted:
+        raise HTTPException(404, "Ticket not found")
+    incoming = incoming_card_from_ticket(ticket)
+    return {"services": [s["name"] for s in incoming["services"]],
+            "plan": (ticket.content or {}).get("dds_exercise")}
+
+
+@router_dds_cycle.put("/tickets/{ticket_id}/exercise", dependencies=[Depends(require_role("TEACHER", "ADMIN"))])
+async def put_exercise_plan(ticket_id: str, payload: ExercisePlan, db: AsyncSession = Depends(get_db)):
+    from backend.core.dds_cycle import incoming_card_from_ticket
+    ticket = await db.get(ScenarioTicket, ticket_id)
+    if not ticket or ticket.is_deleted:
+        raise HTTPException(404, "Ticket not found")
+    incoming = incoming_card_from_ticket(ticket)
+    try:
+        plan = validated_plan(payload.model_dump(), [s["name"] for s in incoming["services"]])
+    except ValueError as exc:
+        raise HTTPException(422, str(exc)) from exc
+    ticket.content = {**(ticket.content or {}), "incoming_card": incoming, "dds_exercise": plan}
+    await db.commit()
+    return {"services": [s["name"] for s in incoming["services"]], "plan": plan}
