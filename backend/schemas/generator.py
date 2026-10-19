@@ -23,4 +23,3 @@ class TicketData(BaseTicketData):
     ground_truth: Dict[str, Any] = Field(default_factory=dict)
     etalon_services: List[str] = Field(default_factory=list)
     dds_etalon: Optional[Dict[str, Any]] = None
-

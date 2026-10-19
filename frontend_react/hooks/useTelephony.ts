@@ -1,5 +1,8 @@
 "use client"
 
+import { getStoredToken } from "@/lib/auth-session"
+import { apiFetch } from "@/lib/api-fetch"
+
 import { useState, useEffect, useRef, useCallback } from "react"
 import { useCallStore } from "../store/useCallStore"
 // Note: In future stages when Asterisk SIP/WebRTC PBX is connected,
@@ -161,6 +164,7 @@ export function useTelephony({
         wsRef.current = ws
 
         ws.onopen = () => {
+          ws.send(JSON.stringify({ type: "auth", token: getStoredToken() }))
           if (!isSubscribed) return
           setIsConnected(true)
           setIsReconnecting(false)
@@ -291,8 +295,11 @@ export function useTelephony({
             : `${protocol}//${window.location.host}/api/v2/asr/stream/${sessionKey}`
           const asrWs = new WebSocket(asrWsUrl)
           asrWsRef.current = asrWs
+          asrWs.onopen = () => {
+            asrWs.send(JSON.stringify({ type: "auth", token: getStoredToken() }))
+          }
           
-          asrWs.onmessage = (event) => {
+          asrWs.onmessage = async (event) => {
             try {
               const data = JSON.parse(event.data)
               if (data.type === "dialogue_response") {
@@ -313,7 +320,12 @@ export function useTelephony({
                     const ttsUrl =
                       `/api/v1/tickets/tts/speak?` +
                       `text=${encodeURIComponent(data.applicant_text)}&speaker=aidar`
-                    const ttsAudio = new Audio(ttsUrl)
+                    const response = await apiFetch(ttsUrl)
+                    if (!response.ok) throw new Error(`TTS unavailable: ${response.status}`)
+                    const objectUrl = URL.createObjectURL(await response.blob())
+                    const ttsAudio = new Audio(objectUrl)
+                    ttsAudio.onended = () => URL.revokeObjectURL(objectUrl)
+                    ttsAudio.onerror = () => URL.revokeObjectURL(objectUrl)
                     ;(window as any).currentCallAudio = ttsAudio
                     const p = ttsAudio.play()
                     if (p && typeof p.catch === "function") {

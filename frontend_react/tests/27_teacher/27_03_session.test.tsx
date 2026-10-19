@@ -208,8 +208,7 @@ describe('ТЗ 41: Запуск урока (Создание сессии) - Н�
     // Select DISPATCHER_DDS role
     const dispatcherRadio = screen.getByRole('radio', { name: /Диспетчер ДДС/i });
     fireEvent.click(dispatcherRadio);
-    await waitFor(() => expect(screen.getByRole('combobox', { name: /Подготовленный билет ДДС/i })).toBeInTheDocument());
-    fireEvent.change(screen.getByRole('combobox', { name: /Подготовленный билет ДДС/i }), { target: { value: 'dds-approved-1' } });
+    fireEvent.click(await screen.findByRole('checkbox', { name: /Подтвержденный билет/i }));
 
     // Select adaptive complexity
     const adaptiveRadio = screen.getByText(/Адаптивный/i);

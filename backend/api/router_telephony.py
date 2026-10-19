@@ -23,7 +23,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm.attributes import flag_modified
 
 from backend.database import get_db
-from backend.core.deps import require_role
+from backend.core.deps import require_role, get_current_user
+from backend.models.domain_01 import User
+from backend.core.access import require_session
+from backend.core.socket_auth import authenticate_socket, validate_socket
 from backend.models.domain_03 import ExamSession
 from backend.core.telephony_adapter import telephony_adapter
 
@@ -50,6 +53,7 @@ class StartCallResponse(BaseModel):
     operator_ext: str
     session_id: Optional[str] = None
     message: str
+    mode: str = "simulation"
 
 
 class HangupRequest(BaseModel):
@@ -101,7 +105,7 @@ class TelephonyConnectionManager:
         self.call_states: Dict[str, Dict[str, Any]] = {}
 
     async def connect(self, session_id: str, websocket: WebSocket):
-        await websocket.accept()
+        # Socket is authenticated and accepted before registration.
         if session_id not in self.active_connections:
             self.active_connections[session_id] = []
         self.active_connections[session_id].append(websocket)
@@ -185,16 +189,24 @@ async def _update_db_session_call_status(
 @router_telephony.post("/start_call", response_model=StartCallResponse, dependencies=[Depends(require_role("TEACHER", "CADET"))])
 async def start_call(
     req: StartCallRequest,
+    current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> StartCallResponse:
     """Initiates an incoming call to the operator workstation using Asterisk."""
+    if not req.session_id:
+        raise HTTPException(422, "A saved session is required")
+    session = await require_session(db, current_user, req.session_id)
+    if (session.dynamic_state or {}).get("dds"):
+        raise HTTPException(409, "Prepared DDS exercises use the DDS phone API")
+    if session.ticket_id != req.ticket_id:
+        raise HTTPException(409, "Ticket must match the saved session")
+
     
-    # Actually originate the call using Asterisk PBX
-    ext_call_id = await telephony_adapter.originate_call(
-        endpoint=req.operator_ext,
-        extension=req.ticket_id
-    )
-    
+    if telephony_adapter.enabled in ("true", "1", "yes"):
+        raise HTTPException(501, "Real PBX channel lifecycle is not implemented; use simulation mode")
+    # Simulator call lifecycle
+    ext_call_id = None
+
     if not ext_call_id:
         # Fallback if Asterisk is unavailable
         logger.warning("Asterisk unavailable, using fallback mock call ID")
@@ -276,18 +288,27 @@ async def start_call(
         ticket_id=req.ticket_id,
         operator_ext=req.operator_ext,
         session_id=req.session_id,
-        message="Call started and answered by operator extension",
+        message="Simulated call started; no physical SIP call was confirmed",
+        mode="simulation",
     )
 
 
 @router_telephony.post("/hangup", response_model=HangupResponse, dependencies=[Depends(require_role("TEACHER", "CADET"))])
 async def hangup(
     req: HangupRequest,
+    current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> HangupResponse:
     """Terminates active call on PBX and notifies clients."""
-    if req.call_id:
-        await telephony_adapter.hangup_call(channel=req.call_id, reason=req.reason)
+    if not req.session_id:
+        raise HTTPException(422, "A saved session is required")
+    session = await require_session(db, current_user, req.session_id)
+    if (session.dynamic_state or {}).get("dds"):
+        raise HTTPException(409, "Prepared DDS exercises use the DDS phone API")
+    state = telephony_manager.get_state(req.session_id)
+    if req.call_id and state.get("call_id") != req.call_id:
+        raise HTTPException(403, "Call does not belong to this session")
+
     session_key = req.session_id or req.ticket_id or (req.call_id or "default")
     current_state = telephony_manager.get_state(session_key)
 
@@ -326,11 +347,19 @@ async def hangup(
 @router_telephony.post("/play_audio", response_model=PlayAudioResponse, dependencies=[Depends(require_role("TEACHER", "CADET"))])
 async def play_audio(
     req: PlayAudioRequest,
+    current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> PlayAudioResponse:
     """Plays audio into the active channel (e.g. citizen dialogue turn / TTS playback)."""
-    if req.call_id and req.audio_url:
-        await telephony_adapter.play_audio(channel=req.call_id, audio_file=req.audio_url)
+    if not req.session_id:
+        raise HTTPException(422, "A saved session is required")
+    session = await require_session(db, current_user, req.session_id)
+    if (session.dynamic_state or {}).get("dds"):
+        raise HTTPException(409, "Prepared DDS exercises use the DDS phone API")
+    state = telephony_manager.get_state(req.session_id)
+    if req.call_id and state.get("call_id") != req.call_id:
+        raise HTTPException(403, "Call does not belong to this session")
+
     session_key = req.session_id or (req.call_id or "default")
 
     # Broadcast PLAY_AUDIO to frontend
@@ -354,9 +383,11 @@ async def play_audio(
 @router_telephony.get("/status/{session_id}", response_model=TelephonyStatusResponse)
 async def get_telephony_status(
     session_id: str,
+    current_user: User = Depends(require_role("TEACHER", "CADET")),
     db: AsyncSession = Depends(get_db),
 ) -> TelephonyStatusResponse:
     """Gets current telephony state for a session (WebSocket fallback polling)."""
+    await require_session(db, current_user, session_id)
     state = telephony_manager.get_state(session_id)
     call_status = state.get("call_status", "IDLE")
 
@@ -385,6 +416,10 @@ async def telephony_websocket(
     session_id: str,
 ):
     """Real-time WebSocket endpoint for receiving telephony events (RINGING, ANSWERED, HANGUP)."""
+    authorized = await authenticate_socket(websocket, session_id)
+    if not authorized:
+        return
+    socket_token, _ = authorized
     await telephony_manager.connect(session_id, websocket)
     try:
         # Send current status immediately upon connection
@@ -399,6 +434,7 @@ async def telephony_websocket(
         while True:
             # Keep connection alive & accept any client command
             data = await websocket.receive_json()
+            await validate_socket(socket_token, session_id)
             msg_type = data.get("type")
             if msg_type == "ping":
                 await websocket.send_json({"type": "pong"})
@@ -409,6 +445,9 @@ async def telephony_websocket(
                     "session_id": session_id,
                     "status": state.get("call_status", "IDLE"),
                 })
+    except HTTPException:
+        await websocket.close(code=1008)
+        telephony_manager.disconnect(session_id, websocket)
     except WebSocketDisconnect:
         telephony_manager.disconnect(session_id, websocket)
     except Exception as e:

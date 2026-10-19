@@ -1,0 +1,179 @@
+ M backend/api/router_dds_cycle.py
+ M backend/api/router_lessons.py
+ M backend/core/dds_cycle.py
+ M backend/core/dds_queue.py
+ M backend/core/dds_report_data.py
+ M backend/core/dds_report_llm.py
+ M backend/schemas/dds_cycle.py
+ M frontend_react/app/dds/page.tsx
+ M frontend_react/app/operator/page.tsx
+ M frontend_react/app/student/lobby/page.tsx
+ M frontend_react/app/student/profile/page.tsx
+ M frontend_react/app/teacher/analytics/page.tsx
+ M frontend_react/app/teacher/tickets/page.tsx
+ M frontend_react/components/dispatcher/dds-assigned-console.tsx
+ M frontend_react/components/dispatcher/dds-assignments.tsx
+ M frontend_react/components/dispatcher/dispatch-panel.tsx
+ M frontend_react/components/dispatcher/top-bar.tsx
+ M frontend_react/lib/dds-cycle.ts
+ M frontend_react/next-env.d.ts
+ M frontend_react/out/404.html
+ D frontend_react/out/50x.html
+ M frontend_react/out/__next.__PAGE__.txt
+ M frontend_react/out/__next._full.txt
+ M frontend_react/out/__next._tree.txt
+ D frontend_react/out/_next/static/axm4dcQ0Jo4VO1BUVux38/_buildManifest.js
+ D frontend_react/out/_next/static/axm4dcQ0Jo4VO1BUVux38/_clientMiddlewareManifest.js
+ D frontend_react/out/_next/static/axm4dcQ0Jo4VO1BUVux38/_ssgManifest.js
+ D frontend_react/out/_next/static/chunks/0h5di-elnvv9n.css
+ D frontend_react/out/_next/static/chunks/0vnvw67zea-08.js
+ D frontend_react/out/_next/static/chunks/25_z61lr4cfb6.js
+ D frontend_react/out/_next/static/chunks/2eibnrdyxg-jj.js
+ D frontend_react/out/_next/static/chunks/2ucnly9l2bdw7.js
+ D frontend_react/out/_next/static/chunks/2y7nv_onakmlu.js
+ D frontend_react/out/_next/static/chunks/3hrynli5yl9z3.js
+ D frontend_react/out/_next/static/chunks/3ihrkw7adauri.js
+ D frontend_react/out/_next/static/chunks/3qbn6qhht6_w_.js
+ M frontend_react/out/_not-found.html
+ M frontend_react/out/_not-found.txt
+ M frontend_react/out/_not-found/__next._full.txt
+ M frontend_react/out/_not-found/__next._not-found.__PAGE__.txt
+ M frontend_react/out/_not-found/__next._tree.txt
+ M frontend_react/out/admin.html
+ M frontend_react/out/admin.txt
+ M frontend_react/out/admin/__next._full.txt
+ M frontend_react/out/admin/__next._tree.txt
+ M frontend_react/out/admin/__next.admin.__PAGE__.txt
+ M frontend_react/out/admin/logs.html
+ M frontend_react/out/admin/logs.txt
+ M frontend_react/out/admin/logs/__next._full.txt
+ M frontend_react/out/admin/logs/__next._tree.txt
+ M frontend_react/out/admin/logs/__next.admin.logs.__PAGE__.txt
+ M frontend_react/out/admin/profile.html
+ M frontend_react/out/admin/profile.txt
+ M frontend_react/out/admin/profile/__next._full.txt
+ M frontend_react/out/admin/profile/__next._tree.txt
+ M frontend_react/out/admin/profile/__next.admin.profile.__PAGE__.txt
+ M frontend_react/out/admin/security.html
+ M frontend_react/out/admin/security.txt
+ M frontend_react/out/admin/security/__next._full.txt
+ M frontend_react/out/admin/security/__next._tree.txt
+ M frontend_react/out/admin/security/__next.admin.security.__PAGE__.txt
+ M frontend_react/out/admin/system.html
+ M frontend_react/out/admin/system.txt
+ M frontend_react/out/admin/system/__next._full.txt
+ M frontend_react/out/admin/system/__next._tree.txt
+ M frontend_react/out/admin/system/__next.admin.system.__PAGE__.txt
+ M frontend_react/out/admin/users.html
+ M frontend_react/out/admin/users.txt
+ M frontend_react/out/admin/users/__next._full.txt
+ M frontend_react/out/admin/users/__next._tree.txt
+ M frontend_react/out/admin/users/__next.admin.users.__PAGE__.txt
+ M frontend_react/out/dds.html
+ M frontend_react/out/dds.txt
+ M frontend_react/out/dds/__next._full.txt
+ M frontend_react/out/dds/__next._tree.txt
+ M frontend_react/out/dds/__next.dds.__PAGE__.txt
+ M frontend_react/out/dds/journal.html
+ M frontend_react/out/dds/journal.txt
+ M frontend_react/out/dds/journal/__next._full.txt
+ M frontend_react/out/dds/journal/__next._tree.txt
+ M frontend_react/out/dds/journal/__next.dds.journal.__PAGE__.txt
+ M frontend_react/out/index.html
+ M frontend_react/out/index.txt
+ M frontend_react/out/login.html
+ M frontend_react/out/login.txt
+ M frontend_react/out/login/__next._full.txt
+ M frontend_react/out/login/__next._tree.txt
+ M frontend_react/out/login/__next.login.__PAGE__.txt
+ M frontend_react/out/operator.html
+ M frontend_react/out/operator.txt
+ M frontend_react/out/operator/__next._full.txt
+ M frontend_react/out/operator/__next._tree.txt
+ M frontend_react/out/operator/__next.operator.__PAGE__.txt
+ M frontend_react/out/operator/journal.html
+ M frontend_react/out/operator/journal.txt
+ M frontend_react/out/operator/journal/__next._full.txt
+ M frontend_react/out/operator/journal/__next._tree.txt
+ M frontend_react/out/operator/journal/__next.operator.journal.__PAGE__.txt
+ M frontend_react/out/student/lobby.html
+ M frontend_react/out/student/lobby.txt
+ M frontend_react/out/student/lobby/__next._full.txt
+ M frontend_react/out/student/lobby/__next._tree.txt
+ M frontend_react/out/student/lobby/__next.student.lobby.__PAGE__.txt
+ M frontend_react/out/student/profile.html
+ M frontend_react/out/student/profile.txt
+ M frontend_react/out/student/profile/__next._full.txt
+ M frontend_react/out/student/profile/__next._tree.txt
+ M frontend_react/out/student/profile/__next.student.profile.__PAGE__.txt
+ M frontend_react/out/teacher.html
+ M frontend_react/out/teacher.txt
+ M frontend_react/out/teacher/__next._full.txt
+ M frontend_react/out/teacher/__next._tree.txt
+ M frontend_react/out/teacher/__next.teacher.__PAGE__.txt
+ M frontend_react/out/teacher/analytics.html
+ M frontend_react/out/teacher/analytics.txt
+ M frontend_react/out/teacher/analytics/__next._full.txt
+ M frontend_react/out/teacher/analytics/__next._tree.txt
+ M frontend_react/out/teacher/analytics/__next.teacher.analytics.__PAGE__.txt
+ M frontend_react/out/teacher/groups.html
+ M frontend_react/out/teacher/groups.txt
+ M frontend_react/out/teacher/groups/__next._full.txt
+ M frontend_react/out/teacher/groups/__next._tree.txt
+ M frontend_react/out/teacher/groups/__next.teacher.groups.__PAGE__.txt
+ M frontend_react/out/teacher/knowledge.html
+ M frontend_react/out/teacher/knowledge.txt
+ M frontend_react/out/teacher/knowledge/__next._full.txt
+ M frontend_react/out/teacher/knowledge/__next._tree.txt
+ M frontend_react/out/teacher/knowledge/__next.teacher.knowledge.__PAGE__.txt
+ M frontend_react/out/teacher/profile.html
+ M frontend_react/out/teacher/profile.txt
+ M frontend_react/out/teacher/profile/__next._full.txt
+ M frontend_react/out/teacher/profile/__next._tree.txt
+ M frontend_react/out/teacher/profile/__next.teacher.profile.__PAGE__.txt
+ M frontend_react/out/teacher/sessions.html
+ M frontend_react/out/teacher/sessions.txt
+ M frontend_react/out/teacher/sessions/__next._full.txt
+ M frontend_react/out/teacher/sessions/__next._tree.txt
+ M frontend_react/out/teacher/sessions/__next.teacher.sessions.__PAGE__.txt
+ M frontend_react/out/teacher/sessions/live.html
+ M frontend_react/out/teacher/sessions/live.txt
+ M frontend_react/out/teacher/sessions/live/__next._full.txt
+ M frontend_react/out/teacher/sessions/live/__next._tree.txt
+ M frontend_react/out/teacher/sessions/live/__next.teacher.sessions.live.__PAGE__.txt
+ M frontend_react/out/teacher/sessions/new.html
+ M frontend_react/out/teacher/sessions/new.txt
+ M frontend_react/out/teacher/sessions/new/__next._full.txt
+ M frontend_react/out/teacher/sessions/new/__next._tree.txt
+ M frontend_react/out/teacher/sessions/new/__next.teacher.sessions.new.__PAGE__.txt
+ M frontend_react/out/teacher/tickets.html
+ M frontend_react/out/teacher/tickets.txt
+ M frontend_react/out/teacher/tickets/__next._full.txt
+ M frontend_react/out/teacher/tickets/__next._tree.txt
+ M frontend_react/out/teacher/tickets/__next.teacher.tickets.__PAGE__.txt
+ M frontend_react/tests/48_student/48_student.test.tsx
+?? backend/core/dds_exercise.py
+?? backend/core/dds_phone.py
+?? backend/schemas/dds_exercise.py
+?? docs/dds-phone-training.md
+?? frontend_react/components/dispatcher/dds-protocol.tsx
+?? frontend_react/components/dispatcher/dds-training-phone.tsx
+?? frontend_react/components/student/profile-assignments.tsx
+?? frontend_react/components/teacher/dds-exercise-editor.tsx
+?? frontend_react/components/teacher/dds-lesson-protocol.tsx
+?? frontend_react/out/_next/static/chunks/02hoouu6px6n3.js
+?? frontend_react/out/_next/static/chunks/0_ng18rxfl6y-.js
+?? frontend_react/out/_next/static/chunks/1jp9h4_nm8bew.js
+?? frontend_react/out/_next/static/chunks/2-e7vsjtywwim.js
+?? frontend_react/out/_next/static/chunks/22-h1hep1890s.css
+?? frontend_react/out/_next/static/chunks/27fdwfrokx1fa.js
+?? frontend_react/out/_next/static/chunks/2r3rr1snfmqnt.js
+?? frontend_react/out/_next/static/chunks/3a8-zno0rh7yc.js
+?? frontend_react/out/_next/static/chunks/3v2qgqkr-v9l7.js
+?? frontend_react/out/_next/static/ubyUQD53IKJOOsWbi-Mqu/_buildManifest.js
+?? frontend_react/out/_next/static/ubyUQD53IKJOOsWbi-Mqu/_clientMiddlewareManifest.js
+?? frontend_react/out/_next/static/ubyUQD53IKJOOsWbi-Mqu/_ssgManifest.js
+?? frontend_react/tests/dds-cycle/dds-phone-training.test.tsx
+?? frontend_react/tests/student-profile-home.test.tsx
+?? scripts/check_dds_phone_postgres.py
+?? tests/test_dds_phone_training.py

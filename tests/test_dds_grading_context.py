@@ -553,4 +553,3 @@ async def test_dds_grading_audit_and_permissions():
         assert details["old_score"] == 60.0
         assert details["new_score"] == 95.5
         assert details["reason"] == "Учтены фактические действия курсанта"
-

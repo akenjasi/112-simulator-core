@@ -1,3 +1,6 @@
+from pathlib import Path
+from backend.core.limits import stored_upload_path
+from backend.core.limits import read_upload, MAX_DOCUMENT_BYTES
 """Knowledge base API router: file upload and retrieval for teacher workspace."""
 
 import asyncio
@@ -59,15 +62,10 @@ def _write_file_sync(file_path: str, content: bytes) -> None:
 
 def _stored_file_path(file_path: str) -> str:
     """Resolve a DB path only when it remains inside the uploads directory."""
-    uploads_root = os.path.realpath(UPLOAD_DIR)
-    candidate = os.path.realpath(os.path.join("data", file_path))
     try:
-        inside_uploads = os.path.commonpath((uploads_root, candidate)) == uploads_root
-    except ValueError:
-        inside_uploads = False
-    if not inside_uploads:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Файл не найден")
-    return candidate
+        return stored_upload_path(file_path)
+    except HTTPException:
+        raise HTTPException(status_code=404, detail="Файл не найден") from None
 
 
 @knowledge_router.get("/files", response_model=list[KnowledgeFileResponse])
@@ -107,10 +105,10 @@ async def upload_knowledge_file(
 
     safe_name = generate_safe_filename(file.filename)
     rel_path = get_relative_path(safe_name)
-    full_path = os.path.join("data", rel_path)
+    full_path = stored_upload_path(rel_path)
 
     # Read and write content
-    content = await file.read()
+    content = await read_upload(file, MAX_DOCUMENT_BYTES)
     file_size = len(content)
 
     await asyncio.to_thread(_write_file_sync, full_path, content)
@@ -125,7 +123,12 @@ async def upload_knowledge_file(
         uploaded_by=current_user.user_id,
     )
     db.add(knowledge_file)
-    await db.commit()
+    try:
+        await db.commit()
+    except Exception:
+        await db.rollback()
+        Path(full_path).unlink(missing_ok=True)
+        raise
     await db.refresh(knowledge_file)
 
     return _to_response(knowledge_file)

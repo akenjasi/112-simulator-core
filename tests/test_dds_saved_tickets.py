@@ -44,7 +44,7 @@ async def test_selected_saved_ticket_supplies_exact_services_without_new_ticket_
     assert 'SECRET' not in loaded.text and 'hidden' not in loaded.text
     names=[item['name'] for item in expected['services']]
     for status in ['Принята','Начало реагирования','Прибытие','Проведение работ','Работы завершены']:
-        if status == 'Работы завершены':
+        if status == 'Начало реагирования':
             dispatched=await request('POST',base+'/actions',users['cadets'][0],json=action(
                 service_name=names[0],kind='dispatch',status=None,who_accepted='Учебная бригада',summary='Направлена на место'))
             assert dispatched.status_code==200,dispatched.text

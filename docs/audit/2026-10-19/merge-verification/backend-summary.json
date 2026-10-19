@@ -1,0 +1,11 @@
+{
+  "mode": "backend-core",
+  "status": "passed",
+  "stages": [
+    {
+      "name": "backend-core",
+      "status": "passed",
+      "exit_code": 0
+    }
+  ]
+}

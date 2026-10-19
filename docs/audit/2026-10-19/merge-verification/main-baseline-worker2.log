@@ -1,0 +1,38 @@
+FFFF                                                                     [100%]
+=================================== FAILURES ===================================
+____________ test_scenario_snapshot_isolation_from_catalog_changes _____________
+tests/test_worker2_lessons_assignment.py:231: in test_scenario_snapshot_isolation_from_catalog_changes
+    assert session.dynamic_state["dds"]["scenario_snapshot"]["description"] == INCOMING_TICKET["description"]
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E   KeyError: 'scenario_snapshot'
+______________________ test_server_timer_expiry_exam_mode ______________________
+tests/test_worker2_lessons_assignment.py:314: in test_server_timer_expiry_exam_mode
+    assert action_res.status_code == 409, action_res.text
+E   AssertionError: {"session_id":"ba6cdfdf-9f78-4592-a1eb-1969948b5048","lesson_id":"fe012bd6-eefe-4bd1-b3a1-57284f87d210","ticket_id":"74893c59-1025-4567-895e-0bffcc5ced98","card_id":"5dc33361-dc73-4383-9d65-08ff750e54cf","session_status":"ACTIVE","lesson_status":"ACTIVE","started_at":"2026-10-19T04:54:04.921348+00:00","incoming_card":{"connection":"Установлено","phones":{"aon":"112","provided":"112","onSite":""},"incident":{"number":"W2-112","savedAt":"18.10.2026 12:00","operator":"112"},"caller":{"name":"Тестовый заявитель","role":"очевидец","address":"ул. Ленина, д. 10"},"description":"Пожар на складе готовой продукции","statuses":{"injured":"нет","ambulanceRefusal":"нет","blocked":"нет"},"emergency":{"cs":false,"cp":false},"classification":{"section":"Пожары","title":"Склад","class":"Пожар","visClass":""},"services":[{"id":"fire_01","name":"01 Пожарные","time":"12:00","status":"Получена службой","isRejected":false,"history":[]},{"id":"police_02","name":"02 Полиция","time":"12:01","status":"Получена службой","isRejected":false,"history":[]}]},"actions":[{"request_id":"0ef305c1-aff8-467e-a559-04ebb5258ca4","kind":"status","service_name":"01 Пожарные","actor_id":"5d3da515-58c3-454c-a007-51b2d478244a","actor_name":"Кадет 0","card_id":"5dc33361-dc73-4383-9d65-08ff750e54cf","at":"2026-10-19T04:55:04.928249+00:00","status":"Принята","comment":"Тестовое подтверждение","order_number":"П-101"}],"allowed_service_statuses":{"01 Пожарные":["Начало реагирования","Отказ от выполнения работ","Принята"],"02 Полиция":["Принята","Не принята"]},"submitted_at":null,"score":null,"time_limit_seconds":10,"time_remaining_seconds":10,"is_expired":false,"start_time":"2026-10-19T04:55:04.912781+00:00","error_limit":null,"received_at":"2026-10-19T04:55:04.912781+00:00","card_submitted_at":null,"current_index":0,"total_cards":1,"completed_cards":0,"can_complete":false,"completion_blockers":[{"code":"DDS_SERVICE_NOT_FINISHED","service_name":"01 Пожарные"},{"code":"DDS_SERVICE_NOT_FINISHED","service_name":"02 Полиция"}],"cards":[{"card_id":"5dc33361-dc73-4383-9d65-08ff750e54cf","ticket_id":"74893c59-1025-4567-895e-0bffcc5ced98","submitted_at":null,"status":"active"}],"readonly":false,"stopped_at":null,"stop_reason":null,"card_pool_source":null,"is_self_training":false}
+E   assert 200 == 409
+E    +  where 200 = <Response [200 OK]>.status_code
+____________________ test_server_timer_expiry_training_mode ____________________
+tests/test_worker2_lessons_assignment.py:356: in test_server_timer_expiry_training_mode
+    assert state_data["is_expired"] is True
+E   assert False is True
+_________________________ test_error_limit_propagation _________________________
+tests/test_worker2_lessons_assignment.py:394: in test_error_limit_propagation
+    assert session.dynamic_state["dds"]["error_limit"] == 5
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E   KeyError: 'error_limit'
+=============================== warnings summary ===============================
+../../../home/orborus/.local/lib/python3.14/site-packages/ldap3/utils/asn1.py:50
+  /home/orborus/.local/lib/python3.14/site-packages/ldap3/utils/asn1.py:50: DeprecationWarning: tagMap is deprecated. Please use TAG_MAP instead.
+    from pyasn1.codec.ber.encoder import tagMap, typeMap, AbstractItemEncoder
+
+../../../home/orborus/.local/lib/python3.14/site-packages/ldap3/utils/asn1.py:50
+  /home/orborus/.local/lib/python3.14/site-packages/ldap3/utils/asn1.py:50: DeprecationWarning: typeMap is deprecated. Please use TYPE_MAP instead.
+    from pyasn1.codec.ber.encoder import tagMap, typeMap, AbstractItemEncoder
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+FAILED tests/test_worker2_lessons_assignment.py::test_scenario_snapshot_isolation_from_catalog_changes
+FAILED tests/test_worker2_lessons_assignment.py::test_server_timer_expiry_exam_mode
+FAILED tests/test_worker2_lessons_assignment.py::test_server_timer_expiry_training_mode
+FAILED tests/test_worker2_lessons_assignment.py::test_error_limit_propagation
+4 failed, 2 warnings in 0.38s

@@ -9,8 +9,8 @@ class IntentClassifier:
         self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         print(f"Загрузка модели на {self.device}...")
         
-        self.tokenizer = AutoTokenizer.from_pretrained(model_path)
-        self.model = AutoModelForSequenceClassification.from_pretrained(model_path).to(self.device)
+        self.tokenizer = AutoTokenizer.from_pretrained(model_path, local_files_only=True)
+        self.model = AutoModelForSequenceClassification.from_pretrained(model_path, local_files_only=True).to(self.device)
         self.model.eval()
         
         self.intent_names = {

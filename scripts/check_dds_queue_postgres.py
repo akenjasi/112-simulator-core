@@ -60,7 +60,7 @@ def main():
                        check=True, stdout=subprocess.DEVNULL)
         created = True
         for _ in range(50):
-            health = subprocess.run(["docker", "exec", name, "pg_isready", "-U", "dds_queue_test", "-d", "dds_queue_test"],
+            health = subprocess.run(["docker", "exec", "-e", f"PGPASSWORD={password}", name, "psql", "-h", "127.0.0.1", "-U", "dds_queue_test", "-d", "dds_queue_test", "-t", "-A", "-v", "ON_ERROR_STOP=1", "-c", "SELECT 1"],
                                     stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
             if health.returncode == 0:
                 break

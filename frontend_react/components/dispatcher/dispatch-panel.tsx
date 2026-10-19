@@ -4,6 +4,7 @@ import { useState, useRef, useEffect } from "react"
 import { Phone } from "lucide-react"
 
 type Props = {
+  preparedExercise?: boolean
   isCardAccepted: boolean
   whoAccepted: string
   setWhoAccepted: (v: string) => void
@@ -22,7 +23,7 @@ type Props = {
 const EMPTY_SERVICES: any[] = []
 const EMPTY_CALLED_SERVICES: string[] = []
 
-export function DispatchPanel({ isCardAccepted, whoAccepted, setWhoAccepted, summary, setSummary, services = EMPTY_SERVICES, calledServices = EMPTY_CALLED_SERVICES, onServiceSaved, disabled = false, acceptedServices, selectedServiceName, onServiceChange, savedDispatches }: Props) {
+export function DispatchPanel({ preparedExercise = false, isCardAccepted, whoAccepted, setWhoAccepted, summary, setSummary, services = EMPTY_SERVICES, calledServices = EMPTY_CALLED_SERVICES, onServiceSaved, disabled = false, acceptedServices, selectedServiceName, onServiceChange, savedDispatches }: Props) {
   const [callState, setCallState] = useState<"idle" | "dialing" | "speaking" | "connected">("idle")
   const [callError, setCallError] = useState<string | null>(null)
   const [inputsUnlocked, setInputsUnlocked] = useState(false)
@@ -118,6 +119,7 @@ export function DispatchPanel({ isCardAccepted, whoAccepted, setWhoAccepted, sum
       const result = await onServiceSaved?.(selectedService, whoAccepted.trim(), summary.trim())
       if (epochRef.current !== epoch || result === false) return
       setSavedRequisites(true)
+      if (preparedExercise) return
       if (audioRef.current) audioRef.current.pause()
       const audio = new Audio(`/audio/tts/${getServiceType(selectedService)}_accepted.wav`)
       audioRef.current = audio
@@ -208,7 +210,7 @@ export function DispatchPanel({ isCardAccepted, whoAccepted, setWhoAccepted, sum
       {/* Section header (dark) */}
       <div className="mt-2 2xl:mt-3 flex items-center justify-between bg-[#303335] px-4 2xl:px-5 py-2 2xl:py-2">
         <span className="text-sm 2xl:text-sm font-bold text-white border-b border-dotted border-white">
-          Отработка (Направление служб)
+          {preparedExercise ? "Передача задания бригаде" : "Отработка (Направление служб)"}
         </span>
         <span className={`text-[11px] 2xl:text-xs px-2 py-0.5 rounded font-semibold ${
           !accepted
@@ -221,6 +223,8 @@ export function DispatchPanel({ isCardAccepted, whoAccepted, setWhoAccepted, sum
         }`}>
           {!accepted
             ? "Заблокировано (требуется статус «Принята»)"
+            : preparedExercise
+            ? savedRequisites ? "Задание передано" : "Запишите передачу задания"
             : callState === "connected"
             ? "Соединено ✓"
             : callState === "dialing"
@@ -260,6 +264,7 @@ export function DispatchPanel({ isCardAccepted, whoAccepted, setWhoAccepted, sum
           </select>
 
           <button
+            hidden={preparedExercise}
             onClick={handleCall}
             disabled={disabled || saving || !accepted || callState === "dialing" || callState === "speaking"}
             className={`flex items-center justify-center gap-2 px-5 py-2.5 rounded text-white font-bold transition-all shadow-sm ${

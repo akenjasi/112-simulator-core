@@ -1,46 +1,39 @@
 #!/usr/bin/env python3
+"""Prepare a private installation env or inspect explicitly supplied model paths."""
+import argparse
 import os
-import shutil
 from pathlib import Path
+import secrets
 
-def setup_models():
-    project_root = Path(__file__).resolve().parent
-    models_dir = project_root / 'data' / 'models'
-    
-    # Create models directory
-    models_dir.mkdir(parents=True, exist_ok=True)
-    
-    models_needed = {
-        'Qwen3.5-9B-Q4_K_M.gguf': Path('/home/orborus/Downloads/Qwen3.5-9B-Q4_K_M.gguf'),
-        'gigaam-v3-ctc-Q8_0.gguf': Path('/home/orborus/Desktop/A_vibecoding/models/gigaam-v3-ctc-Q8_0.gguf')
-    }
-    
-    missing_models = []
-    
-    print(f"Checking models in {models_dir}...")
-    for model_name, user_path in models_needed.items():
-        target_path = models_dir / model_name
-        if target_path.exists():
-            print(f"✅ Model {model_name} already exists in data/models/.")
-            continue
-            
-        if user_path.exists():
-            print(f"Copying {model_name} from {user_path} to {target_path}...")
-            shutil.copy2(user_path, target_path)
-            print(f"✅ Done copying {model_name}.")
-        else:
-            missing_models.append(model_name)
-            
-    if missing_models:
-        print("\n❌ Some models are missing:")
-        for m in missing_models:
-            print(f"- {m}")
-        print("\nPlease download them to data/models/ manually.")
-        print("Download links:")
-        if 'Qwen3.5-9B-Q4_K_M.gguf' in missing_models:
-            print("- Qwen3.5-9B-Q4_K_M.gguf: https://huggingface.co/unsloth/Qwen3.5-9B-GGUF/resolve/main/Qwen3.5-9B-Q4_K_M.gguf?download=true")
-        if 'gigaam-v3-ctc-Q8_0.gguf' in missing_models:
-            print("- gigaam-v3-ctc-Q8_0.gguf: https://huggingface.co/salute-developers/GigaAM/resolve/main/gigaam-v3-ctc-Q8_0.gguf?download=true")
 
-if __name__ == "__main__":
-    setup_models()
+def initialize(path):
+    template = Path(__file__).resolve().parent / '.env.example'
+    values = {'SECRET_KEY': secrets.token_hex(32), 'POSTGRES_PASSWORD': secrets.token_hex(24),
+              'INITIAL_ADMIN_PASSWORD': secrets.token_urlsafe(24)}
+    lines = []
+    for line in template.read_text(encoding='utf-8').splitlines():
+        key = line.partition('=')[0]
+        lines.append(f'{key}={values[key]}' if key in values else line)
+    descriptor = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+    with os.fdopen(descriptor, 'w', encoding='utf-8') as output:
+        output.write('\n'.join(lines) + '\n')
+    print(f'Private configuration created: {path}. Credentials are stored only in this file.')
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--init', action='store_true', help='Create a new .env with unique installation secrets; never overwrite')
+    parser.add_argument('--output', type=Path, default=Path(__file__).resolve().parent / '.env')
+    parser.add_argument('--models-dir', type=Path, default=Path('data/models'))
+    args = parser.parse_args()
+    if args.init:
+        initialize(args.output)
+        return
+    for name in ['Qwen3.5-9B-Q4_K_M.gguf', 'gigaam-v3-ctc-Q8_0.gguf']:
+        path = args.models_dir / name
+        print(f'{name}: {"present" if path.is_file() and path.stat().st_size else "missing (optional speech/LLM feature unavailable)"}')
+    print('This check does not download models or validate their weights. See DOCKER.md.')
+
+
+if __name__ == '__main__':
+    main()

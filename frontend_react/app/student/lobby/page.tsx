@@ -153,12 +153,12 @@ export default function StudentLobbyPage() {
     recordedChunksRef.current = []
 
     try {
-      const stream = await navigator.mediaDevices.getUserMedia({ 
+      const stream = await navigator.mediaDevices.getUserMedia({
         audio: {
           noiseSuppression: true,
           echoCancellation: true,
           autoGainControl: true,
-        } 
+        }
       })
       mediaStreamRef.current = stream
 

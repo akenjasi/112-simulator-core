@@ -1,7 +1,7 @@
 """JWT + password hashing helpers.
 
 Uses bcrypt directly (passlib 1.7.x is not compatible with bcrypt >= 4.x).
-Uses python-jose for JWT signing/verification.
+Uses PyJWT for JWT signing/verification.
 """
 
 import os
@@ -9,10 +9,13 @@ from datetime import datetime, timedelta, timezone
 from typing import Optional
 
 import bcrypt
-from jose import JWTError, jwt
+import jwt
+from jwt.exceptions import PyJWTError as JWTError
 
 # ─── Configuration ────────────────────────────────────────────────────────────
-SECRET_KEY: str = os.getenv("SECRET_KEY", "change-me-in-production-at-least-32-chars!!")
+SECRET_KEY: str = os.getenv("SECRET_KEY", "")
+if len(SECRET_KEY) < 32 or SECRET_KEY.startswith(("change-me", "dev-secret")):
+    raise RuntimeError("Set SECRET_KEY to a unique random secret of at least 32 characters")
 ALGORITHM: str = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES: int = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "480"))
 
@@ -76,6 +79,8 @@ def decode_access_token(token: str) -> Optional[dict]:
     """
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        if payload.get("purpose") not in (None, "access"):
+            return None
         return payload
     except JWTError:
         return None

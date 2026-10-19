@@ -38,12 +38,15 @@ async def load_pool(db: AsyncSession, ticket_ids: list[str], *, training: bool =
                 or (training and not available_for_training(ticket))
                 or (not training and not is_approved_dds_ticket(ticket))):
             raise HTTPException(409, detail={"code": "DDS_TICKET_UNAVAILABLE"})
+        from backend.core.dds_exercise import validated_plan
         incoming = incoming_card_from_ticket(ticket)
-        title = extract_dds_ticket_metadata(ticket)[3]
-        pool.append({"ticket_id": ticket_id, "title": title, "incoming_card": incoming,
-                     "gradebook_snapshot": {"ticket_id": ticket_id, "title": ticket.title or title,
-                                            "etalon": deepcopy(ticket.ground_truth or {}),
-                                            "incoming_card": deepcopy(incoming)}})
+        raw_plan = (ticket.content or {}).get("dds_exercise")
+        try:
+            plan = validated_plan(raw_plan, [s["name"] for s in incoming["services"]]) if raw_plan else None
+        except ValueError as exc:
+            raise HTTPException(422, "Invalid DDS exercise plan") from exc
+        pool.append({"exercise_plan": plan, "ticket_id": ticket_id, "title": extract_dds_ticket_metadata(ticket)[3],
+                     "incoming_card": incoming, "gradebook_snapshot": {"ticket_id": ticket_id, "title": ticket.title or extract_dds_ticket_metadata(ticket)[3], "etalon": deepcopy(ticket.ground_truth or {}), "incoming_card": deepcopy(incoming)}})
     return pool
 
 
@@ -73,6 +76,9 @@ async def activate_card(db: AsyncSession, session: ExamSession, data: dict[str, 
     session.ticket_id = item["ticket_id"]
     data.update(current_index=index, card_id=card.card_id, incoming_card=incoming,
                 actions=[], received_at=now.isoformat(), card_submitted_at=None)
+    from backend.core.dds_exercise import initialize
+    data.pop("criteria", None)
+    data["exercise"] = initialize(item.get("exercise_plan"), card.card_id, now.isoformat())
     return card
 
 
@@ -91,6 +97,8 @@ def completion_blockers(data: dict[str, Any], assigned: dict[str, Any]) -> list[
     incoming, actions = data.get("incoming_card", {}), data.get("actions", [])
     statuses = current_service_statuses(incoming, assigned, actions)
     blockers = []
+    if data.get("exercise") and data["exercise"]["index"] < len(data["exercise"]["plan"]["reports"]):
+        blockers.append({"code": "DDS_REPORTS_PENDING", "service_name": ""})
     if not statuses:
         return [{"code": "DDS_NO_SERVICES", "service_name": ""}]
     for name, raw in statuses.items():
@@ -171,6 +179,14 @@ async def complete_card(db: AsyncSession, session_id: str, card_id: str, request
     card = await db.get(IncidentCard, card_id)
     if not card or card.session_id != session_id:
         raise HTTPException(409, "Card not found")
+    if data.get("exercise"):
+        from backend.core.dds_phone import retry, attempt_result
+        wire = {"request_id": request_id, "card_id": card_id, "operation": "complete"}
+        saved = retry(data["exercise"], wire)
+        if saved:
+            result = await get_dds_session_state(session_id, user, db)
+            result["last_attempt"] = attempt_result(saved)
+            return result
     now = datetime.now(timezone.utc)
     if (lesson.mode or "").upper() == "EXAM":
         from backend.core.dds_cycle import _card_started_at
@@ -202,10 +218,24 @@ async def complete_card(db: AsyncSession, session_id: str, card_id: str, request
             await db.commit()
             raise HTTPException(409, detail={"code": "DDS_EXAM_TIME_EXPIRED", "message": "Время выполнения экзамена истекло"})
     blockers = completion_blockers(data, card.assigned_services or {})
+    if blockers and data.get("exercise"):
+        from backend.core.dds_phone import retry, record
+        from backend.core.dds_exercise import now_utc
+        wire = {"request_id": request_id, "card_id": card_id, "operation": "complete"}
+        if not retry(data["exercise"], wire):
+            record(data, wire, now_utc().isoformat(), "completion")
+            store_state(session, data)
+            await db.commit()
+        return await get_dds_session_state(session_id, user, db)
     if blockers:
         raise HTTPException(409, detail={"code": "DDS_CARD_NOT_READY", "blockers": blockers})
     now = datetime.now(timezone.utc)
     data["card_submitted_at"] = now.isoformat()
+    if data.get("exercise"):
+        from backend.core.dds_exercise import criteria
+        from backend.core.dds_phone import record
+        record(data, {"request_id": request_id, "card_id": card_id, "operation": "complete"}, now.isoformat())
+        data["criteria"] = criteria(data, closed=True)
     card.status = "Отработана"
     result = await db.scalar(select(TicketResult).where(
         TicketResult.session_id == session_id, TicketResult.ticket_id == session.ticket_id))
@@ -213,9 +243,11 @@ async def complete_card(db: AsyncSession, session_id: str, card_id: str, request
         db.add(TicketResult(session_id=session_id, ticket_id=session.ticket_id, status="ungraded"))
     elif result.score_total is None and result.status in (None, "active", "in_progress"):
         result.status = "ungraded"
+    from backend.core.dds_exercise import finalize_result
+    await finalize_result(db, session, data, "ungraded")
     if data.get("version") == 2:
         previous.append({key: deepcopy(data.get(key)) for key in (
-            "card_id", "incoming_card", "actions", "received_at", "card_submitted_at")})
+            "card_id", "incoming_card", "actions", "received_at", "card_submitted_at", "exercise", "criteria")})
         previous[-1].update(ticket_id=session.ticket_id, complete_request_id=request_id)
         data["completed_cards"] = previous
         if data["current_index"] + 1 < len(data["queue"]):
@@ -249,6 +281,8 @@ async def stop_session(db: AsyncSession, session_id: str, user: User) -> dict[st
     if lesson.card_pool_source == "self_training":
         lesson.status, lesson.completed_at = "COMPLETED", now
     data.update(stopped_at=now.isoformat(), stop_reason="cadet", submitted_at=None)
+    from backend.core.dds_exercise import finalize_result
+    await finalize_result(db, session, data, "incomplete")
     card = await db.get(IncidentCard, data.get("card_id"))
     if card:
         card.status = "Не завершено"

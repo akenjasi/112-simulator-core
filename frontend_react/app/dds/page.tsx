@@ -422,10 +422,10 @@ function DdsDemoSimulator() {
 
             <div className="flex items-center gap-2">
               <Link
-                href="/student/lobby"
+                href="/student/profile"
                 className="px-3 py-1.5 text-xs bg-slate-700 hover:bg-slate-600 text-white rounded font-medium transition cursor-pointer"
               >
-                ← В Лобби
+                ← В личный кабинет
               </Link>
               <button 
                 onClick={() => setShowEndShiftModal(true)} 
@@ -661,7 +661,12 @@ function DdsRoute() {
   const ticketId = searchParams ? searchParams.get("ticket_id") : null
 
   const cardId = searchParams?.get("card_id")
-  useEffect(() => { if (!sessionId && !ticketId) router.replace("/dds/journal") }, [sessionId, ticketId, router])
+  const localDemo = searchParams?.get("demo") === "true"
+  useEffect(() => { if (!localDemo && !sessionId && !ticketId) router.replace("/dds/journal") }, [sessionId, ticketId, router, localDemo])
+
+  if (localDemo && !sessionId && !ticketId) {
+    return <><div className="bg-amber-100 px-3 py-1 text-xs">Локальная демонстрация: результаты не сохраняются</div><DdsDemoSimulator /></>
+  }
 
   if (sessionId) {
     return <DDSAssignedConsole sessionId={sessionId} ticketId={ticketId || undefined} cardId={cardId || undefined} />
@@ -675,7 +680,7 @@ function DdsRoute() {
             Необходимо открыть назначенное занятие
           </div>
           <p className="text-xs text-muted-foreground">
-            Прямой доступ к билету вне назначенного занятия не поддерживается. Пожалуйста, перейдите в журнал или лобби для выбора назначенного занятия.
+            Прямой доступ к билету вне назначенного занятия не поддерживается. Пожалуйста, откройте назначенное занятие в личном кабинете или найдите карточку в журнале ДДС.
           </p>
           <div className="pt-2 flex justify-center gap-3">
             <Link
@@ -685,10 +690,10 @@ function DdsRoute() {
               В журнал ДДС
             </Link>
             <Link
-              href="/student/lobby"
+              href="/student/profile"
               className="px-4 py-2 bg-muted text-foreground text-xs font-semibold rounded hover:bg-muted/80"
             >
-              В лобби курсанта
+              В личный кабинет
             </Link>
           </div>
         </div>

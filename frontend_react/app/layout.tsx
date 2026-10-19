@@ -1,13 +1,11 @@
-import { Analytics } from '@vercel/analytics/next'
 import type { Metadata, Viewport } from 'next'
 import './globals.css'
 import { ThemeProvider } from '@/components/theme-provider'
 import { THEME_INIT_SCRIPT } from '@/lib/theme'
 
 export const metadata: Metadata = {
-  title: 'v0 App',
-  description: 'Created with v0',
-  generator: 'v0.app',
+  title: 'Тренажёр 112',
+  description: 'Учебный тренажёр диспетчера системы 112',
   icons: {
     icon: [
       {
@@ -46,7 +44,6 @@ export default function RootLayout({
       <body className="antialiased">
         <ThemeProvider>
           {children}
-          {process.env.NODE_ENV === 'production' && <Analytics />}
         </ThemeProvider>
       </body>
     </html>

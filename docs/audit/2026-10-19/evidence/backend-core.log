@@ -1,0 +1,125 @@
+........................................................................ [ 18%]
+........................................................................ [ 36%]
+....................F..........F...........F............................ [ 54%]
+........................................................................ [ 72%]
+.............................F...FFF.FFFF............................... [ 90%]
+FF..................................                                     [100%]
+=================================== FAILURES ===================================
+__________________ test_demo_session_creation_defaults_to_dds __________________
+tests/test_47_student_stats.py:201: in test_demo_session_creation_defaults_to_dds
+    assert response.status_code == 200, f"Error: {response.text}"
+E   AssertionError: Error: {"detail":"Нет доступных подготовленных билетов ДДС"}
+E   assert 409 == 200
+E    +  where 409 = <Response [409 Conflict]>.status_code
+__ test_completed_ungraded_and_teacher_stop_are_honest_in_history_and_report ___
+tests/test_dds_cycle_acceptance.py:182: in test_completed_ungraded_and_teacher_stop_are_honest_in_history_and_report
+    assert people[d["cadets"][0][0]]["status"] == "COMPLETED"
+E   AssertionError: assert 'INCOMPLETE' == 'COMPLETED'
+E     
+E     - COMPLETED
+E     ?         -
+E     + INCOMPLETE
+E     ? ++
+_ test_ticket_catalog_and_creation_are_protected_and_missing_ticket_start_is_atomic _
+tests/test_dds_cycle_acceptance.py:270: in test_ticket_catalog_and_creation_are_protected_and_missing_ticket_start_is_atomic
+    lesson = await create(d, ticket=False)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests/test_dds_cycle_acceptance.py:65: in create
+    assert r.status_code == 201, r.text
+E   AssertionError: {"detail":{"code":"DDS_INVALID_POOL"}}
+E   assert 422 == 201
+E    +  where 422 = <Response [422 Unprocessable Entity]>.status_code
+_ test_terminal_service_is_read_only_but_original_retries_succeed[\u0420\u0430\u0431\u043e\u0442\u044b \u0437\u0430\u0432\u0435\u0440\u0448\u0435\u043d\u044b] _
+tests/test_dds_service_policy.py:78: in test_terminal_service_is_read_only_but_original_retries_succeed
+    assert result.status_code == 200, result.text
+E   AssertionError: {"detail":{"code":"DDS_DISPATCH_REQUIRED"}}
+E   assert 409 == 200
+E    +  where 409 = <Response [409 Conflict]>.status_code
+_ test_intermediate_progress_is_sequential_with_comment_supplements[\u041d\u0430\u0447\u0430\u043b\u043e \u0440\u0435\u0430\u0433\u0438\u0440\u043e\u0432\u0430\u043d\u0438\u044f] _
+tests/test_dds_service_policy.py:134: in test_intermediate_progress_is_sequential_with_comment_supplements
+    assert (await request("POST", path, users["cadets"][0], json=action(status=target))).status_code == 200
+E   assert 409 == 200
+E    +  where 409 = <Response [409 Conflict]>.status_code
+_ test_intermediate_progress_is_sequential_with_comment_supplements[\u041f\u0440\u0438\u0431\u044b\u0442\u0438\u0435] _
+tests/test_dds_service_policy.py:134: in test_intermediate_progress_is_sequential_with_comment_supplements
+    assert (await request("POST", path, users["cadets"][0], json=action(status=target))).status_code == 200
+E   assert 409 == 200
+E    +  where 409 = <Response [409 Conflict]>.status_code
+_ test_intermediate_progress_is_sequential_with_comment_supplements[\u041f\u0440\u043e\u0432\u0435\u0434\u0435\u043d\u0438\u0435 \u0440\u0430\u0431\u043e\u0442] _
+tests/test_dds_service_policy.py:134: in test_intermediate_progress_is_sequential_with_comment_supplements
+    assert (await request("POST", path, users["cadets"][0], json=action(status=target))).status_code == 200
+E   assert 409 == 200
+E    +  where 409 = <Response [409 Conflict]>.status_code
+_ test_selected_saved_ticket_supplies_exact_services_without_new_ticket_or_secrets[/api/v1/sessions/demo-False] _
+tests/test_dds_saved_tickets.py:48: in test_selected_saved_ticket_supplies_exact_services_without_new_ticket_or_secrets
+    assert saved.status_code==200,saved.text
+E   AssertionError: {"detail":{"code":"DDS_DISPATCH_REQUIRED"}}
+E   assert 409 == 200
+E    +  where 409 = <Response [409 Conflict]>.status_code
+_ test_selected_saved_ticket_supplies_exact_services_without_new_ticket_or_secrets[/api/v1/sessions/demo-True] _
+tests/test_dds_saved_tickets.py:48: in test_selected_saved_ticket_supplies_exact_services_without_new_ticket_or_secrets
+    assert saved.status_code==200,saved.text
+E   AssertionError: {"detail":{"code":"DDS_DISPATCH_REQUIRED"}}
+E   assert 409 == 200
+E    +  where 409 = <Response [409 Conflict]>.status_code
+_ test_selected_saved_ticket_supplies_exact_services_without_new_ticket_or_secrets[/api/v2/sessions/demo-False] _
+tests/test_dds_saved_tickets.py:48: in test_selected_saved_ticket_supplies_exact_services_without_new_ticket_or_secrets
+    assert saved.status_code==200,saved.text
+E   AssertionError: {"detail":{"code":"DDS_DISPATCH_REQUIRED"}}
+E   assert 409 == 200
+E    +  where 409 = <Response [409 Conflict]>.status_code
+_ test_selected_saved_ticket_supplies_exact_services_without_new_ticket_or_secrets[/api/v2/sessions/demo-True] _
+tests/test_dds_saved_tickets.py:48: in test_selected_saved_ticket_supplies_exact_services_without_new_ticket_or_secrets
+    assert saved.status_code==200,saved.text
+E   AssertionError: {"detail":{"code":"DDS_DISPATCH_REQUIRED"}}
+E   assert 409 == 200
+E    +  where 409 = <Response [409 Conflict]>.status_code
+____ test_lobby_demo_card_actions_finish_and_reload[/api/v1/sessions/demo] _____
+tests/test_student_dds_demo_flow.py:64: in test_lobby_demo_card_actions_finish_and_reload
+    assert finished.json()["submitted_at"]
+E   assert None
+____ test_lobby_demo_card_actions_finish_and_reload[/api/v2/sessions/demo] _____
+tests/test_student_dds_demo_flow.py:64: in test_lobby_demo_card_actions_finish_and_reload
+    assert finished.json()["submitted_at"]
+E   assert None
+=============================== warnings summary ===============================
+../../../.local/lib/python3.14/site-packages/ldap3/utils/asn1.py:50
+  /home/orborus/.local/lib/python3.14/site-packages/ldap3/utils/asn1.py:50: DeprecationWarning: tagMap is deprecated. Please use TAG_MAP instead.
+    from pyasn1.codec.ber.encoder import tagMap, typeMap, AbstractItemEncoder
+
+../../../.local/lib/python3.14/site-packages/ldap3/utils/asn1.py:50
+  /home/orborus/.local/lib/python3.14/site-packages/ldap3/utils/asn1.py:50: DeprecationWarning: typeMap is deprecated. Please use TYPE_MAP instead.
+    from pyasn1.codec.ber.encoder import tagMap, typeMap, AbstractItemEncoder
+
+tests/test_admin_journal.py::test_validation_errors_return_422
+tests/test_admin_journal.py::test_validation_errors_return_422
+tests/test_admin_journal.py::test_validation_errors_return_422
+tests/test_admin_journal.py::test_validation_errors_return_422
+  /home/orborus/Desktop/hakaton/112-simulator-core/backend/api/router_audit.py:75: DeprecationWarning: 'HTTP_422_UNPROCESSABLE_ENTITY' is deprecated. Use 'HTTP_422_UNPROCESSABLE_CONTENT' instead.
+    from_dt = parse_iso_datetime(from_at)
+
+tests/test_admin_journal.py::test_validation_errors_return_422
+tests/test_admin_journal.py::test_validation_errors_return_422
+  /home/orborus/.local/lib/python3.14/site-packages/fastapi/routing.py:328: DeprecationWarning: 'HTTP_422_UNPROCESSABLE_ENTITY' is deprecated. Use 'HTTP_422_UNPROCESSABLE_CONTENT' instead.
+    return await dependant.call(**values)
+
+tests/test_admin_journal.py::test_validation_errors_return_422
+  /home/orborus/Desktop/hakaton/112-simulator-core/backend/main.py:337: DeprecationWarning: 'HTTP_422_UNPROCESSABLE_ENTITY' is deprecated. Use 'HTTP_422_UNPROCESSABLE_CONTENT' instead.
+    logs = await get_audit_logs(
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+FAILED tests/test_47_student_stats.py::test_demo_session_creation_defaults_to_dds
+FAILED tests/test_dds_cycle_acceptance.py::test_completed_ungraded_and_teacher_stop_are_honest_in_history_and_report
+FAILED tests/test_dds_cycle_acceptance.py::test_ticket_catalog_and_creation_are_protected_and_missing_ticket_start_is_atomic
+FAILED tests/test_dds_service_policy.py::test_terminal_service_is_read_only_but_original_retries_succeed[\u0420\u0430\u0431\u043e\u0442\u044b \u0437\u0430\u0432\u0435\u0440\u0448\u0435\u043d\u044b]
+FAILED tests/test_dds_service_policy.py::test_intermediate_progress_is_sequential_with_comment_supplements[\u041d\u0430\u0447\u0430\u043b\u043e \u0440\u0435\u0430\u0433\u0438\u0440\u043e\u0432\u0430\u043d\u0438\u044f]
+FAILED tests/test_dds_service_policy.py::test_intermediate_progress_is_sequential_with_comment_supplements[\u041f\u0440\u0438\u0431\u044b\u0442\u0438\u0435]
+FAILED tests/test_dds_service_policy.py::test_intermediate_progress_is_sequential_with_comment_supplements[\u041f\u0440\u043e\u0432\u0435\u0434\u0435\u043d\u0438\u0435 \u0440\u0430\u0431\u043e\u0442]
+FAILED tests/test_dds_saved_tickets.py::test_selected_saved_ticket_supplies_exact_services_without_new_ticket_or_secrets[/api/v1/sessions/demo-False]
+FAILED tests/test_dds_saved_tickets.py::test_selected_saved_ticket_supplies_exact_services_without_new_ticket_or_secrets[/api/v1/sessions/demo-True]
+FAILED tests/test_dds_saved_tickets.py::test_selected_saved_ticket_supplies_exact_services_without_new_ticket_or_secrets[/api/v2/sessions/demo-False]
+FAILED tests/test_dds_saved_tickets.py::test_selected_saved_ticket_supplies_exact_services_without_new_ticket_or_secrets[/api/v2/sessions/demo-True]
+FAILED tests/test_student_dds_demo_flow.py::test_lobby_demo_card_actions_finish_and_reload[/api/v1/sessions/demo]
+FAILED tests/test_student_dds_demo_flow.py::test_lobby_demo_card_actions_finish_and_reload[/api/v2/sessions/demo]
+13 failed, 383 passed, 9 warnings in 62.81s (0:01:02)

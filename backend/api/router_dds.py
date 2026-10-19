@@ -1,3 +1,4 @@
+from backend.core.access import require_card
 """API router for DDS console and SLA actions."""
 
 from datetime import datetime, timezone
@@ -132,9 +133,11 @@ async def _is_assigned_dds_card(db: AsyncSession, card: IncidentCard) -> bool:
 async def perform_card_action(
     card_id: str,
     req: DDSActionRequest,
+    current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> IncidentCard:
     """Execute an action on an assigned service in the incident card."""
+    await require_card(db, current_user, await db.get(IncidentCard, card_id))
     stmt = select(IncidentCard).where(IncidentCard.card_id == card_id)
     result = await db.execute(stmt)
     card = result.scalar_one_or_none()
@@ -237,9 +240,11 @@ async def get_dds_scenarios():
 @router_dds.post("/action")
 async def post_dds_action(
     payload: Dict[str, Any],
+    current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
     """Handle action submission from DDS trainee simulator."""
+    await require_card(db, current_user, await db.get(IncidentCard, payload.get("card_id", "")))
     card_id = payload.get("card_id", "")
     if not card_id:
         raise HTTPException(

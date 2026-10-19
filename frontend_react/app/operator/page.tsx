@@ -57,7 +57,7 @@ function OperatorContent() {
   // ТЗ 59: Задача 1 — Защита страницы (Route Guard)
   useEffect(() => {
     if (!sessionId || !ticketId) {
-      router.push("/student/lobby")
+      router.push("/student/profile")
     }
   }, [sessionId, ticketId, router])
 
@@ -532,14 +532,14 @@ function OperatorContent() {
       setActiveModal(null)
 
       setTimeout(() => {
-        router.push(sessionId ? "/student/lobby" : "/operator/journal")
+        router.push(sessionId ? "/student/profile" : "/operator/journal")
       }, 2000)
     } catch (err) {
       console.error("Evaluation error:", err)
       showToast("Ошибка при отправке на сервер. Перенаправление...")
       setActiveModal(null)
       setTimeout(() => {
-        router.push(sessionId ? "/student/lobby" : "/operator/journal")
+        router.push(sessionId ? "/student/profile" : "/operator/journal")
       }, 2000)
     } finally {
       setIsSubmitting(false)
@@ -573,10 +573,10 @@ function OperatorContent() {
               Журнал
             </Link>
             <Link
-              href="/student/lobby"
+              href="/student/profile"
               className="text-xs bg-slate-800 hover:bg-slate-700 text-white px-2.5 py-1 rounded transition"
             >
-              ← В Лобби
+              ← В личный кабинет
             </Link>
           </div>
         </div>

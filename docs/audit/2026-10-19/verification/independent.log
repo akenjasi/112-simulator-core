@@ -1,0 +1,23 @@
+........................................................................ [ 36%]
+........................................................................ [ 73%]
+....................................................                     [100%]
+=============================== warnings summary ===============================
+test_ai_analytics_ownership_acceptance.py::test_teacher_cannot_read_or_mutate_foreign_or_ownerless_objects[student_get-foreign]
+  /tmp/112-audit-20261019/verify311/lib64/python3.11/site-packages/ldap3/utils/asn1.py:50: DeprecationWarning: tagMap is deprecated. Please use TAG_MAP instead.
+    from pyasn1.codec.ber.encoder import tagMap, typeMap, AbstractItemEncoder
+
+test_ai_analytics_ownership_acceptance.py::test_teacher_cannot_read_or_mutate_foreign_or_ownerless_objects[student_get-foreign]
+  /tmp/112-audit-20261019/verify311/lib64/python3.11/site-packages/ldap3/utils/asn1.py:50: DeprecationWarning: typeMap is deprecated. Please use TYPE_MAP instead.
+    from pyasn1.codec.ber.encoder import tagMap, typeMap, AbstractItemEncoder
+
+test_ai_analytics_ownership_acceptance.py::test_teacher_trigger_requires_explicit_target[payload0-GET]
+test_ai_analytics_ownership_acceptance.py::test_teacher_trigger_requires_explicit_target[payload0-POST]
+test_ai_analytics_ownership_acceptance.py::test_teacher_trigger_requires_explicit_target[payload1-GET]
+test_ai_analytics_ownership_acceptance.py::test_teacher_trigger_requires_explicit_target[payload1-POST]
+test_ai_analytics_ownership_acceptance.py::test_teacher_trigger_requires_explicit_target[payload2-GET]
+test_ai_analytics_ownership_acceptance.py::test_teacher_trigger_requires_explicit_target[payload2-POST]
+  /tmp/112-audit-20261019/verify311/lib64/python3.11/site-packages/fastapi/routing.py:372: StarletteDeprecationWarning: 'HTTP_422_UNPROCESSABLE_ENTITY' is deprecated. Use 'HTTP_422_UNPROCESSABLE_CONTENT' instead.
+    return await dependant.call(**values)
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+196 passed, 8 warnings in 46.35s

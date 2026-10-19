@@ -122,7 +122,7 @@ describe('ТЗ 57: Задача 3 — Персистентность состо�
       elapsedSeconds: 42,
     }
 
-    localStorage.setItem('operator_state_test_ticket_123', JSON.stringify(mockState))
+    localStorage.setItem('operator_state_sess_456', JSON.stringify(mockState))
 
     render(<OperatorPage />)
 

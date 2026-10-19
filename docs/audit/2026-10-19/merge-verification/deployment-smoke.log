@@ -1,0 +1,5 @@
+PASS backend non-root startup, fresh SQLite migration, initial ADMIN, login, protected stats
+nginx: the configuration file /etc/nginx/nginx.conf syntax is ok
+nginx: configuration file /etc/nginx/nginx.conf test is successful
+PASS Nginx HTTP/TLS, four static routes, security header, authenticated API proxy
+Local self-signed certificate checked with explicit test-only trust bypass; public trust not tested.

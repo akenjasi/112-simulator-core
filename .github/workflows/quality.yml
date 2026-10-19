@@ -2,53 +2,80 @@ name: Quality Gate
 
 on:
   push:
-    branches:
-      - main
+    branches: [main]
   pull_request:
+
+permissions:
+  contents: read
 
 jobs:
   quality:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
       - name: Checkout Code
         uses: actions/checkout@v4
-
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
           python-version: "3.11"
-          cache: "pip"
+          cache: pip
           cache-dependency-path: |
             requirements.lock
             tools_tests/requirements.txt
-
       - name: Install Python Dependencies
         run: |
-          python -m pip install --upgrade pip
-          pip install torch torchaudio --index-url https://download.pytorch.org/whl/cpu
-          pip install -r requirements.lock
-          pip install -r tools_tests/requirements.txt
-
+          python -m pip install --require-hashes -r requirements.lock
+          python -m pip install -r tools_tests/requirements.txt
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: "20"
-          cache: "npm"
+          node-version: "22"
+          cache: npm
           cache-dependency-path: frontend_react/package-lock.json
-
       - name: Install Frontend Dependencies
         run: |
           cd frontend_react
-          npm ci
-
+          npm ci --ignore-scripts
       - name: Verify Backend Core
+        env:
+          IMBA_VERIFY_REPORT_DIR: reports/ci/backend
         run: bash scripts/verify_build.sh backend-core
 
       - name: Verify Offline Packaging Contracts
         run: python -m unittest discover -s scripts/tests -p 'test_offline_*.py' -v
 
       - name: Verify Frontend
+        env:
+          IMBA_VERIFY_REPORT_DIR: reports/ci/frontend
         run: bash scripts/verify_build.sh frontend
-
       - name: Run Independent Acceptance Tests
         run: python -m pytest -c tools_tests/pytest.ini tools_tests -q
+      - name: Preserve verification logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: quality-logs
+          path: reports/ci
+          if-no-files-found: warn
+  postgres:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+      - run: |
+          python -m pip install --require-hashes -r requirements.lock
+          python -m pip install -r tools_tests/requirements.txt
+      - name: DDS concurrency and schema acceptance on owned PostgreSQL
+        run: |
+          python scripts/check_dds_queue_postgres.py
+          python scripts/check_dds_phone_postgres.py
+          python scripts/check_audit_postgres.py
+      - name: Build backend and verify actual backup restore
+        run: |
+          docker build -f Dockerfile.backend -t simulator_backend:ci .
+          BACKEND_IMAGE=simulator_backend:ci bash scripts/test_pg_backup_restore.sh

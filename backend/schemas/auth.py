@@ -1,16 +1,17 @@
 from typing import Any, Optional
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 
 class LoginRequest(BaseModel):
-    username: str
-    password: str
-    role: Optional[str] = None
+    username: str = Field(min_length=1, max_length=254)
+    password: str = Field(min_length=1, max_length=1024)
+    role: Optional[str] = Field(None, max_length=32)
 
 
 class TwoFactorRequiredResponse(BaseModel):
     requires_2fa: bool = True
     user_id: str
+    challenge_token: str
 
 
 class TwoFactorSetupResponse(BaseModel):
@@ -24,7 +25,8 @@ class TwoFactorVerifyRequest(BaseModel):
 
 
 class Login2FARequest(BaseModel):
-    code: str
+    code: str = Field(pattern=r"^\d{6}$")
+    challenge_token: str = Field(min_length=32, max_length=128)
     user_id: Optional[str] = None
     username: Optional[str] = None
 

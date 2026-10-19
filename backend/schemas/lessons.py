@@ -9,7 +9,7 @@ class LessonCreate(BaseModel):
     student_id: Optional[str] = Field(None, description="ID конкретного курсанта (алиас для cadet_id)")
     ticket_id: Optional[str] = Field(None, description="ID подготовленного билета сценария")
     mode: str = Field("TRAINING", description="Режим занятия: TRAINING или EXAM")
-    ticket_ids: Optional[List[str]] = Field(None, description="Упорядоченный набор билетов ДДС")
+    ticket_ids: Optional[List[str]] = Field(None, max_length=100, description="Упорядоченный набор билетов ДДС")
     target_role: Optional[str] = Field("DISPATCHER_DDS", description="Целевая роль (OPERATOR_112 или DISPATCHER_DDS)")
     categories: Optional[List[str]] = Field(default_factory=list, description="Список категорий происшествий")
     complexity: Optional[str] = Field("adaptive", description="Сложность (level_1, level_2, level_3, adaptive, mixed)")

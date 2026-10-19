@@ -82,8 +82,8 @@ class QwenTTSV2:
         # Paths for Qwen TTS
         self.qwen_dir = Path(__file__).parent / "qwen_tts"
         self.bin_path = self.qwen_dir / "qwen-tts"
-        self.tokenizer_path = self.qwen_dir / "models" / "qwen-tokenizer-12hz-Q4_K_M.gguf"
-        self.model_path = self.qwen_dir / "models" / "qwen-talker-0.6b-base-Q4_K_M.gguf"
+        self.tokenizer_path = Path(os.getenv("TTS_MODELS_DIR", str(self.qwen_dir / "models"))) / "qwen-tokenizer-12hz-Q4_K_M.gguf"
+        self.model_path = Path(os.getenv("TTS_MODELS_DIR", str(self.qwen_dir / "models"))) / "qwen-talker-0.6b-base-Q4_K_M.gguf"
         self.voices_dir = self.qwen_dir / "voices" / "references"
         
         # Speaker mapping (silero names to our references)
@@ -97,9 +97,14 @@ class QwenTTSV2:
         self.default_speaker = "female_1_irina.wav"
 
     def synthesize(self, text: str, speaker: str = 'aidar') -> bytes:
+        if len(text) > 4000:
+            raise ValueError("TTS text exceeds 4000 characters")
         if not text.strip():
             return bytes()
             
+        if os.getenv("TTS_ENABLED", "false").strip().lower() not in {"true", "1", "yes", "on"}:
+            raise RuntimeError("Speech synthesis is disabled; enable TTS_ENABLED only with provisioned local models")
+
         text_clean = normalize_text_v2(text)
         
         if not text_clean.strip():
@@ -120,8 +125,60 @@ class QwenTTSV2:
         except Exception:
             pass
             
-        # Audio synthesis and sound models are completely disabled
-        return bytes()
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_dir_path = Path(temp_dir)
+            raw_wav = temp_dir_path / "raw.wav"
+            processed_wav = temp_dir_path / "processed.wav"
+            
+            env = os.environ.copy()
+            env["OMP_NUM_THREADS"] = str(os.environ.get("TTS_THREADS", os.cpu_count()))
+            
+            cmd_tts = [
+                str(self.bin_path),
+                "--model", str(self.model_path),
+                "--codec", str(self.tokenizer_path),
+                "--lang", "Russian",
+                "--ref-wav", str(ref_path),
+                "-o", str(raw_wav)
+            ]
+            
+            subprocess.run(cmd_tts, input=text_clean, text=True, check=True, timeout=120, env=env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            
+            # Apply phone fx
+            noise_level = 0.0035
+            cutoff_low = 300
+            cutoff_high = 3400
+            sample_rate = 8000
+            
+            filter_complex = (
+                f"[0:a]highpass=f={cutoff_low},lowpass=f={cutoff_high},"
+                f"acompressor=threshold=-18dB:ratio=4:attack=5:release=50[voice]; "
+                f"anoisesrc=d=60:c=pink:r=24000:a={noise_level},"
+                f"highpass=f={cutoff_low},lowpass=f={cutoff_high}[noise]; "
+                f"[voice][noise]amix=inputs=2:duration=first:weights=1 0.4[out]"
+            )
+            
+            cmd_ffmpeg = [
+                "ffmpeg", "-y",
+                "-i", str(raw_wav),
+                "-filter_complex", filter_complex,
+                "-map", "[out]",
+                "-ar", str(sample_rate),
+                "-ac", "1",
+                "-c:a", "pcm_s16le",
+                str(processed_wav)
+            ]
+            
+            subprocess.run(cmd_ffmpeg, check=True, timeout=30, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            
+            audio_bytes = processed_wav.read_bytes()
+            
+            try:
+                cache_file.write_bytes(audio_bytes)
+            except Exception:
+                pass
+                
+            return audio_bytes
 
     def concatenate_tts(self, texts: list[str], speaker: str = 'aidar', silence_ms: int = 200) -> bytes:
         if not texts:

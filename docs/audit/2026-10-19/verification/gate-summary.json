@@ -1,0 +1,26 @@
+{
+  "mode": "all",
+  "status": "passed",
+  "stages": [
+    {
+      "name": "backend-core",
+      "status": "passed",
+      "exit_code": 0
+    },
+    {
+      "name": "frontend-tests",
+      "status": "passed",
+      "exit_code": 0
+    },
+    {
+      "name": "typecheck",
+      "status": "passed",
+      "exit_code": 0
+    },
+    {
+      "name": "frontend-build",
+      "status": "passed",
+      "exit_code": 0
+    }
+  ]
+}

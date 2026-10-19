@@ -8,6 +8,9 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 
+BACKEND_IMAGE="${BACKEND_IMAGE:-simulator_backend:latest}"
+docker image inspect "$BACKEND_IMAGE" >/dev/null
+
 RAND_ID="$(date +%s)_$RANDOM"
 TEST_CONTAINER="pg15_integ_${RAND_ID}"
 TEST_NET="pg15_net_${RAND_ID}"
@@ -34,12 +37,18 @@ docker run -d \
     postgres:15-alpine >/dev/null
 
 echo "==> 3. Waiting for PostgreSQL 15 to be healthy..."
-for i in {1..30}; do
-    if docker exec "$TEST_CONTAINER" pg_isready -U postgres -d source_test_db >/dev/null 2>&1; then
+DATABASE_READY=false
+for i in {1..60}; do
+    if docker exec -e PGPASSWORD=integ_secret_pass "$TEST_CONTAINER" psql -h 127.0.0.1 -X -v ON_ERROR_STOP=1 -U postgres -d source_test_db -t -A -c 'SELECT 1' >/dev/null 2>&1; then
+        DATABASE_READY=true
         break
     fi
     sleep 1
 done
+if [ "$DATABASE_READY" != true ]; then
+    echo 'ERROR: Test database was not initialized within 60 seconds' >&2
+    exit 1
+fi
 
 echo "==> 4. Populating source database with known test schema and rows..."
 docker exec -i "$TEST_CONTAINER" psql -X -v ON_ERROR_STOP=1 -U postgres -d source_test_db >/dev/null << 'EOF'
@@ -57,16 +66,15 @@ INSERT INTO cadet_exam_results (cadet_name, score, status) VALUES
     ('Васильев Василий', 52, 'Пересдача');
 EOF
 
-echo "==> 5. Creating database backup using application code in 112-simulator-core-backend:latest..."
+echo "==> 5. Creating database backup using application code in ${BACKEND_IMAGE}..."
 chmod 777 "$TEST_BACKUP_DIR"
 docker run --rm \
     --network "$TEST_NET" \
-    -v "$PROJECT_ROOT:/app:ro" \
-    -v "$TEST_BACKUP_DIR:$TEST_BACKUP_DIR" \
+    -v "$TEST_BACKUP_DIR:$TEST_BACKUP_DIR:Z" \
     -w /app \
     -e DATABASE_URL="postgresql+asyncpg://postgres:integ_secret_pass@${TEST_CONTAINER}:5432/source_test_db" \
     -e BACKUP_DIR="$TEST_BACKUP_DIR" \
-    112-simulator-core-backend:latest \
+    "${BACKEND_IMAGE}" \
     python3 -c "
 import asyncio
 from scripts.backup_db import create_backup_async

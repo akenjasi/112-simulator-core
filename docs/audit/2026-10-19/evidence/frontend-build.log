@@ -1,0 +1,48 @@
+
+> my-project@0.1.0 build
+> next build
+
+▲ Next.js 16.3.3 (Turbopack)
+✓ Running next.config.mjs took 31ms
+
+  Creating an optimized production build ...
+✓ Compiled successfully in 7.5s
+  Running TypeScript ...
+  Finished TypeScript in 10.5s ...
+  Collecting page data using 11 workers ...
+  Generating static pages using 11 workers (0/25) ...
+  Generating static pages using 11 workers (6/25) 
+  Generating static pages using 11 workers (12/25) 
+  Generating static pages using 11 workers (18/25) 
+✓ Generating static pages using 11 workers (25/25) in 1055ms
+  Finalizing page optimization ...
+
+Route (app)
+┌ ○ /
+├ ○ /_not-found
+├ ○ /admin
+├ ○ /admin/logs
+├ ○ /admin/profile
+├ ○ /admin/security
+├ ○ /admin/system
+├ ○ /admin/users
+├ ○ /dds
+├ ○ /dds/journal
+├ ○ /login
+├ ○ /operator
+├ ○ /operator/journal
+├ ○ /student/lobby
+├ ○ /student/profile
+├ ○ /teacher
+├ ○ /teacher/analytics
+├ ○ /teacher/groups
+├ ○ /teacher/knowledge
+├ ○ /teacher/profile
+├ ○ /teacher/sessions
+├ ○ /teacher/sessions/live
+├ ○ /teacher/sessions/new
+└ ○ /teacher/tickets
+
+
+○  (Static)  prerendered as static content
+

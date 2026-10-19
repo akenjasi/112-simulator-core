@@ -1,3 +1,4 @@
+import ssl
 import os
 import ldap3
 import logging
@@ -28,8 +29,11 @@ def authenticate_ldap(username: str, password: str) -> bool:
         user_dn = f"uid={username},{ldap_base_dn}"
 
     try:
-        server = ldap3.Server(ldap_server, get_info=ldap3.ALL)
-        conn = ldap3.Connection(server, user=user_dn, password=password, auto_bind=True)
+        if not ldap_server.startswith("ldaps://"):
+            logger.error("LDAP authentication requires an ldaps:// server with a trusted certificate")
+            return False
+        server = ldap3.Server(ldap_server, get_info=ldap3.ALL, connect_timeout=5, tls=ldap3.Tls(validate=ssl.CERT_REQUIRED))
+        conn = ldap3.Connection(server, user=user_dn, password=password, auto_bind=True, receive_timeout=5)
         if conn.bind():
             conn.unbind()
             return True

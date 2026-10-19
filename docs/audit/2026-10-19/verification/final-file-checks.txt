@@ -1,0 +1,6 @@
+Current documentation local links: PASS
+Evidence checksums: PASS
+Independent tests/acceptance manifests unchanged: PASS (git diff and cached diff)
+Own disposable audit containers remaining: none matching check names
+Git diff --check and cached --check: PASS; original diagnostic whitespace preserved by .gitattributes
+7 archived scripts match d51076c bytes: PASS

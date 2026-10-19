@@ -1,13 +1,13 @@
 """Pydantic schemas for reports and evaluations."""
 
 from typing import Any, Dict, List, Literal, Optional
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 
 class CommunicationMetrics(BaseModel):
     greeting_success: bool = True
-    filler_words: int = 0
-    script_followed_pct: float = 100.0
+    filler_words: int = Field(0, ge=0)
+    script_followed_pct: float = Field(100.0, ge=0, le=100)
 
 
 class CardMetrics(BaseModel):
@@ -24,9 +24,10 @@ class CardMetrics(BaseModel):
 
 
 class SLAMetrics(BaseModel):
-    sla_breached_count: int = 0
+    sla_breached_count: int = Field(0, ge=0)
     time_to_first_dispatch_sec: int = Field(
         0,
+        ge=0,
         description="Время от начала звонка до первой отправки карточки (в секундах)",
     )
 
@@ -63,8 +64,26 @@ class CadetEvaluationItem(BaseModel):
 class ReportGenerateRequest(BaseModel):
     format: Literal["pdf", "excel", "csv"] = "pdf"
     group_id: Optional[str] = None
-    session_ids: Optional[List[str]] = None
-    custom_records: Optional[List[Dict[str, Any]]] = None
+    session_ids: Optional[List[str]] = Field(None, max_length=1000)
+    custom_records: Optional[List[Dict[str, Any]]] = Field(None, max_length=1000)
+
+    @field_validator("custom_records")
+    @classmethod
+    def require_explicit_measurements(cls, records):
+        import math
+        for record in records or []:
+            if "final_score" in record:
+                for key in ("final_score", "comm_score", "card_score", "sla_score"):
+                    value = record.get(key)
+                    if value is not None and (isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(value) or not 0 <= value <= 100):
+                        raise ValueError(f"Invalid explicit score: {key}")
+                continue
+            for key, model in (("comm_metrics", CommunicationMetrics), ("card_metrics", CardMetrics), ("sla_metrics", SLAMetrics)):
+                metrics = record.get(key)
+                if not isinstance(metrics, dict) or not model.model_fields.keys() <= metrics.keys():
+                    raise ValueError(f"All measurements must be supplied explicitly: {key}")
+                model.model_validate(metrics, strict=True)
+        return records
 
 
 class ReportGenerateResponse(BaseModel):

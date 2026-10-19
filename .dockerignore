@@ -32,8 +32,7 @@ certs/
 # ─── Node / Frontend ──────────────────────────────────────────────────────────
 frontend_react/node_modules
 frontend_react/.next
-# Keep 'out/' — backend mounts it as /dds static. But it's built fresh in CI.
-# frontend_react/out
+frontend_react/out
 
 # ─── Local databases (use Docker volume for persistence) ──────────────────────
 *.db
@@ -68,3 +67,14 @@ docker_standalone/
 
 # ─── TypeScript build cache ───────────────────────────────────────────────────
 *.tsbuildinfo
+
+.env.*
+!.env.example
+!.env.llm.example
+data/reports/
+docs/audit/
+
+.aws/
+.codex/
+.agents/
+docs/

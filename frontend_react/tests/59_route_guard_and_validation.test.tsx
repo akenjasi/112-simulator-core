@@ -22,28 +22,28 @@ describe('ТЗ 59: Задача 1 — Защита страницы (Route Guard
     currentSearchParams = new URLSearchParams('')
     render(<OperatorPage />)
 
-    expect(pushMock).toHaveBeenCalledWith('/student/lobby')
+    expect(pushMock).toHaveBeenCalledWith('/student/profile')
   })
 
   it('1.2. Если в URL нет ticket_id, перенаправляет в лобби (/student/lobby)', () => {
     currentSearchParams = new URLSearchParams('session_id=sess_only_123')
     render(<OperatorPage />)
 
-    expect(pushMock).toHaveBeenCalledWith('/student/lobby')
+    expect(pushMock).toHaveBeenCalledWith('/student/profile')
   })
 
   it('1.3. Если в URL нет session_id, перенаправляет в лобби (/student/lobby)', () => {
     currentSearchParams = new URLSearchParams('ticket_id=ticket_only_456')
     render(<OperatorPage />)
 
-    expect(pushMock).toHaveBeenCalledWith('/student/lobby')
+    expect(pushMock).toHaveBeenCalledWith('/student/profile')
   })
 
   it('1.4. При наличии session_id и ticket_id доступ разрешен (нет редиректа на монтировании)', () => {
     currentSearchParams = new URLSearchParams('ticket_id=test_ticket_59&session_id=sess_test_59')
     render(<OperatorPage />)
 
-    expect(pushMock).not.toHaveBeenCalledWith('/student/lobby')
+    expect(pushMock).not.toHaveBeenCalledWith('/student/profile')
   })
 })
 
@@ -72,7 +72,7 @@ describe('ТЗ 59: Задача 2 — Валидация перед сохран
 
   it('2.2. Если выбран тип происшествия, но статус заявителя не заполнен — модалка не открывается', () => {
     localStorage.setItem(
-      'operator_state_test_ticket_59',
+      'operator_state_sess_test_59',
       JSON.stringify({
         activeIncidentTitle: 'Пожар',
         callerStatus: '',
@@ -91,7 +91,7 @@ describe('ТЗ 59: Задача 2 — Валидация перед сохран
 
   it('2.3. Если указан статус заявителя, но тип происшествия не выбран — модалка не открывается', () => {
     localStorage.setItem(
-      'operator_state_test_ticket_59',
+      'operator_state_sess_test_59',
       JSON.stringify({
         activeIncidentTitle: null,
         callerStatus: 'очевидец',
@@ -110,7 +110,7 @@ describe('ТЗ 59: Задача 2 — Валидация перед сохран
 
   it('2.4. Если тип происшествия и статус заявителя выбраны, но адрес полностью пуст — модалка не открывается', () => {
     localStorage.setItem(
-      'operator_state_test_ticket_59',
+      'operator_state_sess_test_59',
       JSON.stringify({
         activeIncidentTitle: 'ДТП',
         callerStatus: 'пострадавший',
@@ -139,7 +139,7 @@ describe('ТЗ 59: Задача 2 — Валидация перед сохран
 
   it('2.5. При заполненных типе происшествия, статусе заявителя и адресе модалка сохранения открывается', () => {
     localStorage.setItem(
-      'operator_state_test_ticket_59',
+      'operator_state_sess_test_59',
       JSON.stringify({
         activeIncidentTitle: 'Пожар',
         callerStatus: 'очевидец',
@@ -149,7 +149,7 @@ describe('ТЗ 59: Задача 2 — Валидация перед сохран
           city: 'Москва',
           okrug: 'СВАО',
           district: 'Южное Медведково',
-          street: '',
+          street: 'Учебная улица',
         },
       })
     )

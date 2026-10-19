@@ -259,6 +259,10 @@ async def update_security_policies(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="У администратора нет права изменять базовые настройки безопасности",
             )
+    if ("REQUIRE_2FA_ALL", "true") in updates:
+        unenrolled = await db.scalar(select(User.user_id).where(User.is_active.is_(True), User.is_2fa_enabled.is_(False)).limit(1))
+        if unenrolled:
+            raise HTTPException(409, "Enroll active accounts before enforcing global 2FA; cadet enrollment is not yet supported")
     for key, value in updates:
         stmt = select(SecurityPolicy).where(SecurityPolicy.key == key)
         result = await db.execute(stmt)

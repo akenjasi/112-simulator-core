@@ -1,0 +1,21 @@
+
+> 112-simulator-frontend@0.1.0 test
+> vitest run tests/api_fetch.test.ts tests/auth_entry.test.tsx tests/auth_guard.test.tsx tests/logout.test.tsx tests/password_reset_api.test.ts tests/system_status.test.tsx tests/admin_panel.test.tsx tests/admin_backups.test.tsx tests/admin_journal.test.tsx tests/admin_journal_review.test.tsx tests/74_2fa_frontend.test.tsx tests/48_student/48_student.test.tsx tests/27_teacher/27_01_groups.test.tsx tests/27_teacher/27_02_tickets.test.tsx tests/27_teacher/27_06_knowledge.test.tsx tests/27_teacher/dds-lesson-report.test.tsx tests/27_teacher/dds-lesson-report.acceptance.test.tsx tests/dds-cycle/dds-cycle-validation.test.ts tests/dds-cycle/dds-queue-ui.test.tsx tests/dds-cycle/dds-cycle.acceptance.test.tsx tests/dds-cycle/dds-route.acceptance.test.tsx tests/dds-cycle/teacher-history.acceptance.test.tsx tests/dds-cycle/teacher-live.acceptance.test.tsx tests/p3_component_contracts.acceptance.test.tsx tests/dds-cycle/services-menu.test.tsx tests/dds-cycle/demo-services.test.tsx tests/dds-cycle/assigned-services-menu.test.tsx tests/dds-cycle/reference-layout.test.tsx tests/dds-cycle/service-policy.test.tsx tests/dds-cycle/service-response.test.tsx tests/dds-cycle/incident-list.test.tsx tests/52_journal/incident-journal.test.tsx tests/27_teacher/27_04_dashboard.test.tsx tests/62_telephony.test.tsx tests/admin_integrity_review.test.tsx tests/admin_load_history.test.tsx tests/admin_metrics_and_integrity.test.tsx tests/mobile_adaptive.test.tsx tests/operator_and_tutorial.test.tsx tests/telephony_lifecycle.test.tsx tests/27_teacher/27_00_layout.test.tsx tests/27_teacher/27_03_session.test.tsx tests/27_teacher/27_05_analytics.test.tsx tests/56_services_modal_and_calc.test.tsx tests/57_frontend_fixes.test.tsx tests/58_frontend_ux_improvements.test.tsx tests/59_route_guard_and_validation.test.tsx tests/75_charts.test.tsx tests/dds-cycle/dds-phone-training.test.tsx tests/group-ticket-review.test.tsx tests/incident-classifier.test.tsx tests/student-profile-home.test.tsx tests/websocket_resilience.test.ts
+
+The plugin "vite-tsconfig-paths" is detected. Vite now supports tsconfig paths resolution natively via the resolve.tsconfigPaths option. You can remove the plugin and set resolve.tsconfigPaths: true in your Vite config instead.
+
+ RUN  v5.0.5 /home/orborus/Desktop/hakaton/112-simulator-core/frontend_react
+
+Not implemented: navigation to another Document
+Not implemented: navigation to another Document
+Not implemented: navigation to another Document
+
+ Test Files  53 passed (53)
+      Tests  419 passed (419)
+   Start at  05:38:00
+   Duration  22.62s (tests 43%, environment 38%, import 10%, setup 7%, worker 1%, transform 1%)
+
+Environment  jsdom was created 53 times · 85.42s total, 38% of tracked time
+             create it once per worker with pool: 'vmThreads' (keeps per-file isolation) or isolate: false (shares it across files)
+             learn more: https://vitest.dev/guide/improving-performance#test-environments
+

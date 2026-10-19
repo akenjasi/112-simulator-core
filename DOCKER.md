@@ -1,191 +1,43 @@
-# 🐳 Docker Deployment — 112 Simulator V2
+# Развёртывание и модели
 
-## Быстрый старт
+## Новая установка
 
 ```bash
-# 1. Скопируй файл окружения
-cp .env.example .env
-
-# 2. Собери и запусти все сервисы
-docker compose up --build
-```
-
-После запуска:
-| Сервис | URL |
-|--------|-----|
-| **Frontend** (Next.js → Nginx) | http://localhost:3000 |
-| **Backend API** (FastAPI) | http://localhost:8000 |
-| **Swagger UI** | http://localhost:8000/docs |
-
----
-
-## Архитектура контейнеров
-
-```
-┌──────────────────────────────────────────────────┐
-│                Docker Compose Network             │
-│                  (simulator_net)                  │
-│                                                   │
-│  ┌─────────────┐        ┌──────────────────────┐ │
-│  │  frontend   │ :3000  │      backend         │ │
-│  │  Nginx      │───────▶│  FastAPI + Qwen TTS  │ │
-│  │  /api/*     │ proxy  │  uvicorn :8000        │ │
-│  └─────────────┘        └──────────────────────┘ │
-│                                  │                │
-│              ┌───────────────────┤                │
-│              ▼                   ▼                │
-│     simulator_models       simulator_data         │
-│     (GGUF ~880 MB)         (SQLite + TTS cache)   │
-└──────────────────────────────────────────────────┘
-```
-
----
-
-## Тяжёлые артефакты (GGUF-модели)
-
-При **первом запуске** backend-контейнер автоматически скачивает:
-- `qwen-talker-0.6b-base-Q4_K_M.gguf` (~600 MB)
-- `qwen-tokenizer-12hz-Q4_K_M.gguf` (~243 MB)
-
-Файлы сохраняются в Docker volume `simulator_models`. При повторных `docker compose up` скачивания **не происходит**.
-
-Чтобы скачать модели вручную (без Docker):
-```bash
-bash scripts/download_models.sh
-```
-
----
-
-## Персистентные данные (Volumes)
-
-| Volume | Путь в контейнере | Содержимое |
-|--------|-------------------|------------|
-| `simulator_data` | `/app/data` | SQLite DB, TTS-кэш, загрузки |
-| `simulator_models` | `/app/backend/core/qwen_tts/models` | GGUF-модели |
-
-> **Важно:** При `docker compose down` данные **сохраняются** в named volumes.  
-> Чтобы полностью удалить всё: `docker compose down -v`
-
----
-
-## Безопасность и ФЗ-152
-
-В рамках защиты персональных данных (ПДн) и соответствия требованиям ФЗ-152:
-- Пароли пользователей хешируются и хранятся в БД с использованием bcrypt.
-- В качестве СУБД по умолчанию в Docker Compose используется PostgreSQL.
-- Для обеспечения защиты данных в состоянии покоя (data-at-rest), администратору сервера рекомендуется включить шифрование диска на уровне хоста (например, LUKS / dm-crypt для раздела, куда смонтирован `postgres_data`) или использовать встроенные механизмы шифрования PostgreSQL (Postgres TDE - Transparent Data Encryption).
-- Включена поддержка TLS/HTTPS на уровне Nginx для защиты трафика.
-
-### Настройка SSL/TLS сертификатов
-
-Для тестов можно сгенерировать самоподписанный сертификат с помощью скрипта:
-```bash
+python3 setup_env.py --init
 bash scripts/generate_certs.sh
+docker compose up -d --build
 ```
-Для продакшена: подложите корпоративные (боевые) сертификаты (`server.crt` и `server.key`) в папку `certs/` в корне проекта. Nginx автоматически их подхватит при запуске контейнера `frontend`.
 
----
+Для действующей установки сначала сделайте проверяемый backup. Не заменяйте её `.env` новым файлом: это меняет ключи и пароли. Значения `SECRET_KEY` и `POSTGRES_PASSWORD` обязательны, общих секретов нет. `TESTING` в Compose принудительно false. Начальный пароль ADMIN хранится в приватном `.env`.
 
-## Команды управления
+Вход через Nginx: http://localhost:3000 или https://localhost. Сервисы frontend/backend слушают только loopback хоста; PostgreSQL не публикуется. Для доступа из сети явно установите `FRONTEND_BIND_ADDRESS`, настроив TLS, firewall и доверенные origins. Production: `docker compose -f docker-compose.prod.yml up -d` использует готовые images, не публикует backend. Это отдельный файл, не override dev Compose. Безопаснее не публиковать dev backend наружу. Uvicorn обрабатывает forwarding только от доверенных proxy; не доверяйте произвольному X-Forwarded-For. Для корректного внешнего IP настройте trust в контролируемой сети.
+
+Backend работает под UID/GID 10001. Новый named volume `simulator_data` получает владельца из образа. Старый volume может требовать переноса прав: сначала backup, затем проверка UID и владельца администратором. Автоматически права существующих данных не меняются. На SELinux системах bind-каталоги должны иметь разрешённую контейнерам метку; для сертификатов/моделей Compose уже задаёт bind `:ro,z`. Не перемечайте общие системные каталоги.
+
+`simulator_data` содержит БД SQLite при локальном режиме, uploads, кэш, reports и backups. PostgreSQL использует отдельный `postgres_data`. На production Compose backend всегда работает с PostgreSQL. Каталоги `data/models` и `data/tts_models` монтируются read-only. Код/ключи/сгенерированный frontend output не включаются в Git как артефакты поставки. Backend не раздаёт статический Next output: для UI нужен Next dev или Nginx.
+
+## Внешние возможности
+
+Базовый образ не скачивает модели и не включает PyTorch. Синтез речи по умолчанию выключен (`TTS_ENABLED=false`); включайте его явно только после установки и проверки локальных моделей. DDS, авторизация, занятия и протоколы доступны без ML. Для операторского классификатора установите CPU torch из официального индекса и `requirements-ml.txt`, либо соберите backend с `--build-arg INSTALL_SPEECH_DEPS=true`. Этот отдельный тяжёлый граф не входит в базовый hash lock; перед эксплуатацией проверьте его на целевой платформе.
+
+`bash scripts/download_models.sh` явно скачивает GGUF в `data/models`, Qwen TTS weights — в `data/tts_models`. Скрипт переносим и публикует файл после завершения загрузки; криптографическое происхождение весов и нативных бинарей этим не подтверждается. Перед автономной установкой поставьте и проверьте модели отдельно. Пропущенная модель означает недоступную внешнюю функцию, не условный успешный результат.
+
+Для отчётов DDS требуется OpenAI-compatible HTTP runtime. Локальный backend использует `DDS_LLM_BASE_URL=http://127.0.0.1:8081/v1`; внутри Compose — `DDS_LLM_CONTAINER_BASE_URL=http://llm:8080/v1`. Можно указать иной доступный endpoint. Дополнительный GPU runtime:
 
 ```bash
-# Запуск (пересборка при изменениях)
-docker compose up --build
-
-# Запуск в фоне
-docker compose up --build -d
-
-# Только backend (без frontend)
-docker compose up backend
-
-# Остановить без удаления данных
-docker compose down
-
-# Остановить + удалить volumes (сбросить всё, включая модели и БД!)
-docker compose down -v
-
-# Посмотреть логи backend в реальном времени
-docker compose logs -f backend
-
-# Зайти в контейнер backend
-docker compose exec backend bash
+DDS_LLM_MODEL_PATH=/absolute/path/report.gguf docker compose -f docker-compose.yml -f docker-compose.llm.yml --profile llm up -d
 ```
 
----
+GPU должен быть доступен Docker по CDI `nvidia.com/gpu=all`; это отдельное требование хоста. Standalone runtime: те же два Compose файла, `--profile llm up -d llm`; основной backend можно запускать локально. Файл модели должен существовать, автоматическое создание запрещено. Реальные SIP originate/play не завершены: API честно предоставляет симуляцию и отклоняет запрос production-телефонии. Legacy HTTP TTS настраивается `LEGACY_TTS_URL`. LDAP выключен по умолчанию; включение требует проверяемого LDAPS-сертификата, данных каталога и утверждённой политики регистрации (JIT создаёт только CADET).
 
-## Переменные окружения (.env)
+Запускайте **один процесс backend**: часть runtime/экспорт задач хранится в памяти, DDS job worker имеет это ограничение. Масштабирование на несколько workers/реплик требует отдельной реализации и испытаний. CSV/XLSX экспорты доступны при отказе PDF renderer. Процессные экспорты принадлежат создателю, ограничены по количеству и истекают через сутки; это временные файлы, не архив. Регулярно очищайте старые приватные report-каталоги после рестарта согласно retention установки. DDS job/protocol хранятся отдельно в БД.
 
-Основные переменные для Docker-окружения:
+## Резервирование и выпуск
 
-```env
-# База данных (путь внутри контейнера, перекрывается в compose)
-DATABASE_URL=sqlite+aiosqlite:////app/data/112_simulator.db
+Sidecar `backup` по умолчанию делает снимок каждые 86400 секунд и хранит 180 дней. Изменяйте `BACKUP_INTERVAL_SECONDS`/`BACKUP_RETENTION_DAYS` по нормативам установки, контролируйте логи и свободное место. Снимок в том же volume не защищает от потери диска — нужен внешний backup. Восстановление: [RECOVERY.md](RECOVERY.md).
 
-# JWT-секрет (обязательно сменить в продакшене!)
-SECRET_KEY=your-strong-random-secret-here
+`bash scripts/pack_release.sh` собирает images и переносимый каталог `release/`; ошибка любой команды прерывает выпуск. Images публикуются в `images.tar` только после успешного `docker save`. Секреты, TLS ключи и модели в комплект не входят. Для параметров `BACKEND_IMAGE`/`FRONTEND_IMAGE` используйте те же имена в окружении Compose. На целевом хосте загрузите `docker load -i images.tar`, создайте новые `.env` и сертификаты, перенесите проверенные модели и запустите production Compose.
 
-# CORS: добавь свой домен для продакшена
-CORS_ORIGINS=http://localhost:3000,http://your-domain.com
+Ранее закоммиченный TLS ключ исключён из tracking, но остаётся в истории. **На установках, где он применялся, замените пару key/cert и настройте доверие.** Уже существующие локальные сертификаты генератор сохраняет; историю Git автоматически не переписываем. Nginx требует сертификаты для старта, поэтому генерируйте их перед `up`.
 
-# Токен жизни сессии (минуты)
-ACCESS_TOKEN_EXPIRE_MINUTES=480
-```
-
----
-
-## Структура Docker-файлов
-
-```
-112_simulator_2/
-├── Dockerfile              ← Backend (синоним Dockerfile.backend)
-├── Dockerfile.backend      ← Python 3.11 + ffmpeg + uvicorn
-├── Dockerfile.frontend     ← Node 20 (pnpm build) → Nginx 1.27
-├── docker-compose.yml      ← Связывает backend + frontend
-├── .dockerignore           ← Исключает node_modules, *.gguf, *.db и др.
-├── docker/
-│   └── nginx.conf          ← Nginx: /api/* → backend, SPA fallback
-└── scripts/
-    ├── init.sh             ← Точка входа backend-контейнера
-    └── download_models.sh  ← Ручная загрузка моделей (вне Docker)
-```
-
----
-
-## Продакшен-рекомендации
-
-1. **SECRET_KEY** — сгенерируй случайный ключ:
-   ```bash
-   python3 -c "import secrets; print(secrets.token_hex(32))"
-   ```
-
-2. **CORS_ORIGINS** — укажи только свои домены, не `*`.
-
-3. **Reverse proxy** — поставь Nginx/Traefik перед стеком, добавь TLS.
-
-4. **PostgreSQL вместо SQLite** — раскомментируй в `.env`:
-   ```env
-   DATABASE_URL=postgresql+asyncpg://user:pass@db:5432/simulator
-   ```
-
-5. **Ресурсы для Qwen TTS** — рекомендуется ≥ 4 CPU cores, ≥ 8 GB RAM.
-
----
-
-## Использование GigaAM ASR (Опционально)
-
-Скрипт `router_asr.py` ожидает модель `gigaam-v3-ctc-Q8_0.gguf` для офлайн-распознавания речи.
-Она **не скачивается** автоматически из-за большого размера и специфичных лицензий.
-
-Если вы хотите использовать распознавание речи в Docker:
-1. Скачайте модель GigaAM.
-2. Добавьте её проброс в `docker-compose.yml`:
-   ```yaml
-   volumes:
-     - simulator_data:/app/data
-     - simulator_models:/app/backend/core/qwen_tts/models
-     # Добавьте путь к скачанной модели:
-     - /path/to/your/gigaam-v3-ctc-Q8_0.gguf:/app/models/gigaam-v3-ctc-Q8_0.gguf:ro
-   environment:
-     # Укажите путь внутри контейнера:
-     GIGAAM_MODEL_PATH: "/app/models/gigaam-v3-ctc-Q8_0.gguf"
-   ```
+Для проверяемой CPU-only offline поставки из актуального main также сохранены `package_offline.sh`, `deploy_offline.sh` и [OFFLINE.md](OFFLINE.md). Этот комплект включает закреплённый report GGUF с SHA256 и свой installer; ASR/TTS в нём выключены, GPU не требуется. Это отдельная процедура, отличная от облегчённого `scripts/pack_release.sh`.

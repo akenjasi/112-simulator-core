@@ -32,7 +32,7 @@ function MsgIcon() {
 
 export function TopBar({ data, slaTimer, slaViolated }: Props) {
   return (
-    <div id="tour-topbar" className="flex items-stretch gap-2 2xl:gap-2 bg-[#efefef] p-2 2xl:p-2">
+    <div id="tour-topbar" className="flex shrink-0 items-stretch gap-2 2xl:gap-2 bg-[#efefef] p-2 2xl:p-2">
       {/* Hang up */}
       <div className="flex w-[64px] 2xl:w-[70px] shrink-0 items-center justify-center rounded-sm border border-gray-300 bg-gray-200 opacity-60">
         <button type="button" aria-label="Завершить вызов" disabled className="h-full w-full flex items-center justify-center text-gray-500 cursor-not-allowed" title="Недоступно для роли ДДС в режиме тренажера">
@@ -69,8 +69,8 @@ export function TopBar({ data, slaTimer, slaViolated }: Props) {
         <MsgIcon />
       </div>
 
-      {/* АОН */}
-      <div className="flex flex-1 flex-col justify-center rounded-sm border border-[#c9ced1] bg-[#fbfdfe] px-2 2xl:px-5 py-2 2xl:py-2 min-w-0">
+      {/* АОН заявителя, не номер вызываемой службы */}
+      <div aria-label="АОН заявителя" title="Номер заявителя, определённый при приёме сообщения в 112" className="flex flex-1 flex-col justify-center rounded-sm border border-[#c9ced1] bg-[#fbfdfe] px-2 2xl:px-5 py-2 2xl:py-2 min-w-0">
         <div className="flex items-center justify-between">
           <span className="text-[11px] 2xl:text-sm text-[#8a949b]">АОН</span>
           <div className="flex items-center gap-1 2xl:gap-2 text-[#49555d]">
@@ -91,7 +91,7 @@ export function TopBar({ data, slaTimer, slaViolated }: Props) {
       </div>
 
       {/* предоставленный */}
-      <div className="flex flex-1 flex-col justify-center rounded-sm border border-[#c9ced1] bg-[#fbfdfe] px-2 2xl:px-5 py-2 2xl:py-2 min-w-0">
+      <div aria-label="Предоставленный номер заявителя" title="Контактный номер, указанный заявителем" className="flex flex-1 flex-col justify-center rounded-sm border border-[#c9ced1] bg-[#fbfdfe] px-2 2xl:px-5 py-2 2xl:py-2 min-w-0">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-1 2xl:gap-2">
             <span className="text-[11px] 2xl:text-sm text-[#8a949b] truncate">предоставленный</span>
@@ -113,14 +113,15 @@ export function TopBar({ data, slaTimer, slaViolated }: Props) {
       </div>
 
       {/* телефон на место */}
-      <div className="flex flex-1 flex-col rounded-sm border border-[#c9ced1] bg-[#fbfdfe] px-5 2xl:px-5 py-3 2xl:py-2">
+      <div aria-label="Телефон на место происшествия" title="Контактный телефон на месте происшествия" className="flex flex-1 flex-col rounded-sm border border-[#c9ced1] bg-[#fbfdfe] px-5 2xl:px-5 py-3 2xl:py-2">
         <span className="text-base 2xl:text-sm text-[#8a949b]">телефон на место</span>
+        <span className="mt-1 text-sm font-medium text-[#303335]">{data.phones.onSite}</span>
       </div>
 
       {/* Incident info */}
-      <div className="flex flex-1 flex-col justify-center rounded-sm border border-[#c9ced1] bg-[#fbfdfe] px-3 2xl:px-5 py-2 2xl:py-2">
-        <span className="text-sm 2xl:text-sm font-bold text-[#303335] leading-tight">{data.incident.number}</span>
-        <span className="text-xs 2xl:text-sm text-[#49555d] leading-tight mt-0.5">{data.incident.savedAt}</span>
+      <div aria-label="Сведения о происшествии" className="flex flex-1 flex-col justify-center rounded-sm border border-[#c9ced1] bg-[#fbfdfe] px-3 2xl:px-5 py-2 2xl:py-2">
+        <span className="text-sm 2xl:text-sm font-bold text-[#303335] leading-tight">{/^происшествие(?:\s|$)/i.test(data.incident.number) ? data.incident.number : `Происшествие ${data.incident.number}`}</span>
+        <span className="text-xs 2xl:text-sm text-[#49555d] leading-tight mt-0.5">{data.incident.savedAt && (/^сохр[.\s]/i.test(data.incident.savedAt) ? data.incident.savedAt : `Сохр. ${data.incident.savedAt}`)}</span>
         <span className="text-xs 2xl:text-sm text-[#49555d] leading-tight mt-0.5">{data.incident.operator}</span>
       </div>
 

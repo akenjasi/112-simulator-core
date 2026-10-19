@@ -5,6 +5,11 @@ import logging
 from typing import Optional
 
 from fastapi import APIRouter, Depends
+from backend.core.access import require_session
+from backend.core.deps import get_current_user
+from backend.models.domain_01 import User
+from backend.models.domain_03 import ExamSession
+import base64
 from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -49,14 +54,19 @@ class ProcessTurnRequest(BaseModel):
 
 class ProcessTurnResponse(BaseModel):
     text: str
-    audio_url: str
+    audio_url: Optional[str] = None
 
 
 @router_call.post("/process_turn", response_model=ProcessTurnResponse)
 async def handle_process_turn(
     req: ProcessTurnRequest,
+    current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> ProcessTurnResponse:
+    exam_session = await require_session(db, current_user, req.session_id)
+    if (exam_session.dynamic_state or {}).get("dds"):
+        from fastapi import HTTPException
+        raise HTTPException(409, "Prepared DDS exercises use the DDS API")
     # 1. Classify intent
     intent = await classify_intent(req.operator_text)
 
@@ -82,7 +92,7 @@ async def handle_process_turn(
             logger.warning(f"Error querying SessionStateModel: {e}")
 
         try:
-            ticket_res = await db.execute(select(ScenarioTicketModel).limit(1))
+            ticket_res = await db.execute(select(ScenarioTicketModel).where(ScenarioTicketModel.ticket_uuid == exam_session.ticket_id).limit(1))
             ticket_record = ticket_res.scalar_one_or_none()
             if ticket_record and ticket_record.matrix_json:
                 raw_bricks = ticket_record.matrix_json.get("bricks", [])
@@ -106,8 +116,9 @@ async def handle_process_turn(
         )
 
     # 4. Generate audio via TTS
+    audio = None
     try:
-        await generate_audio(reply_text)
+        audio = await generate_audio(reply_text)
     except Exception as e:
         logger.warning(f"Error generating audio: {e}")
 
@@ -130,5 +141,5 @@ async def handle_process_turn(
         except Exception as e:
             logger.warning(f"Error saving SessionStateModel: {e}")
 
-    audio_url = f"/api/v1/call/audio/{req.session_id}_{intent.value}.wav"
+    audio_url = "data:audio/wav;base64," + base64.b64encode(audio).decode() if audio and audio.startswith(b"RIFF") else None
     return ProcessTurnResponse(text=reply_text, audio_url=audio_url)

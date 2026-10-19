@@ -645,6 +645,8 @@ async def stop_lesson(
                 dds_data = deepcopy(s.dynamic_state.get("dds", {}))
                 dds_data["stopped_at"] = now.isoformat()
                 dds_data["stop_reason"] = "teacher"
+                from backend.core.dds_exercise import finalize_result
+                await finalize_result(db, s, dds_data, "incomplete")
                 card = await db.get(IncidentCard, dds_data.get("card_id"))
                 if card:
                     card.status = "Не завершено"

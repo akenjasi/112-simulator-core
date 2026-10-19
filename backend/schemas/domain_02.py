@@ -94,4 +94,3 @@ class TicketUpdate(BaseModel):
     ground_truth: Optional[Dict[str, Any]] = None
     etalon_services: Optional[List[str]] = None
     dds_etalon: Optional[DDSEtalon] = None
-

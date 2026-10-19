@@ -2,7 +2,7 @@
 # ─── 112 Simulator — Container Initialization Script ──────────────────────────
 # Runs inside the backend container before uvicorn starts.
 # 1. Ensures required directories exist.
-# 2. Downloads GGUF models if not present (idempotent).
+# 2. Uses operator-supplied optional speech models.
 # 3. Exports LD_LIBRARY_PATH for native .so libs.
 # 4. Starts the uvicorn server.
 # ──────────────────────────────────────────────────────────────────────────────
@@ -30,16 +30,11 @@ if [ -d "/app/preseeded_tts_cache" ] && [ "$(ls -A /app/preseeded_tts_cache)" ];
 fi
 
 
-# ─── 2. GGUF weights are provisioned and mounted externally ────────────────
-echo "🤖 GGUF models use configured local mounts; startup does not download weights"
+# ─── 2. Models are supplied separately ────────────────────────────────────
+echo "🤖 External speech models are optional; missing models are reported by speech status APIs."
 
 # ─── 3. Export LD_LIBRARY_PATH for native shared libs ────────────────────────
 export LD_LIBRARY_PATH="/app/backend/bin:${LD_LIBRARY_PATH:-}"
-
-# ─── 4. Run Seed Script ────────────────────────────────────────────────────────
-echo ""
-echo "🌱 Running database seeder..."
-# python3 -m scripts.seed || echo "⚠️  Seeder returned an error, but continuing..."
 
 # ─── 5. Start uvicorn ────────────────────────────────────────────────────────
 echo ""

@@ -1,0 +1,26 @@
+
+==================================== ERRORS ====================================
+__________________ ERROR collecting tests/test_30_tts_fix.py ___________________
+ImportError while importing test module '/home/orborus/Desktop/hakaton/112-simulator-core/tests/test_30_tts_fix.py'.
+Hint: make sure your test modules/packages have valid Python names.
+Traceback:
+/usr/lib64/python3.14/importlib/__init__.py:88: in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+tests/test_30_tts_fix.py:2: in <module>
+    from backend.core.tts_v2 import SileroTTSV2, tts_engine_v2
+E   ImportError: cannot import name 'SileroTTSV2' from 'backend.core.tts_v2' (/home/orborus/Desktop/hakaton/112-simulator-core/backend/core/tts_v2.py)
+=============================== warnings summary ===============================
+../../../.local/lib/python3.14/site-packages/ldap3/utils/asn1.py:50
+  /home/orborus/.local/lib/python3.14/site-packages/ldap3/utils/asn1.py:50: DeprecationWarning: tagMap is deprecated. Please use TAG_MAP instead.
+    from pyasn1.codec.ber.encoder import tagMap, typeMap, AbstractItemEncoder
+
+../../../.local/lib/python3.14/site-packages/ldap3/utils/asn1.py:50
+  /home/orborus/.local/lib/python3.14/site-packages/ldap3/utils/asn1.py:50: DeprecationWarning: typeMap is deprecated. Please use TYPE_MAP instead.
+    from pyasn1.codec.ber.encoder import tagMap, typeMap, AbstractItemEncoder
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+ERROR tests/test_30_tts_fix.py
+!!!!!!!!!!!!!!!!!!!! Interrupted: 1 error during collection !!!!!!!!!!!!!!!!!!!!
+2 warnings, 1 error in 0.46s

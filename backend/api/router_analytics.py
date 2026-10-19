@@ -17,6 +17,7 @@ from backend.core.gradebook_records import build_attempt_records, dds_state_for_
 from backend.core.analytics_engine import build_error_heatmap, calculate_trends
 from backend.core.deps import get_current_user, require_role
 from backend.database import get_db
+from backend.core.analytics_scope import get_scoped_analytics_db
 from backend.models.domain_01 import StudentGroup, User, UserActionLog, student_group_link
 from backend.models.domain_02 import ScenarioTicket
 from backend.models.domain_03 import Assignment, ExamSession
@@ -176,7 +177,7 @@ def _extract_metric_value(
 @analytics_router.get("/heatmap/", response_model=HeatmapResponse, include_in_schema=False)
 async def get_heatmap(
     group_id: Optional[str] = Query(default=None, description="Фильтр по учебной группе"),
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_scoped_analytics_db),
 ):
     """Generate 2D error heatmap by scenario category and error types."""
     stmt = (
@@ -266,7 +267,7 @@ async def get_heatmap(
 async def get_trends(
     user_id: str,
     group_id: Optional[str] = Query(default=None, description="Фильтр по учебной группе"),
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_scoped_analytics_db),
 ):
     """Retrieve progress trends for target cadet compared with group average over time."""
     # Resolve target user's group if not supplied
@@ -377,7 +378,7 @@ async def get_leaderboard(
         description="Порядок сортировки (asc / desc). Если не указан, выбирается автоматически.",
     ),
     limit: int = Query(default=10, ge=1, le=100, description="Количество курсантов в топе"),
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_scoped_analytics_db),
 ):
     """Aggregate average metric per cadet in group and return TOP-10 leaderboard."""
     stmt = (
@@ -474,7 +475,7 @@ async def get_leaderboard(
 @analytics_v1_router.get("/sessions/{session_id}", response_model=SessionAnalyticsResponse, dependencies=[Depends(require_role("TEACHER"))])
 async def get_session_analytics(
     session_id: str,
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_scoped_analytics_db),
     current_user: User = Depends(get_current_user),
 ):
     """Retrieve session statistics with real cadets and tickets breakdown."""
@@ -549,7 +550,7 @@ async def get_session_analytics(
 @analytics_v1_router.get("/lessons/{lesson_id}", response_model=SessionAnalyticsResponse, dependencies=[Depends(require_role("TEACHER"))])
 async def get_lesson_analytics(
     lesson_id: str,
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_scoped_analytics_db),
     current_user: User = Depends(get_current_user),
 ):
     """Retrieve session statistics for an entire lesson with real cadets and tickets breakdown."""
@@ -626,7 +627,7 @@ async def get_lesson_analytics(
 @analytics_v1_router.get("/records/{record_id}", response_model=RecordDetailResponse, dependencies=[Depends(require_role("TEACHER"))])
 async def get_record_detail(
     record_id: str,
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_scoped_analytics_db),
     current_user: User = Depends(get_current_user),
 ):
     """Retrieve details of a specific cadet answer including real etalon and error details."""
@@ -719,7 +720,7 @@ async def get_record_detail(
     dds_state = dds_state_raw if card_matches_dds else {}
     raw_actions = dds_state.get("actions", [])
     cadet_actions_list: List[DDSActionItem] = []
-    
+
     start_dt = exam_session.start_time if exam_session else None
     if start_dt and start_dt.tzinfo is None:
         start_dt = start_dt.replace(tzinfo=timezone.utc)
@@ -739,7 +740,7 @@ async def get_record_detail(
             continue
         if cadet_id and str(actor) != str(cadet_id):
             continue
-        
+
         at_str = a.get("at")
         secs = None
         if start_dt and at_str:
@@ -800,7 +801,7 @@ async def get_record_detail(
         inc_card = card.filled_data
     elif snapshot_matches_card and dds_state and isinstance(dds_state.get("incoming_card"), dict):
         inc_card = dds_state["incoming_card"]
-    
+
     clf = inc_card.get("classification") if isinstance(inc_card.get("classification"), dict) else {}
     caller = inc_card.get("caller") if isinstance(inc_card.get("caller"), dict) else {}
     phones = inc_card.get("phones") if isinstance(inc_card.get("phones"), dict) else {}
@@ -1031,7 +1032,7 @@ async def get_record_detail(
 async def appeal_analytics_record(
     record_id: str,
     req: RecordAppealRequest,
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_scoped_analytics_db),
     current_user: Optional[User] = Depends(get_current_user),
 ):
     """Teacher appeal endpoint to adjust evaluation status and store comment."""
@@ -1144,7 +1145,7 @@ async def appeal_analytics_record(
 async def override_session_grade(
     session_id: str,
     req: GradeOverrideRequest,
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_scoped_analytics_db),
     current_user: User = Depends(get_current_user),
 ):
     """Override session grade with strict audit logging in UserActionLog."""
@@ -1267,7 +1268,7 @@ async def override_session_grade(
 async def override_record_grade(
     record_id: str,
     req: RecordGradeOverrideRequest,
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_scoped_analytics_db),
     current_user: User = Depends(get_current_user),
 ):
     """Override ticket record grade with audit logging in UserActionLog."""
@@ -1671,7 +1672,7 @@ async def get_analytics_overview(
     group_id: Optional[str] = Query(default=None, description="Фильтр по учебной группе"),
     cadet_id: Optional[str] = Query(default=None, description="Фильтр по курсанту"),
     days: int = Query(default=30, ge=1, le=180, description="Глубина в днях"),
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_scoped_analytics_db),
     current_user: User = Depends(get_current_user),
 ):
     """Retrieve verified summary header metrics and daily dynamics."""
@@ -1692,7 +1693,7 @@ async def get_daily_dynamics(
     group_id: Optional[str] = Query(default=None, description="Фильтр по учебной группе"),
     cadet_id: Optional[str] = Query(default=None, description="Фильтр по курсанту"),
     days: int = Query(default=30, ge=1, le=180, description="Глубина в днях"),
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_scoped_analytics_db),
     current_user: User = Depends(get_current_user),
 ):
     """Retrieve daily average scores, session volumes, and pass rate over time."""
@@ -1711,7 +1712,7 @@ async def get_daily_dynamics(
 @analytics_v1_router.get("/groups-comparison", response_model=List[GroupComparisonItem])
 @analytics_v1_router.get("/groups-comparison/", response_model=List[GroupComparisonItem], include_in_schema=False)
 async def get_groups_comparison(
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_scoped_analytics_db),
     current_user: User = Depends(get_current_user),
 ):
     """Compare average scores, pass rate, and session volume across all accessible student groups."""
@@ -1835,7 +1836,7 @@ async def get_errors_heatmap(
     group_id: Optional[str] = Query(default=None, description="Фильтр по группе"),
     entity_type: str = Query(default="students", description="'students' или 'groups'"),
     category: Optional[str] = Query(default=None, description="Категория ошибки: communication, card, sla"),
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_scoped_analytics_db),
 ):
     """Retrieve 2D frequency matrix of error types per student or group."""
     group_cadets: List[str] = []
@@ -2036,5 +2037,3 @@ async def get_errors_heatmap(
         entities=entities,
         totals_by_error=totals_by_error,
     )
-
-

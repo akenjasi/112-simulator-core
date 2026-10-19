@@ -55,7 +55,7 @@ async def test_record_override_denies_other_teacher_and_preserves_owner_zero_old
     async with AsyncSessionLocal() as db:
         result = await db.get(TicketResult, rid)
         assert result.score_total == 75
-        logs = (await db.execute(select(UserActionLog).where(UserActionLog.action == "GRADE_OVERRIDE"))).scalars().all()
+        logs = (await db.execute(select(UserActionLog).where(UserActionLog.action == "GRADE_OVERRIDE", UserActionLog.target_id == rid))).scalars().all()
         assert len(logs) == 1
         assert json.loads(logs[0].details)["old_score"] == 0.0
 

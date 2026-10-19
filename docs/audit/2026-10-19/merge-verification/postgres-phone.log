@@ -1,0 +1,37 @@
+Could not preload /home/orborus/Desktop/hakaton/112-simulator-core/backend/bin/libggml.so: libggml-cpu.so.0: cannot open shared object file: No such file or directory
+Could not preload /home/orborus/Desktop/hakaton/112-simulator-core/backend/bin/libtranscribe.so: libggml.so.0: cannot open shared object file: No such file or directory
+Failed to initialize transcribe_cpp: libggml.so.0: cannot open shared object file: No such file or directory
+Traceback (most recent call last):
+  File "/home/orborus/Desktop/hakaton/112-simulator-core/backend/api/router_asr.py", line 111, in _init_model
+    import transcribe_cpp
+  File "/home/orborus/Desktop/hakaton/112-simulator-core/backend/transcribe_cpp/__init__.py", line 125, in <module>
+    _lib, _lib_path = load_library()
+                      ^^^^^^^^^^^^^^
+  File "/home/orborus/Desktop/hakaton/112-simulator-core/backend/transcribe_cpp/_library.py", line 344, in load_library
+    return _cdll(path), path
+           ^^^^^^^^^^^
+  File "/home/orborus/Desktop/hakaton/112-simulator-core/backend/transcribe_cpp/_library.py", line 316, in _cdll
+    return ctypes.CDLL(str(path))
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib64/python3.11/ctypes/__init__.py", line 376, in __init__
+    self._handle = _dlopen(self._name, mode)
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^
+OSError: libggml.so.0: cannot open shared object file: No such file or directory
+PASS test_complete_two_services_with_evidence_and_corrected_errors {}
+PASS test_phone_ownership_idempotency_unknown_and_wrong_contact {}
+PASS test_plan_validation {'change': 'duplicate'}
+PASS test_plan_validation {'change': 'missing_stage'}
+PASS test_plan_validation {'change': 'empty_result'}
+PASS test_plan_validation {'change': 'external_audio'}
+PASS test_plan_validation {'change': 'limit'}
+PASS test_confirmation_boundary_is_server_time {'seconds': 30, 'expected': 'completed'}
+PASS test_confirmation_boundary_is_server_time {'seconds': 30.001, 'expected': 'not_completed'}
+PASS test_rejected_action_retry_after_another_action_keeps_original_outcome {}
+PASS test_two_tabs_answer_once_restore_and_early_finish {}
+PASS test_configuration_is_snapshot_and_legacy_criteria_are_ungraded {}
+PASS test_criteria_reset_between_cards_and_archive_keeps_protocol {}
+PASS test_teacher_report_contains_criteria_without_exposing_future_plan {}
+PASS test_refusal_requires_reason_is_saved_and_does_not_invent_successful_reports {}
+Network error communicating with LLM service for lesson_id=lesson_test_101: ConnectError
+PASS test_criteria_report_does_not_need_numeric_scores_and_llm_outage_is_explicit {}
+PostgreSQL 15: 16 phone acceptance cases passed

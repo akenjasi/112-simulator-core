@@ -1,3 +1,5 @@
+from backend.core.access import require_assignment, require_managed_cadet, require_session
+from backend.models.domain_01 import StudentGroup
 import datetime
 from copy import deepcopy
 from typing import Optional, List, Dict, Any
@@ -65,8 +67,17 @@ async def _is_assigned_dds_session(db: AsyncSession, session: ExamSession) -> bo
 async def start_session(
     assignment_id: str,
     req: SessionStartRequest,
+    current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
+    assignment = await require_assignment(db, current_user, await db.get(Assignment, assignment_id))
+    target = await db.get(User, req.cadet_id)
+    if not target or target.role != "CADET":
+        raise HTTPException(422, "A valid cadet is required")
+    if current_user.role == "CADET" and req.cadet_id != current_user.user_id:
+        raise HTTPException(403, "Cannot start a session for another cadet")
+    if current_user.role == "TEACHER":
+        await require_managed_cadet(db, current_user, target)
     stmt = select(Assignment).where(Assignment.assignment_id == assignment_id)
     result = await db.execute(stmt)
     assignment = result.scalar_one_or_none()
@@ -86,6 +97,7 @@ async def start_session(
     exam_session = ExamSession(
         session_type=assignment.session_type,
         assignment_id=assignment_id,
+        ticket_id=assignment.scenario_id,
         cadet_id=req.cadet_id,
         status="active",
     )
@@ -105,6 +117,7 @@ async def get_session_state(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
+    await require_session(db, current_user, session_id)
     stmt = select(ExamSession).where(ExamSession.session_id == session_id)
     result = await db.execute(stmt)
     session = result.scalar_one_or_none()
@@ -141,8 +154,10 @@ async def get_session_state(
 async def post_session_message(
     session_id: str,
     req: MessageRequest,
+    current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
+    await require_session(db, current_user, session_id)
     stmt = select(ExamSession).where(ExamSession.session_id == session_id)
     result = await db.execute(stmt)
     session = result.scalar_one_or_none()
@@ -212,8 +227,12 @@ async def post_session_message(
 async def submit_card(
     session_id: str,
     req: SubmitCardRequest,
+    current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
+    await require_session(db, current_user, session_id)
+    if req.operator_id != (await db.get(ExamSession, session_id)).cadet_id:
+        raise HTTPException(403, "Operator must match the session cadet")
     stmt = select(ExamSession).where(ExamSession.session_id == session_id)
     result = await db.execute(stmt)
     session = result.scalar_one_or_none()
@@ -266,8 +285,13 @@ async def evaluate_ticket_endpoint(
 async def appeal_ticket_result(
     result_id: str,
     req: TicketResultUpdate,
+    current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
+    result_record = await db.get(TicketResult, result_id)
+    if not result_record or not result_record.session_id:
+        raise HTTPException(404, "Ticket result not found")
+    await require_session(db, current_user, result_record.session_id)
     stmt = select(TicketResult).where(TicketResult.result_id == result_id)
     result = await db.execute(stmt)
     ticket_result = result.scalar_one_or_none()
@@ -305,9 +329,10 @@ async def appeal_ticket_result(
 async def appeal_ticket(
     result_id: str,
     req: TicketResultUpdate,
+    current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    return await appeal_ticket_result(result_id=result_id, req=req, db=db)
+    return await appeal_ticket_result(result_id=result_id, req=req, db=db, current_user=current_user)
 
 
 sessions_v1_router = APIRouter(
@@ -615,9 +640,17 @@ async def create_demo_session(
 )
 async def create_session_config(
     config: SessionConfigCreate,
+    current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
+    group = await db.get(StudentGroup, config.group_id)
+    if not group:
+        raise HTTPException(404, "Group not found")
+    if group.teacher_id != current_user.user_id:
+        raise HTTPException(403, "Group access denied")
     exam_session = ExamSession(
+        cadet_id=current_user.user_id,
+        dynamic_state={"legacy_config": {"group_id": config.group_id}},
         session_type=config.distribution_mode or "live_stream",
         status="active",
         categories=config.categories,
@@ -648,85 +681,15 @@ async def create_session_config(
 )
 async def get_session_stats(
     session_id: str,
+    current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
+    await require_session(db, current_user, session_id)
     stmt = select(ExamSession).where(ExamSession.session_id == session_id)
     result = await db.execute(stmt)
     exam_session = result.scalar_one_or_none()
 
-    session_status = exam_session.status if exam_session else "active"
-    group_name = "Группа 101"
-    if not exam_session:
-        stmt_assign = select(Assignment).where(Assignment.assignment_id == session_id)
-        res_assign = await db.execute(stmt_assign)
-        assignment = res_assign.scalar_one_or_none()
-        if assignment:
-            session_status = assignment.status
-            session_name_val = f"Урок #{session_id[:8]}"
-        else:
-            session_name_val = f"Сессия #{session_id[:8]}"
-    else:
-        session_name_val = f"Сессия #{session_id[:8]}"
-
-    is_completed = (session_status == "COMPLETED")
-    is_waiting = (session_status == "WAITING")
-
-    cadets_data = [
-        CadetSessionStats(
-            cadet_id="cadet-1",
-            cadet_name="Иванов Иван",
-            status="PASSED" if is_completed else ("IN_PROGRESS" if not is_waiting else "IDLE"),
-            current_ticket="Билет #2 (Завершено)" if is_completed else ("Билет #2 (Пожар в жилом секторе)" if not is_waiting else "Ожидание"),
-            in_progress=0 if (is_completed or is_waiting) else 1,
-            passed=2 if not is_waiting else 0,
-            failed=0,
-            progress=100 if is_completed else (66 if not is_waiting else 0),
-            score=92 if not is_waiting else 0,
-            last_activity="1 мин назад",
-        ),
-        CadetSessionStats(
-            cadet_id="cadet-2",
-            cadet_name="Петров Петр",
-            status="PASSED" if not is_waiting else "IDLE",
-            current_ticket="Билет #3 (Завершено)" if not is_waiting else "Ожидание",
-            in_progress=0,
-            passed=3 if not is_waiting else 0,
-            failed=0,
-            progress=100 if not is_waiting else 0,
-            score=98 if not is_waiting else 0,
-            last_activity="3 мин назад",
-        ),
-        CadetSessionStats(
-            cadet_id="cadet-3",
-            cadet_name="Сидорова Анна",
-            status="FAILED" if not is_waiting else "IDLE",
-            current_ticket="Билет #2 (ДТП с пострадавшими)" if not is_waiting else "Ожидание",
-            in_progress=0,
-            passed=1 if not is_waiting else 0,
-            failed=1 if not is_waiting else 0,
-            progress=100 if is_completed else (50 if not is_waiting else 0),
-            score=64 if not is_waiting else 0,
-            last_activity="Только что",
-        ),
-    ]
-
-    total_in_progress = sum(c.in_progress for c in cadets_data)
-    total_passed = sum(c.passed for c in cadets_data)
-    total_failed = sum(c.failed for c in cadets_data)
-    overall_progress = round(sum(c.progress for c in cadets_data) / max(len(cadets_data), 1))
-
-    return SessionStatsResponse(
-        session_id=session_id,
-        session_name=session_name_val,
-        group_name=group_name,
-        status=session_status,
-        overall_progress=overall_progress,
-        total_cadets=len(cadets_data),
-        total_in_progress=total_in_progress,
-        total_passed=total_passed,
-        total_failed=total_failed,
-        cadets=cadets_data,
-    )
+    raise HTTPException(410, "Use /api/v1/lessons/{lesson_id}; synthetic session statistics are no longer available")
 
 
 @sessions_v1_router.post(
@@ -743,8 +706,10 @@ async def get_session_stats(
 async def evaluate_session_card(
     session_id: str,
     req: IncidentCardSubmit,
+    current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
+    await require_session(db, current_user, session_id)
     stmt = select(ExamSession).where(ExamSession.session_id == session_id)
     result = await db.execute(stmt)
     exam_session = result.scalar_one_or_none()

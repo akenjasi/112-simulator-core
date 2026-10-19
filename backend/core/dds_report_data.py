@@ -13,6 +13,7 @@ Rules:
 - Read-only: no database mutations, no LLM invocations.
 """
 
+from copy import deepcopy
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 from fastapi import HTTPException, status
@@ -69,6 +70,7 @@ class DDSReportSessionItem(BaseModel):
     exercise_status: Optional[str] = None
     total_cards: Optional[int] = None
     completed_cards: Optional[int] = None
+    exercise_protocols: List[Dict[str, Any]] = Field(default_factory=list)
     evaluations: List[DDSReportEvaluationItem] = Field(default_factory=list)
     ticket_results: List[DDSReportTicketResultItem] = Field(default_factory=list)
     cards: List[DDSReportCardItem] = Field(default_factory=list)
@@ -351,6 +353,7 @@ async def collect_lesson_report_data(
             "exercise_status": exercise_status,
             "total_cards": total_cards,
             "completed_cards": completed_cards_count,
+            "exercise_protocols": _exercise_protocols((s.dynamic_state or {}).get("dds", {})),
             "evaluations": evals_by_session.get(s.session_id, []),
             "ticket_results": tickets_by_session.get(s.session_id, []),
             "cards": cards_by_session.get(s.session_id, []),
@@ -369,8 +372,7 @@ async def collect_lesson_report_data(
     # 9. Warnings list
     warnings: List[str] = []
     if len(all_evals) == 0:
-        warnings.append("Отсутствуют результаты оценивания (evaluations) для выбранных сессий.")
-        warnings.append("Оценивание не проводилось; корректность действий не установлена.")
+        warnings.append("Числовые оценки отсутствуют; доступны протоколы критериев ДДС." if any(s["exercise_protocols"] for s in sessions_list) else "Отсутствуют результаты оценивания (evaluations) для выбранных сессий.")
     if len(all_tickets) == 0:
         warnings.append("Отсутствуют результаты билетов (ticket_results) для выбранных сессий.")
     if len(all_cards) == 0:
@@ -404,3 +406,30 @@ async def collect_lesson_report_data(
         "sessions": sessions_list,
         "warnings": warnings,
     }
+
+
+def _exercise_protocols(data):
+    """Compact evidence avoids duplicating complete actions in criteria and events."""
+    from backend.core.dds_exercise import criteria
+    items = list(data.get("completed_cards", []))
+    if not any(item.get("card_id") == data.get("card_id") for item in items):
+        items.append(data)
+    result = []
+    for item in items:
+        if not item.get("exercise"):
+            continue
+        checks = deepcopy(item.get("criteria") or criteria(item, closed=True))
+        for check in checks:
+            if check["key"] != "confirmation":
+                check["evidence"] = [{"event_id": e["id"], "reason": e["reason"]} for e in check["evidence"]]
+        events = []
+        for e in item["exercise"]["events"]:
+            if e["kind"] not in ("mistake", "answered", "report_processed"):
+                continue
+            entry = {key: e[key] for key in ("id", "kind", "at", "service_name", "report_id", "text", "reason", "message", "delay_seconds") if key in e}
+            if "action" in e:
+                entry["action"] = {key: e["action"][key] for key in ("kind", "status", "service_name", "comment", "order_number", "who_accepted", "summary", "operation", "number") if key in e["action"]}
+            events.append(entry)
+        actions = [{key: a[key] for key in ("request_id", "kind", "service_name", "at", "status", "comment", "order_number", "who_accepted", "summary") if key in a} for a in item.get("actions", [])]
+        result.append({"card_id": item.get("card_id"), "criteria": checks, "events": events, "actions": actions})
+    return result

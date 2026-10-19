@@ -30,6 +30,7 @@ export default function LoginPage() {
   const [password, setPassword] = useState("")
   const [totpCode, setTotpCode] = useState("")
   const [userId, setUserId] = useState("")
+  const [challengeToken, setChallengeToken] = useState("")
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -57,6 +58,8 @@ export default function LoginPage() {
       if (data.requires_2fa) {
         // Switch to TOTP 2FA step
         setUserId(data.user_id)
+        setChallengeToken(data.challenge_token)
+        setPassword("")
         setStep("2fa")
         setLoading(false)
         return
@@ -81,6 +84,7 @@ export default function LoginPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           user_id: userId,
+          challenge_token: challengeToken,
           username: username.trim(),
           code: totpCode.trim(),
         }),

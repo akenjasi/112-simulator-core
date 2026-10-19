@@ -1,0 +1,29 @@
+$ /tmp/112-audit-20261019/verify311/bin/python --version
+Python 3.11.15
+
+exit=0
+
+$ node --version
+v22.22.0
+
+exit=0
+
+$ npm --version
+10.9.4
+
+exit=0
+
+$ git branch --show-current
+codex/technical-audit-remediation
+
+exit=0
+
+$ git rev-parse HEAD
+d51076c74fd5b414da7bcfb25a47594e9986577e
+
+exit=0
+
+$ docker image inspect simulator_backend:audit-20261019 simulator_frontend:audit-20261019 --format {{.RepoTags}} {{.Id}} user={{.Config.User}}
+[simulator_backend:audit-20261019] sha256:d1c74dd06c4500d6e217977b6a59e0b23044771745d236b193a6eb504d14f27e user=simulator
+template parsing error: template: :1:36: executing "" at <.Config.User>: map has no entry for key "User"
+exit=1

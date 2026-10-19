@@ -193,9 +193,6 @@ async def seed_analytics_data(
     scenarios = list(existing_sc.scalars().all())
     
     if len(scenarios) < 5:
-        await db.execute(delete(ScenarioTicket))
-        await db.commit()
-        scenarios = []
         for sc_conf in SCENARIO_CONFIGS:
             bricks = [
                 {"intent": "intro", "text": f"Алло! Это 112?! {sc_conf['title']}! Помогите скорее!", "emotion": "panic"},
@@ -443,9 +440,10 @@ async def seed_analytics_data(
             tickets_to_add.append(ticket_res_obj)
             total_tickets += 1
 
-    # Batch add
     db.add_all(sessions_to_add)
+    await db.flush()
     db.add_all(cards_to_add)
+    await db.flush()
     db.add_all(evals_to_add)
     db.add_all(tickets_to_add)
     await db.commit()
@@ -463,14 +461,16 @@ async def seed_analytics_data(
 async def main():
     """CLI runner for seed script."""
     parser = argparse.ArgumentParser(description="Seed 112 Simulator database with analytics dummy data")
-    parser.add_argument("--db-url", type=str, default=None, help="Database connection URL")
+    parser.add_argument("--db-url", type=str, required=True, help="Database connection URL")
     parser.add_argument("--num-students", type=int, default=55, help="Number of students to generate")
     parser.add_argument("--min-tickets", type=int, default=10, help="Min tickets per student")
     parser.add_argument("--max-tickets", type=int, default=20, help="Max tickets per student")
     args = parser.parse_args()
 
     db_url = args.db_url or os.getenv("DATABASE_URL", "sqlite+aiosqlite:///app.db")
-    print(f"🌱 Seeding database: {db_url}")
+    from scripts.demo_seed_guard import require_new_demo_sqlite
+    require_new_demo_sqlite(db_url)
+    print("🌱 Seeding a new synthetic demonstration database")
 
     connect_args = {"check_same_thread": False} if db_url.startswith("sqlite") else {}
     engine = create_async_engine(db_url, connect_args=connect_args, echo=False)

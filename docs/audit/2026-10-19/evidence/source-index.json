@@ -1,0 +1,5598 @@
+[
+  {
+    "file": "backend/__init__.py",
+    "imports": [],
+    "definitions": []
+  },
+  {
+    "file": "backend/api/router_admin.py",
+    "imports": [
+      "import asyncio",
+      "import json",
+      "import os",
+      "from fastapi import APIRouter, Depends, HTTPException, status",
+      "from datetime import datetime, timezone",
+      "from pathlib import Path",
+      "import io",
+      "from fastapi import Response",
+      "from fastapi.responses import FileResponse, StreamingResponse",
+      "from backend.models.domain_01 import SecurityPolicy, SystemErrorLog, User, UserActionLog",
+      "from sqlalchemy import select",
+      "from pydantic import BaseModel",
+      "from reportlab.lib.pagesizes import letter",
+      "from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer",
+      "from reportlab.lib.styles import getSampleStyleSheet",
+      "import psutil",
+      "from sqlalchemy import text",
+      "from sqlalchemy.ext.asyncio import AsyncSession",
+      "from backend.core.deps import get_current_user, require_role",
+      "from backend.core.integrity import verify_integrity",
+      "from backend.database import get_db",
+      "from backend.schemas.admin import BackupItem, BackupsListResponse, BackupResponse, HealthCheckResponse, IntegrityCheckResponse",
+      "from scripts.backup_db import create_backup_async, get_backup_file_path, list_backups"
+    ],
+    "definitions": [
+      {
+        "name": "_get_system_metrics",
+        "start": 49,
+        "end": 53,
+        "decorators": [],
+        "signature": ""
+      },
+      {
+        "name": "healthcheck",
+        "start": 58,
+        "end": 73,
+        "decorators": [
+          "admin_router.get('/healthcheck', response_model=HealthCheckResponse)",
+          "admin_router.get('/healthcheck/', response_model=HealthCheckResponse, include_in_schema=False)"
+        ],
+        "signature": "db: AsyncSession=Depends(get_db)"
+      },
+      {
+        "name": "backup",
+        "start": 78,
+        "end": 120,
+        "decorators": [
+          "admin_router.post('/backup', response_model=BackupResponse)",
+          "admin_router.post('/backup/', response_model=BackupResponse, include_in_schema=False)"
+        ],
+        "signature": ""
+      },
+      {
+        "name": "list_admin_backups",
+        "start": 125,
+        "end": 137,
+        "decorators": [
+          "admin_router.get('/backups', response_model=BackupsListResponse)",
+          "admin_router.get('/backups/', response_model=BackupsListResponse, include_in_schema=False)"
+        ],
+        "signature": ""
+      },
+      {
+        "name": "download_admin_backup",
+        "start": 141,
+        "end": 165,
+        "decorators": [
+          "admin_router.get('/backups/{filename}/download')"
+        ],
+        "signature": "filename: str"
+      },
+      {
+        "name": "SecurityPolicyUpdate",
+        "start": 169,
+        "end": 171,
+        "decorators": [],
+        "signature": null
+      },
+      {
+        "name": "SecurityPoliciesUpdateRequest",
+        "start": 173,
+        "end": 174,
+        "decorators": [],
+        "signature": null
+      },
+      {
+        "name": "_normalise_security_policy",
+        "start": 186,
+        "end": 225,
+        "decorators": [],
+        "signature": "key: str, value: str"
+      },
+      {
+        "name": "get_security_policies",
+        "start": 228,
+        "end": 240,
+        "decorators": [
+          "admin_router.get('/security-policies')"
+        ],
+        "signature": "db: AsyncSession=Depends(get_db)"
+      },
+      {
+        "name": "update_security_policies",
+        "start": 243,
+        "end": 287,
+        "decorators": [
+          "admin_router.put('/security-policies')"
+        ],
+        "signature": "request: SecurityPoliciesUpdateRequest, db: AsyncSession=Depends(get_db), current_user: User=Depends(get_current_user)"
+      },
+      {
+        "name": "get_error_report_pdf",
+        "start": 290,
+        "end": 319,
+        "decorators": [
+          "admin_router.get('/error-report/pdf')"
+        ],
+        "signature": "db: AsyncSession=Depends(get_db)"
+      },
+      {
+        "name": "check_integrity",
+        "start": 324,
+        "end": 368,
+        "decorators": [
+          "admin_router.post('/integrity/check', response_model=IntegrityCheckResponse)",
+          "admin_router.post('/integrity/check/', response_model=IntegrityCheckResponse, include_in_schema=False)"
+        ],
+        "signature": "db: AsyncSession=Depends(get_db), current_user: User=Depends(get_current_user)"
+      }
+    ]
+  },
+  {
+    "file": "backend/api/router_ai_analytics.py",
+    "imports": [
+      "import asyncio",
+      "import logging",
+      "from datetime import datetime, timezone",
+      "from typing import Any, Dict, List, Optional",
+      "from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, status",
+      "from pydantic import BaseModel, ConfigDict, Field",
+      "from sqlalchemy import select",
+      "from sqlalchemy.ext.asyncio import AsyncSession",
+      "from backend.core.ai_analytics_access import get_teacher_cadet_ids, is_cadet_accessible_to_teacher",
+      "from backend.core.ai_worker import DEFAULT_MODEL_NAME, MODEL_FILENAME, MODEL_GGUF_URL, ai_worker, run_cadet_analysis, run_group_analysis",
+      "from backend.core.deps import get_current_user, require_role",
+      "from backend.database import get_db",
+      "from backend.models.domain_01 import User, StudentGroup",
+      "from backend.models.domain_03 import AIStudentAdvice, AIGroupAdvice, Assignment",
+      "from backend.core.dds_report_data import DDSLessonReportDataResponse, collect_lesson_report_data"
+    ],
+    "definitions": [
+      {
+        "name": "AIRefineRequest",
+        "start": 51,
+        "end": 52,
+        "decorators": [],
+        "signature": null
+      },
+      {
+        "name": "TriggerAnalysisRequest",
+        "start": 55,
+        "end": 61,
+        "decorators": [],
+        "signature": null
+      },
+      {
+        "name": "AdviceResponse",
+        "start": 64,
+        "end": 74,
+        "decorators": [],
+        "signature": null
+      },
+      {
+        "name": "ModelInfoResponse",
+        "start": 77,
+        "end": 81,
+        "decorators": [],
+        "signature": null
+      },
+      {
+        "name": "get_ai_model_info",
+        "start": 91,
+        "end": 98,
+        "decorators": [
+          "router.get('/info', response_model=ModelInfoResponse, dependencies=[Depends(require_role('TEACHER', 'CADET'))])"
+        ],
+        "signature": ""
+      },
+      {
+        "name": "trigger_ai_analysis",
+        "start": 109,
+        "end": 283,
+        "decorators": [
+          "router.post('/trigger', dependencies=[Depends(require_role('TEACHER', 'CADET'))])",
+          "router.get('/trigger', dependencies=[Depends(require_role('TEACHER', 'CADET'))])"
+        ],
+        "signature": "req: Optional[TriggerAnalysisRequest]=None, cadet_id: Optional[str]=Query(None), group_id: Optional[str]=Query(None), all_students: bool=Query(False), background: bool=Query(True), sleep_seconds: Optional[float]=Query(None), background_tasks: BackgroundTasks=BackgroundTasks(), db: AsyncSession=Depends(get_db), current_user: User=Depends(get_current_user)"
+      },
+      {
+        "name": "get_student_advice",
+        "start": 291,
+        "end": 338,
+        "decorators": [
+          "router.get('/student/{id}', response_model=List[AdviceResponse], dependencies=[Depends(require_role('TEACHER', 'CADET'))])"
+        ],
+        "signature": "id: str, unread_only: bool=Query(False), limit: int=Query(20, ge=1, le=100), db: AsyncSession=Depends(get_db), current_user: User=Depends(get_current_user)"
+      },
+      {
+        "name": "get_group_advice",
+        "start": 346,
+        "end": 393,
+        "decorators": [
+          "router.get('/group/{id}', response_model=List[AdviceResponse], dependencies=[Depends(require_role('TEACHER', 'CADET'))])"
+        ],
+        "signature": "id: str, unread_only: bool=Query(False), limit: int=Query(20, ge=1, le=100), db: AsyncSession=Depends(get_db), current_user: User=Depends(get_current_user)"
+      },
+      {
+        "name": "mark_student_advice_as_read",
+        "start": 404,
+        "end": 457,
+        "decorators": [
+          "router.patch('/advice/{advice_id}/read', dependencies=[Depends(require_role('TEACHER', 'CADET'))])",
+          "router.patch('/student/advice/{advice_id}/read', dependencies=[Depends(require_role('TEACHER', 'CADET'))])"
+        ],
+        "signature": "advice_id: str, db: AsyncSession=Depends(get_db), current_user: User=Depends(get_current_user)"
+      },
+      {
+        "name": "mark_group_advice_as_read",
+        "start": 464,
+        "end": 491,
+        "decorators": [
+          "router.patch('/group/advice/{advice_id}/read', dependencies=[Depends(require_role('TEACHER', 'CADET'))])"
+        ],
+        "signature": "advice_id: str, db: AsyncSession=Depends(get_db), current_user: User=Depends(get_current_user)"
+      },
+      {
+        "name": "refine_student_advice",
+        "start": 499,
+        "end": 541,
+        "decorators": [
+          "router.post('/student/{advice_id}/refine', response_model=AdviceResponse, dependencies=[Depends(require_role('TEACHER', 'CADET'))])"
+        ],
+        "signature": "advice_id: str, req: AIRefineRequest, db: AsyncSession=Depends(get_db), current_user: User=Depends(get_current_user)"
+      },
+      {
+        "name": "get_lesson_report_data",
+        "start": 550,
+        "end": 592,
+        "decorators": [
+          "router.get('/lessons/{lesson_id}/data', response_model=DDSLessonReportDataResponse)"
+        ],
+        "signature": "lesson_id: str, db: AsyncSession=Depends(get_db), current_user: User=Depends(get_current_user)"
+      }
+    ]
+  },
+  {
+    "file": "backend/api/router_analytics.py",
+    "imports": [
+      "import json",
+      "import logging",
+      "from typing import Any, Dict, List, Optional, Set",
+      "from fastapi import APIRouter, Depends, HTTPException, Query, status",
+      "from sqlalchemy import or_, select",
+      "from sqlalchemy.ext.asyncio import AsyncSession",
+      "from backend.core.analytics_engine import build_error_heatmap, calculate_trends",
+      "from backend.core.deps import get_current_user, require_role",
+      "from backend.database import get_db",
+      "from backend.models.domain_01 import StudentGroup, User, UserActionLog, student_group_link",
+      "from backend.models.domain_02 import ScenarioTicket",
+      "from backend.models.domain_03 import Assignment, ExamSession",
+      "from datetime import datetime, timedelta, timezone",
+      "from backend.models.domain_04 import EvaluationResult, IncidentCard, TicketResult",
+      "from backend.schemas.analytics import CadetAnalyticsSummary, DailyDynamicsPoint, EntityErrorInfo, ErrorHeatmapResponse, ErrorTypeInfo, GroupComparisonItem, HeatmapResponse, LeaderboardItem, LeaderboardResponse, RecordAppealRequest, RecordDetailResponse, RecordSummary, SessionAnalyticsResponse, TrendPoint, TrendResponse"
+    ],
+    "definitions": [
+      {
+        "name": "_extract_metric_value",
+        "start": 55,
+        "end": 111,
+        "decorators": [],
+        "signature": "metric_name: str, scores: Optional[Dict[str, Any]], metrics: Optional[Dict[str, Any]], card: Optional[IncidentCard]=None, session: Optional[ExamSession]=None"
+      },
+      {
+        "name": "get_heatmap",
+        "start": 116,
+        "end": 200,
+        "decorators": [
+          "analytics_router.get('/heatmap', response_model=HeatmapResponse)",
+          "analytics_router.get('/heatmap/', response_model=HeatmapResponse, include_in_schema=False)"
+        ],
+        "signature": "group_id: Optional[str]=Query(default=None, description='Фильтр по учебной группе'), db: AsyncSession=Depends(get_db)"
+      },
+      {
+        "name": "get_trends",
+        "start": 205,
+        "end": 303,
+        "decorators": [
+          "analytics_router.get('/trends/{user_id}', response_model=TrendResponse, dependencies=[Depends(require_role('TEACHER'))])",
+          "analytics_router.get('/trends/{user_id}/', response_model=TrendResponse, include_in_schema=False, dependencies=[Depends(require_role('TEACHER'))])"
+        ],
+        "signature": "user_id: str, group_id: Optional[str]=Query(default=None, description='Фильтр по учебной группе'), db: AsyncSession=Depends(get_db)"
+      },
+      {
+        "name": "get_leaderboard",
+        "start": 308,
+        "end": 409,
+        "decorators": [
+          "analytics_router.get('/leaderboard', response_model=LeaderboardResponse, dependencies=[Depends(require_role('TEACHER'))])",
+          "analytics_router.get('/leaderboard/', response_model=LeaderboardResponse, include_in_schema=False, dependencies=[Depends(require_role('TEACHER'))])"
+        ],
+        "signature": "group_id: Optional[str]=Query(default=None, description='Фильтр по группе'), metric_name: str=Query(default='final_score', description='Название метрики (например, final_score или time_to_first_dispatch_sec)'), order: Optional[str]=Query(default=None, description='Порядок сортировки (asc / desc). Если не указан, выбирается автоматически.'), limit: int=Query(default=10, ge=1, le=100, description='Количество курсантов в топе'), db: AsyncSession=Depends(get_db)"
+      },
+      {
+        "name": "get_session_analytics",
+        "start": 414,
+        "end": 485,
+        "decorators": [
+          "analytics_router.get('/sessions/{session_id}', response_model=SessionAnalyticsResponse, dependencies=[Depends(require_role('TEACHER'))])",
+          "analytics_v1_router.get('/sessions/{session_id}', response_model=SessionAnalyticsResponse, dependencies=[Depends(require_role('TEACHER'))])"
+        ],
+        "signature": "session_id: str, db: AsyncSession=Depends(get_db)"
+      },
+      {
+        "name": "get_record_detail",
+        "start": 490,
+        "end": 569,
+        "decorators": [
+          "analytics_router.get('/records/{record_id}', response_model=RecordDetailResponse, dependencies=[Depends(require_role('TEACHER'))])",
+          "analytics_v1_router.get('/records/{record_id}', response_model=RecordDetailResponse, dependencies=[Depends(require_role('TEACHER'))])"
+        ],
+        "signature": "record_id: str, db: AsyncSession=Depends(get_db)"
+      },
+      {
+        "name": "appeal_analytics_record",
+        "start": 582,
+        "end": 650,
+        "decorators": [
+          "analytics_router.patch('/records/{record_id}/appeal', response_model=RecordDetailResponse, dependencies=[Depends(require_role('TEACHER'))])",
+          "analytics_v1_router.patch('/records/{record_id}/appeal', response_model=RecordDetailResponse, dependencies=[Depends(require_role('TEACHER'))])"
+        ],
+        "signature": "record_id: str, req: RecordAppealRequest, db: AsyncSession=Depends(get_db), current_user: Optional[User]=Depends(get_current_user)"
+      },
+      {
+        "name": "get_daily_dynamics",
+        "start": 675,
+        "end": 797,
+        "decorators": [
+          "analytics_router.get('/dynamics', response_model=List[DailyDynamicsPoint])",
+          "analytics_router.get('/dynamics/', response_model=List[DailyDynamicsPoint], include_in_schema=False)",
+          "analytics_v1_router.get('/dynamics', response_model=List[DailyDynamicsPoint])",
+          "analytics_v1_router.get('/dynamics/', response_model=List[DailyDynamicsPoint], include_in_schema=False)"
+        ],
+        "signature": "group_id: Optional[str]=Query(default=None, description='Фильтр по учебной группе'), cadet_id: Optional[str]=Query(default=None, description='Фильтр по курсанту'), days: int=Query(default=30, ge=1, le=180, description='Глубина в днях'), db: AsyncSession=Depends(get_db)"
+      },
+      {
+        "name": "get_groups_comparison",
+        "start": 804,
+        "end": 880,
+        "decorators": [
+          "analytics_router.get('/groups-comparison', response_model=List[GroupComparisonItem])",
+          "analytics_router.get('/groups-comparison/', response_model=List[GroupComparisonItem], include_in_schema=False)",
+          "analytics_v1_router.get('/groups-comparison', response_model=List[GroupComparisonItem])",
+          "analytics_v1_router.get('/groups-comparison/', response_model=List[GroupComparisonItem], include_in_schema=False)"
+        ],
+        "signature": "db: AsyncSession=Depends(get_db)"
+      },
+      {
+        "name": "get_errors_heatmap",
+        "start": 887,
+        "end": 1090,
+        "decorators": [
+          "analytics_router.get('/errors-heatmap', response_model=ErrorHeatmapResponse)",
+          "analytics_router.get('/errors-heatmap/', response_model=ErrorHeatmapResponse, include_in_schema=False)",
+          "analytics_v1_router.get('/errors-heatmap', response_model=ErrorHeatmapResponse)",
+          "analytics_v1_router.get('/errors-heatmap/', response_model=ErrorHeatmapResponse, include_in_schema=False)"
+        ],
+        "signature": "group_id: Optional[str]=Query(default=None, description='Фильтр по группе'), entity_type: str=Query(default='students', description=\"'students' или 'groups'\"), category: Optional[str]=Query(default=None, description='Категория ошибки: communication, card, sla'), db: AsyncSession=Depends(get_db)"
+      }
+    ]
+  },
+  {
+    "file": "backend/api/router_asr.py",
+    "imports": [
+      "import os",
+      "import sys",
+      "import json",
+      "import uuid",
+      "import tempfile",
+      "import asyncio",
+      "import queue",
+      "import time",
+      "import datetime",
+      "import subprocess",
+      "import logging",
+      "from typing import Optional",
+      "import numpy as np",
+      "from fastapi import APIRouter, UploadFile, File, HTTPException, WebSocket, WebSocketDisconnect",
+      "import ctypes",
+      "from fastapi import Form",
+      "from backend.core.runtime_router import RuntimeRouter",
+      "import transcribe_cpp",
+      "import soundfile as sf",
+      "from backend.database import AsyncSessionLocal",
+      "from backend.models.domain_02 import GeneratedTicket, ScenarioTicket"
+    ],
+    "definitions": [
+      {
+        "name": "convert_to_pcm16k",
+        "start": 43,
+        "end": 76,
+        "decorators": [],
+        "signature": "input_data: bytes"
+      },
+      {
+        "name": "ASRService",
+        "start": 79,
+        "end": 161,
+        "decorators": [],
+        "signature": null
+      },
+      {
+        "name": "get_asr_status",
+        "start": 171,
+        "end": 179,
+        "decorators": [
+          "router_asr.get('/status')"
+        ],
+        "signature": ""
+      },
+      {
+        "name": "transcribe_audio_file",
+        "start": 185,
+        "end": 227,
+        "decorators": [
+          "router_asr.post('/transcribe')"
+        ],
+        "signature": "file: UploadFile=File(...), session_id: Optional[str]=Form(None)"
+      },
+      {
+        "name": "websocket_asr_stream",
+        "start": 231,
+        "end": 470,
+        "decorators": [
+          "router_asr.websocket('/stream/{session_id}')"
+        ],
+        "signature": "websocket: WebSocket, session_id: str, ticket_id: Optional[str]=None"
+      }
+    ]
+  },
+  {
+    "file": "backend/api/router_assignments.py",
+    "imports": [
+      "from fastapi import APIRouter, Depends",
+      "from sqlalchemy import select",
+      "from sqlalchemy.ext.asyncio import AsyncSession",
+      "from backend.core.deps import require_role",
+      "from backend.database import get_db",
+      "from backend.models.domain_03 import Assignment",
+      "from backend.schemas.assignments import AssignmentCreate, AssignmentResponse"
+    ],
+    "definitions": [
+      {
+        "name": "list_assignments",
+        "start": 22,
+        "end": 25,
+        "decorators": [
+          "assignments_router.get('', response_model=list[AssignmentResponse])",
+          "assignments_router.get('/', response_model=list[AssignmentResponse], include_in_schema=False)"
+        ],
+        "signature": "db: AsyncSession=Depends(get_db)"
+      },
+      {
+        "name": "create_assignment",
+        "start": 39,
+        "end": 52,
+        "decorators": [
+          "assignments_router.post('', response_model=AssignmentResponse, dependencies=[Depends(require_role('TEACHER'))])",
+          "assignments_router.post('/', response_model=AssignmentResponse, include_in_schema=False, dependencies=[Depends(require_role('TEACHER'))])"
+        ],
+        "signature": "assignment_in: AssignmentCreate, db: AsyncSession=Depends(get_db)"
+      }
+    ]
+  },
+  {
+    "file": "backend/api/router_audit.py",
+    "imports": [
+      "import re",
+      "from datetime import datetime, timezone",
+      "from typing import Optional",
+      "from fastapi import APIRouter, Depends, HTTPException, Query, status",
+      "from sqlalchemy import select",
+      "from sqlalchemy.ext.asyncio import AsyncSession",
+      "from backend.core.deps import require_role",
+      "from backend.database import get_db",
+      "from backend.models.domain_01 import SystemErrorLog, User, UserActionLog",
+      "from backend.schemas.audit import SystemErrorLogResponse, UserActionLogResponse"
+    ],
+    "definitions": [
+      {
+        "name": "parse_iso_datetime",
+        "start": 17,
+        "end": 47,
+        "decorators": [],
+        "signature": "dt_str: Optional[str]"
+      },
+      {
+        "name": "get_audit_logs",
+        "start": 66,
+        "end": 125,
+        "decorators": [
+          "audit_router.get('', response_model=list[UserActionLogResponse])",
+          "audit_router.get('/', response_model=list[UserActionLogResponse], include_in_schema=False)"
+        ],
+        "signature": "limit: int=Query(100, ge=1, le=1000, description='Max number of logs to return'), offset: int=Query(0, ge=0, description='Number of logs to skip'), from_at: Optional[str]=Query(None, description='Start datetime with explicit timezone'), to_at: Optional[str]=Query(None, description='End datetime with explicit timezone'), user_id: Optional[str]=Query(None, description='Filter by user ID'), db: AsyncSession=Depends(get_db)"
+      },
+      {
+        "name": "get_error_logs",
+        "start": 130,
+        "end": 174,
+        "decorators": [
+          "error_logs_router.get('', response_model=list[SystemErrorLogResponse])",
+          "error_logs_router.get('/', response_model=list[SystemErrorLogResponse], include_in_schema=False)"
+        ],
+        "signature": "limit: int=Query(100, ge=1, le=1000, description='Max number of logs to return'), offset: int=Query(0, ge=0, description='Number of logs to skip'), from_at: Optional[str]=Query(None, description='Start datetime with explicit timezone'), to_at: Optional[str]=Query(None, description='End datetime with explicit timezone'), db: AsyncSession=Depends(get_db)"
+      }
+    ]
+  },
+  {
+    "file": "backend/api/router_auth.py",
+    "imports": [
+      "from datetime import datetime, timedelta, timezone",
+      "from typing import Any, Optional, Union",
+      "import pyotp",
+      "from fastapi import APIRouter, Depends, HTTPException, Request, status",
+      "from fastapi.security import HTTPAuthorizationCredentials",
+      "from sqlalchemy import select",
+      "from sqlalchemy.ext.asyncio import AsyncSession",
+      "from backend.core.auth_sessions import create_user_session, revoke_all_user_sessions, revoke_session",
+      "from backend.core.deps import bearer_scheme, get_current_user",
+      "from backend.core.security import create_access_token, decode_access_token, verify_password",
+      "from backend.database import get_db",
+      "from backend.models.domain_01 import SecurityPolicy, User, UserActionLog",
+      "from backend.core.ldap_adapter import authenticate_ldap",
+      "from backend.core.security import hash_password",
+      "import os",
+      "from backend.schemas.auth import Login2FARequest, LoginRequest, TokenResponse, TwoFactorRequiredResponse, TwoFactorSetupResponse, TwoFactorStatusResponse, TwoFactorVerifyRequest"
+    ],
+    "definitions": [
+      {
+        "name": "_as_utc",
+        "start": 46,
+        "end": 49,
+        "decorators": [],
+        "signature": "value: datetime"
+      },
+      {
+        "name": "_client_ip",
+        "start": 52,
+        "end": 56,
+        "decorators": [],
+        "signature": "request: Request"
+      },
+      {
+        "name": "_add_auth_log",
+        "start": 59,
+        "end": 77,
+        "decorators": [],
+        "signature": "db: AsyncSession, *, request: Request, action: str, user: Optional[User], details: Optional[str]=None"
+      },
+      {
+        "name": "_session_timeout_minutes",
+        "start": 80,
+        "end": 84,
+        "decorators": [],
+        "signature": "db: AsyncSession"
+      },
+      {
+        "name": "_issue_access_token",
+        "start": 87,
+        "end": 105,
+        "decorators": [],
+        "signature": "db: AsyncSession, request: Request, user: User"
+      },
+      {
+        "name": "_token_response",
+        "start": 108,
+        "end": 117,
+        "decorators": [],
+        "signature": "user: User, access_token: str"
+      },
+      {
+        "name": "_extract_body",
+        "start": 120,
+        "end": 151,
+        "decorators": [],
+        "signature": "request: Request"
+      },
+      {
+        "name": "login",
+        "start": 166,
+        "end": 281,
+        "decorators": [
+          "router.post('/api/auth/login', response_model=Union[TokenResponse, TwoFactorRequiredResponse], openapi_extra={'requestBody': {'content': {'application/json': {'schema': LoginRequest.model_json_schema()}, 'application/x-www-form-urlencoded': {'schema': LoginRequest.model_json_schema()}}}})"
+        ],
+        "signature": "request: Request, db: AsyncSession=Depends(get_db)"
+      },
+      {
+        "name": "login_2fa",
+        "start": 296,
+        "end": 350,
+        "decorators": [
+          "router.post('/api/auth/login/2fa', response_model=TokenResponse, openapi_extra={'requestBody': {'content': {'application/json': {'schema': Login2FARequest.model_json_schema()}, 'application/x-www-form-urlencoded': {'schema': Login2FARequest.model_json_schema()}}}})"
+        ],
+        "signature": "request: Request, db: AsyncSession=Depends(get_db)"
+      },
+      {
+        "name": "logout",
+        "start": 354,
+        "end": 366,
+        "decorators": [
+          "router.post('/api/auth/logout')"
+        ],
+        "signature": "request: Request, current_user: User=Depends(get_current_user), credentials: HTTPAuthorizationCredentials=Depends(bearer_scheme), db: AsyncSession=Depends(get_db)"
+      },
+      {
+        "name": "logout_all",
+        "start": 370,
+        "end": 384,
+        "decorators": [
+          "router.post('/api/auth/logout-all')"
+        ],
+        "signature": "request: Request, current_user: User=Depends(get_current_user), db: AsyncSession=Depends(get_db)"
+      },
+      {
+        "name": "setup_2fa",
+        "start": 388,
+        "end": 417,
+        "decorators": [
+          "router.api_route('/api/auth/2fa/setup', methods=['GET', 'POST'], response_model=TwoFactorSetupResponse)"
+        ],
+        "signature": "current_user: User=Depends(get_current_user), db: AsyncSession=Depends(get_db)"
+      },
+      {
+        "name": "verify_2fa_setup",
+        "start": 431,
+        "end": 472,
+        "decorators": [
+          "router.post('/api/auth/2fa/verify-setup', openapi_extra={'requestBody': {'content': {'application/json': {'schema': TwoFactorVerifyRequest.model_json_schema()}, 'application/x-www-form-urlencoded': {'schema': TwoFactorVerifyRequest.model_json_schema()}}}})"
+        ],
+        "signature": "request: Request, current_user: User=Depends(get_current_user), db: AsyncSession=Depends(get_db)"
+      },
+      {
+        "name": "disable_2fa",
+        "start": 476,
+        "end": 490,
+        "decorators": [
+          "router.post('/api/auth/2fa/disable')"
+        ],
+        "signature": "current_user: User=Depends(get_current_user), db: AsyncSession=Depends(get_db)"
+      },
+      {
+        "name": "get_2fa_status",
+        "start": 494,
+        "end": 500,
+        "decorators": [
+          "router.get('/api/auth/2fa/status', response_model=TwoFactorStatusResponse)"
+        ],
+        "signature": "current_user: User=Depends(get_current_user)"
+      }
+    ]
+  },
+  {
+    "file": "backend/api/router_call.py",
+    "imports": [
+      "import inspect",
+      "import logging",
+      "from typing import Optional",
+      "from fastapi import APIRouter, Depends",
+      "from pydantic import BaseModel",
+      "from sqlalchemy import select",
+      "from sqlalchemy.ext.asyncio import AsyncSession",
+      "from backend.core.deps import require_role",
+      "from backend.core.dialogue_router import process_turn",
+      "from backend.core.intent_classifier import classify_intent",
+      "from backend.core.tts_engine import generate_audio",
+      "from backend.database import get_db",
+      "from backend.models.domain_02 import ScenarioTicketModel",
+      "from backend.models.domain_03 import SessionStateModel",
+      "from backend.schemas.bricks import Brick, Intent",
+      "from backend.schemas.router import SessionState"
+    ],
+    "definitions": [
+      {
+        "name": "ProcessTurnRequest",
+        "start": 45,
+        "end": 47,
+        "decorators": [],
+        "signature": null
+      },
+      {
+        "name": "ProcessTurnResponse",
+        "start": 50,
+        "end": 52,
+        "decorators": [],
+        "signature": null
+      },
+      {
+        "name": "handle_process_turn",
+        "start": 56,
+        "end": 134,
+        "decorators": [
+          "router_call.post('/process_turn', response_model=ProcessTurnResponse)"
+        ],
+        "signature": "req: ProcessTurnRequest, db: AsyncSession=Depends(get_db)"
+      }
+    ]
+  },
+  {
+    "file": "backend/api/router_classifier.py",
+    "imports": [
+      "import logging",
+      "from typing import List, Optional",
+      "from fastapi import APIRouter, Depends, HTTPException, Query, status",
+      "from pydantic import BaseModel",
+      "from sqlalchemy import or_, select",
+      "from sqlalchemy.ext.asyncio import AsyncSession",
+      "from backend.core.classifier_rules import calculate_recommended_services",
+      "from backend.database import get_db",
+      "from backend.models.domain_06 import ClassifierRecord",
+      "from backend.schemas.classifier import CalculateRequest, ClassifierRecordResponse"
+    ],
+    "definitions": [
+      {
+        "name": "_resolve_base_services",
+        "start": 70,
+        "end": 125,
+        "decorators": [],
+        "signature": "final_type: Optional[str]=None, category: Optional[str]=None, tags: Optional[List[str]]=None"
+      },
+      {
+        "name": "_handle_get_categories",
+        "start": 128,
+        "end": 142,
+        "decorators": [],
+        "signature": "db: AsyncSession=Depends(get_db)"
+      },
+      {
+        "name": "_handle_search_classifier",
+        "start": 145,
+        "end": 170,
+        "decorators": [],
+        "signature": "q: str=Query(default='', description='Search query'), limit: int=Query(default=20, ge=1, le=100, description='Limit results'), db: AsyncSession=Depends(get_db)"
+      },
+      {
+        "name": "_handle_calculate_services",
+        "start": 173,
+        "end": 231,
+        "decorators": [],
+        "signature": "request: CalculateRequest, db: AsyncSession=Depends(get_db)"
+      },
+      {
+        "name": "_handle_get_subcategories",
+        "start": 234,
+        "end": 249,
+        "decorators": [],
+        "signature": "category: str, db: AsyncSession=Depends(get_db)"
+      },
+      {
+        "name": "_handle_get_services",
+        "start": 252,
+        "end": 277,
+        "decorators": [],
+        "signature": "db: AsyncSession=Depends(get_db)"
+      },
+      {
+        "name": "ClassifierDetails",
+        "start": 280,
+        "end": 281,
+        "decorators": [],
+        "signature": null
+      },
+      {
+        "name": "_handle_get_details",
+        "start": 284,
+        "end": 322,
+        "decorators": [],
+        "signature": "category: str, subcategory: str, db: AsyncSession=Depends(get_db)"
+      }
+    ]
+  },
+  {
+    "file": "backend/api/router_dds.py",
+    "imports": [
+      "from datetime import datetime, timezone",
+      "from typing import Any, Dict, List",
+      "from fastapi import APIRouter, Depends, HTTPException, status",
+      "from sqlalchemy import select",
+      "from sqlalchemy.ext.asyncio import AsyncSession",
+      "from sqlalchemy.orm.attributes import flag_modified",
+      "from backend.core.deps import require_role, get_current_user",
+      "from backend.core.sla_monitor import calculate_sla_status, update_service_status",
+      "from backend.database import get_db",
+      "from backend.models.domain_01 import User",
+      "from backend.models.domain_03 import Assignment, ExamSession",
+      "from backend.models.domain_04 import IncidentCard",
+      "from backend.schemas.dds import DDSActionRequest, DDSCardResponse"
+    ],
+    "definitions": [
+      {
+        "name": "_normalize_assigned_services",
+        "start": 36,
+        "end": 53,
+        "decorators": [],
+        "signature": "raw_services: Any, default_time: datetime"
+      },
+      {
+        "name": "get_dds_cards",
+        "start": 60,
+        "end": 103,
+        "decorators": [
+          "router_dds.get('', response_model=List[DDSCardResponse])",
+          "router_dds.get('/', response_model=List[DDSCardResponse], include_in_schema=False)",
+          "router_dds.get('/cards', response_model=List[DDSCardResponse])",
+          "router_dds.get('/cards/', response_model=List[DDSCardResponse], include_in_schema=False)"
+        ],
+        "signature": "current_user: User=Depends(get_current_user), db: AsyncSession=Depends(get_db)"
+      },
+      {
+        "name": "_is_assigned_dds_card",
+        "start": 106,
+        "end": 120,
+        "decorators": [],
+        "signature": "db: AsyncSession, card: IncidentCard"
+      },
+      {
+        "name": "perform_card_action",
+        "start": 132,
+        "end": 188,
+        "decorators": [
+          "router_dds.post('/cards/{card_id}/action', response_model=DDSCardResponse)",
+          "router_dds.post('/cards/{card_id}/action/', response_model=DDSCardResponse, include_in_schema=False)"
+        ],
+        "signature": "card_id: str, req: DDSActionRequest, db: AsyncSession=Depends(get_db)"
+      },
+      {
+        "name": "get_dds_scenarios",
+        "start": 192,
+        "end": 234,
+        "decorators": [
+          "router_dds.get('/scenarios')"
+        ],
+        "signature": ""
+      },
+      {
+        "name": "post_dds_action",
+        "start": 238,
+        "end": 287,
+        "decorators": [
+          "router_dds.post('/action')"
+        ],
+        "signature": "payload: Dict[str, Any], db: AsyncSession=Depends(get_db)"
+      }
+    ]
+  },
+  {
+    "file": "backend/api/router_dds_cycle.py",
+    "imports": [
+      "from typing import List, Optional",
+      "from fastapi import APIRouter, Body, Depends, HTTPException, Query, status",
+      "from sqlalchemy import select",
+      "from sqlalchemy.ext.asyncio import AsyncSession",
+      "from backend.core.deps import get_current_user, require_role",
+      "from backend.core.dds_cycle import apply_dds_action, extract_dds_ticket_metadata, finish_dds_session, get_dds_session_state, is_suitable_dds_ticket, list_cadet_dds_assignments, matches_dds_ticket_filters",
+      "from backend.database import get_db",
+      "from backend.core.dds_queue import available_for_training, complete_card, start_training",
+      "from backend.models.domain_01 import User",
+      "from backend.models.domain_02 import ScenarioTicket",
+      "from backend.schemas.dds_cycle import DDSActionPayload, DDSFinishPayload, DDSSessionStateResponse, DDSTicketSummary, DDSCompletePayload, DDSTrainingStartPayload",
+      "from backend.schemas.dds_exercise import ExercisePlan, PhoneCommand",
+      "from backend.core.dds_phone import phone_command",
+      "from backend.core.dds_exercise import validated_plan",
+      "from backend.core.dds_cycle import incoming_card_from_ticket",
+      "from backend.core.dds_cycle import incoming_card_from_ticket"
+    ],
+    "definitions": [
+      {
+        "name": "get_prepared_dds_tickets",
+        "start": 56,
+        "end": 88,
+        "decorators": [
+          "router_dds_cycle.get('/tickets', response_model=List[DDSTicketSummary], dependencies=[Depends(require_role('ADMIN', 'TEACHER'))])",
+          "router_dds_cycle.get('/tickets/', response_model=List[DDSTicketSummary], include_in_schema=False, dependencies=[Depends(require_role('ADMIN', 'TEACHER'))])"
+        ],
+        "signature": "category: Optional[str]=Query(None, description='Категория происшествия'), subcategory: Optional[str]=Query(None, description='Подкатегория происшествия'), complexity: Optional[int]=Query(None, ge=1, le=3, description='Уровень сложности (1-3)'), db: AsyncSession=Depends(get_db)"
+      },
+      {
+        "name": "get_training_tickets",
+        "start": 93,
+        "end": 106,
+        "decorators": [
+          "router_dds_cycle.get('/training/tickets', response_model=List[DDSTicketSummary], dependencies=[Depends(require_role('CADET'))])"
+        ],
+        "signature": "category: Optional[str]=Query(None), complexity: Optional[int]=Query(None, ge=1, le=3), db: AsyncSession=Depends(get_db)"
+      },
+      {
+        "name": "post_training",
+        "start": 110,
+        "end": 115,
+        "decorators": [
+          "router_dds_cycle.post('/training', response_model=DDSSessionStateResponse)"
+        ],
+        "signature": "payload: DDSTrainingStartPayload, current_user: User=Depends(get_current_user), db: AsyncSession=Depends(get_db)"
+      },
+      {
+        "name": "get_cadet_assignments",
+        "start": 127,
+        "end": 142,
+        "decorators": [
+          "router_dds_cycle.get('/assignments', response_model=List[DDSSessionStateResponse])",
+          "router_dds_cycle.get('/assignments/', response_model=List[DDSSessionStateResponse], include_in_schema=False)"
+        ],
+        "signature": "include_history: bool=Query(False), current_user: User=Depends(get_current_user), db: AsyncSession=Depends(get_db)"
+      },
+      {
+        "name": "get_session_state_endpoint",
+        "start": 154,
+        "end": 161,
+        "decorators": [
+          "router_dds_cycle.get('/sessions/{session_id}', response_model=DDSSessionStateResponse)",
+          "router_dds_cycle.get('/sessions/{session_id}/', response_model=DDSSessionStateResponse, include_in_schema=False)"
+        ],
+        "signature": "session_id: str, current_user: User=Depends(get_current_user), db: AsyncSession=Depends(get_db)"
+      },
+      {
+        "name": "get_session_card",
+        "start": 165,
+        "end": 170,
+        "decorators": [
+          "router_dds_cycle.get('/sessions/{session_id}/cards/{card_id}', response_model=DDSSessionStateResponse)"
+        ],
+        "signature": "session_id: str, card_id: str, current_user: User=Depends(get_current_user), db: AsyncSession=Depends(get_db)"
+      },
+      {
+        "name": "post_complete_card",
+        "start": 174,
+        "end": 179,
+        "decorators": [
+          "router_dds_cycle.post('/sessions/{session_id}/cards/{card_id}/complete', response_model=DDSSessionStateResponse)"
+        ],
+        "signature": "session_id: str, card_id: str, payload: DDSCompletePayload, current_user: User=Depends(get_current_user), db: AsyncSession=Depends(get_db)"
+      },
+      {
+        "name": "post_session_action_endpoint",
+        "start": 191,
+        "end": 204,
+        "decorators": [
+          "router_dds_cycle.post('/sessions/{session_id}/actions', response_model=DDSSessionStateResponse)",
+          "router_dds_cycle.post('/sessions/{session_id}/actions/', response_model=DDSSessionStateResponse, include_in_schema=False)"
+        ],
+        "signature": "session_id: str, payload: DDSActionPayload, current_user: User=Depends(get_current_user), db: AsyncSession=Depends(get_db)"
+      },
+      {
+        "name": "finish_session_endpoint",
+        "start": 216,
+        "end": 228,
+        "decorators": [
+          "router_dds_cycle.post('/sessions/{session_id}/finish', response_model=DDSSessionStateResponse)",
+          "router_dds_cycle.post('/sessions/{session_id}/finish/', response_model=DDSSessionStateResponse, include_in_schema=False)"
+        ],
+        "signature": "session_id: str, payload: DDSFinishPayload=Body(...), current_user: User=Depends(get_current_user), db: AsyncSession=Depends(get_db)"
+      },
+      {
+        "name": "post_phone",
+        "start": 237,
+        "end": 239,
+        "decorators": [
+          "router_dds_cycle.post('/sessions/{session_id}/phone', response_model=DDSSessionStateResponse)"
+        ],
+        "signature": "session_id: str, payload: PhoneCommand, user: User=Depends(get_current_user), db: AsyncSession=Depends(get_db)"
+      },
+      {
+        "name": "get_exercise_plan",
+        "start": 243,
+        "end": 250,
+        "decorators": [
+          "router_dds_cycle.get('/tickets/{ticket_id}/exercise', dependencies=[Depends(require_role('TEACHER', 'ADMIN'))])"
+        ],
+        "signature": "ticket_id: str, db: AsyncSession=Depends(get_db)"
+      },
+      {
+        "name": "put_exercise_plan",
+        "start": 254,
+        "end": 266,
+        "decorators": [
+          "router_dds_cycle.put('/tickets/{ticket_id}/exercise', dependencies=[Depends(require_role('TEACHER', 'ADMIN'))])"
+        ],
+        "signature": "ticket_id: str, payload: ExercisePlan, db: AsyncSession=Depends(get_db)"
+      }
+    ]
+  },
+  {
+    "file": "backend/api/router_dds_reports.py",
+    "imports": [
+      "import logging",
+      "import uuid",
+      "from datetime import datetime, timezone",
+      "from typing import Optional",
+      "from fastapi import APIRouter, Body, Depends, HTTPException, Response, status",
+      "from pydantic import BaseModel, ConfigDict",
+      "from sqlalchemy import select, update",
+      "from sqlalchemy.exc import IntegrityError",
+      "from sqlalchemy.ext.asyncio import AsyncSession",
+      "from backend.core.deps import get_current_user",
+      "from backend.core.dds_report_data import collect_lesson_report_data",
+      "from backend.core.dds_report_jobs import dds_report_job_worker",
+      "from backend.database import get_db",
+      "from backend.models.domain_01 import User",
+      "from backend.models.domain_03 import Assignment",
+      "from backend.models.dds_report_job import DDSReportJob"
+    ],
+    "definitions": [
+      {
+        "name": "DDSReportJobCreateRequest",
+        "start": 41,
+        "end": 43,
+        "decorators": [],
+        "signature": null
+      },
+      {
+        "name": "DDSReportJobResponse",
+        "start": 46,
+        "end": 65,
+        "decorators": [],
+        "signature": null
+      },
+      {
+        "name": "format_job_response",
+        "start": 70,
+        "end": 90,
+        "decorators": [],
+        "signature": "job: DDSReportJob"
+      },
+      {
+        "name": "verify_lesson_access",
+        "start": 93,
+        "end": 136,
+        "decorators": [],
+        "signature": "lesson_id: str, db: AsyncSession, current_user: User"
+      },
+      {
+        "name": "create_or_get_lesson_report_job",
+        "start": 145,
+        "end": 289,
+        "decorators": [
+          "router.post('/lessons/{lesson_id}/report', response_model=DDSReportJobResponse)"
+        ],
+        "signature": "lesson_id: str, response: Response, req: Optional[DDSReportJobCreateRequest]=Body(default=None), db: AsyncSession=Depends(get_db), current_user: User=Depends(get_current_user)"
+      },
+      {
+        "name": "get_lesson_report_job",
+        "start": 296,
+        "end": 318,
+        "decorators": [
+          "router.get('/lessons/{lesson_id}/report', response_model=DDSReportJobResponse)"
+        ],
+        "signature": "lesson_id: str, db: AsyncSession=Depends(get_db), current_user: User=Depends(get_current_user)"
+      }
+    ]
+  },
+  {
+    "file": "backend/api/router_generator.py",
+    "imports": [
+      "from fastapi import APIRouter",
+      "from backend.core.faker import FakeDataGenerator",
+      "from backend.schemas.faker import GeneratedAddress"
+    ],
+    "definitions": [
+      {
+        "name": "get_random_address",
+        "start": 8,
+        "end": 10,
+        "decorators": [
+          "router.get('/address', response_model=GeneratedAddress)"
+        ],
+        "signature": ""
+      }
+    ]
+  },
+  {
+    "file": "backend/api/router_groups.py",
+    "imports": [
+      "import io",
+      "import random",
+      "from collections import Counter",
+      "from datetime import datetime, timezone, timedelta",
+      "from typing import Optional, List",
+      "from fastapi import APIRouter, Depends, UploadFile, File, HTTPException, Response, Query, status",
+      "from sqlalchemy import select",
+      "from sqlalchemy.orm import selectinload",
+      "from sqlalchemy.ext.asyncio import AsyncSession",
+      "from backend.core.deps import require_role, get_current_user",
+      "from backend.core.auth_sessions import revoke_all_user_sessions",
+      "from backend.core.security import hash_password",
+      "from backend.database import get_db",
+      "from backend.models.domain_01 import StudentGroup, User",
+      "from backend.models.domain_02 import GeneratedTicket, ScenarioTicket",
+      "from backend.models.domain_03 import Assignment, ExamSession",
+      "from backend.models.domain_04 import TicketResult, EvaluationResult",
+      "from backend.schemas.groups import GroupCreate, GroupResponse, SingleStudentAddRequest, StudentResponse",
+      "from backend.schemas.students import StudentStatsResponse, CompetenceMatrixItem, TopErrorItem, StudentLessonHistoryItem, StudentLessonHistoryTicket",
+      "from backend.core.csv_parser import parse_students_csv, generate_csv_template",
+      "from backend.api.router_users import get_users",
+      "from backend.core.dds_queue import queue_ticket_details"
+    ],
+    "definitions": [
+      {
+        "name": "get_csv_template",
+        "start": 67,
+        "end": 74,
+        "decorators": [
+          "students_router.get('/csv-template')",
+          "students_v1_router.get('/csv-template')"
+        ],
+        "signature": ""
+      },
+      {
+        "name": "list_all_students",
+        "start": 82,
+        "end": 105,
+        "decorators": [
+          "students_router.get('', response_model=list[StudentResponse])",
+          "students_router.get('/', response_model=list[StudentResponse], include_in_schema=False)",
+          "students_v1_router.get('', response_model=list[StudentResponse])",
+          "students_v1_router.get('/', response_model=list[StudentResponse], include_in_schema=False)"
+        ],
+        "signature": "role: Optional[str]='CADET', db: AsyncSession=Depends(get_db), current_user: User=Depends(require_role('ADMIN', 'TEACHER'))"
+      },
+      {
+        "name": "_check_group_access",
+        "start": 108,
+        "end": 113,
+        "decorators": [],
+        "signature": "group: StudentGroup, current_user: User"
+      },
+      {
+        "name": "list_groups",
+        "start": 123,
+        "end": 131,
+        "decorators": [
+          "groups_router.get('', response_model=list[GroupResponse])",
+          "groups_router.get('/', response_model=list[GroupResponse], include_in_schema=False)",
+          "groups_v1_router.get('', response_model=list[GroupResponse])",
+          "groups_v1_router.get('/', response_model=list[GroupResponse], include_in_schema=False)",
+          "api_groups_router.get('', response_model=list[GroupResponse])",
+          "api_groups_router.get('/', response_model=list[GroupResponse], include_in_schema=False)"
+        ],
+        "signature": "db: AsyncSession=Depends(get_db), current_user: User=Depends(get_current_user)"
+      },
+      {
+        "name": "create_group",
+        "start": 140,
+        "end": 158,
+        "decorators": [
+          "groups_router.post('', response_model=GroupResponse)",
+          "groups_router.post('/', response_model=GroupResponse, include_in_schema=False)",
+          "groups_v1_router.post('', response_model=GroupResponse)",
+          "groups_v1_router.post('/', response_model=GroupResponse, include_in_schema=False)",
+          "api_groups_router.post('', response_model=GroupResponse)",
+          "api_groups_router.post('/', response_model=GroupResponse, include_in_schema=False)"
+        ],
+        "signature": "group_in: GroupCreate, db: AsyncSession=Depends(get_db), current_user: User=Depends(get_current_user)"
+      },
+      {
+        "name": "get_group_students",
+        "start": 168,
+        "end": 210,
+        "decorators": [
+          "api_groups_router.get('/{group_id}/students', response_model=list[StudentResponse])",
+          "api_groups_router.get('/{group_id}/students/', response_model=list[StudentResponse], include_in_schema=False)",
+          "groups_v1_router.get('/{group_id}/students', response_model=list[StudentResponse])",
+          "groups_v1_router.get('/{group_id}/students/', response_model=list[StudentResponse], include_in_schema=False)",
+          "groups_router.get('/{group_id}/students', response_model=list[StudentResponse])",
+          "groups_router.get('/{group_id}/students/', response_model=list[StudentResponse], include_in_schema=False)"
+        ],
+        "signature": "group_id: str, db: AsyncSession=Depends(get_db), current_user: User=Depends(get_current_user)"
+      },
+      {
+        "name": "add_single_student_to_group",
+        "start": 220,
+        "end": 300,
+        "decorators": [
+          "api_groups_router.post('/{group_id}/students/single')",
+          "api_groups_router.post('/{group_id}/students/single/', include_in_schema=False)",
+          "groups_v1_router.post('/{group_id}/students/single')",
+          "groups_v1_router.post('/{group_id}/students/single/', include_in_schema=False)",
+          "groups_router.post('/{group_id}/students/single')",
+          "groups_router.post('/{group_id}/students/single/', include_in_schema=False)"
+        ],
+        "signature": "group_id: str, student_in: SingleStudentAddRequest, db: AsyncSession=Depends(get_db), current_user: User=Depends(get_current_user)"
+      },
+      {
+        "name": "remove_student_from_group",
+        "start": 310,
+        "end": 347,
+        "decorators": [
+          "api_groups_router.delete('/{group_id}/students/{user_id}')",
+          "api_groups_router.delete('/{group_id}/students/{user_id}/', include_in_schema=False)",
+          "groups_v1_router.delete('/{group_id}/students/{user_id}')",
+          "groups_v1_router.delete('/{group_id}/students/{user_id}/', include_in_schema=False)",
+          "groups_router.delete('/{group_id}/students/{user_id}')",
+          "groups_router.delete('/{group_id}/students/{user_id}/', include_in_schema=False)"
+        ],
+        "signature": "group_id: str, user_id: str, db: AsyncSession=Depends(get_db), current_user: User=Depends(get_current_user)"
+      },
+      {
+        "name": "upload_students_csv",
+        "start": 354,
+        "end": 416,
+        "decorators": [
+          "groups_router.post('/{group_id}/students/csv')",
+          "groups_v1_router.post('/{group_id}/students/csv')",
+          "api_groups_router.post('/{group_id}/students/csv')"
+        ],
+        "signature": "group_id: str, file: UploadFile=File(...), db: AsyncSession=Depends(get_db), current_user: User=Depends(get_current_user)"
+      },
+      {
+        "name": "reset_group_passwords",
+        "start": 423,
+        "end": 465,
+        "decorators": [
+          "api_groups_router.post('/{group_id}/reset-passwords')",
+          "groups_v1_router.post('/{group_id}/reset-passwords')",
+          "groups_router.post('/{group_id}/reset-passwords')"
+        ],
+        "signature": "group_id: str, db: AsyncSession=Depends(get_db), current_user: User=Depends(get_current_user)"
+      },
+      {
+        "name": "get_student_stats",
+        "start": 471,
+        "end": 697,
+        "decorators": [
+          "students_v1_router.get('/me/stats', response_model=StudentStatsResponse)",
+          "students_router.get('/me/stats', response_model=StudentStatsResponse, include_in_schema=False)"
+        ],
+        "signature": "role: Optional[str]=Query(None), current_user: User=Depends(get_current_user), db: AsyncSession=Depends(get_db)"
+      },
+      {
+        "name": "get_student_lessons",
+        "start": 702,
+        "end": 833,
+        "decorators": [
+          "students_v1_router.get('/me/lessons', response_model=List[StudentLessonHistoryItem])",
+          "students_router.get('/me/lessons', response_model=List[StudentLessonHistoryItem], include_in_schema=False)"
+        ],
+        "signature": "role: Optional[str]=Query(None), current_user: User=Depends(get_current_user), db: AsyncSession=Depends(get_db)"
+      }
+    ]
+  },
+  {
+    "file": "backend/api/router_integration.py",
+    "imports": [
+      "from fastapi import APIRouter, Depends, HTTPException",
+      "from pydantic import BaseModel",
+      "from typing import Dict, Any",
+      "from backend.core.spo_gateway import spo_gateway",
+      "from backend.core.deps import require_role"
+    ],
+    "definitions": [
+      {
+        "name": "ExportCardRequest",
+        "start": 14,
+        "end": 15,
+        "decorators": [],
+        "signature": null
+      },
+      {
+        "name": "export_incident_card",
+        "start": 18,
+        "end": 28,
+        "decorators": [
+          "router_integration.post('/spo112/export/{card_id}')"
+        ],
+        "signature": "card_id: str, request: ExportCardRequest"
+      }
+    ]
+  },
+  {
+    "file": "backend/api/router_knowledge.py",
+    "imports": [
+      "import asyncio",
+      "import os",
+      "from datetime import datetime, timezone",
+      "from typing import Optional",
+      "from fastapi import APIRouter, Depends, UploadFile, File, HTTPException, status",
+      "from fastapi.responses import FileResponse",
+      "from pydantic import BaseModel, ConfigDict",
+      "from sqlalchemy import select",
+      "from sqlalchemy.ext.asyncio import AsyncSession",
+      "from backend.database import get_db",
+      "from backend.core.deps import require_role",
+      "from backend.models.domain_03 import KnowledgeFile",
+      "from backend.core.file_storage import generate_safe_filename, get_relative_path"
+    ],
+    "definitions": [
+      {
+        "name": "KnowledgeFileResponse",
+        "start": 28,
+        "end": 37,
+        "decorators": [],
+        "signature": null
+      },
+      {
+        "name": "_to_response",
+        "start": 40,
+        "end": 49,
+        "decorators": [],
+        "signature": "file_record: KnowledgeFile"
+      },
+      {
+        "name": "_write_file_sync",
+        "start": 52,
+        "end": 54,
+        "decorators": [],
+        "signature": "file_path: str, content: bytes"
+      },
+      {
+        "name": "list_knowledge_files",
+        "start": 59,
+        "end": 64,
+        "decorators": [
+          "knowledge_router.get('/files', response_model=list[KnowledgeFileResponse])",
+          "knowledge_router.get('/files/', response_model=list[KnowledgeFileResponse], include_in_schema=False)"
+        ],
+        "signature": "db: AsyncSession=Depends(get_db)"
+      },
+      {
+        "name": "upload_knowledge_file",
+        "start": 69,
+        "end": 113,
+        "decorators": [
+          "knowledge_router.post('/files', response_model=KnowledgeFileResponse, status_code=status.HTTP_201_CREATED)",
+          "knowledge_router.post('/files/', response_model=KnowledgeFileResponse, status_code=status.HTTP_201_CREATED, include_in_schema=False)"
+        ],
+        "signature": "file: UploadFile=File(...), db: AsyncSession=Depends(get_db), _teacher=Depends(require_role('TEACHER'))"
+      },
+      {
+        "name": "download_knowledge_file",
+        "start": 117,
+        "end": 133,
+        "decorators": [
+          "knowledge_router.get('/files/{file_id}/download')"
+        ],
+        "signature": "file_id: str, db: AsyncSession=Depends(get_db)"
+      },
+      {
+        "name": "delete_knowledge_file",
+        "start": 137,
+        "end": 158,
+        "decorators": [
+          "knowledge_router.delete('/files/{file_id}')"
+        ],
+        "signature": "file_id: str, db: AsyncSession=Depends(get_db), _teacher=Depends(require_role('TEACHER'))"
+      }
+    ]
+  },
+  {
+    "file": "backend/api/router_lessons.py",
+    "imports": [
+      "from datetime import datetime, timezone",
+      "from typing import List, Optional",
+      "from fastapi import APIRouter, Depends, HTTPException, status",
+      "from sqlalchemy import select",
+      "from sqlalchemy.ext.asyncio import AsyncSession",
+      "from sqlalchemy.orm.attributes import flag_modified",
+      "from backend.core.dds_cycle import build_dds_cadet_stats, lock_assignment",
+      "from backend.core.dds_queue import initialize_queue, load_pool",
+      "from backend.core.deps import require_role, get_current_user",
+      "from backend.database import get_db",
+      "from backend.models.domain_01 import SecurityPolicy, User, StudentGroup",
+      "from backend.models.domain_02 import ScenarioTicket",
+      "from backend.models.domain_03 import Lesson, ExamSession",
+      "from backend.models.domain_04 import EvaluationResult, TicketResult, IncidentCard",
+      "from backend.schemas.lessons import LessonCreate, LessonDetailResponse, LessonNotesUpdate, LessonSummaryResponse, CadetLessonStats, CadetTicketDetail",
+      "from copy import deepcopy",
+      "from copy import deepcopy",
+      "from backend.core.dds_exercise import finalize_result"
+    ],
+    "definitions": [
+      {
+        "name": "_operator_112_lessons_enabled",
+        "start": 36,
+        "end": 42,
+        "decorators": [],
+        "signature": "db: AsyncSession"
+      },
+      {
+        "name": "get_available_lesson_roles",
+        "start": 49,
+        "end": 54,
+        "decorators": [
+          "lessons_router.get('/available-roles', dependencies=[Depends(require_role('ADMIN', 'TEACHER'))])"
+        ],
+        "signature": "db: AsyncSession=Depends(get_db)"
+      },
+      {
+        "name": "_build_cadet_stats",
+        "start": 57,
+        "end": 333,
+        "decorators": [],
+        "signature": "lesson: Lesson, group: Optional[StudentGroup], db: AsyncSession"
+      },
+      {
+        "name": "create_lesson",
+        "start": 349,
+        "end": 431,
+        "decorators": [
+          "lessons_router.post('', response_model=LessonDetailResponse, status_code=status.HTTP_201_CREATED, dependencies=[Depends(require_role('TEACHER'))])",
+          "lessons_router.post('/', response_model=LessonDetailResponse, status_code=status.HTTP_201_CREATED, include_in_schema=False, dependencies=[Depends(require_role('TEACHER'))])"
+        ],
+        "signature": "payload: LessonCreate, current_user: User=Depends(get_current_user), db: AsyncSession=Depends(get_db)"
+      },
+      {
+        "name": "list_lessons",
+        "start": 445,
+        "end": 497,
+        "decorators": [
+          "lessons_router.get('', response_model=List[LessonSummaryResponse], dependencies=[Depends(require_role('TEACHER'))])",
+          "lessons_router.get('/', response_model=List[LessonSummaryResponse], include_in_schema=False, dependencies=[Depends(require_role('TEACHER'))])"
+        ],
+        "signature": "group_id: Optional[str]=None, status_filter: Optional[str]=None, current_user: User=Depends(get_current_user), db: AsyncSession=Depends(get_db)"
+      },
+      {
+        "name": "get_lesson_detail",
+        "start": 510,
+        "end": 572,
+        "decorators": [
+          "lessons_router.get('/{lesson_id}', response_model=LessonDetailResponse, dependencies=[Depends(require_role('TEACHER', 'CADET'))])",
+          "lessons_router.get('/{lesson_id}/stats', response_model=LessonDetailResponse, dependencies=[Depends(require_role('TEACHER', 'CADET'))])"
+        ],
+        "signature": "lesson_id: str, current_user: User=Depends(get_current_user), db: AsyncSession=Depends(get_db)"
+      },
+      {
+        "name": "start_lesson",
+        "start": 580,
+        "end": 770,
+        "decorators": [
+          "lessons_router.post('/{lesson_id}/start', response_model=LessonDetailResponse, dependencies=[Depends(require_role('TEACHER'))])"
+        ],
+        "signature": "lesson_id: str, current_user: User=Depends(get_current_user), db: AsyncSession=Depends(get_db)"
+      },
+      {
+        "name": "stop_lesson",
+        "start": 778,
+        "end": 887,
+        "decorators": [
+          "lessons_router.post('/{lesson_id}/stop', response_model=LessonDetailResponse, dependencies=[Depends(require_role('TEACHER'))])"
+        ],
+        "signature": "lesson_id: str, current_user: User=Depends(get_current_user), db: AsyncSession=Depends(get_db)"
+      },
+      {
+        "name": "update_lesson_notes",
+        "start": 895,
+        "end": 953,
+        "decorators": [
+          "lessons_router.patch('/{lesson_id}/notes', response_model=LessonDetailResponse, dependencies=[Depends(require_role('TEACHER'))])"
+        ],
+        "signature": "lesson_id: str, payload: LessonNotesUpdate, current_user: User=Depends(get_current_user), db: AsyncSession=Depends(get_db)"
+      }
+    ]
+  },
+  {
+    "file": "backend/api/router_reports.py",
+    "imports": [
+      "import asyncio",
+      "import logging",
+      "import os",
+      "import uuid",
+      "from datetime import datetime, timezone",
+      "from pathlib import Path",
+      "from typing import Any, Dict, List, Optional",
+      "from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, status",
+      "from fastapi.responses import FileResponse",
+      "from sqlalchemy import select",
+      "from backend.core.deps import require_role",
+      "from backend.core.reports_engine import calculate_final_score, generate_csv_from_data, generate_excel_from_data, generate_pdf_from_html, render_report_html",
+      "from backend.database import AsyncSessionLocal",
+      "from backend.models.domain_01 import User",
+      "from backend.models.domain_03 import Assignment, ExamSession",
+      "from backend.models.domain_04 import EvaluationResult, IncidentCard",
+      "from backend.schemas.reports import ReportGenerateRequest, ReportGenerateResponse, ReportStatusResponse"
+    ],
+    "definitions": [
+      {
+        "name": "_background_generate_report",
+        "start": 45,
+        "end": 261,
+        "decorators": [],
+        "signature": "task_id: str, group_id: Optional[str]=None, session_ids: Optional[List[str]]=None, custom_records: Optional[List[Dict[str, Any]]]=None"
+      },
+      {
+        "name": "generate_report",
+        "start": 265,
+        "end": 288,
+        "decorators": [
+          "reports_router.post('/generate', response_model=ReportGenerateResponse)"
+        ],
+        "signature": "req: ReportGenerateRequest, background_tasks: BackgroundTasks"
+      },
+      {
+        "name": "get_report_status",
+        "start": 292,
+        "end": 306,
+        "decorators": [
+          "reports_router.get('/status/{task_id}', response_model=ReportStatusResponse)"
+        ],
+        "signature": "task_id: str"
+      },
+      {
+        "name": "_download_report_response",
+        "start": 309,
+        "end": 367,
+        "decorators": [],
+        "signature": "task_id: str, format: str"
+      },
+      {
+        "name": "download_report_query",
+        "start": 371,
+        "end": 376,
+        "decorators": [
+          "reports_router.get('/download')"
+        ],
+        "signature": "task_id: str=Query(..., description='Task ID to download'), format: str=Query('pdf', description=\"Format to download: 'pdf', 'csv', or 'excel'\")"
+      },
+      {
+        "name": "download_report_path",
+        "start": 380,
+        "end": 385,
+        "decorators": [
+          "reports_router.get('/download/{task_id}')"
+        ],
+        "signature": "task_id: str, format: str=Query('pdf', description=\"Format to download: 'pdf', 'csv', or 'excel'\")"
+      }
+    ]
+  },
+  {
+    "file": "backend/api/router_scenario.py",
+    "imports": [
+      "from fastapi import APIRouter, Depends",
+      "from backend.core.bricks_compiler import compile_ticket",
+      "from backend.core.deps import require_role",
+      "from backend.core.factoids_llm import generate_factoids",
+      "from backend.schemas.bricks import BricksMatrix, TicketData",
+      "from backend.schemas.factoids import FactoidGenerationRequest, FactoidsResponse"
+    ],
+    "definitions": [
+      {
+        "name": "api_generate_factoids",
+        "start": 18,
+        "end": 19,
+        "decorators": [
+          "router.post('/generate_factoids', response_model=FactoidsResponse)"
+        ],
+        "signature": "request: FactoidGenerationRequest"
+      },
+      {
+        "name": "api_compile_ticket",
+        "start": 23,
+        "end": 24,
+        "decorators": [
+          "router.post('/compile_ticket', response_model=BricksMatrix)"
+        ],
+        "signature": "data: TicketData"
+      }
+    ]
+  },
+  {
+    "file": "backend/api/router_scenarios.py",
+    "imports": [
+      "from fastapi import APIRouter, Depends, HTTPException, status",
+      "from fastapi.responses import StreamingResponse",
+      "from sqlalchemy import select",
+      "from sqlalchemy.ext.asyncio import AsyncSession",
+      "import backend.core.factoid_generator as factoid_generator",
+      "from backend.core.deps import require_role",
+      "from backend.core.factoid_generator import stream_scenario_factoids",
+      "from backend.database import get_db",
+      "from backend.models.domain_02 import ScenarioTicket",
+      "from backend.schemas.scenarios import ScenarioCompileResponse, ScenarioCreate, ScenarioGenerateResponse, ScenarioResponse"
+    ],
+    "definitions": [
+      {
+        "name": "list_scenarios",
+        "start": 28,
+        "end": 31,
+        "decorators": [
+          "scenarios_router.get('', response_model=list[ScenarioResponse])",
+          "scenarios_router.get('/', response_model=list[ScenarioResponse], include_in_schema=False)"
+        ],
+        "signature": "db: AsyncSession=Depends(get_db)"
+      },
+      {
+        "name": "create_scenario",
+        "start": 45,
+        "end": 50,
+        "decorators": [
+          "scenarios_router.post('', response_model=ScenarioResponse, dependencies=[Depends(require_role('TEACHER'))])",
+          "scenarios_router.post('/', response_model=ScenarioResponse, include_in_schema=False, dependencies=[Depends(require_role('TEACHER'))])"
+        ],
+        "signature": "scenario_in: ScenarioCreate, db: AsyncSession=Depends(get_db)"
+      },
+      {
+        "name": "generate_scenario",
+        "start": 64,
+        "end": 73,
+        "decorators": [
+          "scenarios_router.post('/{scenario_id}/generate', response_model=ScenarioGenerateResponse, dependencies=[Depends(require_role('TEACHER'))])",
+          "scenarios_router.post('/{scenario_id}/generate/', response_model=ScenarioGenerateResponse, include_in_schema=False, dependencies=[Depends(require_role('TEACHER'))])"
+        ],
+        "signature": "scenario_id: str, db: AsyncSession=Depends(get_db)"
+      },
+      {
+        "name": "compile_scenario",
+        "start": 87,
+        "end": 96,
+        "decorators": [
+          "scenarios_router.post('/{scenario_id}/compile', response_model=ScenarioCompileResponse, dependencies=[Depends(require_role('TEACHER'))])",
+          "scenarios_router.post('/{scenario_id}/compile/', response_model=ScenarioCompileResponse, include_in_schema=False, dependencies=[Depends(require_role('TEACHER'))])"
+        ],
+        "signature": "scenario_id: str, db: AsyncSession=Depends(get_db)"
+      },
+      {
+        "name": "scenario_events",
+        "start": 101,
+        "end": 117,
+        "decorators": [
+          "scenarios_router.get('/{scenario_id}/events')",
+          "scenarios_router.get('/{scenario_id}/events/', include_in_schema=False)"
+        ],
+        "signature": "scenario_id: str, db: AsyncSession=Depends(get_db)"
+      }
+    ]
+  },
+  {
+    "file": "backend/api/router_sessions.py",
+    "imports": [
+      "import datetime",
+      "from copy import deepcopy",
+      "from typing import Optional, List, Dict, Any",
+      "from fastapi import APIRouter, Depends, HTTPException, status",
+      "from sqlalchemy import select, func",
+      "from sqlalchemy.ext.asyncio import AsyncSession",
+      "from sqlalchemy.orm.attributes import flag_modified",
+      "from backend.core.deps import require_role, get_current_user",
+      "from backend.core.runtime_router import RuntimeRouter",
+      "from backend.database import get_db",
+      "from backend.models.domain_01 import User",
+      "from backend.models.domain_02 import GeneratedTicket, ScenarioTicket",
+      "from backend.models.domain_03 import Assignment, ExamSession",
+      "from backend.models.domain_04 import IncidentCard, TicketResult, EvaluationResult",
+      "from backend.schemas.students import DemoSessionRequest, DemoSessionResponse",
+      "from backend.core.evaluator import evaluate_ticket",
+      "from backend.schemas.domain_04 import TicketEvaluationRequest, TicketEvaluationResult, TicketResultResponse, TicketResultUpdate, IncidentCardSubmit, EvaluationResultResponse",
+      "from backend.schemas.domain_03 import SessionConfigCreate, SessionConfigResponse",
+      "from backend.schemas.sessions import MessageRequest, MessageResponse, SessionStartRequest, SessionStartResponse, SessionStateResponse, SubmitCardRequest, SubmitCardResponse, CadetSessionStats, SessionStatsResponse",
+      "from starlette.requests import Request",
+      "from backend.core.runtime_router import RuntimeRouter",
+      "import asyncio",
+      "import os",
+      "import uuid",
+      "from backend.core.dds_cycle import incoming_card_from_ticket, is_suitable_dds_ticket, extract_dds_ticket_metadata",
+      "from backend.core.dds_queue import available_for_training, initialize_queue",
+      "from backend.core.dds_cycle import sanitize_incoming_card",
+      "import secrets",
+      "import json"
+    ],
+    "definitions": [
+      {
+        "name": "_is_assigned_dds_session",
+        "start": 49,
+        "end": 57,
+        "decorators": [],
+        "signature": "db: AsyncSession, session: ExamSession"
+      },
+      {
+        "name": "start_session",
+        "start": 65,
+        "end": 96,
+        "decorators": [
+          "sessions_router.post('/assignments/{assignment_id}/sessions/start', response_model=SessionStartResponse, dependencies=[Depends(require_role('TEACHER', 'CADET'))])"
+        ],
+        "signature": "assignment_id: str, req: SessionStartRequest, db: AsyncSession=Depends(get_db)"
+      },
+      {
+        "name": "get_session_state",
+        "start": 103,
+        "end": 133,
+        "decorators": [
+          "sessions_router.get('/sessions/{session_id}', response_model=SessionStateResponse)"
+        ],
+        "signature": "session_id: str, current_user: User=Depends(get_current_user), db: AsyncSession=Depends(get_db)"
+      },
+      {
+        "name": "post_session_message",
+        "start": 141,
+        "end": 203,
+        "decorators": [
+          "sessions_router.post('/sessions/{session_id}/message', response_model=MessageResponse, dependencies=[Depends(require_role('TEACHER', 'CADET'))])"
+        ],
+        "signature": "session_id: str, req: MessageRequest, db: AsyncSession=Depends(get_db)"
+      },
+      {
+        "name": "submit_card",
+        "start": 212,
+        "end": 247,
+        "decorators": [
+          "sessions_router.post('/sessions/{session_id}/submit_card', response_model=SubmitCardResponse, dependencies=[Depends(require_role('TEACHER', 'CADET'))])"
+        ],
+        "signature": "session_id: str, req: SubmitCardRequest, db: AsyncSession=Depends(get_db)"
+      },
+      {
+        "name": "evaluate_ticket_endpoint",
+        "start": 255,
+        "end": 258,
+        "decorators": [
+          "sessions_router.post('/tickets/evaluate', response_model=TicketEvaluationResult, dependencies=[Depends(require_role('TEACHER', 'CADET'))])"
+        ],
+        "signature": "req: TicketEvaluationRequest"
+      },
+      {
+        "name": "appeal_ticket_result",
+        "start": 266,
+        "end": 297,
+        "decorators": [
+          "sessions_router.patch('/ticket-results/{result_id}/appeal', response_model=TicketResultResponse, dependencies=[Depends(require_role('TEACHER'))])"
+        ],
+        "signature": "result_id: str, req: TicketResultUpdate, db: AsyncSession=Depends(get_db)"
+      },
+      {
+        "name": "appeal_ticket",
+        "start": 305,
+        "end": 310,
+        "decorators": [
+          "sessions_router.patch('/tickets/{result_id}/appeal', response_model=TicketResultResponse, dependencies=[Depends(require_role('TEACHER'))])"
+        ],
+        "signature": "result_id: str, req: TicketResultUpdate, db: AsyncSession=Depends(get_db)"
+      },
+      {
+        "name": "create_demo_session",
+        "start": 331,
+        "end": 597,
+        "decorators": [
+          "sessions_v1_router.post('/demo', response_model=DemoSessionResponse)",
+          "sessions_router.post('/sessions/demo', response_model=DemoSessionResponse, include_in_schema=False)"
+        ],
+        "signature": "request: Request, req: Optional[DemoSessionRequest]=None, current_user: User=Depends(get_current_user), db: AsyncSession=Depends(get_db)"
+      },
+      {
+        "name": "create_session_config",
+        "start": 613,
+        "end": 638,
+        "decorators": [
+          "sessions_v1_router.post('', response_model=SessionConfigResponse, status_code=status.HTTP_201_CREATED, dependencies=[Depends(require_role('TEACHER'))])",
+          "sessions_v1_router.post('/', response_model=SessionConfigResponse, status_code=status.HTTP_201_CREATED, dependencies=[Depends(require_role('TEACHER'))], include_in_schema=False)"
+        ],
+        "signature": "config: SessionConfigCreate, db: AsyncSession=Depends(get_db)"
+      },
+      {
+        "name": "get_session_stats",
+        "start": 646,
+        "end": 726,
+        "decorators": [
+          "sessions_v1_router.get('/{session_id}/stats', response_model=SessionStatsResponse, dependencies=[Depends(require_role('TEACHER'))])"
+        ],
+        "signature": "session_id: str, db: AsyncSession=Depends(get_db)"
+      },
+      {
+        "name": "evaluate_session_card",
+        "start": 740,
+        "end": 853,
+        "decorators": [
+          "sessions_v1_router.post('/{session_id}/evaluate', response_model=EvaluationResultResponse, dependencies=[Depends(require_role('TEACHER', 'CADET'))])",
+          "sessions_router.post('/sessions/{session_id}/evaluate', response_model=EvaluationResultResponse, include_in_schema=False, dependencies=[Depends(require_role('TEACHER', 'CADET'))])"
+        ],
+        "signature": "session_id: str, req: IncidentCardSubmit, db: AsyncSession=Depends(get_db)"
+      }
+    ]
+  },
+  {
+    "file": "backend/api/router_telephony.py",
+    "imports": [
+      "import asyncio",
+      "import logging",
+      "import uuid",
+      "from typing import Optional, Dict, Any, List",
+      "from fastapi import APIRouter, Depends, HTTPException, status, WebSocket, WebSocketDisconnect",
+      "from pydantic import BaseModel, Field",
+      "from sqlalchemy import select",
+      "from sqlalchemy.ext.asyncio import AsyncSession",
+      "from sqlalchemy.orm.attributes import flag_modified",
+      "from backend.database import get_db",
+      "from backend.core.deps import require_role",
+      "from backend.models.domain_03 import ExamSession",
+      "from backend.core.telephony_adapter import telephony_adapter"
+    ],
+    "definitions": [
+      {
+        "name": "StartCallRequest",
+        "start": 40,
+        "end": 43,
+        "decorators": [],
+        "signature": null
+      },
+      {
+        "name": "StartCallResponse",
+        "start": 46,
+        "end": 52,
+        "decorators": [],
+        "signature": null
+      },
+      {
+        "name": "HangupRequest",
+        "start": 55,
+        "end": 59,
+        "decorators": [],
+        "signature": null
+      },
+      {
+        "name": "HangupResponse",
+        "start": 62,
+        "end": 66,
+        "decorators": [],
+        "signature": null
+      },
+      {
+        "name": "PlayAudioRequest",
+        "start": 69,
+        "end": 73,
+        "decorators": [],
+        "signature": null
+      },
+      {
+        "name": "PlayAudioResponse",
+        "start": 76,
+        "end": 81,
+        "decorators": [],
+        "signature": null
+      },
+      {
+        "name": "TelephonyStatusResponse",
+        "start": 84,
+        "end": 89,
+        "decorators": [],
+        "signature": null
+      },
+      {
+        "name": "TelephonyConnectionManager",
+        "start": 94,
+        "end": 139,
+        "decorators": [],
+        "signature": null
+      },
+      {
+        "name": "_update_db_session_call_status",
+        "start": 147,
+        "end": 180,
+        "decorators": [],
+        "signature": "db: AsyncSession, session_id: Optional[str], call_status: str, operator_ext: str, ticket_id: str, call_id: str"
+      },
+      {
+        "name": "start_call",
+        "start": 186,
+        "end": 280,
+        "decorators": [
+          "router_telephony.post('/start_call', response_model=StartCallResponse, dependencies=[Depends(require_role('TEACHER', 'CADET'))])"
+        ],
+        "signature": "req: StartCallRequest, db: AsyncSession=Depends(get_db)"
+      },
+      {
+        "name": "hangup",
+        "start": 284,
+        "end": 323,
+        "decorators": [
+          "router_telephony.post('/hangup', response_model=HangupResponse, dependencies=[Depends(require_role('TEACHER', 'CADET'))])"
+        ],
+        "signature": "req: HangupRequest, db: AsyncSession=Depends(get_db)"
+      },
+      {
+        "name": "play_audio",
+        "start": 327,
+        "end": 351,
+        "decorators": [
+          "router_telephony.post('/play_audio', response_model=PlayAudioResponse, dependencies=[Depends(require_role('TEACHER', 'CADET'))])"
+        ],
+        "signature": "req: PlayAudioRequest, db: AsyncSession=Depends(get_db)"
+      },
+      {
+        "name": "get_telephony_status",
+        "start": 355,
+        "end": 377,
+        "decorators": [
+          "router_telephony.get('/status/{session_id}', response_model=TelephonyStatusResponse)"
+        ],
+        "signature": "session_id: str, db: AsyncSession=Depends(get_db)"
+      },
+      {
+        "name": "telephony_websocket",
+        "start": 383,
+        "end": 416,
+        "decorators": [
+          "router_telephony.websocket('/ws/{session_id}')"
+        ],
+        "signature": "websocket: WebSocket, session_id: str"
+      }
+    ]
+  },
+  {
+    "file": "backend/api/router_tickets.py",
+    "imports": [
+      "import asyncio",
+      "import io",
+      "import json",
+      "import logging",
+      "import os",
+      "import re",
+      "import uuid",
+      "from typing import Any, Dict, List, Optional",
+      "from fastapi import APIRouter, BackgroundTasks, Depends, File, HTTPException, Query, Response, UploadFile, status",
+      "from pydantic import BaseModel",
+      "from sqlalchemy import desc, func, select, text",
+      "from sqlalchemy.ext.asyncio import AsyncSession",
+      "import openpyxl",
+      "from openpyxl.styles import Alignment, Font, PatternFill",
+      "from openpyxl.utils import get_column_letter",
+      "from backend.core.bricks_compiler import compile_ticket",
+      "from backend.core.dds_cycle import extract_dds_ticket_metadata, matches_dds_ticket_filters",
+      "from backend.core.deps import require_role",
+      "from backend.core.faker import FakeDataGenerator",
+      "from backend.core.text_normalization import expand_address_for_tts, format_phone_for_tts, expand_address",
+      "from backend.core.ticket_generator import generate_tickets",
+      "from backend.core.tts_v2 import tts_engine_v2",
+      "from backend.database import AsyncSessionLocal, get_db",
+      "from backend.models.domain_02 import GeneratedTicket, ScenarioTicket",
+      "from backend.schemas.domain_02 import TicketUpdate, TicketFilterParams, TicketGenerateAcceptedResponse, TicketGenerateRequest, TicketResponse, TicketStatusResponse",
+      "from backend.schemas.generator import ClassifierRow",
+      "import random",
+      "from sqlalchemy import or_",
+      "from backend.core.text_normalization import expand_address_for_tts, format_phone_for_tts",
+      "from backend.core.tts_v2 import tts_engine_v2",
+      "import hashlib",
+      "import re",
+      "from backend.core.text_normalization import expand_address_for_tts, format_phone_for_tts",
+      "from backend.core.tts_v2 import tts_engine_v2",
+      "import hashlib",
+      "import re",
+      "import random",
+      "from sqlalchemy import text",
+      "from sqlalchemy import or_",
+      "from sqlalchemy import or_",
+      "from backend.core.tts_v2 import tts_engine_v2"
+    ],
+    "definitions": [
+      {
+        "name": "make_abbr",
+        "start": 53,
+        "end": 56,
+        "decorators": [],
+        "signature": "text: str"
+      },
+      {
+        "name": "load_classifier_ekp",
+        "start": 105,
+        "end": 124,
+        "decorators": [],
+        "signature": ""
+      },
+      {
+        "name": "get_templates_for_category",
+        "start": 127,
+        "end": 132,
+        "decorators": [],
+        "signature": "category: str, subcategory: Optional[str]=None"
+      },
+      {
+        "name": "extract_service_codes",
+        "start": 135,
+        "end": 167,
+        "decorators": [],
+        "signature": "record: dict, category: str"
+      },
+      {
+        "name": "resolve_classifier_row",
+        "start": 170,
+        "end": 224,
+        "decorators": [],
+        "signature": "category: str, subcategory: Optional[str]=None"
+      },
+      {
+        "name": "generate_tickets_background_task",
+        "start": 233,
+        "end": 340,
+        "decorators": [],
+        "signature": "category: Optional[str], subcategory: Optional[str], count: int"
+      },
+      {
+        "name": "get_tickets_status",
+        "start": 348,
+        "end": 353,
+        "decorators": [
+          "api_tickets_router.get('/status', response_model=TicketStatusResponse)",
+          "api_tickets_router.get('/status/', response_model=TicketStatusResponse, include_in_schema=False)",
+          "tickets_router.get('/status', response_model=TicketStatusResponse)",
+          "tickets_router.get('/status/', response_model=TicketStatusResponse, include_in_schema=False)"
+        ],
+        "signature": ""
+      },
+      {
+        "name": "get_tickets_counts",
+        "start": 360,
+        "end": 414,
+        "decorators": [
+          "api_tickets_router.get('/counts')",
+          "api_tickets_router.get('/counts/', include_in_schema=False)",
+          "tickets_router.get('/counts')",
+          "tickets_router.get('/counts/', include_in_schema=False)"
+        ],
+        "signature": "complexity: Optional[int]=Query(None, ge=1, le=3, description='Сложность (1-3)'), db: AsyncSession=Depends(get_db)"
+      },
+      {
+        "name": "get_ticket",
+        "start": 420,
+        "end": 470,
+        "decorators": [
+          "api_tickets_router.get('/{ticket_id}', response_model=TicketResponse)",
+          "api_tickets_router.get('/{ticket_id}/', response_model=TicketResponse, include_in_schema=False)",
+          "tickets_router.get('/{ticket_id}', response_model=TicketResponse)",
+          "tickets_router.get('/{ticket_id}/', response_model=TicketResponse, include_in_schema=False)"
+        ],
+        "signature": "ticket_id: str, db: AsyncSession=Depends(get_db)"
+      },
+      {
+        "name": "list_tickets",
+        "start": 478,
+        "end": 569,
+        "decorators": [
+          "api_tickets_router.get('', response_model=List[TicketResponse])",
+          "api_tickets_router.get('/', response_model=List[TicketResponse], include_in_schema=False)",
+          "tickets_router.get('', response_model=List[TicketResponse])",
+          "tickets_router.get('/', response_model=List[TicketResponse], include_in_schema=False)"
+        ],
+        "signature": "category: Optional[str]=Query(None, description='Категория билета'), subcategory: Optional[str]=Query(None, description='Подкатегория'), complexity: Optional[int]=Query(None, ge=1, le=3, description='Сложность (1-3)'), limit: Optional[int]=Query(100, ge=1, le=500), include_deleted: Optional[bool]=Query(False, description='Включая удаленные'), db: AsyncSession=Depends(get_db)"
+      },
+      {
+        "name": "generate_ticket_endpoint",
+        "start": 594,
+        "end": 608,
+        "decorators": [
+          "api_tickets_router.post('/generate', status_code=status.HTTP_202_ACCEPTED, response_model=TicketGenerateAcceptedResponse)",
+          "api_tickets_router.post('/generate/', status_code=status.HTTP_202_ACCEPTED, response_model=TicketGenerateAcceptedResponse, include_in_schema=False)",
+          "tickets_router.post('/generate', status_code=status.HTTP_202_ACCEPTED, response_model=TicketGenerateAcceptedResponse)",
+          "tickets_router.post('/generate/', status_code=status.HTTP_202_ACCEPTED, response_model=TicketGenerateAcceptedResponse, include_in_schema=False)"
+        ],
+        "signature": "req: TicketGenerateRequest, background_tasks: BackgroundTasks, _teacher=Depends(require_role('TEACHER'))"
+      },
+      {
+        "name": "generate_tickets_import_template_excel",
+        "start": 611,
+        "end": 666,
+        "decorators": [],
+        "signature": ""
+      },
+      {
+        "name": "download_tickets_import_template",
+        "start": 673,
+        "end": 683,
+        "decorators": [
+          "api_tickets_router.get('/import/template')",
+          "api_tickets_router.get('/import/template/', include_in_schema=False)",
+          "tickets_router.get('/import/template')",
+          "tickets_router.get('/import/template/', include_in_schema=False)"
+        ],
+        "signature": ""
+      },
+      {
+        "name": "upload_tickets_import",
+        "start": 690,
+        "end": 924,
+        "decorators": [
+          "api_tickets_router.post('/import/upload')",
+          "api_tickets_router.post('/import/upload/', include_in_schema=False)",
+          "tickets_router.post('/import/upload')",
+          "tickets_router.post('/import/upload/', include_in_schema=False)"
+        ],
+        "signature": "file: UploadFile=File(...), db: AsyncSession=Depends(get_db), _teacher=Depends(require_role('TEACHER'))"
+      },
+      {
+        "name": "_generate_preview_audio_for_ticket",
+        "start": 927,
+        "end": 972,
+        "decorators": [],
+        "signature": "plot: str, gt: dict"
+      },
+      {
+        "name": "get_ticket_audio",
+        "start": 978,
+        "end": 1017,
+        "decorators": [
+          "api_tickets_router.get('/{ticket_id}/audio')",
+          "api_tickets_router.get('/{ticket_id}/audio/', include_in_schema=False)",
+          "tickets_router.get('/{ticket_id}/audio')",
+          "tickets_router.get('/{ticket_id}/audio/', include_in_schema=False)"
+        ],
+        "signature": "ticket_id: str, db: AsyncSession=Depends(get_db)"
+      },
+      {
+        "name": "tts_speak",
+        "start": 1022,
+        "end": 1041,
+        "decorators": [
+          "api_tickets_router.get('/tts/speak')",
+          "tickets_router.get('/tts/speak')"
+        ],
+        "signature": "text: str=Query(..., description='Текст для озвучки'), speaker: str=Query('aidar', description='Голос TTS (aidar, baya, kseniya, eugene)')"
+      },
+      {
+        "name": "get_service_reply",
+        "start": 1046,
+        "end": 1071,
+        "decorators": [
+          "api_tickets_router.get('/tts/service-reply')",
+          "tickets_router.get('/tts/service-reply')"
+        ],
+        "signature": "service_name: str"
+      },
+      {
+        "name": "get_service_accepted",
+        "start": 1075,
+        "end": 1099,
+        "decorators": [
+          "api_tickets_router.get('/tts/service-accepted')",
+          "tickets_router.get('/tts/service-accepted')"
+        ],
+        "signature": "service_name: str"
+      },
+      {
+        "name": "update_ticket",
+        "start": 1106,
+        "end": 1174,
+        "decorators": [
+          "api_tickets_router.patch('/{ticket_id}', response_model=TicketResponse)",
+          "api_tickets_router.patch('/{ticket_id}/', response_model=TicketResponse, include_in_schema=False)",
+          "tickets_router.patch('/{ticket_id}', response_model=TicketResponse)",
+          "tickets_router.patch('/{ticket_id}/', response_model=TicketResponse, include_in_schema=False)"
+        ],
+        "signature": "ticket_id: str, ticket_in: TicketUpdate, db: AsyncSession=Depends(get_db), _teacher=Depends(require_role('TEACHER'))"
+      },
+      {
+        "name": "delete_ticket",
+        "start": 1180,
+        "end": 1201,
+        "decorators": [
+          "api_tickets_router.delete('/{ticket_id}', status_code=status.HTTP_200_OK)",
+          "api_tickets_router.delete('/{ticket_id}/', status_code=status.HTTP_200_OK, include_in_schema=False)",
+          "tickets_router.delete('/{ticket_id}', status_code=status.HTTP_200_OK)",
+          "tickets_router.delete('/{ticket_id}/', status_code=status.HTTP_200_OK, include_in_schema=False)"
+        ],
+        "signature": "ticket_id: str, db: AsyncSession=Depends(get_db), _teacher=Depends(require_role('TEACHER'))"
+      },
+      {
+        "name": "TicketRefineRequest",
+        "start": 1204,
+        "end": 1205,
+        "decorators": [],
+        "signature": null
+      },
+      {
+        "name": "refine_ticket",
+        "start": 1211,
+        "end": 1283,
+        "decorators": [
+          "api_tickets_router.post('/{ticket_id}/refine', response_model=TicketResponse)",
+          "api_tickets_router.post('/{ticket_id}/refine/', response_model=TicketResponse, include_in_schema=False)",
+          "tickets_router.post('/{ticket_id}/refine', response_model=TicketResponse)",
+          "tickets_router.post('/{ticket_id}/refine/', response_model=TicketResponse, include_in_schema=False)"
+        ],
+        "signature": "ticket_id: str, req: TicketRefineRequest, db: AsyncSession=Depends(get_db), _teacher=Depends(require_role('TEACHER'))"
+      },
+      {
+        "name": "search_addresses",
+        "start": 1290,
+        "end": 1322,
+        "decorators": [
+          "api_tickets_router.get('/addresses')",
+          "api_tickets_router.get('/addresses/', include_in_schema=False)",
+          "tickets_router.get('/addresses')",
+          "tickets_router.get('/addresses/', include_in_schema=False)"
+        ],
+        "signature": "q: str=Query('', description='Поисковый запрос')"
+      },
+      {
+        "name": "_generate_preview_audio_for_ticket",
+        "start": 1323,
+        "end": 1370,
+        "decorators": [],
+        "signature": "plot: str, gt: dict"
+      }
+    ]
+  },
+  {
+    "file": "backend/api/router_users.py",
+    "imports": [
+      "import secrets",
+      "import string",
+      "from datetime import datetime, timezone",
+      "from typing import Optional",
+      "from fastapi import APIRouter, Depends, HTTPException, Query, status",
+      "from sqlalchemy import select",
+      "from sqlalchemy.ext.asyncio import AsyncSession",
+      "from backend.core.deps import get_current_user, require_role",
+      "from backend.core.auth_sessions import revoke_all_user_sessions",
+      "from backend.core.security import check_teacher_user_management, hash_password",
+      "from backend.database import get_db",
+      "from backend.models.domain_01 import SecurityPolicy, StudentGroup, User, student_group_link",
+      "from backend.schemas.users import PasswordResetRequest, UserCreate, UserResponse, UserUpdate"
+    ],
+    "definitions": [
+      {
+        "name": "get_current_user_profile",
+        "start": 37,
+        "end": 45,
+        "decorators": [
+          "users_me_router.get('/api/v1/users/me', response_model=UserResponse)",
+          "users_me_router.get('/api/users/me', response_model=UserResponse, include_in_schema=False)"
+        ],
+        "signature": "current_user: User=Depends(get_current_user)"
+      },
+      {
+        "name": "get_users",
+        "start": 52,
+        "end": 104,
+        "decorators": [
+          "users_router.get('', response_model=list[UserResponse])",
+          "users_router.get('/', response_model=list[UserResponse], include_in_schema=False)",
+          "api_users_router.get('', response_model=list[UserResponse])",
+          "api_users_router.get('/', response_model=list[UserResponse], include_in_schema=False)"
+        ],
+        "signature": "role: Optional[str]=Query(None), current_user: User=Depends(get_current_user), db: AsyncSession=Depends(get_db)"
+      },
+      {
+        "name": "create_user",
+        "start": 111,
+        "end": 131,
+        "decorators": [
+          "users_router.post('', response_model=UserResponse)",
+          "users_router.post('/', response_model=UserResponse, include_in_schema=False)",
+          "api_users_router.post('', response_model=UserResponse)",
+          "api_users_router.post('/', response_model=UserResponse, include_in_schema=False)"
+        ],
+        "signature": "user_in: UserCreate, current_user: User=Depends(get_current_user), db: AsyncSession=Depends(get_db)"
+      },
+      {
+        "name": "update_user",
+        "start": 138,
+        "end": 191,
+        "decorators": [
+          "users_router.patch('/{user_id}', response_model=UserResponse)",
+          "users_router.patch('/{user_id}/', response_model=UserResponse, include_in_schema=False)",
+          "api_users_router.patch('/{user_id}', response_model=UserResponse)",
+          "api_users_router.patch('/{user_id}/', response_model=UserResponse, include_in_schema=False)"
+        ],
+        "signature": "user_id: str, user_in: UserUpdate, current_user: User=Depends(get_current_user), db: AsyncSession=Depends(get_db)"
+      },
+      {
+        "name": "delete_user",
+        "start": 198,
+        "end": 223,
+        "decorators": [
+          "users_router.delete('/{user_id}')",
+          "users_router.delete('/{user_id}/', include_in_schema=False)",
+          "api_users_router.delete('/{user_id}')",
+          "api_users_router.delete('/{user_id}/', include_in_schema=False)"
+        ],
+        "signature": "user_id: str, current_user: User=Depends(get_current_user), db: AsyncSession=Depends(get_db)"
+      },
+      {
+        "name": "reset_user_password",
+        "start": 230,
+        "end": 295,
+        "decorators": [
+          "api_users_router.post('/{user_id}/reset-password')",
+          "api_users_router.post('/{user_id}/reset-password/', include_in_schema=False)",
+          "users_router.post('/{user_id}/reset-password')",
+          "users_router.post('/{user_id}/reset-password/', include_in_schema=False)"
+        ],
+        "signature": "user_id: str, current_user: User=Depends(get_current_user), db: AsyncSession=Depends(get_db), reset_in: Optional[PasswordResetRequest]=None"
+      }
+    ]
+  },
+  {
+    "file": "backend/core/__init__.py",
+    "imports": [
+      "from .factoid_generator import router, factoid_router",
+      "from .runtime_router import V2ApplicantSession"
+    ],
+    "definitions": [
+      {
+        "name": "__getattr__",
+        "start": 1,
+        "end": 8,
+        "decorators": [],
+        "signature": "name: str"
+      }
+    ]
+  },
+  {
+    "file": "backend/core/ai_analytics_access.py",
+    "imports": [
+      "from typing import List, Set",
+      "from sqlalchemy import select",
+      "from sqlalchemy.ext.asyncio import AsyncSession",
+      "from backend.models.domain_01 import StudentGroup, student_group_link"
+    ],
+    "definitions": [
+      {
+        "name": "extract_cadet_ids_from_group",
+        "start": 18,
+        "end": 33,
+        "decorators": [],
+        "signature": "group: StudentGroup"
+      },
+      {
+        "name": "get_teacher_groups",
+        "start": 36,
+        "end": 44,
+        "decorators": [],
+        "signature": "db: AsyncSession, teacher_id: str"
+      },
+      {
+        "name": "get_teacher_cadet_ids",
+        "start": 47,
+        "end": 74,
+        "decorators": [],
+        "signature": "db: AsyncSession, teacher_id: str"
+      },
+      {
+        "name": "is_cadet_accessible_to_teacher",
+        "start": 77,
+        "end": 84,
+        "decorators": [],
+        "signature": "db: AsyncSession, teacher_id: str, cadet_id: str"
+      }
+    ]
+  },
+  {
+    "file": "backend/core/ai_worker.py",
+    "imports": [
+      "import asyncio",
+      "import logging",
+      "import os",
+      "import uuid",
+      "from datetime import datetime, timezone, timedelta",
+      "from typing import Any, Dict, List, Optional",
+      "import httpx",
+      "from sqlalchemy import select, func, and_",
+      "from sqlalchemy.ext.asyncio import AsyncSession",
+      "from backend.database import AsyncSessionLocal",
+      "from backend.models.domain_01 import User, StudentGroup",
+      "from backend.models.domain_02 import ScenarioTicket",
+      "from backend.models.domain_03 import ExamSession, CardActionSession, SessionStateModel, AIStudentAdvice, AIGroupAdvice",
+      "from backend.models.domain_04 import EvaluationResult, TicketResult"
+    ],
+    "definitions": [
+      {
+        "name": "call_qwen_llm",
+        "start": 45,
+        "end": 152,
+        "decorators": [],
+        "signature": "prompt: str, sleep_seconds: float=0.0, model: str=DEFAULT_MODEL_NAME"
+      },
+      {
+        "name": "collect_cadet_session_data",
+        "start": 155,
+        "end": 236,
+        "decorators": [],
+        "signature": "cadet_id: str, db: AsyncSession, target_date: Optional[datetime]=None"
+      },
+      {
+        "name": "build_cadet_prompt",
+        "start": 239,
+        "end": 273,
+        "decorators": [],
+        "signature": "cadet_data: Dict[str, Any]"
+      },
+      {
+        "name": "collect_group_session_data",
+        "start": 276,
+        "end": 316,
+        "decorators": [],
+        "signature": "group_id: str, db: AsyncSession, target_date: Optional[datetime]=None"
+      },
+      {
+        "name": "build_group_prompt",
+        "start": 319,
+        "end": 338,
+        "decorators": [],
+        "signature": "group_data: Dict[str, Any]"
+      },
+      {
+        "name": "run_cadet_analysis",
+        "start": 341,
+        "end": 365,
+        "decorators": [],
+        "signature": "cadet_id: str, db: AsyncSession, sleep_seconds: float=5.0, model: str=DEFAULT_MODEL_NAME, target_date: Optional[datetime]=None"
+      },
+      {
+        "name": "run_group_analysis",
+        "start": 368,
+        "end": 392,
+        "decorators": [],
+        "signature": "group_id: str, db: AsyncSession, sleep_seconds: float=5.0, model: str=DEFAULT_MODEL_NAME, target_date: Optional[datetime]=None"
+      },
+      {
+        "name": "AIAnalysisWorker",
+        "start": 395,
+        "end": 483,
+        "decorators": [],
+        "signature": null
+      }
+    ]
+  },
+  {
+    "file": "backend/core/analytics_engine.py",
+    "imports": [
+      "from typing import Any, Dict, List, Optional, Union"
+    ],
+    "definitions": [
+      {
+        "name": "build_error_heatmap",
+        "start": 9,
+        "end": 54,
+        "decorators": [],
+        "signature": "records: List[Dict[str, Any]]"
+      },
+      {
+        "name": "calculate_trends",
+        "start": 57,
+        "end": 111,
+        "decorators": [],
+        "signature": "records: List[Dict[str, Any]]"
+      }
+    ]
+  },
+  {
+    "file": "backend/core/audit_middleware.py",
+    "imports": [
+      "import logging",
+      "from typing import Optional",
+      "from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoint",
+      "from starlette.requests import Request",
+      "from starlette.responses import Response",
+      "from backend.core.security import decode_access_token",
+      "from backend.database import AsyncSessionLocal",
+      "from backend.models.domain_01 import UserActionLog"
+    ],
+    "definitions": [
+      {
+        "name": "_extract_token",
+        "start": 18,
+        "end": 26,
+        "decorators": [],
+        "signature": "auth_header: Optional[str]"
+      },
+      {
+        "name": "AuditMiddleware",
+        "start": 29,
+        "end": 60,
+        "decorators": [],
+        "signature": null
+      }
+    ]
+  },
+  {
+    "file": "backend/core/auth_sessions.py",
+    "imports": [
+      "import uuid",
+      "from datetime import datetime, timezone",
+      "from typing import Optional",
+      "from sqlalchemy import select, update",
+      "from sqlalchemy.ext.asyncio import AsyncSession",
+      "from backend.models.domain_01 import AuthSession"
+    ],
+    "definitions": [
+      {
+        "name": "utc_now",
+        "start": 20,
+        "end": 21,
+        "decorators": [],
+        "signature": ""
+      },
+      {
+        "name": "create_user_session",
+        "start": 24,
+        "end": 60,
+        "decorators": [],
+        "signature": "db: AsyncSession, *, user_id: str, expires_at: datetime, ip_address: Optional[str]=None, user_agent: Optional[str]=None"
+      },
+      {
+        "name": "revoke_session",
+        "start": 63,
+        "end": 78,
+        "decorators": [],
+        "signature": "db: AsyncSession, *, session_id: str, user_id: Optional[str]=None"
+      },
+      {
+        "name": "revoke_all_user_sessions",
+        "start": 81,
+        "end": 91,
+        "decorators": [],
+        "signature": "db: AsyncSession, *, user_id: str"
+      }
+    ]
+  },
+  {
+    "file": "backend/core/bootstrap.py",
+    "imports": [
+      "from sqlalchemy import select",
+      "from sqlalchemy.ext.asyncio import AsyncSession",
+      "from backend.core.security import hash_password",
+      "from backend.models.domain_01 import User"
+    ],
+    "definitions": [
+      {
+        "name": "ensure_initial_admin",
+        "start": 10,
+        "end": 39,
+        "decorators": [],
+        "signature": "db: AsyncSession, username: str | None, password: str | None, full_name: str | None=None"
+      }
+    ]
+  },
+  {
+    "file": "backend/core/bricks_compiler.py",
+    "imports": [
+      "import logging",
+      "from typing import List",
+      "from backend.schemas.bricks import Brick, BricksMatrix, Emotion, Intent, TicketData"
+    ],
+    "definitions": [
+      {
+        "name": "compile_ticket",
+        "start": 8,
+        "end": 105,
+        "decorators": [],
+        "signature": "data: TicketData"
+      }
+    ]
+  },
+  {
+    "file": "backend/core/classifier_rules.py",
+    "imports": [
+      "from typing import List, Optional"
+    ],
+    "definitions": [
+      {
+        "name": "calculate_recommended_services",
+        "start": 6,
+        "end": 29,
+        "decorators": [],
+        "signature": "base_services: Optional[List[str]], has_victims: bool=False, is_blocked: bool=False, is_fire: bool=False"
+      }
+    ]
+  },
+  {
+    "file": "backend/core/complexity.py",
+    "imports": [],
+    "definitions": [
+      {
+        "name": "calculate_complexity",
+        "start": 1,
+        "end": 29,
+        "decorators": [],
+        "signature": "services: list[str], markers: list[str]"
+      }
+    ]
+  },
+  {
+    "file": "backend/core/csv_parser.py",
+    "imports": [
+      "from typing import IO",
+      "import csv",
+      "from backend.schemas.domain_01 import StudentCSVRow"
+    ],
+    "definitions": [
+      {
+        "name": "parse_students_csv",
+        "start": 9,
+        "end": 38,
+        "decorators": [],
+        "signature": "file_obj: IO[str]"
+      },
+      {
+        "name": "generate_csv_template",
+        "start": 41,
+        "end": 43,
+        "decorators": [],
+        "signature": ""
+      }
+    ]
+  },
+  {
+    "file": "backend/core/dds_cycle.py",
+    "imports": [
+      "import math",
+      "from copy import deepcopy",
+      "from datetime import datetime, timezone",
+      "from typing import Any, Dict, List, Optional",
+      "from fastapi import HTTPException, status",
+      "from sqlalchemy import select, text",
+      "from sqlalchemy.ext.asyncio import AsyncSession",
+      "from sqlalchemy.orm.attributes import flag_modified",
+      "from backend.models.domain_01 import User, StudentGroup",
+      "from backend.models.domain_02 import ScenarioTicket",
+      "from backend.models.domain_03 import Assignment, ExamSession",
+      "from backend.models.domain_04 import IncidentCard, EvaluationResult, TicketResult",
+      "from backend.schemas.dds_cycle import DispatcherData, DDSActionPayload",
+      "from backend.schemas.lessons import CadetLessonStats, CadetTicketDetail",
+      "from backend.core.dds_service_policy import action_error, allowed_statuses, current_service_statuses",
+      "from backend.core.dds_queue import archived_cards, card_progress, completion_blockers, has_dispatch, queue_ticket_details",
+      "from backend.core.dds_exercise import projection",
+      "from backend.core.dds_exercise import now_utc",
+      "from backend.core.dds_queue import stop_session",
+      "from backend.core.dds_phone import saved_request, attempt_result",
+      "from backend.core.dds_exercise import action_issue, now_utc",
+      "from backend.core.dds_phone import record",
+      "from backend.core.dds_exercise import accepted_action",
+      "from backend.core.dds_phone import record",
+      "from backend.core.dds_exercise import projection",
+      "from backend.core.dds_queue import store_state"
+    ],
+    "definitions": [
+      {
+        "name": "sanitize_incoming_card",
+        "start": 31,
+        "end": 44,
+        "decorators": [],
+        "signature": "content: Any"
+      },
+      {
+        "name": "incoming_card_from_ticket",
+        "start": 47,
+        "end": 72,
+        "decorators": [],
+        "signature": "ticket: ScenarioTicket"
+      },
+      {
+        "name": "is_suitable_dds_ticket",
+        "start": 75,
+        "end": 83,
+        "decorators": [],
+        "signature": "ticket: Optional[ScenarioTicket]"
+      },
+      {
+        "name": "extract_dds_ticket_metadata",
+        "start": 86,
+        "end": 136,
+        "decorators": [],
+        "signature": "ticket: ScenarioTicket"
+      },
+      {
+        "name": "matches_dds_ticket_filters",
+        "start": 139,
+        "end": 160,
+        "decorators": [],
+        "signature": "ticket: ScenarioTicket, category: Optional[str]=None, subcategory: Optional[str]=None, complexity: Optional[int]=None"
+      },
+      {
+        "name": "get_session_score",
+        "start": 163,
+        "end": 207,
+        "decorators": [],
+        "signature": "evals: List[EvaluationResult], trs: List[TicketResult]"
+      },
+      {
+        "name": "lock_assignment",
+        "start": 210,
+        "end": 215,
+        "decorators": [],
+        "signature": "db: AsyncSession, assignment_id: str"
+      },
+      {
+        "name": "build_session_state_dict",
+        "start": 218,
+        "end": 285,
+        "decorators": [],
+        "signature": "session: ExamSession, lesson: Assignment, card: Optional[IncidentCard], evals: List[EvaluationResult], trs: List[TicketResult]"
+      },
+      {
+        "name": "_validate_session_is_assigned_dds",
+        "start": 288,
+        "end": 301,
+        "decorators": [],
+        "signature": "session: ExamSession, lesson: Assignment"
+      },
+      {
+        "name": "apply_dds_action",
+        "start": 304,
+        "end": 515,
+        "decorators": [],
+        "signature": "session_id: str, payload: DDSActionPayload, current_user: User, db: AsyncSession"
+      },
+      {
+        "name": "finish_dds_session",
+        "start": 518,
+        "end": 525,
+        "decorators": [],
+        "signature": "session_id: str, current_user: User, db: AsyncSession"
+      },
+      {
+        "name": "get_dds_session_state",
+        "start": 528,
+        "end": 591,
+        "decorators": [],
+        "signature": "session_id: str, current_user: User, db: AsyncSession, card_id: Optional[str]=None"
+      },
+      {
+        "name": "list_cadet_dds_assignments",
+        "start": 595,
+        "end": 652,
+        "decorators": [],
+        "signature": "current_user: User, db: AsyncSession"
+      },
+      {
+        "name": "build_dds_cadet_stats",
+        "start": 655,
+        "end": 1093,
+        "decorators": [],
+        "signature": "lesson: Assignment, group: Optional[StudentGroup], db: AsyncSession"
+      }
+    ]
+  },
+  {
+    "file": "backend/core/dds_exercise.py",
+    "imports": [
+      "from copy import deepcopy",
+      "from datetime import datetime, timedelta, timezone",
+      "import re",
+      "import uuid",
+      "from backend.schemas.dds_exercise import ExercisePlan, STAGES",
+      "from backend.core.dds_service_policy import allowed_statuses",
+      "from sqlalchemy import select",
+      "from backend.models.domain_04 import TicketResult"
+    ],
+    "definitions": [
+      {
+        "name": "now_utc",
+        "start": 23,
+        "end": 24,
+        "decorators": [],
+        "signature": ""
+      },
+      {
+        "name": "parse_time",
+        "start": 27,
+        "end": 29,
+        "decorators": [],
+        "signature": "value"
+      },
+      {
+        "name": "norm",
+        "start": 32,
+        "end": 33,
+        "decorators": [],
+        "signature": "value"
+      },
+      {
+        "name": "contains",
+        "start": 36,
+        "end": 37,
+        "decorators": [],
+        "signature": "text, keywords"
+      },
+      {
+        "name": "validated_plan",
+        "start": 40,
+        "end": 44,
+        "decorators": [],
+        "signature": "raw, services"
+      },
+      {
+        "name": "initialize",
+        "start": 47,
+        "end": 52,
+        "decorators": [],
+        "signature": "plan, card_id, at"
+      },
+      {
+        "name": "event",
+        "start": 55,
+        "end": 58,
+        "decorators": [],
+        "signature": "exercise, kind, at, card_id, **extra"
+      },
+      {
+        "name": "current",
+        "start": 61,
+        "end": 64,
+        "decorators": [],
+        "signature": "exercise"
+      },
+      {
+        "name": "contact_for",
+        "start": 67,
+        "end": 68,
+        "decorators": [],
+        "signature": "exercise, report"
+      },
+      {
+        "name": "skip_refused",
+        "start": 71,
+        "end": 76,
+        "decorators": [],
+        "signature": "data, at"
+      },
+      {
+        "name": "schedule",
+        "start": 79,
+        "end": 93,
+        "decorators": [],
+        "signature": "data, at"
+      },
+      {
+        "name": "action_issue",
+        "start": 96,
+        "end": 126,
+        "decorators": [],
+        "signature": "data, payload, service_status"
+      },
+      {
+        "name": "accepted_action",
+        "start": 129,
+        "end": 144,
+        "decorators": [],
+        "signature": "data, payload, at"
+      },
+      {
+        "name": "criteria",
+        "start": 147,
+        "end": 175,
+        "decorators": [],
+        "signature": "data, closed=False"
+      },
+      {
+        "name": "projection",
+        "start": 178,
+        "end": 199,
+        "decorators": [],
+        "signature": "data, editable"
+      },
+      {
+        "name": "contact_public",
+        "start": 202,
+        "end": 203,
+        "decorators": [],
+        "signature": "contact"
+      },
+      {
+        "name": "finalize_result",
+        "start": 206,
+        "end": 221,
+        "decorators": [],
+        "signature": "db, session, data, status"
+      }
+    ]
+  },
+  {
+    "file": "backend/core/dds_phone.py",
+    "imports": [
+      "from copy import deepcopy",
+      "from fastapi import HTTPException",
+      "from backend.core import dds_exercise as training",
+      "from backend.core.dds_queue import locked_context, store_state",
+      "from backend.core.dds_service_policy import current_service_statuses",
+      "from backend.models.domain_04 import IncidentCard",
+      "from backend.core.dds_cycle import get_dds_session_state"
+    ],
+    "definitions": [
+      {
+        "name": "retry",
+        "start": 10,
+        "end": 14,
+        "decorators": [],
+        "signature": "exercise, payload"
+      },
+      {
+        "name": "record",
+        "start": 17,
+        "end": 25,
+        "decorators": [],
+        "signature": "data, payload, at, reason=None"
+      },
+      {
+        "name": "phone_command",
+        "start": 28,
+        "end": 85,
+        "decorators": [],
+        "signature": "db, session_id, payload, user"
+      },
+      {
+        "name": "attempt_result",
+        "start": 88,
+        "end": 90,
+        "decorators": [],
+        "signature": "saved"
+      },
+      {
+        "name": "saved_request",
+        "start": 93,
+        "end": 99,
+        "decorators": [],
+        "signature": "data, payload"
+      }
+    ]
+  },
+  {
+    "file": "backend/core/dds_queue.py",
+    "imports": [
+      "from copy import deepcopy",
+      "from datetime import datetime, timezone",
+      "from typing import Any",
+      "from fastapi import HTTPException",
+      "from sqlalchemy import select, text",
+      "from sqlalchemy.ext.asyncio import AsyncSession",
+      "from sqlalchemy.orm.attributes import flag_modified",
+      "from backend.core.dds_service_policy import canonical_status, current_service_statuses",
+      "from backend.models.domain_02 import ScenarioTicket",
+      "from backend.models.domain_01 import User",
+      "from backend.models.domain_03 import Assignment, ExamSession",
+      "from backend.models.domain_04 import IncidentCard, TicketResult",
+      "from backend.schemas.dds_cycle import DDSTrainingStartPayload",
+      "from backend.core.dds_cycle import incoming_card_from_ticket, is_suitable_dds_ticket, extract_dds_ticket_metadata",
+      "from backend.core.dds_exercise import initialize",
+      "from backend.core.dds_cycle import _validate_session_is_assigned_dds, lock_assignment",
+      "from backend.core.dds_cycle import get_dds_session_state",
+      "from backend.core.dds_exercise import finalize_result",
+      "from backend.core.dds_cycle import get_dds_session_state",
+      "from backend.core.dds_exercise import finalize_result",
+      "from backend.core.dds_cycle import get_dds_session_state",
+      "from backend.core.dds_cycle import get_session_score",
+      "from backend.schemas.lessons import CadetTicketDetail",
+      "from backend.core.dds_exercise import validated_plan",
+      "from backend.core.dds_phone import retry, attempt_result",
+      "from backend.core.dds_phone import retry, record",
+      "from backend.core.dds_exercise import now_utc",
+      "from backend.core.dds_exercise import criteria",
+      "from backend.core.dds_phone import record"
+    ],
+    "definitions": [
+      {
+        "name": "available_for_training",
+        "start": 19,
+        "end": 21,
+        "decorators": [],
+        "signature": "ticket: ScenarioTicket"
+      },
+      {
+        "name": "load_pool",
+        "start": 24,
+        "end": 46,
+        "decorators": [],
+        "signature": "db: AsyncSession, ticket_ids: list[str], *, training: bool=False"
+      },
+      {
+        "name": "store_state",
+        "start": 49,
+        "end": 53,
+        "decorators": [],
+        "signature": "session: ExamSession, data: dict[str, Any]"
+      },
+      {
+        "name": "activate_card",
+        "start": 56,
+        "end": 78,
+        "decorators": [],
+        "signature": "db: AsyncSession, session: ExamSession, data: dict[str, Any], index: int, now: datetime"
+      },
+      {
+        "name": "initialize_queue",
+        "start": 81,
+        "end": 84,
+        "decorators": [],
+        "signature": "db: AsyncSession, session: ExamSession, pool: list[dict[str, Any]], now: datetime"
+      },
+      {
+        "name": "completion_blockers",
+        "start": 87,
+        "end": 108,
+        "decorators": [],
+        "signature": "data: dict[str, Any], assigned: dict[str, Any]"
+      },
+      {
+        "name": "has_dispatch",
+        "start": 111,
+        "end": 114,
+        "decorators": [],
+        "signature": "actions: list[dict[str, Any]], service_name: str"
+      },
+      {
+        "name": "archived_cards",
+        "start": 117,
+        "end": 118,
+        "decorators": [],
+        "signature": "data: dict[str, Any]"
+      },
+      {
+        "name": "card_progress",
+        "start": 121,
+        "end": 127,
+        "decorators": [],
+        "signature": "data: dict[str, Any]"
+      },
+      {
+        "name": "locked_context",
+        "start": 130,
+        "end": 146,
+        "decorators": [],
+        "signature": "db: AsyncSession, session_id: str, user: User"
+      },
+      {
+        "name": "complete_card",
+        "start": 149,
+        "end": 224,
+        "decorators": [],
+        "signature": "db: AsyncSession, session_id: str, card_id: str, request_id: str, user: User"
+      },
+      {
+        "name": "stop_session",
+        "start": 227,
+        "end": 250,
+        "decorators": [],
+        "signature": "db: AsyncSession, session_id: str, user: User"
+      },
+      {
+        "name": "start_training",
+        "start": 253,
+        "end": 284,
+        "decorators": [],
+        "signature": "db: AsyncSession, payload: DDSTrainingStartPayload, user: User"
+      },
+      {
+        "name": "queue_ticket_details",
+        "start": 287,
+        "end": 320,
+        "decorators": [],
+        "signature": "session, evaluations, results"
+      }
+    ]
+  },
+  {
+    "file": "backend/core/dds_report_data.py",
+    "imports": [
+      "from copy import deepcopy",
+      "from datetime import datetime",
+      "from typing import Any, Dict, List, Optional",
+      "from fastapi import HTTPException, status",
+      "from pydantic import BaseModel, ConfigDict, Field",
+      "from sqlalchemy import func, select",
+      "from sqlalchemy.ext.asyncio import AsyncSession",
+      "from backend.models.domain_01 import User, StudentGroup",
+      "from backend.models.domain_03 import Assignment, ExamSession",
+      "from backend.models.domain_04 import IncidentCard, EvaluationResult, TicketResult",
+      "from backend.core.dds_exercise import criteria"
+    ],
+    "definitions": [
+      {
+        "name": "DDSReportEvaluationItem",
+        "start": 31,
+        "end": 39,
+        "decorators": [],
+        "signature": null
+      },
+      {
+        "name": "DDSReportTicketResultItem",
+        "start": 42,
+        "end": 51,
+        "decorators": [],
+        "signature": null
+      },
+      {
+        "name": "DDSReportCardItem",
+        "start": 54,
+        "end": 59,
+        "decorators": [],
+        "signature": null
+      },
+      {
+        "name": "DDSReportSessionItem",
+        "start": 62,
+        "end": 76,
+        "decorators": [],
+        "signature": null
+      },
+      {
+        "name": "DDSReportStudentItem",
+        "start": 79,
+        "end": 84,
+        "decorators": [],
+        "signature": null
+      },
+      {
+        "name": "DDSReportSummary",
+        "start": 87,
+        "end": 92,
+        "decorators": [],
+        "signature": null
+      },
+      {
+        "name": "DDSLessonReportDataResponse",
+        "start": 95,
+        "end": 103,
+        "decorators": [],
+        "signature": null
+      },
+      {
+        "name": "_format_datetime",
+        "start": 108,
+        "end": 113,
+        "decorators": [],
+        "signature": "dt: Any"
+      },
+      {
+        "name": "collect_lesson_report_data",
+        "start": 118,
+        "end": 352,
+        "decorators": [],
+        "signature": "db: AsyncSession, lesson_id: str, lesson: Optional[Assignment]=None"
+      },
+      {
+        "name": "_exercise_protocols",
+        "start": 355,
+        "end": 379,
+        "decorators": [],
+        "signature": "data"
+      }
+    ]
+  },
+  {
+    "file": "backend/core/dds_report_jobs.py",
+    "imports": [
+      "import asyncio",
+      "import copy",
+      "import logging",
+      "from datetime import datetime, timezone",
+      "from typing import Any, Dict, Optional, Tuple",
+      "import httpx",
+      "from sqlalchemy import select, update",
+      "from sqlalchemy.ext.asyncio import AsyncSession",
+      "from backend.database import AsyncSessionLocal",
+      "from backend.models.dds_report_job import DDSReportJob",
+      "from backend.core.dds_report_llm import DDSReportConfigurationError, DDSReportGenerationError, generate_dds_lesson_report"
+    ],
+    "definitions": [
+      {
+        "name": "classify_error",
+        "start": 46,
+        "end": 110,
+        "decorators": [],
+        "signature": "exc: Exception"
+      },
+      {
+        "name": "DDSReportJobWorker",
+        "start": 115,
+        "end": 390,
+        "decorators": [],
+        "signature": null
+      }
+    ]
+  },
+  {
+    "file": "backend/core/dds_report_llm.py",
+    "imports": [
+      "import json",
+      "import logging",
+      "import math",
+      "import os",
+      "from typing import Any, Dict, List, Optional, Union",
+      "from urllib.parse import urlsplit",
+      "import httpx",
+      "from pydantic import ValidationError",
+      "from backend.core.dds_report_data import DDSLessonReportDataResponse"
+    ],
+    "definitions": [
+      {
+        "name": "DDSReportGenerationError",
+        "start": 42,
+        "end": 44,
+        "decorators": [],
+        "signature": null
+      },
+      {
+        "name": "DDSReportConfigurationError",
+        "start": 47,
+        "end": 49,
+        "decorators": [],
+        "signature": null
+      },
+      {
+        "name": "DDSLLMSettings",
+        "start": 54,
+        "end": 162,
+        "decorators": [],
+        "signature": null
+      },
+      {
+        "name": "get_llm_settings",
+        "start": 165,
+        "end": 179,
+        "decorators": [],
+        "signature": ""
+      },
+      {
+        "name": "build_dds_report_messages",
+        "start": 207,
+        "end": 243,
+        "decorators": [],
+        "signature": "snapshot: Union[Dict[str, Any], DDSLessonReportDataResponse]"
+      },
+      {
+        "name": "generate_dds_lesson_report",
+        "start": 248,
+        "end": 431,
+        "decorators": [],
+        "signature": "snapshot: Union[Dict[str, Any], DDSLessonReportDataResponse], client: Optional[httpx.AsyncClient]=None, settings: Optional[DDSLLMSettings]=None"
+      }
+    ]
+  },
+  {
+    "file": "backend/core/dds_service_policy.py",
+    "imports": [
+      "from typing import Any"
+    ],
+    "definitions": [
+      {
+        "name": "canonical_status",
+        "start": 14,
+        "end": 15,
+        "decorators": [],
+        "signature": "value: str"
+      },
+      {
+        "name": "allowed_statuses",
+        "start": 18,
+        "end": 28,
+        "decorators": [],
+        "signature": "current: str"
+      },
+      {
+        "name": "current_service_statuses",
+        "start": 31,
+        "end": 41,
+        "decorators": [],
+        "signature": "incoming: dict, assigned: dict, actions: list[dict]"
+      },
+      {
+        "name": "action_error",
+        "start": 44,
+        "end": 60,
+        "decorators": [],
+        "signature": "current: str, payload: Any"
+      }
+    ]
+  },
+  {
+    "file": "backend/core/deps.py",
+    "imports": [
+      "import os",
+      "from datetime import datetime, timezone",
+      "from fastapi import Depends, HTTPException, status",
+      "from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer",
+      "from typing import Optional",
+      "from sqlalchemy import select",
+      "from sqlalchemy.ext.asyncio import AsyncSession",
+      "from backend.core.security import decode_access_token",
+      "from backend.database import get_db",
+      "from backend.models.domain_01 import AuthSession, User"
+    ],
+    "definitions": [
+      {
+        "name": "get_current_user",
+        "start": 19,
+        "end": 85,
+        "decorators": [],
+        "signature": "credentials: HTTPAuthorizationCredentials=Depends(bearer_scheme), db: AsyncSession=Depends(get_db)"
+      },
+      {
+        "name": "get_current_user_optional",
+        "start": 87,
+        "end": 95,
+        "decorators": [],
+        "signature": "credentials: HTTPAuthorizationCredentials=Depends(bearer_scheme), db: AsyncSession=Depends(get_db)"
+      },
+      {
+        "name": "require_role",
+        "start": 97,
+        "end": 111,
+        "decorators": [],
+        "signature": "*roles: str"
+      }
+    ]
+  },
+  {
+    "file": "backend/core/dialogue_router.py",
+    "imports": [
+      "from __future__ import annotations",
+      "from backend.schemas.bricks import Brick, Intent",
+      "from backend.schemas.router import SessionState"
+    ],
+    "definitions": [
+      {
+        "name": "process_turn",
+        "start": 7,
+        "end": 25,
+        "decorators": [],
+        "signature": "current_state: SessionState, matrix_bricks: list[Brick], operator_intent: Intent"
+      }
+    ]
+  },
+  {
+    "file": "backend/core/evaluator.py",
+    "imports": [
+      "from typing import Any, Dict",
+      "from backend.schemas.domain_04 import TicketEvaluationRequest, TicketEvaluationResult"
+    ],
+    "definitions": [
+      {
+        "name": "normalize_text",
+        "start": 7,
+        "end": 13,
+        "decorators": [],
+        "signature": "text: str"
+      },
+      {
+        "name": "evaluate_ticket",
+        "start": 16,
+        "end": 52,
+        "decorators": [],
+        "signature": "req: TicketEvaluationRequest"
+      }
+    ]
+  },
+  {
+    "file": "backend/core/factoid_generator.py",
+    "imports": [
+      "import os",
+      "import re",
+      "import json",
+      "import logging",
+      "import threading",
+      "from typing import Generator, Optional, Dict, Any, Union",
+      "from fastapi import APIRouter",
+      "from fastapi.responses import StreamingResponse",
+      "from pydantic import BaseModel",
+      "from llama_cpp import LlamaDiskCache",
+      "import llama_cpp",
+      "from llama_cpp import LlamaDiskCache",
+      "from llama_cpp.llama_cache import LlamaDiskCache",
+      "from llama_cpp.llama_cache import LlamaDiskCache"
+    ],
+    "definitions": [
+      {
+        "name": "FactoidGenerationRequest",
+        "start": 23,
+        "end": 38,
+        "decorators": [],
+        "signature": null
+      },
+      {
+        "name": "get_llm",
+        "start": 91,
+        "end": 183,
+        "decorators": [],
+        "signature": ""
+      },
+      {
+        "name": "format_ground_truth_input",
+        "start": 186,
+        "end": 234,
+        "decorators": [],
+        "signature": "payload: Union[FactoidGenerationRequest, dict, str]"
+      },
+      {
+        "name": "stream_scenario_factoids",
+        "start": 237,
+        "end": 297,
+        "decorators": [],
+        "signature": "request_data: Union[FactoidGenerationRequest, str, dict]"
+      },
+      {
+        "name": "generate_scenario_sse",
+        "start": 305,
+        "end": 314,
+        "decorators": [
+          "router.post('/generate_scenario_sse')"
+        ],
+        "signature": "payload: FactoidGenerationRequest"
+      }
+    ]
+  },
+  {
+    "file": "backend/core/factoids_llm.py",
+    "imports": [
+      "import inspect",
+      "import re",
+      "import httpx",
+      "from typing import List",
+      "from backend.schemas.factoids import Factoid, FactoidGenerationRequest, FactoidsResponse"
+    ],
+    "definitions": [
+      {
+        "name": "build_prompt",
+        "start": 42,
+        "end": 81,
+        "decorators": [],
+        "signature": "request: FactoidGenerationRequest"
+      },
+      {
+        "name": "call_llm_api",
+        "start": 84,
+        "end": 100,
+        "decorators": [],
+        "signature": "prompt: str"
+      },
+      {
+        "name": "generate_factoids",
+        "start": 103,
+        "end": 119,
+        "decorators": [],
+        "signature": "request: FactoidGenerationRequest"
+      }
+    ]
+  },
+  {
+    "file": "backend/core/faker.py",
+    "imports": [
+      "import json",
+      "import os",
+      "from pathlib import Path",
+      "import random",
+      "from typing import List, Optional",
+      "from backend.schemas.faker import GeneratedAddress, GeneratedPerson"
+    ],
+    "definitions": [
+      {
+        "name": "FakeDataGenerator",
+        "start": 127,
+        "end": 217,
+        "decorators": [],
+        "signature": null
+      }
+    ]
+  },
+  {
+    "file": "backend/core/file_storage.py",
+    "imports": [
+      "import os",
+      "import uuid",
+      "import re"
+    ],
+    "definitions": [
+      {
+        "name": "generate_safe_filename",
+        "start": 5,
+        "end": 22,
+        "decorators": [],
+        "signature": "original_name: str"
+      },
+      {
+        "name": "get_relative_path",
+        "start": 24,
+        "end": 26,
+        "decorators": [],
+        "signature": "safe_name: str"
+      }
+    ]
+  },
+  {
+    "file": "backend/core/integrity.py",
+    "imports": [
+      "import argparse",
+      "import hashlib",
+      "import json",
+      "import os",
+      "import sys",
+      "from datetime import datetime, timezone",
+      "from pathlib import Path",
+      "from typing import Any, Dict, List, Optional, Set, Tuple"
+    ],
+    "definitions": [
+      {
+        "name": "hash_file_sha256",
+        "start": 61,
+        "end": 67,
+        "decorators": [],
+        "signature": "path: Path | str, chunk_size: int=65536"
+      },
+      {
+        "name": "is_safe_relative_path",
+        "start": 70,
+        "end": 80,
+        "decorators": [],
+        "signature": "path_str: str"
+      },
+      {
+        "name": "check_parent_dirs_safe",
+        "start": 83,
+        "end": 102,
+        "decorators": [],
+        "signature": "root: Path, rel_path: str"
+      },
+      {
+        "name": "is_path_in_scope",
+        "start": 105,
+        "end": 151,
+        "decorators": [],
+        "signature": "rel_path: str"
+      },
+      {
+        "name": "scan_scope_files",
+        "start": 154,
+        "end": 177,
+        "decorators": [],
+        "signature": "root_dir: Path | str"
+      },
+      {
+        "name": "generate_manifest",
+        "start": 180,
+        "end": 266,
+        "decorators": [],
+        "signature": "root_dir: Path | str, output_path: Path | str"
+      },
+      {
+        "name": "verify_integrity",
+        "start": 269,
+        "end": 526,
+        "decorators": [],
+        "signature": "root_dir: Path | str, manifest_path: Optional[Path | str]=None"
+      },
+      {
+        "name": "main",
+        "start": 529,
+        "end": 576,
+        "decorators": [],
+        "signature": ""
+      }
+    ]
+  },
+  {
+    "file": "backend/core/intent_classifier.py",
+    "imports": [
+      "import sys",
+      "import logging",
+      "import os",
+      "import torch",
+      "from typing import Dict, Any",
+      "from backend.schemas.bricks import Intent",
+      "from inference import IntentClassifier"
+    ],
+    "definitions": [
+      {
+        "name": "classify_intent",
+        "start": 48,
+        "end": 64,
+        "decorators": [],
+        "signature": "operator_text: str"
+      },
+      {
+        "name": "classify_intent_sync",
+        "start": 66,
+        "end": 82,
+        "decorators": [],
+        "signature": "operator_text: str"
+      }
+    ]
+  },
+  {
+    "file": "backend/core/ldap_adapter.py",
+    "imports": [
+      "import os",
+      "import ldap3",
+      "import logging"
+    ],
+    "definitions": [
+      {
+        "name": "authenticate_ldap",
+        "start": 7,
+        "end": 42,
+        "decorators": [],
+        "signature": "username: str, password: str"
+      }
+    ]
+  },
+  {
+    "file": "backend/core/reports_engine.py",
+    "imports": [
+      "import csv",
+      "import io",
+      "import os",
+      "from datetime import datetime, timezone",
+      "from pathlib import Path",
+      "from typing import Any, Dict, List, Tuple",
+      "from jinja2 import Environment, FileSystemLoader, select_autoescape",
+      "from openpyxl import Workbook",
+      "from openpyxl.styles import Alignment, Border, Font, PatternFill, Side",
+      "from openpyxl.utils import get_column_letter",
+      "import weasyprint",
+      "from xhtml2pdf import pisa"
+    ],
+    "definitions": [
+      {
+        "name": "calculate_final_score",
+        "start": 12,
+        "end": 123,
+        "decorators": [],
+        "signature": "comm_metrics: Dict[str, Any], card_metrics: Dict[str, Any], sla_metrics: Dict[str, Any]"
+      },
+      {
+        "name": "generate_pdf_from_html",
+        "start": 126,
+        "end": 150,
+        "decorators": [],
+        "signature": "html_content: str, output_path: str"
+      },
+      {
+        "name": "get_templates_dir",
+        "start": 153,
+        "end": 159,
+        "decorators": [],
+        "signature": ""
+      },
+      {
+        "name": "render_report_html",
+        "start": 162,
+        "end": 170,
+        "decorators": [],
+        "signature": "context: Dict[str, Any], template_name: str='report_layout.html'"
+      },
+      {
+        "name": "generate_csv_from_data",
+        "start": 173,
+        "end": 207,
+        "decorators": [],
+        "signature": "cadets: List[Dict[str, Any]]"
+      },
+      {
+        "name": "generate_excel_from_data",
+        "start": 210,
+        "end": 399,
+        "decorators": [],
+        "signature": "cadets_data: List[Dict[str, Any]]"
+      }
+    ]
+  },
+  {
+    "file": "backend/core/runtime_router.py",
+    "imports": [
+      "import os",
+      "import re",
+      "import json",
+      "import time",
+      "import logging",
+      "from typing import Dict, Any, List, Optional, Tuple, Set",
+      "from backend.core.intent_classifier import classify_intent_sync"
+    ],
+    "definitions": [
+      {
+        "name": "V2ApplicantSession",
+        "start": 33,
+        "end": 430,
+        "decorators": [],
+        "signature": null
+      },
+      {
+        "name": "RuntimeRouter",
+        "start": 433,
+        "end": 438,
+        "decorators": [],
+        "signature": null
+      }
+    ]
+  },
+  {
+    "file": "backend/core/security.py",
+    "imports": [
+      "import os",
+      "from datetime import datetime, timedelta, timezone",
+      "from typing import Optional",
+      "import bcrypt",
+      "from jose import JWTError, jwt",
+      "from fastapi import HTTPException, status",
+      "from fastapi import HTTPException, status"
+    ],
+    "definitions": [
+      {
+        "name": "hash_password",
+        "start": 21,
+        "end": 25,
+        "decorators": [],
+        "signature": "plain_password: str"
+      },
+      {
+        "name": "verify_password",
+        "start": 28,
+        "end": 36,
+        "decorators": [],
+        "signature": "plain_password: str, hashed_password: str"
+      },
+      {
+        "name": "create_access_token",
+        "start": 40,
+        "end": 69,
+        "decorators": [],
+        "signature": "subject: str, role: str, extra: Optional[dict]=None, expires_delta: Optional[timedelta]=None, token_id: Optional[str]=None"
+      },
+      {
+        "name": "decode_access_token",
+        "start": 72,
+        "end": 81,
+        "decorators": [],
+        "signature": "token: str"
+      },
+      {
+        "name": "check_teacher_user_management",
+        "start": 84,
+        "end": 106,
+        "decorators": [],
+        "signature": "current_user_role: str, target_user_role: Optional[str]=None, new_role: Optional[str]=None"
+      }
+    ]
+  },
+  {
+    "file": "backend/core/sla_monitor.py",
+    "imports": [
+      "import copy",
+      "from datetime import datetime, timezone",
+      "from typing import Any, Dict"
+    ],
+    "definitions": [
+      {
+        "name": "calculate_sla_status",
+        "start": 8,
+        "end": 51,
+        "decorators": [],
+        "signature": "services: Dict[str, Any], current_time: datetime, timeout_sec: int=30"
+      },
+      {
+        "name": "update_service_status",
+        "start": 54,
+        "end": 89,
+        "decorators": [],
+        "signature": "services: Dict[str, Any], service_name: str, new_status: str, comment: str, current_time: datetime"
+      }
+    ]
+  },
+  {
+    "file": "backend/core/spo_gateway.py",
+    "imports": [
+      "import os",
+      "import json",
+      "import logging",
+      "from typing import Optional",
+      "from httpx import AsyncClient",
+      "from zeep import AsyncClient as ZeepAsyncClient",
+      "from zeep.transports import AsyncTransport"
+    ],
+    "definitions": [
+      {
+        "name": "SpoGateway",
+        "start": 11,
+        "end": 60,
+        "decorators": [],
+        "signature": null
+      }
+    ]
+  },
+  {
+    "file": "backend/core/telephony_adapter.py",
+    "imports": [
+      "import os",
+      "import socket",
+      "import logging",
+      "import asyncio",
+      "from typing import Optional",
+      "from panoramisk import Manager"
+    ],
+    "definitions": [
+      {
+        "name": "TelephonyAdapter",
+        "start": 10,
+        "end": 154,
+        "decorators": [],
+        "signature": null
+      }
+    ]
+  },
+  {
+    "file": "backend/core/text_normalization.py",
+    "imports": [
+      "import re",
+      "from num2words import num2words"
+    ],
+    "definitions": [
+      {
+        "name": "num2words_ru",
+        "start": 4,
+        "end": 8,
+        "decorators": [],
+        "signature": "num_str: str"
+      },
+      {
+        "name": "format_phone_for_tts",
+        "start": 10,
+        "end": 51,
+        "decorators": [],
+        "signature": "phone: str"
+      },
+      {
+        "name": "expand_address_for_tts",
+        "start": 53,
+        "end": 83,
+        "decorators": [],
+        "signature": "text: str"
+      }
+    ]
+  },
+  {
+    "file": "backend/core/ticket_generator.py",
+    "imports": [
+      "import uuid",
+      "from typing import Any, List",
+      "from backend.core.complexity import calculate_complexity",
+      "from backend.schemas.generator import ClassifierRow, TicketData",
+      "import re as _re",
+      "import random"
+    ],
+    "definitions": [
+      {
+        "name": "_SafeFormatDict",
+        "start": 8,
+        "end": 12,
+        "decorators": [],
+        "signature": null
+      },
+      {
+        "name": "generate_tickets",
+        "start": 15,
+        "end": 107,
+        "decorators": [],
+        "signature": "classifier_row: ClassifierRow, count: int, faker: Any"
+      }
+    ]
+  },
+  {
+    "file": "backend/core/tts_engine.py",
+    "imports": [
+      "import inspect",
+      "import httpx"
+    ],
+    "definitions": [
+      {
+        "name": "generate_audio",
+        "start": 6,
+        "end": 19,
+        "decorators": [],
+        "signature": "text: str"
+      }
+    ]
+  },
+  {
+    "file": "backend/core/tts_v2.py",
+    "imports": [
+      "import io",
+      "import os",
+      "import re",
+      "import uuid",
+      "import hashlib",
+      "import tempfile",
+      "import subprocess",
+      "import num2words",
+      "from pathlib import Path",
+      "from typing import Optional, List"
+    ],
+    "definitions": [
+      {
+        "name": "normalize_phone_number",
+        "start": 13,
+        "end": 27,
+        "decorators": [],
+        "signature": "match"
+      },
+      {
+        "name": "normalize_text_v2",
+        "start": 30,
+        "end": 69,
+        "decorators": [],
+        "signature": "text: str"
+      },
+      {
+        "name": "QwenTTSV2",
+        "start": 72,
+        "end": 186,
+        "decorators": [],
+        "signature": null
+      }
+    ]
+  },
+  {
+    "file": "backend/database.py",
+    "imports": [
+      "import os",
+      "from typing import AsyncGenerator",
+      "from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine",
+      "from sqlalchemy.orm import sessionmaker"
+    ],
+    "definitions": [
+      {
+        "name": "get_db",
+        "start": 25,
+        "end": 28,
+        "decorators": [],
+        "signature": ""
+      }
+    ]
+  },
+  {
+    "file": "backend/db/__init__.py",
+    "imports": [],
+    "definitions": []
+  },
+  {
+    "file": "backend/db/database.py",
+    "imports": [
+      "from typing import AsyncGenerator",
+      "from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine"
+    ],
+    "definitions": [
+      {
+        "name": "get_db",
+        "start": 27,
+        "end": 30,
+        "decorators": [],
+        "signature": ""
+      }
+    ]
+  },
+  {
+    "file": "backend/main.py",
+    "imports": [
+      "import os",
+      "from contextlib import asynccontextmanager",
+      "import httpx",
+      "from fastapi import FastAPI, Depends, Query",
+      "from fastapi.middleware.cors import CORSMiddleware",
+      "from fastapi.responses import RedirectResponse",
+      "from fastapi.staticfiles import StaticFiles",
+      "from backend.core.deps import require_role",
+      "from backend.api.router_assignments import assignments_router",
+      "from backend.api.router_audit import audit_router, error_logs_router",
+      "from backend.api.router_auth import auth_router",
+      "from backend.api.router_call import router_call",
+      "from backend.api.router_classifier import classifier_router, classifier_v1_router",
+      "from backend.api.router_dds import router_dds",
+      "from backend.api.router_dds_cycle import router_dds_cycle",
+      "from backend.api.router_scenario import router as scenario_router",
+      "from backend.api.router_groups import groups_router, groups_v1_router, api_groups_router, students_router, students_v1_router",
+      "from backend.api.router_reports import reports_router",
+      "from backend.api.router_scenarios import scenarios_router",
+      "from backend.api.router_sessions import sessions_router, sessions_v1_router",
+      "from backend.api.router_lessons import lessons_router",
+      "from backend.api.router_users import users_router, api_users_router, users_me_router",
+      "from backend.api.router_analytics import analytics_router, analytics_v1_router",
+      "from backend.api.router_admin import admin_router",
+      "from backend.api.router_generator import router as generator_router",
+      "from backend.api.router_tickets import tickets_router, api_tickets_router",
+      "from backend.api.router_knowledge import knowledge_router",
+      "from backend.api.router_asr import router_asr",
+      "from backend.api.router_telephony import router_telephony",
+      "from backend.api.router_ai_analytics import router as ai_analytics_router",
+      "from backend.api.router_dds_reports import router as dds_reports_router",
+      "from backend.api.router_integration import router_integration",
+      "from backend.core.audit_middleware import AuditMiddleware",
+      "from fastapi import APIRouter as _APIRouter, Query as _Query",
+      "import json as _json, os as _os",
+      "import sentry_sdk",
+      "from fastapi import Request",
+      "from fastapi.responses import JSONResponse",
+      "import traceback",
+      "from backend.models.domain_01 import SystemErrorLog",
+      "from backend.database import AsyncSessionLocal",
+      "import backend.models.domain_01",
+      "import backend.models.domain_02",
+      "import backend.models.domain_03",
+      "import backend.models.domain_04",
+      "import backend.models.domain_05",
+      "import backend.models.domain_06",
+      "import backend.models.dds_report_job",
+      "from backend.database import AsyncSessionLocal, engine",
+      "from backend.models.base import Base",
+      "from backend.core.bootstrap import ensure_initial_admin",
+      "import logging",
+      "from backend.core.dds_report_jobs import dds_report_job_worker",
+      "from backend.api.router_audit import get_audit_logs",
+      "from backend.database import get_db",
+      "from backend.api.router_admin import healthcheck",
+      "from backend.database import get_db",
+      "from sqlalchemy import text",
+      "from backend.api.router_asr import asr_service",
+      "import numpy as np",
+      "from backend.core.intent_classifier import classify_intent_sync",
+      "from backend.core.runtime_router import RuntimeRouter"
+    ],
+    "definitions": [
+      {
+        "name": "_patched_async_client_init",
+        "start": 19,
+        "end": 23,
+        "decorators": [],
+        "signature": "self, *args, **kwargs"
+      },
+      {
+        "name": "lifespan",
+        "start": 66,
+        "end": 168,
+        "decorators": [
+          "asynccontextmanager"
+        ],
+        "signature": "app: FastAPI"
+      },
+      {
+        "name": "_search_addresses",
+        "start": 231,
+        "end": 258,
+        "decorators": [
+          "_addresses_router.get('')",
+          "_addresses_router.get('/', include_in_schema=False)"
+        ],
+        "signature": "q: str=_Query('', description='Поисковый запрос')"
+      },
+      {
+        "name": "health_check",
+        "start": 265,
+        "end": 266,
+        "decorators": [
+          "app.get('/health', tags=['System'])"
+        ],
+        "signature": ""
+      },
+      {
+        "name": "api_health_check",
+        "start": 270,
+        "end": 271,
+        "decorators": [
+          "app.get('/api/health', tags=['System'])"
+        ],
+        "signature": ""
+      },
+      {
+        "name": "global_exception_handler",
+        "start": 286,
+        "end": 300,
+        "decorators": [
+          "app.exception_handler(Exception)"
+        ],
+        "signature": "request: Request, exc: Exception"
+      },
+      {
+        "name": "get_legacy_teacher_analytics",
+        "start": 307,
+        "end": 323,
+        "decorators": [
+          "app.get('/api/teacher/analytics', tags=['Legacy Compatibility'])"
+        ],
+        "signature": ""
+      },
+      {
+        "name": "get_legacy_admin_audit",
+        "start": 327,
+        "end": 345,
+        "decorators": [
+          "app.get('/api/admin/audit', tags=['Legacy Compatibility'], dependencies=[Depends(require_role('ADMIN'))])"
+        ],
+        "signature": "limit: int=Query(100, ge=1, le=1000, description='Max number of logs to return'), offset: int=Query(0, ge=0, description='Number of logs to skip'), from_at: str | None=Query(None, description='Start datetime with explicit timezone'), to_at: str | None=Query(None, description='End datetime with explicit timezone'), user_id: str | None=Query(None, description='Filter by user ID')"
+      },
+      {
+        "name": "get_legacy_admin_system_stats",
+        "start": 350,
+        "end": 359,
+        "decorators": [
+          "app.get('/api/admin/system_stats', tags=['Legacy Compatibility'])"
+        ],
+        "signature": ""
+      },
+      {
+        "name": "redirect_dds",
+        "start": 368,
+        "end": 369,
+        "decorators": [
+          "app.get('/dds', include_in_schema=False)"
+        ],
+        "signature": ""
+      }
+    ]
+  },
+  {
+    "file": "backend/models/base.py",
+    "imports": [
+      "from sqlalchemy.orm import declarative_base",
+      "import backend.models.domain_01",
+      "import backend.models.domain_02",
+      "import backend.models.domain_03",
+      "import backend.models.domain_04",
+      "import backend.models.domain_05"
+    ],
+    "definitions": []
+  },
+  {
+    "file": "backend/models/dds_report_job.py",
+    "imports": [
+      "import uuid",
+      "from datetime import datetime, timezone",
+      "from typing import Any, Dict, Optional",
+      "from sqlalchemy import DateTime, Integer, JSON, String, Text, func",
+      "from sqlalchemy.orm import Mapped, mapped_column",
+      "from backend.models.base import Base"
+    ],
+    "definitions": [
+      {
+        "name": "DDSReportJob",
+        "start": 18,
+        "end": 84,
+        "decorators": [],
+        "signature": null
+      }
+    ]
+  },
+  {
+    "file": "backend/models/domain_01.py",
+    "imports": [
+      "import uuid",
+      "from datetime import datetime, timezone",
+      "from enum import Enum",
+      "from typing import Optional",
+      "from sqlalchemy import Table, Column, String, Integer, Boolean, DateTime, JSON, ForeignKey, CheckConstraint, Enum as SQLEnum, func",
+      "from sqlalchemy.orm import Mapped, mapped_column, relationship, synonym",
+      "from backend.models.base import Base",
+      "from backend.models.domain_03 import AIStudentAdvice, AIGroupAdvice"
+    ],
+    "definitions": [
+      {
+        "name": "ProfileType",
+        "start": 22,
+        "end": 24,
+        "decorators": [],
+        "signature": null
+      },
+      {
+        "name": "User",
+        "start": 37,
+        "end": 96,
+        "decorators": [],
+        "signature": null
+      },
+      {
+        "name": "AuthSession",
+        "start": 99,
+        "end": 124,
+        "decorators": [],
+        "signature": null
+      },
+      {
+        "name": "StudentGroup",
+        "start": 127,
+        "end": 195,
+        "decorators": [],
+        "signature": null
+      },
+      {
+        "name": "UserActionLog",
+        "start": 201,
+        "end": 233,
+        "decorators": [],
+        "signature": null
+      },
+      {
+        "name": "__getattr__",
+        "start": 237,
+        "end": 241,
+        "decorators": [],
+        "signature": "name"
+      },
+      {
+        "name": "SecurityPolicy",
+        "start": 243,
+        "end": 250,
+        "decorators": [],
+        "signature": null
+      },
+      {
+        "name": "SystemErrorLog",
+        "start": 252,
+        "end": 267,
+        "decorators": [],
+        "signature": null
+      }
+    ]
+  },
+  {
+    "file": "backend/models/domain_02.py",
+    "imports": [
+      "import uuid",
+      "from datetime import datetime, timezone",
+      "from typing import Optional",
+      "from sqlalchemy import Integer, String, Text, DateTime, JSON, Boolean, func",
+      "from sqlalchemy.orm import Mapped, mapped_column",
+      "from backend.models.base import Base"
+    ],
+    "definitions": [
+      {
+        "name": "GeneratedTicket",
+        "start": 17,
+        "end": 65,
+        "decorators": [],
+        "signature": null
+      },
+      {
+        "name": "ScenarioTicketModel",
+        "start": 68,
+        "end": 77,
+        "decorators": [],
+        "signature": null
+      },
+      {
+        "name": "ScenarioTicket",
+        "start": 80,
+        "end": 122,
+        "decorators": [],
+        "signature": null
+      },
+      {
+        "name": "SysSequence",
+        "start": 125,
+        "end": 129,
+        "decorators": [],
+        "signature": null
+      }
+    ]
+  },
+  {
+    "file": "backend/models/domain_03.py",
+    "imports": [
+      "import uuid",
+      "from datetime import datetime, timezone",
+      "from typing import Optional",
+      "from sqlalchemy import Integer, String, Boolean, DateTime, JSON, ForeignKey, CheckConstraint, Text, func",
+      "from sqlalchemy.orm import Mapped, mapped_column",
+      "from backend.models.base import Base",
+      "from backend.models.domain_02 import ScenarioTicket"
+    ],
+    "definitions": [
+      {
+        "name": "SessionStateModel",
+        "start": 20,
+        "end": 26,
+        "decorators": [],
+        "signature": null
+      },
+      {
+        "name": "Assignment",
+        "start": 33,
+        "end": 148,
+        "decorators": [],
+        "signature": null
+      },
+      {
+        "name": "ExamSession",
+        "start": 154,
+        "end": 223,
+        "decorators": [],
+        "signature": null
+      },
+      {
+        "name": "CardActionSession",
+        "start": 229,
+        "end": 270,
+        "decorators": [],
+        "signature": null
+      },
+      {
+        "name": "ReferenceMaterial",
+        "start": 273,
+        "end": 304,
+        "decorators": [],
+        "signature": null
+      },
+      {
+        "name": "KnowledgeFile",
+        "start": 307,
+        "end": 333,
+        "decorators": [],
+        "signature": null
+      },
+      {
+        "name": "AIStudentAdvice",
+        "start": 336,
+        "end": 378,
+        "decorators": [],
+        "signature": null
+      },
+      {
+        "name": "AIGroupAdvice",
+        "start": 381,
+        "end": 423,
+        "decorators": [],
+        "signature": null
+      }
+    ]
+  },
+  {
+    "file": "backend/models/domain_04.py",
+    "imports": [
+      "import uuid",
+      "from datetime import datetime, timezone",
+      "from typing import Optional",
+      "from sqlalchemy import String, Boolean, Integer, Float, DateTime, JSON, ForeignKey, func",
+      "from sqlalchemy.orm import Mapped, mapped_column",
+      "from backend.models.base import Base"
+    ],
+    "definitions": [
+      {
+        "name": "IncidentCard",
+        "start": 21,
+        "end": 63,
+        "decorators": [],
+        "signature": null
+      },
+      {
+        "name": "EvaluationResult",
+        "start": 66,
+        "end": 119,
+        "decorators": [],
+        "signature": null
+      },
+      {
+        "name": "TicketResult",
+        "start": 122,
+        "end": 164,
+        "decorators": [],
+        "signature": null
+      },
+      {
+        "name": "SessionReport",
+        "start": 167,
+        "end": 215,
+        "decorators": [],
+        "signature": null
+      }
+    ]
+  },
+  {
+    "file": "backend/models/domain_05.py",
+    "imports": [
+      "import uuid",
+      "from datetime import datetime, timezone",
+      "from typing import Optional",
+      "from sqlalchemy import String, Integer, Boolean, DateTime, JSON, ForeignKey, func",
+      "from sqlalchemy.orm import Mapped, mapped_column",
+      "from backend.models.base import Base"
+    ],
+    "definitions": [
+      {
+        "name": "BricksMatrixRef",
+        "start": 20,
+        "end": 39,
+        "decorators": [],
+        "signature": null
+      },
+      {
+        "name": "ImportJob",
+        "start": 42,
+        "end": 79,
+        "decorators": [],
+        "signature": null
+      }
+    ]
+  },
+  {
+    "file": "backend/models/domain_06.py",
+    "imports": [
+      "from typing import List, Optional",
+      "from sqlalchemy import Integer, JSON, String",
+      "from sqlalchemy.orm import Mapped, mapped_column",
+      "from backend.models.base import Base"
+    ],
+    "definitions": [
+      {
+        "name": "ClassifierRecord",
+        "start": 9,
+        "end": 22,
+        "decorators": [],
+        "signature": null
+      }
+    ]
+  },
+  {
+    "file": "backend/schemas/__init__.py",
+    "imports": [],
+    "definitions": []
+  },
+  {
+    "file": "backend/schemas/admin.py",
+    "imports": [
+      "from typing import Optional",
+      "from pydantic import BaseModel"
+    ],
+    "definitions": [
+      {
+        "name": "HealthCheckResponse",
+        "start": 7,
+        "end": 10,
+        "decorators": [],
+        "signature": null
+      },
+      {
+        "name": "BackupResponse",
+        "start": 13,
+        "end": 18,
+        "decorators": [],
+        "signature": null
+      },
+      {
+        "name": "BackupItem",
+        "start": 21,
+        "end": 24,
+        "decorators": [],
+        "signature": null
+      },
+      {
+        "name": "BackupsListResponse",
+        "start": 27,
+        "end": 28,
+        "decorators": [],
+        "signature": null
+      },
+      {
+        "name": "IntegrityDeviationSchema",
+        "start": 31,
+        "end": 34,
+        "decorators": [],
+        "signature": null
+      },
+      {
+        "name": "IntegrityCheckResponse",
+        "start": 37,
+        "end": 44,
+        "decorators": [],
+        "signature": null
+      }
+    ]
+  },
+  {
+    "file": "backend/schemas/analytics.py",
+    "imports": [
+      "from typing import Any, Dict, List, Optional, Union",
+      "from pydantic import BaseModel, Field, RootModel"
+    ],
+    "definitions": [
+      {
+        "name": "HeatmapResponse",
+        "start": 7,
+        "end": 31,
+        "decorators": [],
+        "signature": null
+      },
+      {
+        "name": "TrendPoint",
+        "start": 34,
+        "end": 44,
+        "decorators": [],
+        "signature": null
+      },
+      {
+        "name": "TrendResponse",
+        "start": 47,
+        "end": 71,
+        "decorators": [],
+        "signature": null
+      },
+      {
+        "name": "LeaderboardItem",
+        "start": 74,
+        "end": 94,
+        "decorators": [],
+        "signature": null
+      },
+      {
+        "name": "LeaderboardResponse",
+        "start": 97,
+        "end": 109,
+        "decorators": [],
+        "signature": null
+      },
+      {
+        "name": "RecordAppealRequest",
+        "start": 112,
+        "end": 114,
+        "decorators": [],
+        "signature": null
+      },
+      {
+        "name": "RecordSummary",
+        "start": 117,
+        "end": 125,
+        "decorators": [],
+        "signature": null
+      },
+      {
+        "name": "CadetAnalyticsSummary",
+        "start": 128,
+        "end": 132,
+        "decorators": [],
+        "signature": null
+      },
+      {
+        "name": "SessionAnalyticsResponse",
+        "start": 135,
+        "end": 139,
+        "decorators": [],
+        "signature": null
+      },
+      {
+        "name": "RecordDetailResponse",
+        "start": 142,
+        "end": 154,
+        "decorators": [],
+        "signature": null
+      },
+      {
+        "name": "DailyDynamicsPoint",
+        "start": 157,
+        "end": 164,
+        "decorators": [],
+        "signature": null
+      },
+      {
+        "name": "GroupComparisonItem",
+        "start": 167,
+        "end": 175,
+        "decorators": [],
+        "signature": null
+      },
+      {
+        "name": "ErrorTypeInfo",
+        "start": 178,
+        "end": 183,
+        "decorators": [],
+        "signature": null
+      },
+      {
+        "name": "EntityErrorInfo",
+        "start": 186,
+        "end": 192,
+        "decorators": [],
+        "signature": null
+      },
+      {
+        "name": "ErrorHeatmapResponse",
+        "start": 195,
+        "end": 199,
+        "decorators": [],
+        "signature": null
+      }
+    ]
+  },
+  {
+    "file": "backend/schemas/assignments.py",
+    "imports": [
+      "from datetime import datetime",
+      "from typing import Optional",
+      "from pydantic import BaseModel"
+    ],
+    "definitions": [
+      {
+        "name": "AssignmentCreate",
+        "start": 6,
+        "end": 11,
+        "decorators": [],
+        "signature": null
+      },
+      {
+        "name": "AssignmentResponse",
+        "start": 14,
+        "end": 22,
+        "decorators": [],
+        "signature": null
+      }
+    ]
+  },
+  {
+    "file": "backend/schemas/audit.py",
+    "imports": [
+      "from datetime import datetime",
+      "from typing import Optional",
+      "from pydantic import BaseModel"
+    ],
+    "definitions": [
+      {
+        "name": "UserActionLogResponse",
+        "start": 8,
+        "end": 22,
+        "decorators": [],
+        "signature": null
+      },
+      {
+        "name": "SystemErrorLogResponse",
+        "start": 25,
+        "end": 31,
+        "decorators": [],
+        "signature": null
+      }
+    ]
+  },
+  {
+    "file": "backend/schemas/auth.py",
+    "imports": [
+      "from typing import Any, Optional",
+      "from pydantic import BaseModel"
+    ],
+    "definitions": [
+      {
+        "name": "LoginRequest",
+        "start": 5,
+        "end": 8,
+        "decorators": [],
+        "signature": null
+      },
+      {
+        "name": "TwoFactorRequiredResponse",
+        "start": 11,
+        "end": 13,
+        "decorators": [],
+        "signature": null
+      },
+      {
+        "name": "TwoFactorSetupResponse",
+        "start": 16,
+        "end": 19,
+        "decorators": [],
+        "signature": null
+      },
+      {
+        "name": "TwoFactorVerifyRequest",
+        "start": 22,
+        "end": 23,
+        "decorators": [],
+        "signature": null
+      },
+      {
+        "name": "Login2FARequest",
+        "start": 26,
+        "end": 29,
+        "decorators": [],
+        "signature": null
+      },
+      {
+        "name": "TwoFactorStatusResponse",
+        "start": 32,
+        "end": 33,
+        "decorators": [],
+        "signature": null
+      },
+      {
+        "name": "TokenResponse",
+        "start": 36,
+        "end": 45,
+        "decorators": [],
+        "signature": null
+      }
+    ]
+  },
+  {
+    "file": "backend/schemas/bricks.py",
+    "imports": [
+      "from enum import Enum",
+      "from typing import List, Dict",
+      "from pydantic import BaseModel, Field"
+    ],
+    "definitions": [
+      {
+        "name": "Emotion",
+        "start": 6,
+        "end": 8,
+        "decorators": [],
+        "signature": null
+      },
+      {
+        "name": "Intent",
+        "start": 11,
+        "end": 21,
+        "decorators": [],
+        "signature": null
+      },
+      {
+        "name": "Brick",
+        "start": 24,
+        "end": 34,
+        "decorators": [],
+        "signature": null
+      },
+      {
+        "name": "BricksMatrix",
+        "start": 37,
+        "end": 39,
+        "decorators": [],
+        "signature": null
+      },
+      {
+        "name": "TicketData",
+        "start": 42,
+        "end": 46,
+        "decorators": [],
+        "signature": null
+      }
+    ]
+  },
+  {
+    "file": "backend/schemas/classifier.py",
+    "imports": [
+      "from typing import List, Optional",
+      "from pydantic import BaseModel, ConfigDict, Field"
+    ],
+    "definitions": [
+      {
+        "name": "ClassifierRecordResponse",
+        "start": 7,
+        "end": 17,
+        "decorators": [],
+        "signature": null
+      },
+      {
+        "name": "CalculateRequest",
+        "start": 20,
+        "end": 38,
+        "decorators": [],
+        "signature": null
+      },
+      {
+        "name": "CalculateResponse",
+        "start": 41,
+        "end": 45,
+        "decorators": [],
+        "signature": null
+      }
+    ]
+  },
+  {
+    "file": "backend/schemas/dds.py",
+    "imports": [
+      "from datetime import datetime",
+      "from typing import Any, Optional",
+      "from pydantic import BaseModel, ConfigDict, Field"
+    ],
+    "definitions": [
+      {
+        "name": "DDSActionRequest",
+        "start": 8,
+        "end": 12,
+        "decorators": [],
+        "signature": null
+      },
+      {
+        "name": "DDSCardResponse",
+        "start": 15,
+        "end": 26,
+        "decorators": [],
+        "signature": null
+      }
+    ]
+  },
+  {
+    "file": "backend/schemas/dds_cycle.py",
+    "imports": [
+      "from datetime import datetime",
+      "from typing import Any, Dict, List, Literal, Optional",
+      "from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator"
+    ],
+    "definitions": [
+      {
+        "name": "DDSPhonesData",
+        "start": 27,
+        "end": 32,
+        "decorators": [],
+        "signature": null
+      },
+      {
+        "name": "DDSIncidentData",
+        "start": 35,
+        "end": 40,
+        "decorators": [],
+        "signature": null
+      },
+      {
+        "name": "DDSCallerData",
+        "start": 43,
+        "end": 48,
+        "decorators": [],
+        "signature": null
+      },
+      {
+        "name": "DDSStatusesData",
+        "start": 51,
+        "end": 56,
+        "decorators": [],
+        "signature": null
+      },
+      {
+        "name": "DDSEmergencyData",
+        "start": 59,
+        "end": 63,
+        "decorators": [],
+        "signature": null
+      },
+      {
+        "name": "DDSClassificationData",
+        "start": 66,
+        "end": 72,
+        "decorators": [],
+        "signature": null
+      },
+      {
+        "name": "DDSServiceHistoryItem",
+        "start": 75,
+        "end": 85,
+        "decorators": [],
+        "signature": null
+      },
+      {
+        "name": "DDSServiceItem",
+        "start": 88,
+        "end": 103,
+        "decorators": [],
+        "signature": null
+      },
+      {
+        "name": "DispatcherData",
+        "start": 106,
+        "end": 136,
+        "decorators": [],
+        "signature": null
+      },
+      {
+        "name": "DDSTicketSummary",
+        "start": 142,
+        "end": 149,
+        "decorators": [],
+        "signature": null
+      },
+      {
+        "name": "DDSActionPayload",
+        "start": 152,
+        "end": 181,
+        "decorators": [],
+        "signature": null
+      },
+      {
+        "name": "DDSFinishPayload",
+        "start": 184,
+        "end": 185,
+        "decorators": [],
+        "signature": null
+      },
+      {
+        "name": "DDSCompletePayload",
+        "start": 188,
+        "end": 190,
+        "decorators": [],
+        "signature": null
+      },
+      {
+        "name": "DDSTrainingStartPayload",
+        "start": 193,
+        "end": 204,
+        "decorators": [],
+        "signature": null
+      },
+      {
+        "name": "DDSSessionStateResponse",
+        "start": 207,
+        "end": 235,
+        "decorators": [],
+        "signature": null
+      }
+    ]
+  },
+  {
+    "file": "backend/schemas/dds_exercise.py",
+    "imports": [
+      "import re",
+      "from typing import Literal",
+      "from pydantic import BaseModel, ConfigDict, Field, model_validator, field_validator"
+    ],
+    "definitions": [
+      {
+        "name": "Contact",
+        "start": 9,
+        "end": 33,
+        "decorators": [],
+        "signature": null
+      },
+      {
+        "name": "Report",
+        "start": 36,
+        "end": 45,
+        "decorators": [],
+        "signature": null
+      },
+      {
+        "name": "ExercisePlan",
+        "start": 48,
+        "end": 75,
+        "decorators": [],
+        "signature": null
+      },
+      {
+        "name": "PhoneCommand",
+        "start": 78,
+        "end": 97,
+        "decorators": [],
+        "signature": null
+      }
+    ]
+  },
+  {
+    "file": "backend/schemas/domain_01.py",
+    "imports": [
+      "import re",
+      "from typing import Optional",
+      "from pydantic import BaseModel, ConfigDict, field_validator",
+      "from backend.models.domain_01 import ProfileType"
+    ],
+    "definitions": [
+      {
+        "name": "StudentCSVRow",
+        "start": 9,
+        "end": 20,
+        "decorators": [],
+        "signature": null
+      },
+      {
+        "name": "Group",
+        "start": 23,
+        "end": 31,
+        "decorators": [],
+        "signature": null
+      },
+      {
+        "name": "GroupCreate",
+        "start": 38,
+        "end": 42,
+        "decorators": [],
+        "signature": null
+      },
+      {
+        "name": "GroupResponse",
+        "start": 45,
+        "end": 53,
+        "decorators": [],
+        "signature": null
+      },
+      {
+        "name": "SingleStudentAddRequest",
+        "start": 56,
+        "end": 64,
+        "decorators": [],
+        "signature": null
+      },
+      {
+        "name": "StudentResponse",
+        "start": 67,
+        "end": 79,
+        "decorators": [],
+        "signature": null
+      }
+    ]
+  },
+  {
+    "file": "backend/schemas/domain_02.py",
+    "imports": [
+      "from datetime import datetime",
+      "from typing import Any, Dict, List, Optional",
+      "from pydantic import BaseModel, ConfigDict, Field"
+    ],
+    "definitions": [
+      {
+        "name": "TicketGenerateRequest",
+        "start": 8,
+        "end": 11,
+        "decorators": [],
+        "signature": null
+      },
+      {
+        "name": "TicketFilterParams",
+        "start": 14,
+        "end": 17,
+        "decorators": [],
+        "signature": null
+      },
+      {
+        "name": "TicketResponse",
+        "start": 23,
+        "end": 42,
+        "decorators": [],
+        "signature": null
+      },
+      {
+        "name": "TicketGenerateAcceptedResponse",
+        "start": 48,
+        "end": 49,
+        "decorators": [],
+        "signature": null
+      },
+      {
+        "name": "TicketStatusResponse",
+        "start": 52,
+        "end": 54,
+        "decorators": [],
+        "signature": null
+      },
+      {
+        "name": "TicketUpdate",
+        "start": 56,
+        "end": 63,
+        "decorators": [],
+        "signature": null
+      }
+    ]
+  },
+  {
+    "file": "backend/schemas/domain_03.py",
+    "imports": [
+      "from enum import Enum",
+      "from typing import Optional, List",
+      "from pydantic import BaseModel, Field, model_validator",
+      "from typing import Optional, List, Union"
+    ],
+    "definitions": [
+      {
+        "name": "ComplexityLevel",
+        "start": 6,
+        "end": 10,
+        "decorators": [],
+        "signature": null
+      },
+      {
+        "name": "SessionConfigCreate",
+        "start": 24,
+        "end": 40,
+        "decorators": [],
+        "signature": null
+      },
+      {
+        "name": "SessionConfigResponse",
+        "start": 43,
+        "end": 53,
+        "decorators": [],
+        "signature": null
+      }
+    ]
+  },
+  {
+    "file": "backend/schemas/domain_04.py",
+    "imports": [
+      "from datetime import datetime",
+      "from typing import Any, Dict, List, Optional",
+      "from pydantic import BaseModel, ConfigDict, Field, model_validator"
+    ],
+    "definitions": [
+      {
+        "name": "TicketEvaluationRequest",
+        "start": 6,
+        "end": 13,
+        "decorators": [],
+        "signature": null
+      },
+      {
+        "name": "TicketEvaluationResult",
+        "start": 16,
+        "end": 21,
+        "decorators": [],
+        "signature": null
+      },
+      {
+        "name": "TicketResultUpdate",
+        "start": 24,
+        "end": 28,
+        "decorators": [],
+        "signature": null
+      },
+      {
+        "name": "TicketResultResponse",
+        "start": 31,
+        "end": 43,
+        "decorators": [],
+        "signature": null
+      },
+      {
+        "name": "IncidentCardSubmit",
+        "start": 46,
+        "end": 64,
+        "decorators": [],
+        "signature": null
+      },
+      {
+        "name": "EvaluationResultResponse",
+        "start": 67,
+        "end": 73,
+        "decorators": [],
+        "signature": null
+      }
+    ]
+  },
+  {
+    "file": "backend/schemas/factoids.py",
+    "imports": [
+      "from typing import Optional, Dict, Any, List",
+      "from pydantic import BaseModel"
+    ],
+    "definitions": [
+      {
+        "name": "Factoid",
+        "start": 5,
+        "end": 7,
+        "decorators": [],
+        "signature": null
+      },
+      {
+        "name": "FactoidsResponse",
+        "start": 10,
+        "end": 11,
+        "decorators": [],
+        "signature": null
+      },
+      {
+        "name": "FactoidGenerationRequest",
+        "start": 14,
+        "end": 29,
+        "decorators": [],
+        "signature": null
+      }
+    ]
+  },
+  {
+    "file": "backend/schemas/faker.py",
+    "imports": [
+      "from typing import Optional",
+      "from pydantic import BaseModel, ConfigDict"
+    ],
+    "definitions": [
+      {
+        "name": "GeneratedPerson",
+        "start": 5,
+        "end": 11,
+        "decorators": [],
+        "signature": null
+      },
+      {
+        "name": "GeneratedAddress",
+        "start": 15,
+        "end": 29,
+        "decorators": [],
+        "signature": null
+      }
+    ]
+  },
+  {
+    "file": "backend/schemas/generator.py",
+    "imports": [
+      "import uuid",
+      "from typing import Any, Dict, List",
+      "from pydantic import BaseModel, Field",
+      "from backend.schemas.bricks import TicketData as BaseTicketData",
+      "from backend.schemas.faker import GeneratedPerson"
+    ],
+    "definitions": [
+      {
+        "name": "ClassifierRow",
+        "start": 10,
+        "end": 15,
+        "decorators": [],
+        "signature": null
+      },
+      {
+        "name": "TicketData",
+        "start": 18,
+        "end": 24,
+        "decorators": [],
+        "signature": null
+      }
+    ]
+  },
+  {
+    "file": "backend/schemas/groups.py",
+    "imports": [
+      "from typing import Optional",
+      "from pydantic import BaseModel, EmailStr, field_validator",
+      "from backend.models.domain_01 import ProfileType",
+      "import re"
+    ],
+    "definitions": [
+      {
+        "name": "GroupCreate",
+        "start": 8,
+        "end": 13,
+        "decorators": [],
+        "signature": null
+      },
+      {
+        "name": "GroupResponse",
+        "start": 16,
+        "end": 24,
+        "decorators": [],
+        "signature": null
+      },
+      {
+        "name": "SingleStudentAddRequest",
+        "start": 32,
+        "end": 39,
+        "decorators": [],
+        "signature": null
+      },
+      {
+        "name": "StudentResponse",
+        "start": 44,
+        "end": 55,
+        "decorators": [],
+        "signature": null
+      }
+    ]
+  },
+  {
+    "file": "backend/schemas/lessons.py",
+    "imports": [
+      "import datetime",
+      "from typing import List, Optional",
+      "from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator"
+    ],
+    "definitions": [
+      {
+        "name": "LessonCreate",
+        "start": 6,
+        "end": 68,
+        "decorators": [],
+        "signature": null
+      },
+      {
+        "name": "LessonNotesUpdate",
+        "start": 71,
+        "end": 72,
+        "decorators": [],
+        "signature": null
+      },
+      {
+        "name": "CadetTicketDetail",
+        "start": 75,
+        "end": 86,
+        "decorators": [],
+        "signature": null
+      },
+      {
+        "name": "CadetLessonStats",
+        "start": 89,
+        "end": 103,
+        "decorators": [],
+        "signature": null
+      },
+      {
+        "name": "LessonDetailResponse",
+        "start": 106,
+        "end": 140,
+        "decorators": [],
+        "signature": null
+      },
+      {
+        "name": "LessonSummaryResponse",
+        "start": 143,
+        "end": 161,
+        "decorators": [],
+        "signature": null
+      }
+    ]
+  },
+  {
+    "file": "backend/schemas/reports.py",
+    "imports": [
+      "from typing import Any, Dict, List, Optional",
+      "from pydantic import BaseModel, Field"
+    ],
+    "definitions": [
+      {
+        "name": "CommunicationMetrics",
+        "start": 7,
+        "end": 10,
+        "decorators": [],
+        "signature": null
+      },
+      {
+        "name": "CardMetrics",
+        "start": 13,
+        "end": 23,
+        "decorators": [],
+        "signature": null
+      },
+      {
+        "name": "SLAMetrics",
+        "start": 26,
+        "end": 31,
+        "decorators": [],
+        "signature": null
+      },
+      {
+        "name": "ScoreDetails",
+        "start": 34,
+        "end": 41,
+        "decorators": [],
+        "signature": null
+      },
+      {
+        "name": "CadetEvaluationItem",
+        "start": 44,
+        "end": 60,
+        "decorators": [],
+        "signature": null
+      },
+      {
+        "name": "ReportGenerateRequest",
+        "start": 63,
+        "end": 66,
+        "decorators": [],
+        "signature": null
+      },
+      {
+        "name": "ReportGenerateResponse",
+        "start": 69,
+        "end": 70,
+        "decorators": [],
+        "signature": null
+      },
+      {
+        "name": "ReportStatusResponse",
+        "start": 73,
+        "end": 77,
+        "decorators": [],
+        "signature": null
+      }
+    ]
+  },
+  {
+    "file": "backend/schemas/router.py",
+    "imports": [
+      "from pydantic import BaseModel, Field"
+    ],
+    "definitions": [
+      {
+        "name": "SessionState",
+        "start": 4,
+        "end": 6,
+        "decorators": [],
+        "signature": null
+      }
+    ]
+  },
+  {
+    "file": "backend/schemas/scenarios.py",
+    "imports": [
+      "from pydantic import BaseModel"
+    ],
+    "definitions": [
+      {
+        "name": "ScenarioCreate",
+        "start": 4,
+        "end": 5,
+        "decorators": [],
+        "signature": null
+      },
+      {
+        "name": "ScenarioResponse",
+        "start": 8,
+        "end": 13,
+        "decorators": [],
+        "signature": null
+      },
+      {
+        "name": "ScenarioGenerateResponse",
+        "start": 16,
+        "end": 17,
+        "decorators": [],
+        "signature": null
+      },
+      {
+        "name": "ScenarioCompileResponse",
+        "start": 20,
+        "end": 21,
+        "decorators": [],
+        "signature": null
+      }
+    ]
+  },
+  {
+    "file": "backend/schemas/sessions.py",
+    "imports": [
+      "from typing import Optional",
+      "from pydantic import BaseModel"
+    ],
+    "definitions": [
+      {
+        "name": "SessionStartRequest",
+        "start": 5,
+        "end": 6,
+        "decorators": [],
+        "signature": null
+      },
+      {
+        "name": "SessionStartResponse",
+        "start": 9,
+        "end": 14,
+        "decorators": [],
+        "signature": null
+      },
+      {
+        "name": "SessionStateResponse",
+        "start": 17,
+        "end": 23,
+        "decorators": [],
+        "signature": null
+      },
+      {
+        "name": "MessageRequest",
+        "start": 26,
+        "end": 27,
+        "decorators": [],
+        "signature": null
+      },
+      {
+        "name": "MessageResponse",
+        "start": 30,
+        "end": 33,
+        "decorators": [],
+        "signature": null
+      },
+      {
+        "name": "SubmitCardRequest",
+        "start": 36,
+        "end": 39,
+        "decorators": [],
+        "signature": null
+      },
+      {
+        "name": "SubmitCardResponse",
+        "start": 42,
+        "end": 44,
+        "decorators": [],
+        "signature": null
+      },
+      {
+        "name": "CadetSessionStats",
+        "start": 47,
+        "end": 57,
+        "decorators": [],
+        "signature": null
+      },
+      {
+        "name": "SessionStatsResponse",
+        "start": 60,
+        "end": 70,
+        "decorators": [],
+        "signature": null
+      }
+    ]
+  },
+  {
+    "file": "backend/schemas/students.py",
+    "imports": [
+      "from datetime import datetime",
+      "from typing import List, Optional, Dict, Any",
+      "from pydantic import BaseModel, ConfigDict, Field"
+    ],
+    "definitions": [
+      {
+        "name": "CompetenceMatrixItem",
+        "start": 6,
+        "end": 10,
+        "decorators": [],
+        "signature": null
+      },
+      {
+        "name": "TopErrorItem",
+        "start": 13,
+        "end": 18,
+        "decorators": [],
+        "signature": null
+      },
+      {
+        "name": "StudentStatsResponse",
+        "start": 21,
+        "end": 41,
+        "decorators": [],
+        "signature": null
+      },
+      {
+        "name": "StudentLessonHistoryTicket",
+        "start": 44,
+        "end": 55,
+        "decorators": [],
+        "signature": null
+      },
+      {
+        "name": "StudentLessonHistoryItem",
+        "start": 58,
+        "end": 73,
+        "decorators": [],
+        "signature": null
+      },
+      {
+        "name": "DemoSessionRequest",
+        "start": 76,
+        "end": 78,
+        "decorators": [],
+        "signature": null
+      },
+      {
+        "name": "DemoSessionResponse",
+        "start": 81,
+        "end": 87,
+        "decorators": [],
+        "signature": null
+      }
+    ]
+  },
+  {
+    "file": "backend/schemas/tickets.py",
+    "imports": [
+      "from backend.schemas.domain_02 import GeneratedTicketResponse, TicketFilter, TicketFilterParams, TicketGenerateAcceptedResponse, TicketGenerateRequest, TicketResponse, TicketStatusResponse"
+    ],
+    "definitions": []
+  },
+  {
+    "file": "backend/schemas/users.py",
+    "imports": [
+      "from typing import Optional",
+      "from pydantic import BaseModel"
+    ],
+    "definitions": [
+      {
+        "name": "UserCreate",
+        "start": 5,
+        "end": 10,
+        "decorators": [],
+        "signature": null
+      },
+      {
+        "name": "UserUpdate",
+        "start": 13,
+        "end": 18,
+        "decorators": [],
+        "signature": null
+      },
+      {
+        "name": "PasswordResetRequest",
+        "start": 21,
+        "end": 23,
+        "decorators": [],
+        "signature": null
+      },
+      {
+        "name": "UserResponse",
+        "start": 26,
+        "end": 35,
+        "decorators": [],
+        "signature": null
+      }
+    ]
+  }
+]

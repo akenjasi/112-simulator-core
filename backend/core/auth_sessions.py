@@ -11,7 +11,7 @@ from typing import Optional
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from backend.models.domain_01 import AuthSession
+from backend.models.domain_01 import AuthChallenge, AuthSession
 
 
 MAX_ACTIVE_SESSIONS = 5
@@ -79,6 +79,9 @@ async def revoke_session(
 
 
 async def revoke_all_user_sessions(db: AsyncSession, *, user_id: str) -> int:
+    await db.execute(update(AuthChallenge).where(
+        AuthChallenge.user_id == user_id, AuthChallenge.consumed_at.is_(None)
+    ).values(consumed_at=utc_now()))
     result = await db.execute(
         update(AuthSession)
         .where(

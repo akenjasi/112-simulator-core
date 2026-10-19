@@ -70,7 +70,7 @@ async def generate_scenario(scenario_id: str, db: AsyncSession = Depends(get_db)
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Scenario ticket not found",
         )
-    return {"job_id": "mock_job_123"}
+    raise HTTPException(501, "Use the supported ticket generation API; legacy job execution is unavailable")
 
 
 @scenarios_router.post(

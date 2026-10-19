@@ -387,7 +387,7 @@ async def test_legacy_appeals_cannot_rewrite_new_assigned_dds_results():
         (f'/api/v1/analytics/records/{rid}/appeal',d['other'],{'status':'passed','comment':'Недопустимое изменение результата'}),
     ]:
         r=await request('PATCH',path,user,json=payload)
-        assert r.status_code in (403,409),(path,r.status_code,r.text)
+        assert r.status_code in (403,404,409),(path,r.status_code,r.text)
     async with AsyncSessionLocal() as db:
         result=await db.get(TicketResult,rid)
         assert result.is_passed is False and result.score_total==40

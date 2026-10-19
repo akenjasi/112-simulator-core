@@ -3,27 +3,11 @@
 import os
 from contextlib import asynccontextmanager
 
-import httpx
 from fastapi import FastAPI, Depends, Query
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import RedirectResponse
-from fastapi.staticfiles import StaticFiles
 
 from backend.core.deps import require_role
-
-# ─── Compatibility patch ───────────────────────────────────────────────────────
-# httpx >= 0.28 removed the 'app' keyword; patch to use ASGITransport instead.
-_orig_async_client_init = httpx.AsyncClient.__init__
-
-
-def _patched_async_client_init(self, *args, **kwargs):
-    if "app" in kwargs:
-        app = kwargs.pop("app")
-        kwargs["transport"] = httpx.ASGITransport(app=app)
-    _orig_async_client_init(self, *args, **kwargs)
-
-
-httpx.AsyncClient.__init__ = _patched_async_client_init
+from backend.core.config import cors_origins
 
 # ─── Routers ──────────────────────────────────────────────────────────────────
 from backend.api.router_assignments import assignments_router
@@ -78,43 +62,9 @@ async def lifespan(app: FastAPI):
     from backend.database import AsyncSessionLocal, engine
     from backend.models.base import Base
 
+    from backend.core.schema_migrations import migrate_schema
     async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
-        from sqlalchemy import text
-        for alter_sql in [
-            "ALTER TABLE users ADD COLUMN student_id VARCHAR",
-            "ALTER TABLE users ADD COLUMN totp_secret VARCHAR",
-            "ALTER TABLE users ADD COLUMN is_2fa_enabled BOOLEAN DEFAULT 0",
-            "ALTER TABLE generated_tickets ADD COLUMN status VARCHAR",
-            "ALTER TABLE ticket_results ADD COLUMN score_total FLOAT",
-            "ALTER TABLE ticket_results ADD COLUMN status VARCHAR",
-            "ALTER TABLE scenario_tickets ADD COLUMN title VARCHAR",
-            "ALTER TABLE scenario_tickets ADD COLUMN category VARCHAR",
-            "ALTER TABLE scenario_tickets ADD COLUMN complexity INTEGER DEFAULT 1",
-            "ALTER TABLE scenario_tickets ADD COLUMN content JSON DEFAULT '{}'",
-            "ALTER TABLE exam_sessions ADD COLUMN ticket_id VARCHAR",
-            "ALTER TABLE user_action_log ADD COLUMN endpoint VARCHAR",
-            "ALTER TABLE scenario_tickets ADD COLUMN is_deleted BOOLEAN DEFAULT 0",
-            "ALTER TABLE generated_tickets ADD COLUMN is_deleted BOOLEAN DEFAULT 0",
-        ]:
-            try:
-                async with conn.begin_nested():
-                    await conn.execute(text(alter_sql))
-            except Exception:
-                pass
-        try:
-            async with conn.begin_nested():
-                await conn.execute(
-                    text("INSERT INTO sys_sequences (name, last_val) VALUES ('generated_tickets', 0) ON CONFLICT (name) DO NOTHING")
-                )
-        except Exception:
-            try:
-                async with conn.begin_nested():
-                    await conn.execute(
-                        text("INSERT OR IGNORE INTO sys_sequences (name, last_val) VALUES ('generated_tickets', 0)")
-                    )
-            except Exception:
-                pass
+        await conn.run_sync(migrate_schema)
 
     from backend.core.bootstrap import ensure_initial_admin
     async with AsyncSessionLocal() as db:
@@ -178,8 +128,8 @@ app.add_middleware(AuditMiddleware)
 # CORS middleware
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
+    allow_origins=cors_origins(),
+    allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -305,24 +255,10 @@ async def global_exception_handler(request: Request, exc: Exception):
 # ─── Legacy compatibility endpoints for frontend/*.html ──────────────────────
 
 
-@app.get("/api/teacher/analytics", tags=["Legacy Compatibility"])
+@app.get("/api/teacher/analytics", tags=["Legacy Compatibility"], dependencies=[Depends(require_role("TEACHER"))])
 async def get_legacy_teacher_analytics():
-    return {
-        "group_readiness_index": 84,
-        "group_status": "Готов к аттестации",
-        "total_evaluations": 142,
-        "radar": {"stress": 85, "speed": 82, "accuracy": 90, "sla": 88, "protocol": 80, "navigation": 79},
-        "heatmap": [
-            {"category": "Пожары", "errors": 3, "total": 45, "rate": 6.7},
-            {"category": "ДТП", "errors": 8, "total": 52, "rate": 15.4},
-            {"category": "ЖКХ", "errors": 2, "total": 30, "rate": 6.7},
-            {"category": "Медицина", "errors": 1, "total": 15, "rate": 6.7},
-        ],
-        "cadet_roster": [
-            {"username": "cadet1", "full_name": "Курсант Петров А.В.", "score": 88, "status": "Сдал"},
-            {"username": "cadet2", "full_name": "Курсант Сидорова М.К.", "score": 92, "status": "Сдал"},
-        ],
-    }
+    from fastapi import HTTPException
+    raise HTTPException(410, "Use /api/analytics; synthetic legacy statistics are no longer available")
 
 
 @app.get("/api/admin/audit", tags=["Legacy Compatibility"], dependencies=[Depends(require_role("ADMIN"))])
@@ -348,7 +284,7 @@ async def get_legacy_admin_audit(
 
 
 
-@app.get("/api/admin/system_stats", tags=["Legacy Compatibility"])
+@app.get("/api/admin/system_stats", tags=["Legacy Compatibility"], dependencies=[Depends(require_role("ADMIN"))])
 async def get_legacy_admin_system_stats():
     from backend.api.router_admin import healthcheck
     from backend.database import get_db
@@ -362,24 +298,4 @@ async def get_legacy_admin_system_stats():
 
 
 
-# ─── React SPA frontend (DDS) ─────────────────────────────────────────────────
-_PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-_REACT_OUT_DIR = os.path.normpath(os.path.join(_PROJECT_ROOT, "frontend_react", "out"))
-
-@app.get("/dds", include_in_schema=False)
-async def redirect_dds():
-    return RedirectResponse(url="/dds/")
-
-if os.path.isdir(_REACT_OUT_DIR):
-    app.mount("/dds", StaticFiles(directory=_REACT_OUT_DIR, html=True), name="dds_frontend")
-
-
-# ─── Legacy HTML frontend (static) ────────────────────────────────────────────
-# index.html = login page, admin.html, teacher.html, operator.html
-# All JS files use relative /api/... paths → must be served from same origin as API (:8000)
-_FRONTEND_PATH = os.path.normpath(os.path.join(_PROJECT_ROOT, "frontend"))
-
-if os.path.isdir(_FRONTEND_PATH):
-    # IMPORTANT: mount AFTER all include_router() calls.
-    # FastAPI resolves include_router routes before checking mounts.
-    app.mount("/", StaticFiles(directory=_FRONTEND_PATH, html=True), name="frontend")
+# Frontend is served at its origin by Nginx or Next.js, including /_next assets.

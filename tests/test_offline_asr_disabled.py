@@ -14,7 +14,7 @@ from backend.main import app
 
 
 @pytest.mark.asyncio
-async def test_disabled_asr_skips_model_and_rejects_audio_before_processing(monkeypatch, tmp_path):
+async def test_disabled_asr_skips_model_and_rejects_audio_before_processing(monkeypatch, tmp_path, db_session):
     monkeypatch.setenv("ASR_ENABLED", "false")
     model = Mock(side_effect=AssertionError("Disabled ASR must not load weights"))
     monkeypatch.setitem(sys.modules, "transcribe_cpp", SimpleNamespace(Model=model))
@@ -27,10 +27,16 @@ async def test_disabled_asr_skips_model_and_rejects_audio_before_processing(monk
     monkeypatch.setattr(router_asr, "convert_to_pcm16k", decode)
     fallback = AsyncMock(side_effect=AssertionError("Disabled ASR must not start CLI"))
     monkeypatch.setattr(service, "_transcribe_cli_pcm", fallback)
-    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as client:
+    from tests.conftest import create_user_and_token
+    from backend.models.domain_03 import ExamSession
+    user, _, headers = await create_user_and_token("CADET")
+    session = ExamSession(cadet_id=user.user_id, session_type="CALL_SIMULATION", status="ACTIVE")
+    db_session.add(session)
+    await db_session.commit()
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test", headers=headers) as client:
         status = await client.get("/api/v2/asr/status")
         assert status.json()["status"] == "disabled"
-        response = await client.post("/api/v2/asr/transcribe", files={"file": ("audio.webm", b"synthetic", "audio/webm")})
+        response = await client.post("/api/v2/asr/transcribe", files={"file": ("audio.webm", b"synthetic", "audio/webm")}, data={"session_id": session.session_id})
         assert response.status_code == 503
     decode.assert_not_called()
     with pytest.raises(RuntimeError, match="disabled"):

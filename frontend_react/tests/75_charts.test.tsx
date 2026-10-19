@@ -37,10 +37,21 @@ describe('Task 75: Advanced Analytics & Charts Dashboard', () => {
   };
 
   beforeEach(() => {
+    localStorage.setItem('access_token', 'teacher-token');
     vi.stubGlobal(
       'fetch',
       vi.fn((url: string) => {
         const urlStr = url.toString();
+        if (urlStr.includes('/api/analytics/overview')) {
+          return Promise.resolve({ ok: true, status: 200, json: async () => ({
+            total_sessions: 50, total_attempts: 50, graded_attempts: 50, pending_attempts: 0,
+            avg_score: 81, passed_count: 42, failed_count: 8, pass_rate: 84,
+            total_errors: 30, active_cadets_count: 29, trend_direction: 'up', daily_dynamics: mockDynamics,
+          }) });
+        }
+        if (urlStr === '/api/v1/lessons') {
+          return Promise.resolve({ok: true, status: 200, json: async () => [{id: 'lesson-1', group_id: 'grp-1', group_name: 'Группа 101-П', students: []}]});
+        }
         if (urlStr.includes('/api/analytics/dynamics')) {
           return Promise.resolve({
             ok: true,
@@ -72,6 +83,7 @@ describe('Task 75: Advanced Analytics & Charts Dashboard', () => {
   });
 
   afterEach(() => {
+    localStorage.clear();
     vi.restoreAllMocks();
   });
 
@@ -105,21 +117,14 @@ describe('Task 75: Advanced Analytics & Charts Dashboard', () => {
     expect(screen.getByTestId('bar-chart-container')).toBeInTheDocument();
   });
 
-  it('should render Heatmap matrix with error types, entities, and toggle controls', async () => {
+  it('filters the current recorded overview by group', async () => {
     render(<AnalyticsPage initialTab="charts" />);
-
-    expect(screen.getByTestId('heatmap-card')).toBeInTheDocument();
-    expect(screen.getByText(/Тепловая карта девиаций и ошибок/i)).toBeInTheDocument();
-
-    // Toggle by students vs by groups
-    const byCadetsBtn = screen.getByRole('button', { name: /По курсантам/i });
-    const byGroupsBtn = screen.getByRole('button', { name: /По группам/i });
-    expect(byCadetsBtn).toBeInTheDocument();
-    expect(byGroupsBtn).toBeInTheDocument();
-
-    // Filter categories
-    expect(screen.getByRole('button', { name: /Коммуникация/i })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /Карточка/i })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /^SLA$/i })).toBeInTheDocument();
+    expect(await screen.findByText(/50 оценённых попыток/)).toBeInTheDocument();
+    await screen.findByRole('option', {name: 'Группа 101-П'});
+    fireEvent.change(screen.getByTestId('filter-charts-group'), {target: {value: 'grp-1'}});
+    await waitFor(() => expect(global.fetch).toHaveBeenCalledWith(
+      expect.stringMatching(/\/api\/analytics\/overview\?.*group_id=grp-1/), expect.anything()));
+    expect(screen.getByTestId('line-chart-container')).toBeInTheDocument();
+    expect(screen.getByTestId('bar-chart-container')).toBeInTheDocument();
   });
 });

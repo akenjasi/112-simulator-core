@@ -193,7 +193,7 @@ class DDSCompletePayload(BaseModel):
 class DDSTrainingStartPayload(BaseModel):
     model_config = ConfigDict(extra="forbid")
     request_id: str = Field(..., min_length=1, max_length=128)
-    ticket_ids: List[str] = Field(..., min_length=1)
+    ticket_ids: List[str] = Field(..., min_length=1, max_length=100)
 
     @field_validator("ticket_ids")
     @classmethod
@@ -231,6 +231,9 @@ class DDSSessionStateResponse(BaseModel):
     completion_blockers: List[Dict[str, str]] = Field(default_factory=list)
     cards: List[Dict[str, Any]] = Field(default_factory=list)
     readonly: bool = False
+    exercise: Optional[Dict[str, Any]] = None
+    criteria: List[Dict[str, Any]] = Field(default_factory=list)
+    last_attempt: Optional[Dict[str, Any]] = None
     stopped_at: Optional[str] = None
     stop_reason: Optional[str] = None
     card_pool_source: Optional[str] = None

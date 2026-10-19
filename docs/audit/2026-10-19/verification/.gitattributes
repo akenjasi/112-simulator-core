@@ -1,0 +1,2 @@
+# Preserve whitespace in original diagnostic tool output.
+*.log -whitespace

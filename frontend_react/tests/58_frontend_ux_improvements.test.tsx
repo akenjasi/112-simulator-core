@@ -11,6 +11,8 @@ vi.mock('next/navigation', () => ({
   useRouter: () => ({ push: pushMock, replace: vi.fn(), back: vi.fn() }),
 }))
 
+// Timer begins only after a call is answered; test the active-call state explicitly.
+vi.mock('@/hooks/useTelephony',()=>({useTelephony:()=>({callStatus:'ANSWERED',isConnected:true,isReconnecting:false,startCall:vi.fn(),hangupCall:vi.fn(),playAudio:vi.fn(),error:null})}))
 describe('ТЗ 58: Задача 1 — Стартовое состояние (Пустая карточка и геолокация)', () => {
   beforeEach(() => {
     localStorage.clear()
@@ -26,7 +28,7 @@ describe('ТЗ 58: Задача 1 — Стартовое состояние (П�
     expect(nameInput.value).toBe('')
 
     // Full address string should be empty
-    const addressInput = screen.getByTitle('Очистить адрес').previousElementSibling as HTMLInputElement
+    const addressInput = screen.getByTitle('Очистить адрес').previousElementSibling?.querySelector('input') as HTMLInputElement
     expect(addressInput.value).toBe('')
 
     // Country, subject, city, okrug, district are filled
@@ -223,10 +225,11 @@ describe('ТЗ 58: Задача 6 — Остановка таймера и от�
 
   it('6.1. При нажатии "Сохранить" таймер останавливается', async () => {
     localStorage.setItem(
-      'operator_state_test_ticket_58',
+      'operator_state_sess_test_58',
       JSON.stringify({
         activeIncidentTitle: 'Пожар',
         callerStatus: 'очевидец',
+        fullAddressString: 'Учебная улица, дом 1',
       })
     )
     render(<OperatorPage />)
@@ -254,10 +257,11 @@ describe('ТЗ 58: Задача 6 — Остановка таймера и от�
 
   it('6.2. В финальной модалке клик "Передать в службы" отправляет POST-запрос на evaluate и редиректит в лобби', async () => {
     localStorage.setItem(
-      'operator_state_test_ticket_58',
+      'operator_state_sess_test_58',
       JSON.stringify({
         activeIncidentTitle: 'Пожар',
         callerStatus: 'очевидец',
+        fullAddressString: 'Учебная улица, дом 1',
       })
     )
     const fetchMock = vi.fn().mockImplementation((url) => {
@@ -302,6 +306,6 @@ describe('ТЗ 58: Задача 6 — Остановка таймера и от�
       vi.advanceTimersByTime(2500)
     })
 
-    expect(pushMock).toHaveBeenCalledWith('/student/lobby')
+    expect(pushMock).toHaveBeenCalledWith('/student/profile')
   })
 })
