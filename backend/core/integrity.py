@@ -23,7 +23,7 @@ EXCLUDED_DIR_NAMES: Set[str] = {
     "uploads",
     "backups",
     "assets",
-    "frontend_react",
+    "frontend",
     "node_modules",
     "out",
     "certs",
@@ -47,13 +47,13 @@ SUPPORTED_ALGORITHMS: Set[str] = {"sha256"}
 MANDATORY_ENTRYPOINTS: List[str] = [
     "backend/main.py",
     "backend/core/integrity.py",
-    "scripts/init.sh",
+    "docker/scripts/init.sh",
     "backend/bin/transcribe-cli",
     "backend/core/qwen_tts/qwen-tts",
 ]
 
 SCOPE_SUMMARY = (
-    "Python-файлы backend, скрипты запуска (scripts/init.sh), "
+    "Python-файлы backend, скрипты запуска (docker/scripts/init.sh), "
     "нативные библиотеки и бинарные файлы (backend/bin/, qwen-tts)"
 )
 
@@ -128,6 +128,9 @@ def is_path_in_scope(rel_path: str) -> bool:
     if parts[-1] == "backend_manifest.json":
         return False
 
+    if norm_path.startswith("backend/tests/"):
+        return False
+
     # 1. Python files under backend/
     if norm_path.startswith("backend/") and ext == ".py":
         return True
@@ -136,8 +139,8 @@ def is_path_in_scope(rel_path: str) -> bool:
     if norm_path.startswith("alembic/") and ext == ".py":
         return True
 
-    # 3. Scripts: scripts/init.sh, scripts/*.sh, scripts/*.py
-    if norm_path.startswith("scripts/") and ext in {".sh", ".py"}:
+    # 3. Container entrypoints and backend maintenance commands.
+    if norm_path.startswith(("docker/scripts/", "backend/scripts/")) and ext in {".sh", ".py"}:
         return True
 
     # 4. Binaries and native libraries in backend/bin/

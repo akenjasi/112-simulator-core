@@ -6,30 +6,28 @@
 
 ## GPU runtime
 
-`docker-compose.llm.yml` использует закреплённый digest llama.cpp CUDA, `--offline`, alias `dds-qwen`, ctx8192 и NVIDIA CDI `nvidia.com/gpu=all`. Нужны Linux/Docker/Compose с поддержкой CDI и SELinux bind, подходящая NVIDIA-среда и заранее подготовленный единый GGUF.
+`docker/compose/llm.yml` использует закреплённый digest llama.cpp CUDA, `--offline`, alias `dds-qwen`, ctx8192 и NVIDIA CDI `nvidia.com/gpu=all`. Нужны Linux/Docker/Compose с поддержкой CDI и SELinux bind, подходящая NVIDIA-среда и заранее подготовленный единый GGUF.
 
-Создайте внешнюю env-конфигурацию на основе `.env.llm.example`. Не храните реальную `.env.llm` в репозитории: это имя не исключено текущим `.gitignore`. Задайте существующий абсолютный DDS_LLM_MODEL_PATH. Bind read-only, create_host_path=false, SELinux z; отсутствующий файл не должен превращаться в каталог.
+Создайте внешнюю env-конфигурацию на основе `.env.llm.example`. Реальную `.env.llm` храните приватно; .env.* исключены из Git, а примеры остаются tracked. Задайте существующий абсолютный DDS_LLM_MODEL_PATH. Bind read-only, create_host_path=false, SELinux z; отсутствующий файл не должен превращаться в каталог.
 
 Из корня проекта, после подстановки реального приватного env-файла:
 
 ```bash
-docker compose -p imba-llm -f docker-compose.llm.yml --env-file /absolute/private/.env.llm up -d
+make llm-up LLM_ENV_FILE=/absolute/private/.env.llm
 curl -f http://127.0.0.1:8081/health
-docker compose -p imba-llm -f docker-compose.llm.yml --env-file /absolute/private/.env.llm logs -f
 ```
 
 Получение image требует сети; offline режим относится к уже подготовленному runtime. Сетевая изоляция контейнера firewall-правилами этим Compose не гарантирована.
 
 ## Backend в основной Compose-сети
 
-Для общего запуска используются три файла. `docker-compose.reports.yml` задаёт backend URL и присоединяет llm к общей сети:
+Для общего запуска Makefile объединяет base+dev с llm/reports и явно включает профиль llm:
 
 ```bash
-docker compose -f docker-compose.yml -f docker-compose.llm.yml -f docker-compose.reports.yml --env-file /absolute/private/.env.llm config --quiet
-docker compose -f docker-compose.yml -f docker-compose.llm.yml -f docker-compose.reports.yml --env-file /absolute/private/.env.llm up -d
+make up WITH_LLM=1 LLM_ENV_FILE=/absolute/private/.env.llm
 ```
 
-Обычный Compose дополнительно требует корневой `.env` для backend. `--env-file` интерполирует переменные Compose, но не отменяет объявленный service env_file. Убедитесь в его наличии и правильных значениях.
+Корневая .env задаёт секреты основного стека; LLM_ENV_FILE добавляет параметры модели. Можно указать ENV_FILE для другого приватного файла основной установки. Production использует ту же добавку с make up-prod. Для logs/down этого варианта также передавайте WITH_LLM=1 и тот же LLM_ENV_FILE. Готовые модели и images нужны до автономного запуска.
 
 На хосте DDS_LLM_BASE_URL — `http://127.0.0.1:8081/v1`; в общей сети — `http://llm:8080/v1`, DDS_LLM_MODEL — `dds-qwen`. Для локального Python backend значения нужно передать в его environment; env-файл только Compose не экспортирует их в shell.
 

@@ -123,13 +123,13 @@ _CLASSIFIER_EKP_DATA: Optional[Dict[str, Any]] = None
 
 
 def load_classifier_ekp() -> Dict[str, Any]:
-    """Lazy load data/classifier_ekp.json."""
+    """Lazy load assets/reference/classifier_ekp.json."""
     global _CLASSIFIER_EKP_DATA
     if _CLASSIFIER_EKP_DATA is None:
         project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
         possible_paths = [
-            os.path.join(project_root, "data", "classifier_ekp.json"),
-            os.path.join(os.getcwd(), "data", "classifier_ekp.json"),
+            os.path.join(project_root, "assets", "reference", "classifier_ekp.json"),
+            os.path.join(os.getcwd(), "assets", "reference", "classifier_ekp.json"),
         ]
         for path in possible_paths:
             if os.path.exists(path):
@@ -1594,8 +1594,8 @@ async def search_addresses(q: str = Query("", description="Поисковый з
     """Поиск адресов по строке."""
     project_root = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
     possible_paths = [
-        os.path.join(project_root, "data", "moscow_112_addresses.json"),
-        os.path.join(os.getcwd(), "data", "moscow_112_addresses.json"),
+        os.path.join(project_root, "assets", "reference", "moscow_112_addresses.json"),
+        os.path.join(os.getcwd(), "assets", "reference", "moscow_112_addresses.json"),
     ]
     data = []
     for path in possible_paths:

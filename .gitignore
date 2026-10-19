@@ -1,5 +1,5 @@
 worktrees/
-reports/
+data/checks/
 __pycache__/
 *.pyc
 .env
@@ -18,12 +18,15 @@ data/records/
 *.raw
 
 # Generated outputs and installation credentials
-frontend_react/out/
-certs/*.key
-certs/*.crt
+frontend/out/
+data/certs/
 .env.*
 !.env.example
 !.env.llm.example
-release/
+data/packages/
 data/uploads/
 data/reports/
+
+.venv/
+.pytest_cache/
+.ruff_cache/

@@ -1,0 +1,24 @@
+# Current DDS/auth/admin contract; paths relative to frontend.
+tests/api_fetch.test.ts
+tests/auth_entry.test.tsx
+tests/auth_guard.test.tsx
+tests/logout.test.tsx
+tests/password_reset_api.test.ts
+tests/system_status.test.tsx
+tests/admin_panel.test.tsx
+tests/admin_backups.test.tsx
+tests/admin_journal.test.tsx
+tests/admin_journal_review.test.tsx
+tests/74_2fa_frontend.test.tsx
+tests/48_student/48_student.test.tsx
+tests/27_teacher/27_01_groups.test.tsx
+tests/27_teacher/27_02_tickets.test.tsx
+tests/27_teacher/27_06_knowledge.test.tsx
+tests/27_teacher/dds-lesson-report.test.tsx
+tests/27_teacher/dds-lesson-report.acceptance.test.tsx
+tests/dds-cycle/dds-cycle-validation.test.ts
+tests/dds-cycle/dds-cycle.acceptance.test.tsx
+tests/dds-cycle/dds-route.acceptance.test.tsx
+tests/dds-cycle/teacher-history.acceptance.test.tsx
+tests/dds-cycle/teacher-live.acceptance.test.tsx
+tests/p3_component_contracts.acceptance.test.tsx

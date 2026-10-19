@@ -1,0 +1,15 @@
+services:
+  backend:
+    build:
+      context: .
+      dockerfile: docker/images/backend.Dockerfile
+    ports:
+    - 127.0.0.1:${BACKEND_PORT:-8000}:8000
+  frontend:
+    build:
+      context: .
+      dockerfile: docker/images/frontend.Dockerfile
+  backup:
+    build:
+      context: .
+      dockerfile: docker/images/backend.Dockerfile

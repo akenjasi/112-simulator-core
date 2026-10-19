@@ -26,13 +26,13 @@ venv/
 env/
 .env.local
 .env
-certs/
+data/certs/
 .env.*.local
 
 # ─── Node / Frontend ──────────────────────────────────────────────────────────
-frontend_react/node_modules
-frontend_react/.next
-frontend_react/out
+frontend/node_modules
+frontend/.next
+frontend/out
 
 # ─── Local databases (use Docker volume for persistence) ──────────────────────
 *.db
@@ -60,7 +60,7 @@ Thumbs.db
 *.log
 *.tmp
 worktrees/
-reports/
+data/checks/
 
 # ─── Docker files (avoid recursive context issues) ───────────────────────────
 docker_standalone/
@@ -77,3 +77,8 @@ data/reports/
 .codex/
 .agents/
 docs/
+
+data/packages/
+tools/tests/
+backend/tests/
+docker/offline/tests/

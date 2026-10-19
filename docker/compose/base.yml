@@ -1,0 +1,109 @@
+services:
+  postgres:
+    image: postgres:15-alpine
+    container_name: simulator_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-simulator}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set a unique POSTGRES_PASSWORD in .env}
+      POSTGRES_DB: ${POSTGRES_DB:-simulator112}
+    volumes:
+    - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test:
+      - CMD-SHELL
+      - pg_isready -U "$${POSTGRES_USER}" -d "$${POSTGRES_DB}"
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+    - simulator_net
+  backend:
+    image: ${BACKEND_IMAGE:-simulator_backend:latest}
+    container_name: simulator_backend
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-simulator}:${POSTGRES_PASSWORD:?Set
+        POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-simulator112}
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:3000,http://127.0.0.1:3000}
+      SECRET_KEY: ${SECRET_KEY:?Set a unique SECRET_KEY in .env}
+      TTS_ENABLED: ${TTS_ENABLED:-false}
+      TESTING: 'false'
+      INITIAL_ADMIN_USERNAME: ${INITIAL_ADMIN_USERNAME:-admin}
+      INITIAL_ADMIN_PASSWORD: ${INITIAL_ADMIN_PASSWORD:-}
+      INITIAL_ADMIN_FULL_NAME: ${INITIAL_ADMIN_FULL_NAME:-Администратор системы 112}
+      DDS_LLM_BASE_URL: ${DDS_LLM_CONTAINER_BASE_URL:-http://llm:8080/v1}
+      DDS_LLM_MODEL: ${DDS_LLM_MODEL:-dds-qwen}
+      GIGAAM_MODEL_PATH: /app/models/gigaam-v3-ctc-Q8_0.gguf
+      LLM_MODEL_PATH: /app/models/Qwen3.5-9B-Q4_K_M.gguf
+    ports: []
+    volumes:
+    - simulator_data:/app/data
+    - ./data/models:/app/models:ro,z
+    - ./data/tts_models:/app/backend/core/qwen_tts/models:ro,z
+    healthcheck:
+      test:
+      - CMD
+      - curl
+      - -f
+      - http://localhost:8000/health
+      interval: 30s
+      timeout: 10s
+      retries: 10
+      start_period: 600s
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+    - simulator_net
+    extra_hosts:
+    - host.docker.internal:host-gateway
+    security_opt:
+    - no-new-privileges:true
+    cap_drop:
+    - ALL
+  frontend:
+    container_name: simulator_frontend
+    restart: unless-stopped
+    ports:
+    - ${FRONTEND_BIND_ADDRESS:-127.0.0.1}:3000:3000
+    - ${FRONTEND_BIND_ADDRESS:-127.0.0.1}:443:443
+    volumes:
+    - ./data/certs:/etc/nginx/ssl:ro,z
+    depends_on:
+      backend:
+        condition: service_healthy
+    networks:
+    - simulator_net
+  backup:
+    image: ${BACKEND_IMAGE:-simulator_backend:latest}
+    restart: unless-stopped
+    command:
+    - python
+    - -m
+    - backend.scripts.db.backup_loop
+    environment:
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-simulator}:${POSTGRES_PASSWORD:?Set
+        POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-simulator112}
+      BACKUP_DIR: /app/data/backups
+      BACKUP_INTERVAL_SECONDS: ${BACKUP_INTERVAL_SECONDS:-86400}
+      BACKUP_RETENTION_DAYS: ${BACKUP_RETENTION_DAYS:-180}
+    volumes:
+    - simulator_data:/app/data
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+    - simulator_net
+    security_opt:
+    - no-new-privileges:true
+    cap_drop:
+    - ALL
+volumes:
+  simulator_data:
+    driver: local
+  postgres_data:
+    driver: local
+networks:
+  simulator_net:
+    driver: bridge

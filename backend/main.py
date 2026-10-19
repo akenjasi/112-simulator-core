@@ -184,8 +184,8 @@ async def _search_addresses(q: str = _Query("", description="Поисковый 
     """Поиск адресов Москвы по строке."""
     _project_root = _os.path.dirname(_os.path.dirname(_os.path.abspath(__file__)))
     _paths = [
-        _os.path.join(_project_root, "data", "moscow_112_addresses.json"),
-        _os.path.join(_os.getcwd(), "data", "moscow_112_addresses.json"),
+        _os.path.join(_project_root, "assets", "reference", "moscow_112_addresses.json"),
+        _os.path.join(_os.getcwd(), "assets", "reference", "moscow_112_addresses.json"),
     ]
     _data = []
     for _path in _paths:

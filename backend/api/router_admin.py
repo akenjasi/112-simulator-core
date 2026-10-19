@@ -32,7 +32,7 @@ from backend.schemas.admin import (
     HealthCheckResponse,
     IntegrityCheckResponse,
 )
-from scripts.backup_db import (
+from backend.core.backups import (
     create_backup_async,
     get_backup_file_path,
     list_backups,

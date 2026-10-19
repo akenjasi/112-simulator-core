@@ -21,42 +21,45 @@ jobs:
           python-version: "3.11"
           cache: pip
           cache-dependency-path: |
-            requirements.lock
-            tools_tests/requirements.txt
+            backend/requirements/runtime.lock
+            backend/requirements/test.txt
       - name: Install Python Dependencies
         run: |
-          python -m pip install --require-hashes -r requirements.lock
-          python -m pip install -r tools_tests/requirements.txt
+          python -m pip install --require-hashes -r backend/requirements/runtime.lock
+          python -m pip install -r backend/requirements/test.txt
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
           node-version: "22"
           cache: npm
-          cache-dependency-path: frontend_react/package-lock.json
+          cache-dependency-path: frontend/package-lock.json
       - name: Install Frontend Dependencies
         run: |
-          cd frontend_react
+          cd frontend
           npm ci --ignore-scripts
       - name: Verify Backend Core
         env:
-          IMBA_VERIFY_REPORT_DIR: reports/ci/backend
-        run: bash scripts/verify_build.sh backend-core
+          IMBA_VERIFY_REPORT_DIR: data/checks/ci/backend
+        run: bash tools/quality/verify.sh backend-core
 
       - name: Verify Offline Packaging Contracts
-        run: python -m unittest discover -s scripts/tests -p 'test_offline_*.py' -v
+        run: python -m unittest discover -s docker/offline/tests -p 'test_offline_*.py' -v
+
+      - name: Verify Repository Utilities
+        run: python -m unittest discover -s tools/tests/utilities -v
 
       - name: Verify Frontend
         env:
-          IMBA_VERIFY_REPORT_DIR: reports/ci/frontend
-        run: bash scripts/verify_build.sh frontend
+          IMBA_VERIFY_REPORT_DIR: data/checks/ci/frontend
+        run: bash tools/quality/verify.sh frontend
       - name: Run Independent Acceptance Tests
-        run: python -m pytest -c tools_tests/pytest.ini tools_tests -q
+        run: python -m pytest -c tools/tests/acceptance/pytest.ini tools/tests/acceptance -q
       - name: Preserve verification logs
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: quality-logs
-          path: reports/ci
+          path: data/checks/ci
           if-no-files-found: warn
   postgres:
     runs-on: ubuntu-latest
@@ -68,14 +71,14 @@ jobs:
           python-version: "3.11"
           cache: pip
       - run: |
-          python -m pip install --require-hashes -r requirements.lock
-          python -m pip install -r tools_tests/requirements.txt
+          python -m pip install --require-hashes -r backend/requirements/runtime.lock
+          python -m pip install -r backend/requirements/test.txt
       - name: DDS concurrency and schema acceptance on owned PostgreSQL
         run: |
-          python scripts/check_dds_queue_postgres.py
-          python scripts/check_dds_phone_postgres.py
-          python scripts/check_audit_postgres.py
+          python backend/tests/postgres/check_queue.py
+          python backend/tests/postgres/check_phone.py
+          python backend/tests/postgres/check_audit.py
       - name: Build backend and verify actual backup restore
         run: |
-          docker build -f Dockerfile.backend -t simulator_backend:ci .
-          BACKEND_IMAGE=simulator_backend:ci bash scripts/test_pg_backup_restore.sh
+          docker build -f docker/images/backend.Dockerfile -t simulator_backend:ci .
+          BACKEND_IMAGE=simulator_backend:ci bash backend/tests/postgres/check_backup_restore.sh

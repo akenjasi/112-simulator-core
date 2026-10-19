@@ -28,7 +28,7 @@ def get_classifier():
             classifier = IntentClassifier(model_path=CLASSIFIER_PATH)
             return classifier
         except (ImportError, OSError) as exc:
-            raise RuntimeError("Speech classifier requires requirements-ml.txt and local classifier files") from exc
+            raise RuntimeError("Speech classifier requires backend/requirements/speech.txt and local classifier files") from exc
 
 
 # Mapping from label_id to Intent enum

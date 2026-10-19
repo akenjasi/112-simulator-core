@@ -137,8 +137,8 @@ class FakeDataGenerator:
         if cls._addresses_cache is None:
             base_dir = Path(__file__).resolve().parent.parent.parent
             candidates = [
-                base_dir / "data" / "moscow_112_addresses.json",
-                Path.cwd() / "data" / "moscow_112_addresses.json",
+                base_dir / "assets" / "reference" / "moscow_112_addresses.json",
+                Path.cwd() / "assets" / "reference" / "moscow_112_addresses.json",
             ]
             loaded_data = None
             for p in candidates:
@@ -148,7 +148,7 @@ class FakeDataGenerator:
                     break
 
             if loaded_data is None:
-                raise FileNotFoundError("moscow_112_addresses.json not found in data directory")
+                raise FileNotFoundError("moscow_112_addresses.json not found in assets/reference")
 
             cls._addresses_cache = loaded_data
 

@@ -17,7 +17,7 @@
 | Аналитика/оценка | `router_analytics.py`, `router_ai_analytics.py`, `ai_analytics_access.py`; экспертные оценки и результаты |
 | Нейроотчёты DDS | `router_dds_reports.py` → `dds_report_data.py`, `dds_report_jobs.py`, `dds_report_llm.py`; сохранённый job/snapshot, HTTP inference |
 | Оператор/речь | `router_call.py`, `router_asr.py`, `router_telephony.py`; `runtime_router.py`, `dialogue_router.py`, `intent_classifier.py`, `tts_v2.py`, `tts_engine.py` |
-| Интерфейс | `frontend_react/app`: Next routes; `components`, `hooks`, `lib`, `store`: UI/network/state |
+| Интерфейс | `frontend/app`: Next routes; `components`, `hooks`, `lib`, `store`: UI/network/state |
 
 Это карта поиска, не обещание готовности каждой интеграции. API разных поколений и ASR/TTS/SIP/SPO112 требуют отдельных проверок.
 
@@ -37,7 +37,7 @@
 
 Next dev проксирует `/api`, production frontend — статический export за Nginx. Backend-only запуск не заменяет frontend. Dockerfiles, обычные Compose и offline bundle — разные точки входа; см. [эксплуатацию](operations/deployment.md).
 
-Проверки лежат в `tests`, `frontend_react/tests`, независимых `tools_tests` и `scripts/tests`. Состав gate задаётся manifests/workflow, а не количеством тестов в старом отчёте. См. [тестирование](testing.md), [backlog](backlog.md) и [историю](history/README.md).
+Проверки лежат в `backend/tests`, `frontend/tests`, независимых `tools/tests/acceptance` и `docker/offline/tests`. Состав gate задаётся manifests/workflow, а не количеством тестов в старом отчёте. См. [тестирование](testing.md), [backlog](backlog.md) и [историю](history/README.md).
 
 ## Артефакты и нативные зависимости
 
@@ -48,3 +48,7 @@ Next dev проксирует `/api`, production frontend — статическ
 - `data/112_simulator.db` — стандартная локальная БД; явный DATABASE_URL имеет приоритет. Старый корневой файл используется только как совместимый fallback, если canonical файла ещё нет. Backup использует ту же политику пути.
 
 База, uploads и результаты не являются исходным кодом. Удалять их при уборке нельзя; перенос данных выполняется отдельно после проверки открытых файлов и резервной копии.
+
+## Владельцы служебных файлов
+
+Серверные тесты и зависимости находятся внутри backend, frontend переименован без изменения интерфейса. Общая приёмка и runner находятся в tools, Docker/Compose и поставка — в docker. В корне команды объединяет Makefile; карта утилит — в [development](development/scripts.md). Справочники поставляются из assets/reference, локальные TLS и результаты проверок — из data/certs и data/checks; реальные данные и модели не удаляются при уборке.

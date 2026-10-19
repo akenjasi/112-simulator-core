@@ -55,6 +55,6 @@
 
 ## Проверки
 
-Новые проверки — `tests/test_dds_phone_training.py` и `frontend_react/tests/dds-cycle/dds-phone-training.test.tsx`. `python scripts/check_dds_phone_postgres.py` создаёт отдельный PostgreSQL 15 на случайном loopback-порту, использует синтетические данные и удаляет только собственный контейнер. Обычный pytest использует защитный conftest с отдельной временной SQLite.
+Новые проверки — `backend/tests/test_dds_phone_training.py` и `frontend/tests/dds-cycle/dds-phone-training.test.tsx`. `python backend/tests/postgres/check_phone.py` создаёт отдельный PostgreSQL 15 на случайном loopback-порту, использует синтетические данные и удаляет только собственный контейнер. Обычный pytest использует защитный conftest с отдельной временной SQLite.
 
 Браузерная проверка выполняется на отдельной SQLite и портах, не на рабочем стенде. Полная готовность к публикации определяется также общей регрессией и production build; целевые зелёные проверки сами по себе не означают зелёного общего gate.
