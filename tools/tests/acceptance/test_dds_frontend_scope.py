@@ -57,6 +57,14 @@ def product_files():
 REVIEWED_UPDATES = {
     # Explicit user-approved background reports; pinned by exact hash, not an allowlist.
     'components/teacher/dds-lesson-report.tsx',
+    # User-approved DDS interface guide; exact hashes are pinned in approved_updates.
+    'components/dispatcher/caller-panel.tsx',
+    'components/dispatcher/incident-panel.tsx',
+    'components/tutorial.tsx',
+    'components/dds-help.tsx',
+    'components/dispatcher/dds-interface-guide.tsx',
+    'components/dispatcher/dds-workspace-content.tsx',
+    'lib/dds-interface-help.ts',
     'components/student/student-review.tsx',
     'lib/student-review.ts',
     'app/admin/security/page.tsx',

@@ -2,6 +2,8 @@
 import {useEffect, useRef, useState, type ReactNode, type PointerEvent, type KeyboardEvent, type Dispatch, type SetStateAction} from "react"
 import {createPortal} from "react-dom"
 import {GripHorizontal, Minus, Phone, PhoneIncoming, Volume2, VolumeX} from "lucide-react"
+import {DDSHelp} from "@/components/dds-help"
+import type {DDSHelpTopic} from "@/lib/dds-interface-help"
 import type {DDSExercise, DDSPhonePayload} from "@/lib/dds-cycle"
 
 type Command = Omit<DDSPhonePayload, "request_id" | "card_id">
@@ -48,7 +50,7 @@ function ReportForm({fields, onChange, disabled, saved, saveDisabled, onSave, fi
 }) {
   const input = "mt-1 min-h-10 w-full rounded border border-[#b4b9bc] bg-white px-3 py-2 text-sm disabled:bg-slate-100 disabled:text-slate-600"
   const tooLong = (first ? summaryText(fields.brigade, fields.content) : reportText(fields)).length > 1000
-  return <div className="space-y-3" aria-label="Запись доклада">
+  return <div data-dds-help="record" className="space-y-3" aria-label="Запись доклада">
     <div className="grid grid-cols-1 gap-3 sm:grid-cols-[minmax(0,1fr)_9rem]">
       <label className="block text-xs font-medium">{legacy && first ? "Кто принял" : "Кто доложил"}
         <input aria-label={legacy && first ? "Кто принял" : "Кто доложил"} disabled={disabled} maxLength={255}
@@ -66,6 +68,7 @@ function ReportForm({fields, onChange, disabled, saved, saveDisabled, onSave, fi
     </label>
     {tooLong && <p role="alert" className="text-xs text-red-700">Сократите запись до 1000 символов с учётом подписей полей.</p>}
     <div className="flex flex-wrap items-center justify-between gap-2">
+      <DDSHelp topic="record" />
       <span className="text-xs text-slate-500">{saved ? "Запись сохранена" : "Запишите сведения из доклада"}</span>
       <button type="button" disabled={saveDisabled} onClick={onSave}
         className="min-h-10 rounded bg-[#157dbd] px-4 py-2 text-sm font-semibold text-white disabled:opacity-50">
@@ -114,7 +117,7 @@ function PhoneWindow({children, onMinimize, position, setPosition}: {
     const bounds = panel.current!.getBoundingClientRect(), [x,y] = delta[event.key]
     setPosition(constrain(bounds.left + x, bounds.top + y))
   }
-  return createPortal(<div ref={panel} role="dialog" aria-label="Учебный телефон ДДС" aria-modal={false}
+  return createPortal(<div data-dds-help="phone-window" ref={panel} role="dialog" aria-label="Учебный телефон ДДС" aria-modal={false}
     onKeyDown={event => {if (event.key === "Escape") {event.stopPropagation(); onMinimize()}}}
     className="fixed z-[70] flex w-[880px] max-w-[calc(100vw-24px)] select-text flex-col overflow-hidden rounded-xl border border-slate-300 bg-[#fbfdfe] text-sm text-[#1e2327] shadow-2xl"
     style={{left: position?.x ?? 12, top: position?.y ?? 12, maxHeight: "calc(100dvh - 120px)", visibility: position ? "visible" : "hidden"}}>
@@ -133,7 +136,7 @@ function PhoneWindow({children, onMinimize, position, setPosition}: {
 }
 
 // A local alert, separate from the report recordings; it never sends phone commands.
-function useIncomingRingtone(ringing: boolean) {
+function useIncomingRingtone(ringing: boolean, enabled = true) {
   const context = useRef<AudioContext | null>(null)
   const active = useRef<{osc: OscillatorNode; gain: GainNode}[]>([])
   const [muted, setMuted] = useState(false)
@@ -154,6 +157,7 @@ function useIncomingRingtone(ringing: boolean) {
     } catch {if (mounted.current) setReady(false)}
   }
   useEffect(() => {
+    if (!enabled) return
     mounted.current = true
     window.addEventListener("pointerdown", unlock, true); window.addEventListener("keydown", unlock, true)
     return () => {
@@ -161,9 +165,9 @@ function useIncomingRingtone(ringing: boolean) {
       window.removeEventListener("pointerdown", unlock, true); window.removeEventListener("keydown", unlock, true)
       void context.current?.close().catch(() => {}); context.current = null
     }
-  }, [])
+  }, [enabled])
   useEffect(() => {
-    if (!ringing || muted || !ready || !context.current) return
+    if (!enabled || !ringing || muted || !ready || !context.current) return
     const ctx = context.current
     const pulse = () => {
       if (ctx.state !== "running") {setReady(false); return}
@@ -179,21 +183,24 @@ function useIncomingRingtone(ringing: boolean) {
     }
     pulse(); const timer = window.setInterval(pulse, 3000)
     return () => {window.clearInterval(timer); stop()}
-  }, [ringing, muted, ready])
+  }, [ringing, muted, ready, enabled])
   return {muted, ready, toggle: () => {unlock(); setMuted(value => !value)}, enable: () => {setMuted(false); unlock()}}
 }
 
-export function DDSTrainingPhone({exercise, selectedService, onServiceChange, disabled, command, record}: {
+export function DDSTrainingPhone({exercise, selectedService, onServiceChange, disabled, command, record, tourTopic, silent = false}: {
   exercise: DDSExercise; selectedService: string; onServiceChange: (value: string) => void;
-  disabled: boolean; command: (payload: Command) => Promise<boolean>; record?: PhoneRecord
+  disabled: boolean; command: (payload: Command) => Promise<boolean>; record?: PhoneRecord; tourTopic?: DDSHelpTopic | null; silent?: boolean
 }) {
   const [opened, setOpened] = useState(false)
+  const touring = tourTopic !== undefined
+  const phoneVisible = touring ? ["phoneWindow", "directory", "dial", "sound", "record"].includes(tourTopic || "") : opened
   const [position, setPosition] = useState<WindowPosition>(null)
   const [number, setNumber] = useState("")
   const [audioNotice, setAudioNotice] = useState("")
   const [playing, setPlaying] = useState(false)
   const [answering, setAnswering] = useState<string | null>(null)
   const [view, setView] = useState<"call" | "directory">("call")
+  const visibleView = touring ? tourTopic === "directory" ? "directory" : "call" : view
   const [directoryPage, setDirectoryPage] = useState(0)
   const [drafts, setDrafts] = useState<Record<string, ReportFields>>({})
   const [brigades, setBrigades] = useState<Record<string, string>>({})
@@ -221,7 +228,7 @@ export function DDSTrainingPhone({exercise, selectedService, onServiceChange, di
     content: record?.saved ? savedSummary.content : record?.summary || ""}
   const recordDisabled = disabled || (sequential && incoming?.contact.service_name !== selectedService) || !record?.accepted || !outgoing || !!record?.saved
   const ringing = !!incoming?.ringing
-  const ring = useIncomingRingtone(ringing && answering !== incoming?.id && !playing)
+  const ring = useIncomingRingtone(ringing && answering !== incoming?.id && !playing && !touring, !silent)
   const currentService = hasReport ? incoming!.contact.service_name : selectedService
   const currentContact = hasReport ? incoming!.contact : exercise.contacts.find(contact => outgoing
     ? contact.id === outgoing.contact_id : contact.service_name === selectedService)
@@ -304,24 +311,28 @@ export function DDSTrainingPhone({exercise, selectedService, onServiceChange, di
     onClick={() => {setOpened(true); setView("call"); onServiceChange(incoming!.contact.service_name); void call({operation:"answer", report_id:incoming!.id})}}>Принять звонок</button>
   const button = "min-h-9 rounded border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium hover:bg-slate-50 disabled:opacity-50"
 
-  return <section className="min-h-0 text-sm text-[#1e2327]" aria-label="Телефон ДДС">
+  return <section data-dds-help="phone" className="min-h-0 text-sm text-[#1e2327]" aria-label="Телефон ДДС">
     <div className="flex flex-wrap items-center gap-3">
-      <button ref={launcher} type="button" aria-expanded={opened} className="rounded bg-green-700 px-3 py-2 font-semibold text-white"
+      <button ref={launcher} type="button" aria-expanded={phoneVisible} className="rounded bg-green-700 px-3 py-2 font-semibold text-white"
         onClick={() => setOpened(value => !value)}>☎ Телефон</button>
-      {ringing && !opened && <div role="status" className="flex min-w-0 flex-1 flex-wrap items-center justify-between gap-2 rounded border border-green-500 bg-green-50 px-3 py-2">
+      <DDSHelp topic="phone" />
+      {ringing && !phoneVisible && <div role="status" className="flex min-w-0 flex-1 flex-wrap items-center justify-between gap-2 rounded border border-green-500 bg-green-50 px-3 py-2">
         <span>Входящий: {incoming!.contact.service_name}</span>{answerButton}
       </div>}
     </div>
-    {opened && <PhoneWindow onMinimize={minimize} position={position} setPosition={setPosition}>
+    {phoneVisible && <PhoneWindow onMinimize={minimize} position={position} setPosition={setPosition}>
       <div className="mb-4 flex flex-wrap items-center justify-between gap-2 border-b border-slate-200 pb-3">
-        <div className="flex gap-2">
-          <button type="button" aria-pressed={view === "call"} className={button} onClick={() => setView("call")}>Телефон</button>
-          <button type="button" aria-pressed={view === "directory"} className={button} onClick={() => setView("directory")}>Справочник</button>
+        <div data-dds-help="directory" className="flex items-center gap-2">
+          <button type="button" aria-pressed={visibleView === "call"} className={button} onClick={() => setView("call")}>Телефон</button>
+          <button type="button" aria-pressed={visibleView === "directory"} className={button} onClick={() => setView("directory")}>Справочник</button>
+          <DDSHelp topic="directory" />
+          <DDSHelp topic="phoneWindow" />
         </div>
-        <button type="button" aria-label="Звук входящего звонка" aria-pressed={!ring.muted} onClick={ring.toggle}
+        <div data-dds-help="sound" className="flex items-center gap-1"><DDSHelp topic="sound" />
+        <button type="button" disabled={disabled} aria-label="Звук входящего звонка" aria-pressed={!ring.muted} onClick={ring.toggle}
           className="flex min-h-9 items-center gap-2 rounded px-2 text-xs text-slate-600 hover:bg-slate-100">
           {ring.muted ? <VolumeX size={16}/> : <Volume2 size={16}/>}{ring.muted ? "Звонок без звука" : "Звук звонка"}
-        </button>
+        </button></div>
       </div>
       {ringing && <div role="status" className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-green-400 bg-green-50 p-3">
         <div className="flex items-center gap-3"><PhoneIncoming size={22} className="text-green-700"/>
@@ -330,7 +341,7 @@ export function DDSTrainingPhone({exercise, selectedService, onServiceChange, di
         </div>{answerButton}
         {!ring.ready && !ring.muted && <button type="button" className="w-full text-left text-xs underline" onClick={ring.enable}>Включить звук звонка</button>}
       </div>}
-      {view === "directory" ? <div aria-label="Справочник телефонов">
+      {visibleView === "directory" ? <div aria-label="Справочник телефонов">
         <h3 className="mb-3 font-semibold">Учебные номера служб</h3>
         <ul className="grid grid-cols-1 gap-2 sm:grid-cols-2">{exercise.contacts.slice(directoryPage*4, directoryPage*4+4).map(contact => <li key={contact.id}
           className="flex items-center justify-between gap-3 rounded-lg border border-slate-200 bg-white p-3">
@@ -345,7 +356,8 @@ export function DDSTrainingPhone({exercise, selectedService, onServiceChange, di
           <button type="button" className={button} disabled={(directoryPage+1)*4>=exercise.contacts.length} onClick={() => setDirectoryPage(value=>value+1)}>Следующие контакты</button>
         </div>}
       </div> : <div className="grid grid-cols-1 gap-5 md:grid-cols-[250px_minmax(0,1fr)]">
-        <div className="space-y-3">
+        <div data-dds-help="dial" className="space-y-3">
+          <div className="flex items-center justify-between"><span className="text-xs font-medium">Набор номера</span><DDSHelp topic="dial" /></div>
           <label className="block text-xs font-medium">Номер телефона
             <input aria-label="Номер учебного телефона" placeholder="Введите номер" value={number} maxLength={24} disabled={disabled}
               onChange={event=>setNumber(event.target.value)} onKeyDown={event=>{if(event.key==="Enter") void dial()}}

@@ -12,7 +12,7 @@
 | backend/scripts/check_report_runtime.py | `python -m backend.scripts.check_report_runtime --base-url http://127.0.0.1:18081/v1 [--container isolated-name]`: синтетическая проверка отмены, сна/RSS и повторного inference без БД; только отдельный тестовый runtime |
 | backend/scripts/lock_dependencies.py | Явная регенерация runtime.lock на Python 3.11/Linux x86_64; не обычная установка |
 | backend/tests/postgres | check_queue.py, check_phone.py, check_audit.py и check_backup_restore.sh; собственные disposable PostgreSQL, не рабочая БД |
-| tools/setup_env.py | `make init` создаёт приватный .env без перезаписи; вызов без --init проверяет optional model paths |
+| tools/setup_env.py | `make init` создаёт приватный .env без перезаписи; `make check-env` проверяет итоговые настройки Compose без вывода секретов; вызов без флагов проверяет optional model paths |
 | tools/quality | verify.sh с backend-core/frontend/all/backend-all и обязательные manifests; [проверки](../testing.md) |
 | docker/scripts | init.sh — entrypoint image; generate_certs.sh — локальная TLS-пара с сохранением существующей; pack_release.sh — прежний трёхобразный release |
 | docker/offline | package.sh/deploy.sh через Makefile, затем standalone install/start/stop/backup/restore/verify из готового комплекта |

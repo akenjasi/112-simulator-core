@@ -181,14 +181,23 @@ describe('ТЗ 41: Запуск урока (Создание сессии) - Н�
     expect(submitBtn).not.toBeDisabled();
   });
 
-  it('hides Operator 112 when the administrator disables it', async () => {
+  it('automatically uses DDS without a role selector when it is the only available role', async () => {
     operator112Enabled = false;
     render(<SessionSetupPage />);
 
-    await waitFor(() => {
-      expect(screen.getByRole('radio', { name: /Диспетчер ДДС/i })).toBeInTheDocument();
-    });
+    const approvedTicket = await screen.findByRole('checkbox', { name: /Подтвержденный билет/i });
+    expect(screen.queryByText(/Роль для тренировки/i)).not.toBeInTheDocument();
+    expect(screen.queryByRole('radio', { name: /Диспетчер ДДС/i })).not.toBeInTheDocument();
     expect(screen.queryByRole('radio', { name: /Оператор 112/i })).not.toBeInTheDocument();
+    fireEvent.change(screen.getByRole('combobox', { name: /Выбор Группы/i }), { target: { value: 'grp-2' } });
+    fireEvent.click(approvedTicket);
+    fireEvent.click(screen.getByRole('button', { name: /Создать и запустить/i }));
+
+    await waitFor(() => expect(pushMock).toHaveBeenCalled());
+    const createCall = (global.fetch as any).mock.calls.find((call: any[]) =>
+      call[0] === '/api/v1/lessons' && call[1]?.method === 'POST'
+    );
+    expect(JSON.parse(createCall[1].body).target_role).toBe('DISPATCHER_DDS');
   });
 
   it('should submit lesson configuration to POST /api/v1/lessons', async () => {
@@ -250,18 +259,25 @@ describe('ТЗ 41: Запуск урока (Создание сессии) - Н�
     );
   });
 
-  it('sends exam mode to the backend', async () => {
+  it('creates a regular lesson without offering a mode selector', async () => {
     render(<SessionSetupPage />);
     await waitFor(() => expect(screen.getByText(/Группа 101/i)).toBeInTheDocument());
     fireEvent.change(screen.getByRole('combobox', { name: /Выбор Группы/i }), { target: { value: 'grp-1' } });
-    fireEvent.click(screen.getByText(/Экзаменационный режим/i));
+    expect(screen.queryByText(/Режим проведения занятия/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Экзаменационный режим/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/Поток в реальном времени/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/^Обучение$/i)).not.toBeInTheDocument();
+    fireEvent.change(screen.getByLabelText(/Норматив времени \(сек\)/i), { target: { value: '45' } });
     fireEvent.click(screen.getByRole('button', { name: /Создать и запустить/i }));
 
     await waitFor(() => expect(pushMock).toHaveBeenCalled());
     const createCall = (global.fetch as any).mock.calls.find((call: any[]) =>
       call[0] === '/api/v1/lessons' && call[1]?.method === 'POST'
     );
-    expect(JSON.parse(createCall[1].body).mode).toBe('EXAM');
+    const payload = JSON.parse(createCall[1].body);
+    expect(payload.mode).toBe('TRAINING');
+    expect(payload.distribution_mode).toBeUndefined();
+    expect(payload.time_limit_seconds).toBe(45);
   });
 
   it('blocks DDS lesson creation when the approved ticket catalog is empty', async () => {

@@ -164,9 +164,9 @@
       "reason": "Current requested fix: own the notification holder and unmount it with its page"
     },
     "app/dds/page.tsx": {
-      "sha256": "fe651b72bfc9d2c78648be0385d11111610d5e9f59ed7d7cd79f7c762cc781b6",
-      "source_revision": "3337c99",
-      "reason": "Integrated DDS workflow and security/auth fixes"
+      "sha256": "8a741de097f77ea4d4806f7239b6c70ab62edf31db79a836f6ee0bda89fdee26",
+      "source_revision": "74793c1+user-approved-dds-interface-guide",
+      "reason": "User requested up-to-date DDS help after pulling the new UI: movable phone window, number-based dialing, audio-only v2 reports, three report fields and manual service stages. Exact implementation pin; original baseline unchanged."
     },
     "app/globals.css": {
       "sha256": "60d267b194288e154039e672d627961fde2d01d19b823536c338f790c15adb53",
@@ -194,9 +194,9 @@
       "reason": "Explicit user feedback 2026-10-19: distinguish saved inaccurate records from rejected actions in instructor protocol."
     },
     "components/dispatcher/dds-training-phone.tsx": {
-      "sha256": "338125a9392535ce3405c130aefd7a9b5267ef482638ee3d9a01d1fca8928512",
-      "source_revision": "codex/dds-phone-audio-cycle (base d75d14b)",
-      "reason": "Explicit user request 2026-10-19: determine called service from its dialed directory number; remove manual service selection and the Messages tab, keeping replay of the current report."
+      "sha256": "8e3a1a18aff3a5254ca1fe4d392cee56d9948bd5158793d4a3b77bdc7fd8e5fe",
+      "source_revision": "74793c1+user-approved-dds-interface-guide",
+      "reason": "User requested up-to-date DDS help after pulling the new UI: movable phone window, number-based dialing, audio-only v2 reports, three report fields and manual service stages. Exact implementation pin; original baseline unchanged."
     },
     "components/dispatcher/dispatch-panel.tsx": {
       "sha256": "9ed4c3fd8e5d0ce4c06e079819e633aef38f458c27e56bbb023f19d322b8244e",
@@ -204,9 +204,9 @@
       "reason": "Prepared phone exercise and protocol integration already present before audit"
     },
     "components/dispatcher/top-bar.tsx": {
-      "sha256": "9cfb25291e1359085fd8fdb9d8c6e989f0cb8f2dba4ec38871194f3a8371e86a",
-      "source_revision": "d51076c",
-      "reason": "Prepared phone exercise controls already present before audit"
+      "sha256": "1b9a29a3354eb3ee0e9cd837aae683287f7f60efd232671e25642b18810a1bfa",
+      "source_revision": "74793c1+user-approved-dds-interface-guide",
+      "reason": "User requested up-to-date DDS help after pulling the new UI: movable phone window, number-based dialing, audio-only v2 reports, three report fields and manual service stages. Exact implementation pin; original baseline unchanged."
     },
     "components/teacher/dds-exercise-editor.tsx": {
       "sha256": "74f1ab01fbd785237dfc91348afd7c46a003e22ac2bdacd155f00babe66afb87",
@@ -247,6 +247,41 @@
       "sha256": "e8d617fb3d6408fe472268165beb7423aace80d308461b2d37dbfac16b0bad77",
       "source_revision": "74793c15a6196264713cd7f9f10fc13ac3071cbe",
       "reason": "Explicit user request 2026-10-19: implement background DDS reports with resource waiting reasons and snapshot/period metadata in the existing teacher report screen. Manual role verification requested by the user: explicitly explain RAM/CPU waiting reasons."
+    },
+    "components/dispatcher/caller-panel.tsx": {
+      "sha256": "eac133283f3ab39dcb8ae4981b2968db7869a09415eee883162b3d6713c65470",
+      "source_revision": "74793c1+user-approved-dds-interface-guide",
+      "reason": "User requested up-to-date DDS help after pulling the new UI: movable phone window, number-based dialing, audio-only v2 reports, three report fields and manual service stages. Exact implementation pin; original baseline unchanged."
+    },
+    "components/dispatcher/incident-panel.tsx": {
+      "sha256": "66ec7e01c19b434278c871d74de19be62654edf637a1cd0f46e261992d0f3338",
+      "source_revision": "74793c1+user-approved-dds-interface-guide",
+      "reason": "User requested up-to-date DDS help after pulling the new UI: movable phone window, number-based dialing, audio-only v2 reports, three report fields and manual service stages. Exact implementation pin; original baseline unchanged."
+    },
+    "components/tutorial.tsx": {
+      "sha256": "4879be1c33b0d32b5fa128c575a6ec53e927866e3f4299bec1d6bf8aebfd195e",
+      "source_revision": "74793c1+user-approved-dds-interface-guide",
+      "reason": "User requested up-to-date DDS help after pulling the new UI: movable phone window, number-based dialing, audio-only v2 reports, three report fields and manual service stages. Exact implementation pin; original baseline unchanged."
+    },
+    "components/dds-help.tsx": {
+      "sha256": "87faeeab1f75796db7e27120c28264a981ba59baef315ecf3c0fac5372547355",
+      "source_revision": "74793c1+user-approved-dds-interface-guide",
+      "reason": "User requested up-to-date DDS help after pulling the new UI: movable phone window, number-based dialing, audio-only v2 reports, three report fields and manual service stages. Exact implementation pin; original baseline unchanged."
+    },
+    "components/dispatcher/dds-interface-guide.tsx": {
+      "sha256": "13ad04b4f0ee24a1f9a9b6c1042f85f153931470bfcf86531fa2ddd07ac59f89",
+      "source_revision": "74793c1+user-approved-dds-interface-guide",
+      "reason": "User requested up-to-date DDS help after pulling the new UI: movable phone window, number-based dialing, audio-only v2 reports, three report fields and manual service stages. Exact implementation pin; original baseline unchanged."
+    },
+    "components/dispatcher/dds-workspace-content.tsx": {
+      "sha256": "550d5f45cba315fb3406bdd5d1350cfcd5b4ff289372613ef04d7482c0cce486",
+      "source_revision": "74793c1+user-approved-dds-interface-guide",
+      "reason": "User requested up-to-date DDS help after pulling the new UI: movable phone window, number-based dialing, audio-only v2 reports, three report fields and manual service stages. Exact implementation pin; original baseline unchanged."
+    },
+    "lib/dds-interface-help.ts": {
+      "sha256": "3a4448d80b67d3c86c653924468e07de46686ec6b35fa8e393a26284af311917",
+      "source_revision": "74793c1+user-approved-dds-interface-guide",
+      "reason": "User requested up-to-date DDS help after pulling the new UI: movable phone window, number-based dialing, audio-only v2 reports, three report fields and manual service stages. Exact implementation pin; original baseline unchanged."
     }
   },
   "update_policy": "2026-10-19: explicitly reconciled under the user request to repair obsolete tests. Original sha256 values are unchanged. Exact supplemental hashes preserve the integrated changes; these paths are not open-ended exceptions. 2026-10-19: the user explicitly requested the DDS audio-only cycle and teacher review; only the three existing supplemental entries were updated, preserving the original map and guarded path set. 2026-10-19: background report implementation explicitly authorizes the teacher report screen; one exact supplemental hash added, original hash map preserved."

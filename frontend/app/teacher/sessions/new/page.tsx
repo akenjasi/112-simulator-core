@@ -90,14 +90,12 @@ export interface DdsCategoryItem {
 
 export type TargetRole = "OPERATOR_112" | "DISPATCHER_DDS"
 export type ComplexityLevel = "level_1" | "level_2" | "level_3" | "adaptive" | "mixed"
-export type DistributionMode = "live_stream" | "exam"
 
 export interface SessionFormData {
   group_id: string
   target_role: TargetRole
   categories: string[]
   complexity: ComplexityLevel
-  distribution_mode: DistributionMode
   time_limit_seconds: string | number
   error_limit: string | number
 }
@@ -176,7 +174,6 @@ export default function SessionSetupPage() {
       target_role: "OPERATOR_112",
       categories: [],
       complexity: "adaptive",
-      distribution_mode: "live_stream",
       time_limit_seconds: 30,
       error_limit: "",
     },
@@ -716,7 +713,7 @@ export default function SessionSetupPage() {
         ticket_ids: isDds ? selectedDdsTickets.map(ticket => ticket.ticket_id) : undefined,
         categories: isDds ? [] : (isAllCategoriesSelected ? [] : (data.categories || [])),
         complexity: data.complexity,
-        mode: data.distribution_mode === "exam" ? "EXAM" : "TRAINING",
+        mode: "TRAINING",
         time_limit_seconds:
           data.time_limit_seconds !== "" && data.time_limit_seconds !== undefined
             ? Number(data.time_limit_seconds)
@@ -1132,7 +1129,8 @@ export default function SessionSetupPage() {
               </div>
             </div>
 
-            {/* РЯД 2: Роль для тренировки (слева) + Режим проведения занятия (справа) */}
+            {/* Роль участника занятия */}
+            {availableRoles.length > 1 && (
             <div className="grid grid-cols-1 gap-4 items-start">
               {/* 3. Роль для тренировки */}
               <div className="space-y-1.5">
@@ -1193,64 +1191,8 @@ export default function SessionSetupPage() {
                   )}
                 />
               </div>
-
-              {/* 4. Режим проведения занятия */}
-              <div className="space-y-1.5">
-                <Label className="font-semibold text-foreground text-sm">
-                  Режим проведения занятия <span className="text-destructive">*</span>
-                </Label>
-                <Controller
-                  name="distribution_mode"
-                  control={control}
-                  rules={{ required: true }}
-                  render={({ field }) => (
-                    <div>
-                      <RadioGroup
-                        value={field.value}
-                        onValueChange={field.onChange}
-                        className="grid grid-cols-2 gap-2"
-                      >
-                        {[
-                          {
-                            value: "live_stream",
-                            title: "Поток в реальном времени",
-                          },
-                          {
-                            value: "exam",
-                            title: "Экзаменационный режим",
-                          },
-                        ].map((mode) => {
-                          const isSelected = field.value === mode.value
-                          return (
-                            <label
-                              key={mode.value}
-                              htmlFor={`mode-${mode.value}`}
-                              className={`flex items-center p-2 rounded-lg border cursor-pointer transition-all ${
-                                isSelected
-                                  ? "border-primary bg-primary/5 ring-1 ring-primary shadow-xs"
-                                  : "border-border hover:bg-muted/40 text-muted-foreground"
-                              }`}
-                            >
-                              <div className="flex items-center gap-2 overflow-hidden">
-                                <RadioGroupItem id={`mode-${mode.value}`} value={mode.value} />
-                                <span className="font-medium text-xs text-foreground truncate">
-                                  {mode.title}
-                                </span>
-                              </div>
-                            </label>
-                          )
-                        })}
-                      </RadioGroup>
-                      <p className="text-[11px] text-muted-foreground mt-1.5">
-                        {field.value === "exam"
-                          ? "Экзамен: лимит времени действует на всю текущую карточку от серверной выдачи. По истечении лимита редактирование завершается. Норматив первого решения службы (SLA 30 сек) рассчитывается независимо."
-                          : "Поток в реальном времени (обучение): курсант продолжает работу после норматива, система фиксирует факт просрочки."}
-                      </p>
-                    </div>
-                  )}
-                />
-              </div>
             </div>
+            )}
 
             {/* РЯД 4: Лимиты времени и ошибок */}
             <div className="pt-2 border-t">
@@ -1258,7 +1200,7 @@ export default function SessionSetupPage() {
                 <div className="space-y-1">
                   <Label htmlFor="time_limit_seconds" className="text-xs flex items-center gap-1 text-foreground font-medium">
                     <Clock className="h-3.5 w-3.5 text-muted-foreground" />
-                    Лимит времени (сек)
+                    Норматив времени (сек)
                   </Label>
                   <Input
                     id="time_limit_seconds"
@@ -1270,7 +1212,7 @@ export default function SessionSetupPage() {
                     {...register("time_limit_seconds")}
                   />
                   <p className="text-[11px] text-muted-foreground">
-                    Лимит времени на карточку от момента выдачи. Норматив SLA 30 сек на первичное решение службы действует параллельно в интерфейсе ДДС.
+                    Норматив на карточку от момента выдачи. Превышение фиксируется, курсант может продолжить работу. Норматив SLA 30 сек на первичное решение службы учитывается отдельно.
                   </p>
                 </div>
 
@@ -1826,7 +1768,6 @@ export default function SessionSetupPage() {
               <div className="flex flex-wrap gap-1.5 mb-1">
                 <Badge variant="secondary" className="text-xs font-medium">{selectedGroupObj?.group_name || "Группа не выбрана"}</Badge>
                 <Badge variant="outline" className="text-xs">{watch("target_role") === "DISPATCHER_DDS" ? "Диспетчер ДДС" : "Оператор 112"}</Badge>
-                <Badge variant="outline" className="text-xs">{watch("distribution_mode") === "exam" ? "Экзамен" : "Обучение"}</Badge>
               </div>
               <div className="text-sm font-semibold text-foreground">
                 {isDdsRole ? "Набор билетов ДДС: " : "Будет доступно билетов: "}
