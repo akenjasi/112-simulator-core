@@ -46,8 +46,8 @@ export function StudentAttemptReview() {
   const finished = !!state?.card_submitted_at
   const evaluated = review?.criteria.some(item => item.status !== "not_evaluated")
   const journal = review ? [
-    ...review.state.actions.map((action, i) => ({id: `action-${i}`, at: action.at, service: action.service_name, text: actionDescription(action as unknown as Record<string, unknown>), mistake: false})),
-    ...review.events.filter(event => ["mistake", "answered", "dialed"].includes(event.kind)).map(event => ({id: event.id, at: event.at, service: event.service_name, text: event.kind === "mistake" ? [actionDescription(event.action), event.message].filter(Boolean).join(". ") : event.text || "Текст сообщения не сохранён.", mistake: event.kind === "mistake"})),
+    ...review.state.actions.map((action, i) => ({id: `action-${i}`, at: action.at, service: action.service_name, text: actionDescription(action as unknown as Record<string, unknown>), mistake: false, blocking: false})),
+    ...review.events.filter(event => ["mistake", "answered", "dialed"].includes(event.kind)).map(event => ({id: event.id, at: event.at, service: event.service_name, text: event.kind === "mistake" ? [actionDescription(event.action), event.message].filter(Boolean).join(". ") : event.text || "Текст сообщения не сохранён.", mistake: event.kind === "mistake", blocking: event.blocking !== false})),
   ].sort((a, b) => (a.at || "").localeCompare(b.at || "")) : []
 
   return <div className={`${styles.root} min-h-screen bg-slate-50 text-foreground dark:bg-slate-950`}>
@@ -112,8 +112,8 @@ export function StudentAttemptReview() {
             <div className={`${styles.scroll} space-y-4 p-5`}>
               <p className="whitespace-pre-wrap text-sm leading-relaxed text-muted-foreground">{state.incoming_card.description}</p>
               <h3 className="text-sm font-semibold">Доклады и действия</h3>
-              <p className="text-xs leading-relaxed text-muted-foreground">Только сохранённые события этой карточки. Ошибочная попытка не меняет её статус.</p>
-              {journal.length ? <ol className="space-y-3">{journal.map(item => <li key={item.id} className="rounded-lg border border-border p-3"><p className="text-xs text-muted-foreground">{reviewTime(item.at)}{item.service ? ` · ${item.service}` : ""}</p>{item.mistake && <p className="mt-1 text-xs font-semibold">Ошибочная попытка</p>}<p className="mt-1 whitespace-pre-wrap text-sm leading-relaxed">{item.text}</p></li>)}</ol> : <p className="text-sm text-muted-foreground">Сохранённых докладов и действий пока нет. Это не результат проверки.</p>}
+              <p className="text-xs leading-relaxed text-muted-foreground">Только сохранённые события этой карточки. Ошибки в содержании записей сохраняются для разбора и не блокируют работу.</p>
+              {journal.length ? <ol className="space-y-3">{journal.map(item => <li key={item.id} className="rounded-lg border border-border p-3"><p className="text-xs text-muted-foreground">{reviewTime(item.at)}{item.service ? ` · ${item.service}` : ""}</p>{item.mistake && <p className="mt-1 text-xs font-semibold">{item.blocking ? "Ошибочная попытка" : "Ошибка в записи · действие сохранено"}</p>}<p className="mt-1 whitespace-pre-wrap text-sm leading-relaxed">{item.text}</p></li>)}</ol> : <p className="text-sm text-muted-foreground">Сохранённых докладов и действий пока нет. Это не результат проверки.</p>}
             </div>
           </aside>
         </div>

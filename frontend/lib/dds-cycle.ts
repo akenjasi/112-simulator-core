@@ -65,7 +65,7 @@ export interface DDSContact {
 export interface DDSEvent {
   id: string; kind: string; at: string; card_id: string; service_name?: string;
   report_id?: string; text?: string | null; audio?: string | null; message?: string; reason?: string;
-  result?: string; delay_seconds?: number; action?: Record<string, unknown>
+  result?: string; delay_seconds?: number; action?: Record<string, unknown>; blocking?: boolean
 }
 export interface DDSCriterion {
   key: string; label: string; status: "completed" | "completed_after_correction" | "not_completed" | "not_evaluated";

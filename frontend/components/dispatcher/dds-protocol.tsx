@@ -10,8 +10,9 @@ const recommendations: Record<string, string> = {
 }
 export function DDSProtocol({criteria = [], events = []}: {criteria?: DDSCriterion[]; events?: DDSEvent[]}) {
   const mistakes = events.filter(event => event.kind === "mistake")
+  const contentErrors = mistakes.filter(event => event.blocking === false)
   return <details className="rounded border border-slate-400 bg-white p-3 text-sm text-slate-900" open={false}>
-    <summary className="cursor-pointer font-semibold">Протокол ДДС · Ошибочных попыток: {mistakes.length}</summary>
+    <summary className="cursor-pointer font-semibold">Протокол ДДС · Ошибочных попыток: {mistakes.length - contentErrors.length}{contentErrors.length > 0 && ` · Ошибок в записях: ${contentErrors.length}`}</summary>
     <p className="my-2 text-xs">Критерии без баллов. Интервалы обработки докладов сохраняются без штрафов.</p>
     <ul className="space-y-1">{criteria.map(c => <li key={c.key}>{c.label}: <strong>{labels[c.status]}</strong>
       {c.key === "confirmation" && c.evidence.map((e, i) => <span className="block text-xs" key={i}>{String(e.service_name)}: {e.seconds == null ? "не подтверждено" : `${Number(e.seconds).toFixed(1)} с`}</span>)}
@@ -21,6 +22,7 @@ export function DDSProtocol({criteria = [], events = []}: {criteria?: DDSCriteri
     </div>}
     {events.length > 0 && <ol className="mt-3 max-h-52 space-y-2 overflow-y-auto border-t pt-2" aria-label="Журнал учебных событий">
       {events.map(e => <li key={e.id} className={e.kind === "mistake" ? "text-red-800" : ""}>
+        {e.kind === "mistake" && e.blocking === false && <span className="block font-semibold">Ошибка в записи · действие сохранено</span>}
         <time>{new Date(e.at).toLocaleTimeString("ru-RU")}</time> · {e.service_name} · {e.message || e.text || ({received: "Карточка направлена", action: "Действие сохранено", incoming_scheduled: "Запланирован входящий доклад", report_processed: "Доклад обработан", audio: e.result === "played" ? "Аудио воспроизведено (подтверждение браузера)" : "Аудио недоступно"} as Record<string, string>)[e.kind] || e.kind}
         {e.action && <span className="block text-xs">{String(e.action.status || e.action.operation || e.action.kind || "")}</span>}
         {e.delay_seconds !== undefined && <span className="block text-xs">Регистрация доклада: {e.delay_seconds.toFixed(1)} с · без штрафа</span>}

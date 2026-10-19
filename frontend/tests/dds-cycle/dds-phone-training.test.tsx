@@ -57,6 +57,16 @@ it("shows corrected mistakes and timing without inventing numeric grades", () =>
   expect(screen.queryByText(/100/)).toBeNull()
 })
 
+it("separates accepted content errors from rejected attempts in the teacher protocol", () => {
+  render(<DDSProtocol criteria={[{key:"accuracy",label:"Точность записей",status:"not_completed",evidence:[]}]} events={[
+    {id:"m1",kind:"mistake",at:"2026-10-19T00:00:00Z",card_id:"c",message:"Нет доклада"},
+    {id:"m2",kind:"mistake",at:"2026-10-19T00:01:00Z",card_id:"c",blocking:false,message:"Неверно записано ФИО"},
+  ]}/>)
+  expect(screen.getByText(/Ошибочных попыток: 1 · Ошибок в записях: 1/)).toBeTruthy()
+  expect(screen.getByText("Ошибка в записи · действие сохранено")).toBeTruthy()
+  expect(screen.getByText("Не выполнено")).toBeTruthy()
+})
+
 it("teacher saves an explicit prepared plan using existing card services", async () => {
   const network = vi.fn().mockResolvedValueOnce(new Response(JSON.stringify({services:["Аварийная служба"],plan:null}),{status:200}))
     .mockImplementationOnce(async (_url, options) => new Response(JSON.stringify({plan:JSON.parse(options.body)}),{status:200}))

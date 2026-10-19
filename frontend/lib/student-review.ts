@@ -18,7 +18,7 @@ export interface ReviewEvidence {
   action?: Record<string, unknown>
 }
 export interface ReviewCriterion {key: string; status: ReviewStatus; evidence: ReviewEvidence[]}
-export interface ReviewEvent extends ReviewEvidence {id: string; kind: string; text?: string}
+export interface ReviewEvent extends ReviewEvidence {id: string; kind: string; text?: string; blocking?: boolean}
 export interface TeacherAssessment {
   score: number | null
   is_passed: boolean | null
@@ -127,7 +127,8 @@ export function actionDescription(action?: Record<string, unknown>) {
     typeof action.number === "string" ? `Номер: ${action.number}` : "",
     typeof action.who_accepted === "string" ? `Исполнитель: ${action.who_accepted}` : "",
     typeof action.order_number === "string" ? `Бригада: ${action.order_number}` : "",
-    action.comment, action.summary]
+    action.comment, action.summary,
+    typeof action.note === "string" ? `Запись доклада: ${action.note}` : ""]
   return parts.filter((part): part is string => typeof part === "string" && !!part.trim()).join(" · ")
 }
 

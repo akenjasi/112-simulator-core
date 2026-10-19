@@ -21,7 +21,9 @@ def recordings():
     result = {}
     for key, name, _, spoken_number in RESPONDERS:
         introduction = f"{POSITION} {name}. Бригада номер {spoken_number}."
+        # Keep recordings referenced by earlier immutable session snapshots available.
         result[f"dds_{key}_reply.wav"] = f"{introduction} Слушаю. Готов принять задание."
+        result[f"dds_{key}_reply_v2.wav"] = f"{introduction} Задание принято. Бригада направлена к месту происшествия. О ходе работ доложу."
         for index, phrase in enumerate(STAGE_PHRASES):
             result[f"dds_{key}_{index}.wav"] = f"{introduction} {phrase}"
     return result
@@ -34,7 +36,7 @@ def default_phone_plan(services):
     for index, service in enumerate(dict.fromkeys(services)):
         key, name, brigade, _ = RESPONDERS[index % len(RESPONDERS)]
         contact_id = f"dds-contact-{index}"
-        reply = f"dds_{key}_reply.wav"
+        reply = f"dds_{key}_reply_v2.wav"
         contacts.append(dict(id=contact_id, service_name=service, number=str(7000 + index),
                              full_name=name, position=POSITION, brigade=brigade,
                              reply=pool[reply], dispatch_keywords=["направлена"], audio=AUDIO_PREFIX + reply))

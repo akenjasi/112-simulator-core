@@ -181,3 +181,17 @@ it("offers a review after finishing and preserves the exact completed card", asy
   render(<DDSAssignedConsole sessionId="s1"/>)
   expect(await screen.findByRole("link", {name: "Разбор карточки"})).toHaveAttribute("href", "/student/review?session_id=s1&card_id=c1")
 })
+
+it("shows accepted inaccurate notes as content errors, with the trainee's original record", async () => {
+  const mistake = {id: "content-error", kind: "mistake", card_id: "c1", at: "2026-10-19T10:03:00Z",
+    blocking: false, message: "В записи доклада неверно записано ФИО докладчика.",
+    action: {status: "Начало реагирования", note: "Пупкин, бригада 99"}}
+  network.mockResolvedValue(response(state({criteria: [criterion("accuracy", "not_completed", [mistake])],
+    exercise: {source: "prepared", contacts: [], outgoing: {}, events: [mistake]}})))
+  render(<StudentAttemptReview/>)
+  expect(await screen.findByText("Ошибка в записи · действие сохранено")).toBeInTheDocument()
+  expect(screen.getByText("Не выполнено")).toBeInTheDocument()
+  expect(screen.getAllByText(/Запись доклада: Пупкин, бригада 99/)).toHaveLength(2)
+  expect(screen.getAllByText(/неверно записано ФИО докладчика/)).toHaveLength(2)
+  expect(screen.queryByText("Ошибочная попытка")).not.toBeInTheDocument()
+})

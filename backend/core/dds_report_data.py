@@ -426,7 +426,7 @@ def _exercise_protocols(data):
         for e in item["exercise"]["events"]:
             if e["kind"] not in ("mistake", "answered", "report_processed"):
                 continue
-            entry = {key: e[key] for key in ("id", "kind", "at", "service_name", "report_id", "text", "reason", "message", "delay_seconds") if key in e}
+            entry = {key: e[key] for key in ("id", "kind", "at", "service_name", "report_id", "text", "reason", "message", "blocking", "delay_seconds") if key in e}
             if "action" in e:
                 entry["action"] = {key: e["action"][key] for key in ("kind", "status", "service_name", "order_number", "who_accepted", "summary", "operation", "number") if key in e["action"]}
             events.append(entry)

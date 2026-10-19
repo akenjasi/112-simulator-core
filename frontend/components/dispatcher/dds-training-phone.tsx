@@ -160,7 +160,7 @@ export function DDSTrainingPhone({exercise, selectedService, onServiceChange, di
         </div>}
         {record && !hasReport && <div className="space-y-2 border-t border-[#b4b9bc] pt-2">
           <label className="flex items-center gap-2"><span className="w-24 shrink-0">Кто принял:</span><input aria-label="Кто принял" disabled={recordDisabled} value={record.saved?.whoAccepted ?? record.whoAccepted} onChange={event => record.setWhoAccepted(event.target.value)} placeholder="ФИО, должность" className="min-w-0 flex-1 border border-[#b4b9bc] p-1.5"/></label>
-          <label className="flex items-center gap-2"><span className="w-24 shrink-0">Суть:</span><input aria-label="Суть сообщения" disabled={recordDisabled} value={record.saved?.summary ?? record.summary} onChange={event => record.setSummary(event.target.value)} placeholder="Переданное поручение" className="min-w-0 flex-1 border border-[#b4b9bc] p-1.5"/></label>
+          <label className="flex items-center gap-2"><span className="w-24 shrink-0">Суть:</span><input aria-label="Суть сообщения" disabled={recordDisabled} value={record.saved?.summary ?? record.summary} onChange={event => record.setSummary(event.target.value)} placeholder="Содержание ответа службы" className="min-w-0 flex-1 border border-[#b4b9bc] p-1.5"/></label>
           <div className="flex justify-end"><button type="button" disabled={recordDisabled || !record.whoAccepted.trim() || !record.summary.trim()} onClick={() => void record.onSave()} className="bg-[#157dbd] px-3 py-1.5 text-white disabled:opacity-50">{record.saved ? "Сохранено" : "Сохранить телефонограмму"}</button></div>
         </div>}
       </div>}

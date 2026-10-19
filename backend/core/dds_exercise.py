@@ -100,9 +100,6 @@ def action_issue(data, payload, service_status):
         call = ex["outgoing"].get(payload.service_name)
         if not call:
             return "call_required"
-        contact = next(c for c in ex["plan"]["contacts"] if c["id"] == call["contact_id"])
-        if not contains(payload.who_accepted, [contact["full_name"], contact["position"]]) or not contains(payload.summary, contact["dispatch_keywords"]):
-            return "record_accuracy"
         if service_status != "Принята":
             return "transition"
         return None
@@ -124,20 +121,62 @@ def action_issue(data, payload, service_status):
         return "transition"
     if ex["plan"].get("presentation") == "audio_only":
         note = ex.get("notes", {}).get(report["id"], "")
+        if not note.strip():
+            return "report_note"
+    return None
+
+
+def accuracy_issues(data, payload):
+    """Assess written content without rejecting the trainee's action or changing it."""
+    ex = data["exercise"]
+    issues = []
+    if payload.kind == "dispatch":
+        contact = next(c for c in ex["plan"]["contacts"]
+                       if c["id"] == ex["outgoing"][payload.service_name]["contact_id"])
+        if not contains(payload.who_accepted, [contact["full_name"]]):
+            issues.append("В телефонограмме неверно записано ФИО исполнителя.")
+        if not contains(payload.who_accepted, [contact["position"]]):
+            issues.append("В телефонограмме неверно записана или пропущена должность исполнителя.")
+        if not contains(payload.summary, contact["dispatch_keywords"]):
+            issues.append("В сути телефонограммы не отражены существенные сведения ответа службы.")
+        return issues
+    if payload.status not in STAGES:
+        return issues
+    report = current(ex)
+    contact = contact_for(ex, report)
+    if ex["plan"].get("presentation") == "audio_only":
+        note = ex.get("notes", {}).get(report["id"], "")
         number = norm(contact["brigade"])
         spoken_number = {"1": "один", "2": "два", "3": "три", "4": "четыре"}.get(number, number)
-        heard_number = any(f" {value} " in f" {norm(note)} " for value in (number, spoken_number))
-        if not heard_number or not contains(note, [contact["full_name"], contact["position"], report["status"]]):
-            return "report_note"
-    if norm(payload.order_number) != norm(contact["brigade"]) or not contains(payload.comment, report["comment_keywords"]):
-        return "record_accuracy"
-    return None
+        if not contains(note, [contact["full_name"]]):
+            issues.append("В записи доклада неверно записано ФИО докладчика.")
+        if not contains(note, [contact["position"]]):
+            issues.append("В записи доклада неверно записана или пропущена должность докладчика.")
+        if not any(f" {value} " in f" {norm(note)} " for value in (number, spoken_number)):
+            issues.append("В записи доклада неверно указан или пропущен номер бригады.")
+        if not contains(note, [report["status"]]):
+            issues.append("В записи доклада неверно отражён или пропущен этап работ.")
+    if norm(payload.order_number) != norm(contact["brigade"]):
+        issues.append("В статусе службы указан неверный номер бригады.")
+    if not contains(payload.comment, report["comment_keywords"]):
+        issues.append("В комментарии к статусу не отражён результат работ из доклада.")
+    return issues
 
 
 def accepted_action(data, payload, at):
     ex = data.get("exercise")
     if not ex:
         return
+    issues = accuracy_issues(data, payload)
+    if issues:
+        report = current(ex) if payload.kind == "status" else None
+        action = payload.model_dump(exclude_none=True)
+        if report and ex["plan"].get("presentation") == "audio_only":
+            action["note"] = ex.get("notes", {}).get(report["id"], "")
+        event(ex, "mistake", at, data["card_id"], service_name=payload.service_name,
+              reason="record_accuracy", blocking=False, message=" ".join(issues),
+              report_id=report["id"] if report else None,
+              action=action)
     event(ex, "action", at, data["card_id"], service_name=payload.service_name,
           action=payload.model_dump(exclude_none=True))
     if payload.kind == "status" and payload.status in ("Не принята", "Отказ от выполнения работ"):
@@ -177,6 +216,8 @@ def criteria(data, closed=False):
             done = all(item["seconds"] is not None and item["seconds"] <= 30 for item in confirmations)
             evidence = confirmations
         state = "completed_after_correction" if done and evidence and key != "confirmation" else "completed" if done else "not_completed" if closed or key == "confirmation" and any(item["seconds"] is not None and item["seconds"] > 30 for item in confirmations) else "not_evaluated"
+        if key == "accuracy" and any(e.get("blocking") is False for e in evidence):
+            state = "not_completed"
         if ex.get("refused_services") and key in ("service", "stage", "accuracy"):
             state = "not_evaluated"
         result.append({"key": key, "label": label, "status": state, "evidence": evidence})

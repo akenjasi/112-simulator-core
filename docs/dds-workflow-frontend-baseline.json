@@ -189,14 +189,14 @@
       "reason": "Integrated operator workspace and current call flow"
     },
     "components/dispatcher/dds-protocol.tsx": {
-      "sha256": "0a3309073dcfdee6ff0af6bfc0eba80be2b1fc97254c36103eed6e95c151c1e6",
-      "source_revision": "d51076c",
-      "reason": "Prepared DDS exercise protocol already present before audit"
+      "sha256": "51459877c40f9dcc5a516fb67988c6d17315439ee719ab03293496fe780716c4",
+      "source_revision": "codex/dds-phone-audio-cycle (base e1ef59b)",
+      "reason": "Explicit user feedback 2026-10-19: distinguish saved inaccurate records from rejected actions in instructor protocol."
     },
     "components/dispatcher/dds-training-phone.tsx": {
-      "sha256": "011c3227cb16ef9f588eabfd46744a478d2b077386b375df62e4f642185abb0b",
-      "source_revision": "codex/dds-phone-audio-cycle (base 54f83a8)",
-      "reason": "Explicit user request 2026-10-19: automatic audio-only DDS cycle, replay, saved trainee notes and owning-teacher review; optional teacher configuration"
+      "sha256": "7d2fa25586cdb5231185ec9ef84b95072c5973a19685bec40ecd0ac6277dcca0",
+      "source_revision": "codex/dds-phone-audio-cycle (base e1ef59b)",
+      "reason": "Explicit user feedback 2026-10-19: accept inaccurate trainee content, show specific content errors in card review, and record the service response rather than an outgoing instruction."
     },
     "components/dispatcher/dispatch-panel.tsx": {
       "sha256": "9ed4c3fd8e5d0ce4c06e079819e633aef38f458c27e56bbb023f19d322b8244e",
@@ -234,14 +234,14 @@
       "reason": "Audited supported runtime and dependency security corrections"
     },
     "components/student/student-review.tsx": {
-      "sha256": "1499b77136fe882d1a04dc4cdde3d0d0fb19c91ab5068da5c33bcc6b5bca8fba",
-      "source_revision": "stash:149aed5e0ca98621a9fe107149906272b6c77c44",
-      "reason": "User-requested student teacher-assessment display restored after stash pop across the component directory reorganization."
+      "sha256": "0d0b6d97908edf1adcd233c441bc50d195dc9d5fa4a5e6de6a63508c202b7118",
+      "source_revision": "codex/dds-phone-audio-cycle (base e1ef59b)",
+      "reason": "Explicit user feedback 2026-10-19: accept inaccurate trainee content, show specific content errors in card review, and record the service response rather than an outgoing instruction."
     },
     "lib/student-review.ts": {
-      "sha256": "6051c6f7a191c31bb0721292552e7b2c5f75327e01da61b275a71da3a1cc6ae0",
-      "source_revision": "stash:149aed5e0ca98621a9fe107149906272b6c77c44",
-      "reason": "User-requested student teacher-assessment display restored after stash pop across the component directory reorganization."
+      "sha256": "881754c0241596179e2bf5e736bfece2eaab732834bcd9fd8c01ec722115e404",
+      "source_revision": "codex/dds-phone-audio-cycle (base e1ef59b)",
+      "reason": "Explicit user feedback 2026-10-19: accept inaccurate trainee content, show specific content errors in card review, and record the service response rather than an outgoing instruction."
     }
   },
   "update_policy": "2026-10-19: explicitly reconciled under the user request to repair obsolete tests. Original sha256 values are unchanged. Exact supplemental hashes preserve the integrated changes; these paths are not open-ended exceptions. 2026-10-19: the user explicitly requested the DDS audio-only cycle and teacher review; only the three existing supplemental entries were updated, preserving the original map and guarded path set."

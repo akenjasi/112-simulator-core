@@ -128,7 +128,11 @@ async def test_phone_ownership_idempotency_unknown_and_wrong_contact():
     audio = await phone(state, user, "audio", call_id=outgoing["call_id"], audio_result="unavailable")
     assert audio.json()["exercise"]["events"][-1]["result"] == "unavailable"
     inaccurate = await act(state, user, kind="dispatch", who_accepted="Любой", summary="Любой")
-    assert inaccurate.json()["last_attempt"]["reason"] == "record_accuracy"
+    assert inaccurate.json()["last_attempt"]["accepted"]
+    assert inaccurate.json()["actions"][-1]["summary"] == "Любой"
+    mistake = next(e for e in inaccurate.json()["exercise"]["events"] if e["kind"] == "mistake" and e["reason"] == "record_accuracy")
+    assert mistake["blocking"] is False
+    assert "ФИО" in mistake["message"] and "существенные сведения" in mistake["message"]
     early = await phone(state, user, "answer", report_id="r0-0")
     assert early.status_code == 409
     for outsider in [user, None]:

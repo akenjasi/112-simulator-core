@@ -23,6 +23,10 @@ def test_catalog_is_deterministic_valid_and_has_real_recordings():
     assert plan["presentation"] == "audio_only"
     assert [c["number"] for c in plan["contacts"]] == ["7000", "7001"]
     assert len(plan["reports"]) == 8
+    for contact in plan["contacts"]:
+        assert "Задание принято. Бригада направлена" in contact["reply"]
+        assert "Слушаю" not in contact["reply"]
+        assert contact["audio"].endswith("_reply_v2.wav")
     for filename, transcript in recordings().items():
         assert "Начальник бригады" in transcript and "Бригада номер" in transcript
         with wave.open(str(AUDIO_DIR / filename)) as audio:
@@ -39,7 +43,8 @@ def test_report_note_matches_the_heard_number_without_substring_matches(number, 
     data["exercise"].update(accepted=report["id"], notes={report["id"]:
         f"Начальник бригады Иванов Иван Иванович. Бригада {number}. Начало реагирования."})
     payload = DDSActionPayload(request_id="test", kind="status", service_name="Газ", status=report["status"], order_number="1")
-    assert (training.action_issue(data, payload, "Принята") is None) is accepted
+    assert training.action_issue(data, payload, "Принята") is None
+    assert (not training.accuracy_issues(data, payload)) is accepted
 
 
 @pytest.mark.asyncio
@@ -107,3 +112,63 @@ async def test_recordings_are_public_fixed_assets_not_arbitrary_files():
         assert audio.getnframes() > 1000
     assert (await request("GET", "/api/dds/audio/unknown.wav", None)).status_code == 404
     assert (await request("GET", "/api/dds/audio/dds_ivanov_0.wav?file=/etc/passwd", None)).content == response.content
+
+
+@pytest.mark.asyncio
+async def test_inaccurate_content_is_saved_and_cycle_finishes_with_card_errors(monkeypatch):
+    from sqlalchemy import select
+    from backend.models.domain_04 import TicketResult
+    from backend.core.dds_report_data import _exercise_protocols
+    users, ids = await exercise(n=1, count=1)
+    _, states = await launch(users, ids)
+    state, user = states[0], users["cadets"][0]
+    clock = [training.parse_time(state["received_at"])]
+    monkeypatch.setattr(training, "now_utc", lambda: clock[0])
+    await act(state, user)
+    await phone(state, user, number="7000", service_name="Аварийная служба")
+    wire = dict(request_id="inaccurate-dispatch", card_id=state["card_id"], kind="dispatch",
+                service_name="Аварийная служба", who_accepted="Пупкин", summary="123")
+    sent = (await request("POST", base(state) + "/actions", user, json=wire)).json()
+    assert sent["last_attempt"]["accepted"] and sent["exercise"]["due_at"]
+    assert sent["actions"][-1]["who_accepted"] == "Пупкин" and sent["actions"][-1]["summary"] == "123"
+    repeated = (await request("POST", base(state) + "/actions", user, json=wire)).json()
+    assert repeated["last_attempt"]["accepted"]
+    assert repeated["exercise"]["events"] == sent["exercise"]["events"]
+    plan = default_phone_plan(["Аварийная служба"])
+    for index, report in enumerate(plan["reports"]):
+        clock[0] += timedelta(seconds=3)
+        assert (await phone(state, user, "answer", report_id=report["id"])).status_code == 200
+        note = "Пупкин. Всё уже закончилось, бригада 99." if index == 0 else report["text"]
+        assert (await phone(state, user, "note", report_id=report["id"], note=note)).status_code == 200
+        if index == 0:
+            wrong = (await act(state, user, status="Прибытие", order_number="99")).json()
+            assert wrong["last_attempt"]["reason"] == "wrong_stage"
+            assert wrong["exercise"]["processed_reports"] == 0
+        result = (await act(state, user, status=report["status"], order_number="99" if index == 0 else "1",
+                            comment="123" if index == 3 else report["text"])).json()
+        assert result["last_attempt"]["accepted"], result
+        assert result["exercise"]["processed_reports"] == index + 1
+    done = (await complete(state, user)).json()
+    assert done["readonly"] and done["exercise"]["processed_reports"] == 4
+    assert done["exercise"]["notes"]["dds-report-0-0"] == "Пупкин. Всё уже закончилось, бригада 99."
+    accuracy = next(c for c in done["criteria"] if c["key"] == "accuracy")
+    assert accuracy["status"] == "not_completed"  # Completion must not pretend content was corrected.
+    assert len(accuracy["evidence"]) == 3
+    assert all(e["blocking"] is False for e in accuracy["evidence"])
+    assert "ФИО докладчика" in accuracy["evidence"][1]["message"]
+    assert accuracy["evidence"][1]["action"]["note"].startswith("Пупкин")
+    assert "результат работ" in accuracy["evidence"][2]["message"]
+    assert next(c for c in done["criteria"] if c["key"] == "completion")["status"] == "completed"
+    restored = (await request("GET", base(state) + f"/cards/{state['card_id']}", user)).json()
+    assert restored["criteria"] == done["criteria"]
+    async with AsyncSessionLocal() as db:
+        session = await db.get(ExamSession, state["session_id"])
+        saved_result = await db.scalar(select(TicketResult).where(TicketResult.session_id == state["session_id"]))
+        assert saved_result.errors_count == 4  # Three content errors plus the blocked wrong stage.
+        assert saved_result.error_details["dds_criteria"] == done["criteria"]
+        protocols = _exercise_protocols(session.dynamic_state["dds"])
+        assert any(e.get("blocking") is False for e in protocols[0]["events"])
+        assert "Всё уже закончилось" not in str(protocols)  # Free report notes never enter LLM input.
+    teacher = await request("GET", base(state) + "/phone-notes", users["teacher"])
+    assert teacher.json()["cards"][0]["notes"][0]["note"].startswith("Пупкин")
+    assert "Иванов" in teacher.json()["cards"][0]["notes"][0]["expected_text"]
