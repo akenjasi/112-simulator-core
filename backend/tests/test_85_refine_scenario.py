@@ -6,7 +6,7 @@ from backend.models.domain_02 import GeneratedTicket
 import uuid
 
 @pytest.mark.asyncio
-async def test_ticket_refine_endpoint():
+async def test_ticket_refine_endpoint(teacher_auth_client):
     """
     Test that the POST /api/tickets/{id}/refine endpoint accepts a correction_comment 
     and returns a modified ticket.
@@ -28,19 +28,18 @@ async def test_ticket_refine_endpoint():
         
     # 2. Make a POST request to /api/tickets/{ticket_id}/refine
     correction_comment = "Добавь крики на фоне"
-    async with AsyncClient(app=app, base_url="http://test") as ac:
+    async with AsyncClient(app=app, base_url="http://test", headers=teacher_auth_client.headers) as ac:
         response = await ac.post(
             f"/api/tickets/{ticket_id}/refine",
             json={"correction_comment": correction_comment}
         )
         
-    # 3. Verify response status is 200 and plot has changed
-    assert response.status_code == 200
-    data = response.json()
-    assert correction_comment in data["plot"]
-    assert data["plot"].startswith("Original plot.")
-    assert "\n[ИИ-коррекция с учетом: Добавь крики на фоне]" in data["plot"]
-    
+    assert response.status_code == 501
+    assert response.json()["detail"] == "AI ticket refinement is not configured"
+    async with AsyncSessionLocal() as session:
+        unchanged = await session.get(GeneratedTicket, ticket_id)
+        assert unchanged.plot == "Original plot."
+
     # Clean up
     async with AsyncSessionLocal() as session:
         ticket = await session.get(GeneratedTicket, ticket_id)

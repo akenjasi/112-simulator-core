@@ -225,14 +225,14 @@ async def test_scenario_snapshot_isolation_from_catalog_changes():
     start_res = await api_request("POST", f"/api/v1/lessons/{lesson_id}/start", env["teacher"])
     assert start_res.status_code == 200
 
-    # Проверяем наличие снимка в сессии и в уроке
+    # Проверяем снимок очереди в сессии и порядок ID билетов в уроке
     async with AsyncSessionLocal() as db:
         session = (await db.scalars(select(ExamSession).where(ExamSession.assignment_id == lesson_id))).one()
-        assert session.dynamic_state["dds"]["scenario_snapshot"]["description"] == INCOMING_TICKET["description"]
+        assert session.dynamic_state["dds"]["queue"][0]["incoming_card"]["description"] == INCOMING_TICKET["description"]
 
         lesson = await db.get(Assignment, lesson_id)
         assert len(lesson.card_pool_ids) == 1
-        assert lesson.card_pool_ids[0]["description"] == INCOMING_TICKET["description"]
+        assert lesson.card_pool_ids == [env["ticket_id"]]
 
         # Теперь модифицируем исходный билет в базе данных (симулируем правку в каталоге)
         ticket = await db.get(ScenarioTicket, env["ticket_id"])
@@ -304,7 +304,10 @@ async def test_server_timer_expiry_exam_mode():
         lesson = await db.get(Assignment, lesson_id)
         lesson.mode = "EXAM"
         session = (await db.scalars(select(ExamSession).where(ExamSession.assignment_id == lesson_id))).one()
-        session.start_time = datetime.now(timezone.utc) - timedelta(seconds=60)
+        from backend.core.dds_queue import store_state
+        aged = deepcopy(session.dynamic_state["dds"])
+        aged["received_at"] = (datetime.now(timezone.utc) - timedelta(seconds=60)).isoformat()
+        store_state(session, aged)
         await db.commit()
         session_id = session.session_id
 
@@ -344,7 +347,10 @@ async def test_server_timer_expiry_training_mode():
     # Отматываем время в прошлое (в режиме TRAINING)
     async with AsyncSessionLocal() as db:
         session = (await db.scalars(select(ExamSession).where(ExamSession.assignment_id == lesson_id))).one()
-        session.start_time = datetime.now(timezone.utc) - timedelta(seconds=35)
+        from backend.core.dds_queue import store_state
+        aged = deepcopy(session.dynamic_state["dds"])
+        aged["received_at"] = (datetime.now(timezone.utc) - timedelta(seconds=35)).isoformat()
+        store_state(session, aged)
         await db.commit()
         session_id = session.session_id
 
@@ -356,6 +362,11 @@ async def test_server_timer_expiry_training_mode():
     assert state_data["is_expired"] is True
     assert state_data["time_remaining_seconds"] == 0
 
+    # Finish each service through a permitted terminal refusal before submission.
+    for service_name in ["01 Пожарные", "02 Полиция"]:
+        rejected = await api_request("POST", f"/api/dds/sessions/{session_id}/actions", cadet,
+            json=make_action(service_name=service_name, status_val="Не принята" if service_name == "02 Полиция" else "Отказ от выполнения работ"))
+        assert rejected.status_code == 200, rejected.text
     # Завершение сессии также фиксирует превышение
     finish_res = await api_request("POST", f"/api/dds/sessions/{session_id}/finish", cadet, json={})
     assert finish_res.status_code == 200
@@ -391,4 +402,5 @@ async def test_error_limit_propagation():
     async with AsyncSessionLocal() as db:
         session = (await db.scalars(select(ExamSession).where(ExamSession.assignment_id == lesson_id))).one()
         assert session.error_limit == 5
-        assert session.dynamic_state["dds"]["error_limit"] == 5
+        assert session.dynamic_state["dds"]["version"] == 2
+        assert session_data["error_limit"] == session.error_limit

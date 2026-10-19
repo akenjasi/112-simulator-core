@@ -69,7 +69,7 @@ def test_model_and_schema_fields():
 
 
 @pytest.mark.asyncio
-async def test_patch_ticket_endpoint(auth_client):
+async def test_patch_ticket_endpoint(teacher_auth_client):
     """Тестирование редактирования билета через PATCH /api/tickets/{ticket_id}."""
     import uuid
     from backend.database import AsyncSessionLocal
@@ -111,7 +111,7 @@ async def test_patch_ticket_endpoint(auth_client):
           "house": "42"
         },
     }
-    res = await auth_client.patch(f"/api/tickets/{ticket_id}", json=update_payload)
+    res = await teacher_auth_client.patch(f"/api/tickets/{ticket_id}", json=update_payload)
     assert res.status_code == 200, res.text
     data = res.json()
     assert data["plot"] == "Новая фабула после редактирования преподавателем!"

@@ -175,3 +175,77 @@ async def cadet_auth_client():
 async def async_client(teacher_auth_client):
     """Default async HTTP client (authenticated as TEACHER for lesson tests)."""
     yield teacher_auth_client
+
+
+@pytest.fixture
+async def teacher_id(teacher_auth_client):
+    response = await teacher_auth_client.get('/api/v1/users/me')
+    assert response.status_code == 200, response.text
+    return response.json()['user_id']
+
+
+@pytest.fixture
+async def operator_lessons_enabled():
+    """Explicit opt-in; never change the default policy for unrelated tests."""
+    from backend.models.domain_01 import SecurityPolicy
+    async with AsyncSessionLocal() as db:
+        old = await db.get(SecurityPolicy, 'ENABLE_OPERATOR_112_FOR_LESSONS')
+        if old:
+            previous = old.value
+            old.value = 'true'
+        else:
+            previous = None
+            db.add(SecurityPolicy(key='ENABLE_OPERATOR_112_FOR_LESSONS', value='true'))
+        await db.commit()
+    yield
+    async with AsyncSessionLocal() as db:
+        old = await db.get(SecurityPolicy, 'ENABLE_OPERATOR_112_FOR_LESSONS')
+        if old:
+            if previous is None:
+                await db.delete(old)
+            else:
+                old.value = previous
+            await db.commit()
+
+
+@pytest.fixture
+async def approved_dds_ticket():
+    from backend.models.domain_02 import ScenarioTicket
+    card = {
+        'connection': 'Установлено',
+        'phones': {'aon': '112', 'provided': '112', 'onSite': ''},
+        'incident': {'number': 'FIXTURE-112', 'savedAt': '', 'operator': '112'},
+        'caller': {'name': 'Тестовый заявитель', 'role': 'очевидец', 'address': 'ул. Ленина, д. 10'},
+        'description': 'Пожар на складе',
+        'statuses': {'injured': 'нет', 'ambulanceRefusal': 'нет', 'blocked': 'нет'},
+        'emergency': {'cs': False, 'cp': False},
+        'classification': {'section': 'Пожары', 'title': 'Склад', 'class': 'Пожар', 'visClass': ''},
+        'services': [{'id': 'fire_01', 'name': '01 Пожарные', 'time': '', 'status': 'Получена службой', 'isRejected': False, 'history': []}],
+    }
+    async with AsyncSessionLocal() as db:
+        ticket = ScenarioTicket(title='Fixture DDS', workflow_state={'status': 'APPROVED'}, content={'incoming_card': card})
+        db.add(ticket)
+        await db.commit()
+        return ticket.scenario_id
+
+
+@pytest.fixture
+async def saved_call(cadet_auth_client):
+    """Persist the same owner/session/ticket graph used by the authenticated API."""
+    from backend.models.domain_02 import ScenarioTicket
+    from backend.models.domain_03 import ExamSession
+    from backend.api.router_telephony import telephony_manager
+    response = await cadet_auth_client.get('/api/v1/users/me')
+    assert response.status_code == 200, response.text
+    owner_id = response.json()['user_id']
+    async with AsyncSessionLocal() as db:
+        ticket = ScenarioTicket(title='Call fixture')
+        db.add(ticket)
+        await db.flush()
+        call = ExamSession(cadet_id=owner_id, ticket_id=ticket.scenario_id,
+                           session_type='CALL_SIMULATION', status='ACTIVE')
+        db.add(call)
+        await db.commit()
+        session_id, ticket_id = call.session_id, ticket.scenario_id
+    yield session_id, ticket_id
+    telephony_manager.call_states.pop(session_id, None)

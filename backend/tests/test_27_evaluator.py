@@ -9,6 +9,7 @@ from backend.database import AsyncSessionLocal, engine
 from backend.models.base import Base
 from backend.models.domain_01 import User, UserActionLog
 from backend.models.domain_04 import TicketResult
+from backend.models.domain_03 import Assignment, ExamSession
 from backend.schemas.domain_04 import (
     TicketEvaluationRequest,
     TicketEvaluationResult,
@@ -144,8 +145,16 @@ async def test_appeal_endpoint_and_audit_logging(setup_db):
         await session.flush()
         teacher_id = teacher.user_id
 
-        # Создаем результат проверки билета
+        assignment = Assignment(assigned_by=teacher_id, session_type="CALL_SIMULATION")
+        session.add(assignment)
+        await session.flush()
+        saved = ExamSession(assignment_id=assignment.assignment_id, cadet_id=teacher_id, session_type="CALL_SIMULATION")
+        session.add(saved)
+        await session.flush()
+
+        # Создаем результат проверки билета в доступной сессии
         tr = TicketResult(
+            session_id=saved.session_id,
             ticket_id="ticket-appeal-42",
             is_passed=False,
             errors_count=2,

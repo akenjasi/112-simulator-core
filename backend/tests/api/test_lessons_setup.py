@@ -16,7 +16,7 @@ from backend.models.domain_03 import Assignment
 
 
 @pytest.fixture(autouse=True)
-async def init_db():
+async def init_db(teacher_id):
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
 
@@ -27,7 +27,7 @@ async def init_db():
             ("group-test-03", "Группа 303"),
             ("group-test-stats", "Группа Статистики"),
         ]:
-            grp = StudentGroup(group_id=gid, group_name=gname)
+            grp = StudentGroup(group_id=gid, group_name=gname, teacher_id=teacher_id)
             session.add(grp)
         await session.commit()
 
@@ -38,7 +38,7 @@ async def init_db():
 
 
 @pytest.mark.asyncio
-async def test_create_lesson_success_default_waiting(teacher_auth_client):
+async def test_create_lesson_success_default_waiting(teacher_auth_client, operator_lessons_enabled):
     """Test creating a lesson returns status 201 and WAITING status."""
     payload = {
         "group_id": "group-test-01",
@@ -77,10 +77,11 @@ async def test_create_lesson_success_default_waiting(teacher_auth_client):
 
 
 @pytest.mark.asyncio
-async def test_create_lesson_dispatcher_role(teacher_auth_client):
+async def test_create_lesson_dispatcher_role(teacher_auth_client, approved_dds_ticket):
     """Test creating a lesson with DISPATCHER_DDS role and level_2 complexity."""
     payload = {
         "group_id": "group-test-02",
+        "ticket_id": approved_dds_ticket,
         "target_role": "DISPATCHER_DDS",
         "categories": ["Пожары и задымления"],
         "complexity": "level_2",
@@ -105,7 +106,7 @@ async def test_create_lesson_dispatcher_role(teacher_auth_client):
 
 
 @pytest.mark.asyncio
-async def test_create_lesson_empty_categories_allowed(teacher_auth_client):
+async def test_create_lesson_empty_categories_allowed(teacher_auth_client, operator_lessons_enabled):
     """Empty categories is allowed and represents 'all categories'."""
     payload = {
         "group_id": "group-test-03",
@@ -180,7 +181,7 @@ async def test_create_lesson_validation_invalid_time_limit(teacher_auth_client):
 
 
 @pytest.mark.asyncio
-async def test_get_lesson_and_stats(teacher_auth_client):
+async def test_get_lesson_and_stats(teacher_auth_client, operator_lessons_enabled):
     """Test getting created lesson details and stats."""
     payload = {
         "group_id": "group-test-stats",
@@ -201,8 +202,12 @@ async def test_get_lesson_and_stats(teacher_auth_client):
     assert res_stats.json()["session_id"] == lesson_id
     assert res_stats.json()["status"] == "WAITING"
 
-    # Also test router_sessions compatibility
-    res_sess_stats = await teacher_auth_client.get(f"/api/v1/sessions/{lesson_id}/stats")
-    assert res_sess_stats.status_code == 200
-    assert res_sess_stats.json()["session_id"] == lesson_id
-    assert res_sess_stats.json()["status"] == "WAITING"
+    from backend.models.domain_03 import ExamSession
+    async with AsyncSessionLocal() as db:
+        saved = ExamSession(assignment_id=lesson_id, session_type="CALL_SIMULATION", status="WAITING", cadet_id=(await teacher_auth_client.get("/api/v1/users/me")).json()["user_id"])
+        db.add(saved)
+        await db.commit()
+        session_id = saved.session_id
+    res_sess_stats = await teacher_auth_client.get(f"/api/v1/sessions/{session_id}/stats")
+    assert res_sess_stats.status_code == 410
+    assert "/api/v1/lessons/{lesson_id}" in res_sess_stats.json()["detail"]

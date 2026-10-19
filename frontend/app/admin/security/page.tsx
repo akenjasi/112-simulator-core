@@ -28,6 +28,7 @@ export default function SecurityPoliciesPage() {
   }, [themeContext?.theme]);
 
   const [form] = Form.useForm();
+  const [notificationApi, notificationHolder] = notification.useNotification();
   const [loading, setLoading] = useState(false);
   const [operator112Enabled, setOperator112Enabled] = useState(false);
   const [isSavingOperator112Access, setIsSavingOperator112Access] = useState(false);
@@ -86,11 +87,11 @@ export default function SecurityPoliciesPage() {
       });
 
       if (!res.ok) throw new Error("Не удалось сохранить настройку");
-      notification.success({ message: "Доступ к роли «Оператор 112» обновлён" });
+      notificationApi.success({ message: "Доступ к роли «Оператор 112» обновлён" });
     } catch (error) {
       console.error(error);
       setOperator112Enabled(previousValue);
-      notification.error({ message: "Не удалось обновить доступ к роли «Оператор 112»" });
+      notificationApi.error({ message: "Не удалось обновить доступ к роли «Оператор 112»" });
     } finally {
       setIsSavingOperator112Access(false);
     }
@@ -109,13 +110,13 @@ export default function SecurityPoliciesPage() {
         body: JSON.stringify({ policies }),
       });
       if (res.ok) {
-        notification.success({ message: "Настройки безопасности сохранены" });
+        notificationApi.success({ message: "Настройки безопасности сохранены" });
       } else {
-        notification.error({ message: "Ошибка сохранения" });
+        notificationApi.error({ message: "Ошибка сохранения" });
       }
     } catch (error) {
       console.error(error);
-      notification.error({ message: "Ошибка сохранения" });
+      notificationApi.error({ message: "Ошибка сохранения" });
     }
   };
 
@@ -135,11 +136,11 @@ export default function SecurityPoliciesPage() {
         a.click();
         window.URL.revokeObjectURL(url);
       } else {
-        notification.error({ message: "Ошибка скачивания отчета" });
+        notificationApi.error({ message: "Ошибка скачивания отчета" });
       }
     } catch (error) {
       console.error(error);
-      notification.error({ message: "Ошибка скачивания отчета" });
+      notificationApi.error({ message: "Ошибка скачивания отчета" });
     }
   };
 
@@ -161,6 +162,7 @@ export default function SecurityPoliciesPage() {
           : undefined,
       }}
     >
+      {notificationHolder}
       <div style={{ padding: 24 }}>
         <Row justify="space-between" align="middle" style={{ marginBottom: 24 }}>
           <Col>

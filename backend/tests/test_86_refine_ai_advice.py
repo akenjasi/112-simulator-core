@@ -5,20 +5,21 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from datetime import datetime, timezone
 
 from backend.models.domain_03 import AIStudentAdvice
-from backend.models.domain_01 import User
+from backend.models.domain_01 import User, StudentGroup
 from backend.core.security import hash_password
 
 @pytest.mark.asyncio
-async def test_refine_ai_advice(auth_client: AsyncClient, cadet_auth_client: AsyncClient, db_session: AsyncSession):
+async def test_refine_ai_advice(teacher_auth_client: AsyncClient, teacher_id, cadet_auth_client: AsyncClient, db_session: AsyncSession):
     # 1. Create a cadet user
     cadet_id = str(uuid.uuid4())
     cadet = User(
         user_id=cadet_id,
         username=f"test_cadet_refine_{uuid.uuid4().hex[:8]}",
         password_hash=hash_password("test_pass_123"),
-        role="CADET"
+        role="CADET", created_by_id=teacher_id
     )
     db_session.add(cadet)
+    db_session.add(StudentGroup(group_name="Refine fixture", teacher_id=teacher_id, cadet_ids=[cadet_id]))
     await db_session.commit()
 
     # 2. Create a dummy AIStudentAdvice record
@@ -34,9 +35,9 @@ async def test_refine_ai_advice(auth_client: AsyncClient, cadet_auth_client: Asy
     db_session.add(advice)
     await db_session.commit()
 
-    # 3. Call the refine endpoint as an instructor (admin auth_client)
+    # 3. Call the refine endpoint as the cadet's instructor
     correction = "ИИ, ты не прав, студент молодец"
-    response = await auth_client.post(
+    response = await teacher_auth_client.post(
         f"/api/ai-analytics/student/{advice_id}/refine",
         json={"correction_comment": correction}
     )

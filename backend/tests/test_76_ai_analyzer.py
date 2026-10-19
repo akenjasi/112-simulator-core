@@ -304,6 +304,8 @@ async def test_api_group_advice_and_model_info():
             specialization="OPERATOR_112",
         )
         session.add(teacher)
+        await session.flush()
+        group.teacher_id = teacher.user_id
         session.add(group)
         await session.commit()
         teacher_id = teacher.user_id

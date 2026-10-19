@@ -17,7 +17,9 @@ async def init_db():
     async with AsyncSessionLocal() as session:
         admin = User(username="admin_user", password_hash=hash_password("admin_pass"), role="ADMIN")
         teacher = User(username="teacher_user", password_hash=hash_password("teacher_pass"), role="TEACHER")
-        cadet = User(username="cadet_user", password_hash=hash_password("cadet_pass"), role="CADET")
+        session.add_all([admin, teacher])
+        await session.flush()
+        cadet = User(username="cadet_user", password_hash=hash_password("cadet_pass"), role="CADET", created_by_id=teacher.user_id)
         session.add_all([admin, teacher, cadet])
         await session.commit()
 
@@ -59,7 +61,7 @@ async def test_rbac_teacher_creates_cadet_success():
     async with AsyncClient(app=app, base_url="http://test") as ac:
         response = await ac.post("/api/admin/users", json={
             "username": "new_cadet_by_teacher",
-            "password": "pwd",
+            "password": "test_password_123",
             "role": "CADET"
         }, headers=headers)
     assert response.status_code == 200
@@ -74,7 +76,7 @@ async def test_rbac_teacher_creates_admin_forbidden():
     async with AsyncClient(app=app, base_url="http://test") as ac:
         response = await ac.post("/api/admin/users", json={
             "username": "new_admin_by_teacher",
-            "password": "pwd",
+            "password": "test_password_123",
             "role": "ADMIN"
         }, headers=headers)
     assert response.status_code == 403

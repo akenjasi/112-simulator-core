@@ -6,7 +6,7 @@ from backend.database import engine
 from backend.models.base import Base
 
 @pytest.fixture(autouse=True)
-async def init_db():
+async def init_db(cadet_auth_client):
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
     
@@ -15,7 +15,7 @@ async def init_db():
     from backend.database import AsyncSessionLocal
     
     async with AsyncSessionLocal() as session:
-        t = User(username="eval_test", password_hash="h", role="STUDENT")
+        t = await session.get(User, (await cadet_auth_client.get("/api/v1/users/me")).json()["user_id"])
         session.add(t)
         await session.flush()
         
@@ -43,7 +43,7 @@ async def init_db():
         await conn.run_sync(Base.metadata.drop_all)
 
 @pytest.mark.asyncio
-async def test_evaluate_perfect_score(init_db, auth_client):
+async def test_evaluate_perfect_score(init_db, cadet_auth_client):
     session_id, user_id, ticket_id = init_db
     
     payload = {
@@ -57,7 +57,7 @@ async def test_evaluate_perfect_score(init_db, auth_client):
         "is_refusal_03": False
     }
     
-    res = await auth_client.post(f"/api/v1/sessions/{session_id}/evaluate", json=payload)
+    res = await cadet_auth_client.post(f"/api/v1/sessions/{session_id}/evaluate", json=payload)
     assert res.status_code == 200
     data = res.json()
     assert "evaluation_id" in data
@@ -66,7 +66,7 @@ async def test_evaluate_perfect_score(init_db, auth_client):
     assert len(data["errors_list"]) == 0
 
 @pytest.mark.asyncio
-async def test_evaluate_time_penalty(init_db, auth_client):
+async def test_evaluate_time_penalty(init_db, cadet_auth_client):
     session_id, user_id, ticket_id = init_db
     
     payload = {
@@ -80,14 +80,14 @@ async def test_evaluate_time_penalty(init_db, auth_client):
         "is_refusal_03": False
     }
     
-    res = await auth_client.post(f"/api/v1/sessions/{session_id}/evaluate", json=payload)
+    res = await cadet_auth_client.post(f"/api/v1/sessions/{session_id}/evaluate", json=payload)
     assert res.status_code == 200
     data = res.json()
     assert data["scores"]["total"] < 100
     assert any("секунд" in e for e in data["errors_list"])
 
 @pytest.mark.asyncio
-async def test_evaluate_missing_service(init_db, auth_client):
+async def test_evaluate_missing_service(init_db, cadet_auth_client):
     session_id, user_id, ticket_id = init_db
     
     payload = {
@@ -101,7 +101,7 @@ async def test_evaluate_missing_service(init_db, auth_client):
         "is_refusal_03": False
     }
     
-    res = await auth_client.post(f"/api/v1/sessions/{session_id}/evaluate", json=payload)
+    res = await cadet_auth_client.post(f"/api/v1/sessions/{session_id}/evaluate", json=payload)
     assert res.status_code == 200
     data = res.json()
     assert data["scores"]["total"] <= 70

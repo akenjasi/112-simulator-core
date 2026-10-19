@@ -1,48 +1,40 @@
+"""Adapter boundary contracts; these tests do not claim a real PBX/SPO stand."""
 import pytest
-from httpx import AsyncClient
-from backend.main import app
 from unittest.mock import AsyncMock
+from backend.database import AsyncSessionLocal
+from backend.models.domain_04 import IncidentCard
 
 @pytest.mark.asyncio
-async def test_spo112_gateway_export(monkeypatch):
-    """
-    Test that the SPO-112 export gateway endpoint exists and attempts to format
-    and send the incident card to an external system (mocked).
-    """
-    from backend.core.spo_gateway import spo_gateway
-    mock_export = AsyncMock(return_value=True)
-    monkeypatch.setattr(spo_gateway, "export_card", mock_export)
-    
-    async with AsyncClient(app=app, base_url="http://test") as client:
-        response = await client.post(
-            "/api/integration/spo112/export/card-123",
-            json={"card_data": {"address": "Test Ave 1", "description": "Fire"}}
-        )
-    
-    assert response.status_code == 200
-    assert response.json()["status"] == "success"
-    mock_export.assert_called_once_with({"address": "Test Ave 1", "description": "Fire"})
+async def test_spo112_gateway_export(monkeypatch, saved_call, cadet_auth_client):
+    session_id, _ = saved_call
+    stored = {'address': 'Test Ave 1', 'description': 'Fire'}
+    async with AsyncSessionLocal() as db:
+        card = IncidentCard(session_id=session_id, card_origin="runtime", filled_data=stored)
+        db.add(card)
+        await db.commit()
+        card_id = card.card_id
+    export = AsyncMock(return_value=True)
+    monkeypatch.setattr('backend.core.spo_gateway.spo_gateway.export_card', export)
+    response = await cadet_auth_client.post(f'/api/integration/spo112/export/{card_id}',
+        json={'card_data': {'address': 'spoofed request address'}})
+    assert response.status_code == 200, response.text
+    assert response.json()['status'] == 'success'
+    export.assert_awaited_once_with(stored)
+    export.return_value = False
+    failed = await cadet_auth_client.post(f'/api/integration/spo112/export/{card_id}', json={'card_data': {}})
+    assert failed.status_code == 500
 
 @pytest.mark.asyncio
-async def test_asterisk_ari_adapter(monkeypatch):
-    """
-    Test that the telephony router uses the real Asterisk client interface 
-    instead of just returning static mock responses.
-    """
+async def test_asterisk_ari_adapter(monkeypatch, saved_call, cadet_auth_client):
+    """A configured PBX must not report a fake successful physical call."""
     from backend.core.telephony_adapter import telephony_adapter
-    mock_originate = AsyncMock(return_value="mock_ari_call_id")
-    monkeypatch.setattr(telephony_adapter, "originate_call", mock_originate)
-    
-    async with AsyncClient(app=app, base_url="http://test") as client:
-        response = await client.post(
-            "/api/v2/telephony/start_call",
-            json={
-                "ticket_id": "test-ticket-456",
-                "operator_ext": "1002"
-            }
-        )
-        
-    assert response.status_code == 200
-    data = response.json()
-    assert data["call_id"] == "mock_ari_call_id"
-    mock_originate.assert_called_once_with(endpoint="1002", extension="test-ticket-456")
+    session_id, ticket_id = saved_call
+    originate = AsyncMock()
+    monkeypatch.setattr(telephony_adapter, 'originate_call', originate)
+    monkeypatch.setattr(telephony_adapter, 'enabled', 'true')
+    response = await cadet_auth_client.post('/api/v2/telephony/start_call', json={
+        'ticket_id': ticket_id, 'session_id': session_id, 'operator_ext': '1002',
+    })
+    assert response.status_code == 501
+    assert 'Real PBX channel lifecycle is not implemented' in response.json()['detail']
+    originate.assert_not_called()

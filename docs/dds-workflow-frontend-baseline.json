@@ -156,5 +156,83 @@
       "lib/teacher-groups.ts",
       "lib/teacher-knowledge.ts"
     ]
-  }
+  },
+  "approved_updates": {
+    "app/admin/security/page.tsx": {
+      "sha256": "7d6f72b9ba3f4334fd547e12ef209b11b3abe961b17782577305ecd4528e1f1d",
+      "source_revision": "codex/test-contract-repair",
+      "reason": "Current requested fix: own the notification holder and unmount it with its page"
+    },
+    "app/dds/page.tsx": {
+      "sha256": "fe651b72bfc9d2c78648be0385d11111610d5e9f59ed7d7cd79f7c762cc781b6",
+      "source_revision": "3337c99",
+      "reason": "Integrated DDS workflow and security/auth fixes"
+    },
+    "app/globals.css": {
+      "sha256": "60d267b194288e154039e672d627961fde2d01d19b823536c338f790c15adb53",
+      "source_revision": "3337c99",
+      "reason": "Integrated persisted themes and audited CSS import"
+    },
+    "app/layout.tsx": {
+      "sha256": "5db12439980cf76c5c5d2c1b551e92c4841ed36483d841c97882a8bbcdd33849",
+      "source_revision": "3337c99",
+      "reason": "Integrated local-font root layout from audited main"
+    },
+    "app/login/page.tsx": {
+      "sha256": "ab1e2fccce9b0d11e4b5e1e90db0835cb0913563c742b38df82e41f60b43a397",
+      "source_revision": "3337c99",
+      "reason": "Integrated authenticated prototype login"
+    },
+    "app/operator/page.tsx": {
+      "sha256": "be2ba159b3b75ecc69ba20c3f6cc3beb0a5523c877a0396cc4cfca7c47c725a1",
+      "source_revision": "3337c99",
+      "reason": "Integrated operator workspace and current call flow"
+    },
+    "components/dispatcher/dds-protocol.tsx": {
+      "sha256": "0a3309073dcfdee6ff0af6bfc0eba80be2b1fc97254c36103eed6e95c151c1e6",
+      "source_revision": "d51076c",
+      "reason": "Prepared DDS exercise protocol already present before audit"
+    },
+    "components/dispatcher/dds-training-phone.tsx": {
+      "sha256": "f3ff4cdf33bd1c00c4b97dd0f1ff947ed95977101b84bde71b9479640eedf66c",
+      "source_revision": "d51076c",
+      "reason": "Prepared DDS phone exercise already present before audit"
+    },
+    "components/dispatcher/dispatch-panel.tsx": {
+      "sha256": "9ed4c3fd8e5d0ce4c06e079819e633aef38f458c27e56bbb023f19d322b8244e",
+      "source_revision": "d51076c",
+      "reason": "Prepared phone exercise and protocol integration already present before audit"
+    },
+    "components/dispatcher/top-bar.tsx": {
+      "sha256": "9cfb25291e1359085fd8fdb9d8c6e989f0cb8f2dba4ec38871194f3a8371e86a",
+      "source_revision": "d51076c",
+      "reason": "Prepared phone exercise controls already present before audit"
+    },
+    "components/teacher/dds-exercise-editor.tsx": {
+      "sha256": "89c0850d8db9f1847fb2916e03eba2f0b469ddeba216ed8a956d94abc7f04c31",
+      "source_revision": "d51076c",
+      "reason": "Prepared DDS exercise editor already present before audit"
+    },
+    "components/teacher/dds-lesson-protocol.tsx": {
+      "sha256": "8e9ff2e6481c8aeae98ddcda153c6d7a98697cb17ffcf4c15d40e01762855c13",
+      "source_revision": "d51076c",
+      "reason": "Prepared teacher lesson protocol already present before audit"
+    },
+    "hooks/useTelephony.ts": {
+      "sha256": "b6641cf7a8e9895d799523c307b8a0546a41817097e79aaa1cca8fa8f2ca3d47",
+      "source_revision": "ce9dcf4",
+      "reason": "First-frame WebSocket authentication security correction"
+    },
+    "package-lock.json": {
+      "sha256": "6ae084d3d9e79d3ea7f5ea475810a9c02faf5fdee5e49fa4cbd174c85113cbfc",
+      "source_revision": "ce9dcf4",
+      "reason": "Locked dependency tree of the audited security corrections"
+    },
+    "package.json": {
+      "sha256": "bdc63e3a4c9cb0c1cefe5267e4dbf74853a076996a4dbcec83d8a123b8cf3007",
+      "source_revision": "ce9dcf4",
+      "reason": "Audited supported runtime and dependency security corrections"
+    }
+  },
+  "update_policy": "2026-10-19: explicitly reconciled under the user request to repair obsolete tests. Original sha256 values are unchanged. Exact supplemental hashes preserve the integrated changes; these paths are not open-ended exceptions."
 }

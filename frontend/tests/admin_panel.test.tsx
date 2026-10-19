@@ -1,16 +1,13 @@
 import React from 'react';
-import { act, cleanup, render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { cleanup, render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { notification } from 'antd';
 // Load the page during suite import, not inside the 5s behavioral test budget.
 import SecurityPoliciesPage from '../app/admin/security/page';
 
-// Ant Design notifications render in their own root outside RTL's container.
-// Flush and dispose that root before Vitest destroys this file's jsdom window.
-afterEach(async () => {
-  await act(async () => { notification.destroy(); });
-  cleanup();
-});
+// Pages own their notification holders, so RTL unmounts every React root.
+// Calling the static notification.destroy() here creates a global root even
+// for tests which never display a notice and leaves it outside RTL cleanup.
+afterEach(() => { cleanup(); });
 
 // Recharts ResponsiveContainer mock for jsdom
 vi.mock('recharts', async () => {
@@ -299,7 +296,7 @@ describe('Admin Panel Pages and Components', () => {
   });
 
   it('should save the Operator 112 access toggle without validating unrelated security fields', async () => {
-    render(<SecurityPoliciesPage />);
+    const { unmount } = render(<SecurityPoliciesPage />);
 
     const operatorToggle = await screen.findByRole('switch', {
       name: /Разрешить роль «Оператор 112»/i,
@@ -320,5 +317,8 @@ describe('Admin Panel Pages and Components', () => {
       );
     });
     expect(await screen.findByText('Доступ к роли «Оператор 112» обновлён')).toBeInTheDocument();
+    unmount();
+    expect(screen.queryByText('Доступ к роли «Оператор 112» обновлён')).not.toBeInTheDocument();
+    expect(document.querySelector('.ant-notification')).toBeNull();
   });
 });

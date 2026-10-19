@@ -23,15 +23,15 @@ async def init_db():
         await conn.run_sync(Base.metadata.drop_all)
 
 @pytest.mark.asyncio
-async def test_scenario_generate_and_compile(init_db, auth_client):
+async def test_scenario_generate_and_compile(init_db, teacher_auth_client):
     scenario_id = init_db
     
-    res = await auth_client.post(f"/api/admin/scenarios/{scenario_id}/generate")
-    assert res.status_code == 200
-    data = res.json()
-    assert "job_id" in data
+    res = await teacher_auth_client.post(f"/api/admin/scenarios/{scenario_id}/generate")
+    assert res.status_code == 501
+    assert "legacy job execution is unavailable" in res.json()["detail"]
+    assert "job_id" not in res.json()
     
-    res_compile = await auth_client.post(f"/api/admin/scenarios/{scenario_id}/compile")
+    res_compile = await teacher_auth_client.post(f"/api/admin/scenarios/{scenario_id}/compile")
     assert res_compile.status_code == 200
     data_compile = res_compile.json()
     assert data_compile["success"] is True

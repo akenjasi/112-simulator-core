@@ -6,7 +6,7 @@ from backend.database import engine
 from backend.models.base import Base
 
 @pytest.fixture(autouse=True)
-async def init_db():
+async def init_db(teacher_id):
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
     
@@ -16,8 +16,8 @@ async def init_db():
     from backend.database import AsyncSessionLocal
     
     async with AsyncSessionLocal() as session:
-        t = User(username="teacher", password_hash="h", role="TEACHER")
-        c = User(username="cadet", password_hash="h", role="CADET")
+        t = await session.get(User, teacher_id)
+        c = User(username="cadet", password_hash="h", role="CADET", created_by_id=teacher_id)
         s = ScenarioTicket()
         session.add_all([t, c, s])
         await session.flush()

@@ -30,40 +30,16 @@ def test_address_expansion():
     Проверяем, что сокращения адресов разворачиваются для TTS,
     чтобы нейросеть читала их красиво.
     """
-    def expand_address(text: str) -> str:
-        text = re.sub(r'\bул\.\s*', 'улица ', text)
-        text = re.sub(r'\bд\.\s*', 'дом ', text)
-        text = re.sub(r'\bк\.\s*', 'корпус ', text)
-        text = re.sub(r'\bкв\.\s*', 'квартира ', text)
-        text = re.sub(r'\bпр-кт\.\s*', 'проспект ', text)
-        text = re.sub(r'\bпр-кт\s+', 'проспект ', text)
-        return text.strip()
-
-    assert expand_address("ул. Ленина, д. 5") == "улица Ленина, дом 5"
-    assert expand_address("ул.Школьная д.7") == "улица Школьная дом 7"
-
-    # Проверяем реализацию из backend.api.router_tickets
-    assert expand_address_for_tts("ул. Ленина, д. 5") == "улица Ленина, дом 5"
-    assert expand_address_for_tts("ул.Школьная д.7") == "улица Школьная дом 7"
-    assert expand_address_for_tts("пр-кт. Мира к. 2 кв. 14") == "проспект Мира корпус 2 квартира 14"
+    assert expand_address_for_tts("ул. Ленина, д. 5") == "улица Ленина, дом пять"
+    assert expand_address_for_tts("ул.Школьная д.7") == "улица Школьная дом семь"
+    assert expand_address_for_tts("пр-кт. Мира к. 2 кв. 14") == "проспект Мира корпус два квартира четырнадцать"
 
 
 def test_tts_phone_spacing():
-    """
-    Проверяем, что телефон разбивается пробелами для правильного зачитывания.
-    """
-    def format_phone_for_tts_local(phone: str) -> str:
-        # Убираем все кроме цифр
-        digits = re.sub(r'\D', '', phone)
-        # Вставляем пробелы
-        return " ".join(digits)
-    
-    assert format_phone_for_tts_local("+79443759255") == "7 9 4 4 3 7 5 9 2 5 5"
-    assert format_phone_for_tts_local("8 (495) 123-45-67") == "8 4 9 5 1 2 3 4 5 6 7"
-
-    # Проверяем реализацию из backend.api.router_tickets
-    assert format_phone_for_tts("+79443759255") == "7 9 4 4 3 7 5 9 2 5 5"
-    assert format_phone_for_tts("8 (495) 123-45-67") == "8 4 9 5 1 2 3 4 5 6 7"
+    """Qwen receives spoken groups; retain the plus and zero groups."""
+    assert format_phone_for_tts("+79443759255") == "плюс семь, девятьсот сорок четыре, триста семьдесят пять, девяносто два, пятьдесят пять"
+    assert format_phone_for_tts("8 (495) 123-45-67") == "восемь, четыреста девяносто пять, сто двадцать три, сорок пять, шестьдесят семь"
+    assert format_phone_for_tts("+70000000000") == "плюс семь, ноль ноль ноль, ноль ноль ноль, ноль ноль, ноль ноль"
 
 
 def test_no_hardcoded_allo_in_ticket_generator():

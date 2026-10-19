@@ -184,6 +184,9 @@ async def test_analytics_endpoints():
 
         teacher = User(username="teacher_analytics", password_hash="h", role="TEACHER")
         session.add(teacher)
+        await session.flush()
+        group.teacher_id = teacher.user_id
+        a1.assigned_by = teacher.user_id
 
         await session.commit()
         u1_id = u1.user_id

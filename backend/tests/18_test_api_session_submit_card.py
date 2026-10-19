@@ -6,7 +6,7 @@ from backend.database import engine
 from backend.models.base import Base
 
 @pytest.fixture(autouse=True)
-async def init_db():
+async def init_db(teacher_id):
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
     
@@ -15,7 +15,7 @@ async def init_db():
     from backend.database import AsyncSessionLocal
     
     async with AsyncSessionLocal() as session:
-        t = User(username="t", password_hash="h", role="TEACHER")
+        t = await session.get(User, teacher_id)
         session.add(t)
         await session.flush()
         
@@ -43,10 +43,10 @@ async def init_db():
         await conn.run_sync(Base.metadata.drop_all)
 
 @pytest.mark.asyncio
-async def test_session_submit_card(init_db, auth_client):
+async def test_session_submit_card(init_db, teacher_auth_client):
     session_id, user_id = init_db
     
-    res = await auth_client.post(f"/api/v2/sessions/{session_id}/submit_card", json={
+    res = await teacher_auth_client.post(f"/api/v2/sessions/{session_id}/submit_card", json={
         "operator_id": user_id,
         "filled_data": {"address": "Minsk"},
         "assigned_services": ["101"]
@@ -57,6 +57,6 @@ async def test_session_submit_card(init_db, auth_client):
     assert data["session_status"] == "COMPLETED"
     
     # Check if session was closed
-    state_res = await auth_client.get(f"/api/v2/sessions/{session_id}")
+    state_res = await teacher_auth_client.get(f"/api/v2/sessions/{session_id}")
     assert state_res.json()["status"] == "COMPLETED"
 

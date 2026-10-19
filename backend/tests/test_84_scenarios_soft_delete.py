@@ -8,7 +8,7 @@ from backend.models.domain_02 import GeneratedTicket
 from backend.database import get_db
 
 @pytest.mark.asyncio
-async def test_scenario_soft_delete(db_session: AsyncSession):
+async def test_scenario_soft_delete(db_session: AsyncSession, teacher_auth_client):
     """
     Test that soft deleting a scenario sets its is_deleted flag and hides it from the default GET list.
     """
@@ -23,30 +23,30 @@ async def test_scenario_soft_delete(db_session: AsyncSession):
     db_session.add(ticket)
     await db_session.commit()
     
-    async with AsyncClient(app=app, base_url="http://test") as ac:
+    async with AsyncClient(app=app, base_url="http://test", headers=teacher_auth_client.headers) as ac:
         # 1. Verify it's in the list
         response = await ac.get("/api/tickets")
         assert response.status_code == 200
         data = response.json()
-        assert any(t["id"] == "test-soft-delete-123" for t in data), "Ticket should be in the list"
+        assert any(t["id"] == ticket.id for t in data), "Ticket should be in the list"
         
         # 2. Patch the ticket
-        patch_res = await ac.patch("/api/tickets/test-soft-delete-123", json={"complexity": 2})
+        patch_res = await ac.patch(f"/api/tickets/{ticket.id}", json={"complexity": 2})
         assert patch_res.status_code == 200
         assert patch_res.json()["complexity"] == 2
         
         # 3. Delete it
-        del_res = await ac.delete("/api/tickets/test-soft-delete-123")
+        del_res = await ac.delete(f"/api/tickets/{ticket.id}")
         assert del_res.status_code == 200
         
         # 4. Verify it's hidden from default GET list
         response = await ac.get("/api/tickets")
         assert response.status_code == 200
         data = response.json()
-        assert not any(t["id"] == "test-soft-delete-123" for t in data), "Deleted ticket should be hidden by default"
+        assert not any(t["id"] == ticket.id for t in data), "Deleted ticket should be hidden by default"
         
         # 5. Verify it's returned if include_deleted=true
         response_inc = await ac.get("/api/tickets?include_deleted=true")
         assert response_inc.status_code == 200
         data_inc = response_inc.json()
-        assert any(t["id"] == "test-soft-delete-123" for t in data_inc), "Deleted ticket should be present when include_deleted=true"
+        assert any(t["id"] == ticket.id for t in data_inc), "Deleted ticket should be present when include_deleted=true"

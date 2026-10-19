@@ -178,7 +178,7 @@ exit 0
         assert result.returncode != 0, "CI masked failed independent acceptance"
 
 
-@pytest.mark.parametrize("stage", ["backend-core", "frontend-tests", "typecheck", "frontend-build"])
+@pytest.mark.parametrize("stage", ["backend-core", "backend-all", "frontend-tests", "typecheck", "frontend-build"])
 def test_checked_in_ci_command_propagates_each_required_failure(tmp_path, stage):
     data = workflow()
     project = tmp_path / "workflow-probe"
@@ -196,12 +196,12 @@ exit 0
 '''
     executable(project / "tools/quality/verify.sh", stub)
     env = clean_env()
-    env.update(P3_CI_TRACE=str(marker), P3_FAILED_MODE="backend-core" if stage == "backend-core" else "frontend",
+    env.update(P3_CI_TRACE=str(marker), P3_FAILED_MODE=stage if stage in ("backend-core", "backend-all") else "frontend",
                GITHUB_WORKSPACE=str(project), RUNNER_TEMP=str(tmp_path), CI="true")
     candidates = []
     for _, job, step in runner_steps(data):
         command = step["run"]
-        mode = re.search(r"verify\.sh[\"']?\s+(all|backend-core|frontend)\b", command)
+        mode = re.search(r"verify\.sh[\"']?\s+(all|backend-core|backend-all|frontend)\b", command)
         if mode and mode[1] in {"all", env["P3_FAILED_MODE"]}:
             candidates.append((job, step))
     assert candidates, f"No mandatory CI invocation covers {stage}"

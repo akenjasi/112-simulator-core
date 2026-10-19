@@ -7,7 +7,7 @@ from backend.models.domain_03 import Lesson, ExamSession
 
 
 @pytest.mark.asyncio
-async def test_lesson_state_transitions(async_client, db_session):
+async def test_lesson_state_transitions(async_client, db_session, teacher_id, approved_dds_ticket):
     """
     Тест проверяет полный жизненный цикл урока:
     1. Создание урока -> статус WAITING
@@ -18,7 +18,7 @@ async def test_lesson_state_transitions(async_client, db_session):
     """
     # 1. Создаем учебную группу и двух курсантов с уникальными именами
     uid = uuid.uuid4().hex[:6]
-    group = StudentGroup(group_name=f"Группа Т-42-{uid}")
+    group = StudentGroup(group_name=f"Группа Т-42-{uid}", teacher_id=teacher_id)
     db_session.add(group)
     await db_session.flush()
 
@@ -51,6 +51,7 @@ async def test_lesson_state_transitions(async_client, db_session):
     create_payload = {
         "group_id": group_id,
         "target_role": "DISPATCHER_DDS",
+        "ticket_id": approved_dds_ticket,
         "categories": ["Пожары", "ДТП"],
         "complexity": "level_2",
         "time_limit_seconds": 45,

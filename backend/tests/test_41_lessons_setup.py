@@ -16,12 +16,12 @@ from backend.models.domain_03 import Assignment
 
 
 @pytest.fixture(autouse=True)
-async def init_db():
+async def init_db(teacher_id):
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
 
     async with AsyncSessionLocal() as session:
-        grp = StudentGroup(group_id="group-test-41", group_name="Группа ТЗ-41")
+        grp = StudentGroup(group_id="group-test-41", group_name="Группа ТЗ-41", teacher_id=teacher_id)
         session.add(grp)
         await session.commit()
 
@@ -32,7 +32,7 @@ async def init_db():
 
 
 @pytest.mark.asyncio
-async def test_create_dds_lesson_waiting_status(teacher_auth_client):
+async def test_create_dds_lesson_waiting_status(teacher_auth_client, approved_dds_ticket):
     """
     Тест проверяет эндпоинт создания группового урока.
     Ожидается, что при валидных данных урок будет создан со статусом WAITING.
@@ -40,6 +40,7 @@ async def test_create_dds_lesson_waiting_status(teacher_auth_client):
     payload = {
         "group_id": "group-test-41",
         "target_role": "DISPATCHER_DDS",
+        "ticket_id": approved_dds_ticket,
         "categories": ["Взрывы", "ДТП"],
         "complexity": "adaptive",
         "time_limit_seconds": 30,

@@ -42,6 +42,11 @@ jobs:
           IMBA_VERIFY_REPORT_DIR: data/checks/ci/backend
         run: bash tools/quality/verify.sh backend-core
 
+      - name: Verify Complete Backend Suite
+        env:
+          IMBA_VERIFY_REPORT_DIR: data/checks/ci/backend-all
+        run: bash tools/quality/verify.sh backend-all
+
       - name: Verify Offline Packaging Contracts
         run: python -m unittest discover -s docker/offline/tests -p 'test_offline_*.py' -v
 

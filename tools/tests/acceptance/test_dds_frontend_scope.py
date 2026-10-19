@@ -1,4 +1,6 @@
-"""Preserve the DDS workspace, with explicit exceptions for user-approved fixes."""
+"""Preserve the DDS workspace, including exact reviewed post-handoff updates."""
+import re
+import pytest
 import hashlib
 import json
 from pathlib import Path
@@ -49,12 +51,68 @@ def product_files():
             if path.relative_to(FRONTEND).as_posix() not in LOBBY_ALLOWLIST | TESTER_FIX_ALLOWLIST | TEACHER_UI_ALLOWLIST}
 
 
-def test_only_lobby_frontend_may_change():
-    expected = {name: digest for name, digest in json.loads(MANIFEST.read_text())["sha256"].items()
+# Reconcile the frozen handoff with integrated work, not a blanket new baseline.
+# The old hash map remains immutable; supplemental entries pin these exact files
+# rather than allowing future arbitrary changes under a permanent allowlist.
+REVIEWED_UPDATES = {
+    'app/admin/security/page.tsx',
+    'app/dds/page.tsx',
+    'app/globals.css',
+    'app/layout.tsx',
+    'app/login/page.tsx',
+    'app/operator/page.tsx',
+    'components/dispatcher/dds-protocol.tsx',
+    'components/dispatcher/dds-training-phone.tsx',
+    'components/dispatcher/dispatch-panel.tsx',
+    'components/dispatcher/top-bar.tsx',
+    'components/teacher/dds-exercise-editor.tsx',
+    'components/teacher/dds-lesson-protocol.tsx',
+    'hooks/useTelephony.ts',
+    'package-lock.json',
+    'package.json',
+}
+ORIGINAL_HASH_MAP_DIGEST = "ff9eaf593819935e5fb3620ebe5303728ad2fa3387dee022577eea36a8f08888"
+
+
+def expected_files():
+    manifest = json.loads(MANIFEST.read_text())
+    original = manifest["sha256"]
+    assert hashlib.sha256(json.dumps(original, sort_keys=True).encode()).hexdigest() == ORIGINAL_HASH_MAP_DIGEST
+    updates = manifest["approved_updates"]
+    assert set(updates) == REVIEWED_UPDATES
+    for update in updates.values():
+        assert re.fullmatch(r"[0-9a-f]{64}", update["sha256"])
+        assert update["source_revision"] and update["reason"]
+    expected = {name: digest for name, digest in original.items()
                 if name not in TESTER_FIX_ALLOWLIST | TEACHER_UI_ALLOWLIST}
-    files = product_files()
-    changes = [f"removed: {name}" for name in expected.keys() - files.keys()]
-    changes.extend(f"added outside lobby: {name}" for name in files.keys() - expected.keys())
-    changes.extend(f"changed: {name}" for name in files.keys() & expected.keys()
-                   if hashlib.sha256(files[name].read_bytes()).hexdigest() != expected[name])
-    assert not changes, "Forbidden frontend changes outside the approved fixes:\n" + "\n".join(sorted(changes))
+    expected.update({name: item["sha256"] for name, item in updates.items()})
+    return expected
+
+
+def scope_changes(expected, actual):
+    changes = [f"removed: {name}" for name in expected.keys() - actual.keys()]
+    changes.extend(f"added outside approved scope: {name}" for name in actual.keys() - expected.keys())
+    changes.extend(f"changed: {name}" for name in actual.keys() & expected.keys()
+                   if actual[name] != expected[name])
+    return sorted(changes)
+
+
+def test_only_approved_frontend_may_change():
+    actual = {name: hashlib.sha256(path.read_bytes()).hexdigest() for name, path in product_files().items()}
+    changes = scope_changes(expected_files(), actual)
+    assert not changes, "Forbidden frontend changes outside the approved fixes:\n" + "\n".join(changes)
+
+
+@pytest.mark.parametrize("mutation", ["changed", "removed", "added"])
+def test_scope_guard_still_rejects_unreviewed_changes(mutation):
+    expected = expected_files()
+    actual = expected.copy()
+    # Supplemental files are pinned, too: they are not a mutable allowlist.
+    target = "hooks/useTelephony.ts"
+    if mutation == "changed":
+        actual[target] = "0" * 64
+    elif mutation == "removed":
+        del actual[target]
+    else:
+        actual["components/dispatcher/unreviewed.tsx"] = "0" * 64
+    assert len(scope_changes(expected, actual)) == 1

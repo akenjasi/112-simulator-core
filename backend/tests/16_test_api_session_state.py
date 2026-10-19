@@ -6,7 +6,7 @@ from backend.database import engine
 from backend.models.base import Base
 
 @pytest.fixture(autouse=True)
-async def init_db():
+async def init_db(teacher_id):
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
     
@@ -15,7 +15,7 @@ async def init_db():
     from backend.database import AsyncSessionLocal
     
     async with AsyncSessionLocal() as session:
-        t = User(username="t", password_hash="h", role="TEACHER")
+        t = await session.get(User, teacher_id)
         c = User(username="c", password_hash="h", role="CADET")
         session.add_all([t, c])
         await session.flush()
@@ -44,10 +44,10 @@ async def init_db():
         await conn.run_sync(Base.metadata.drop_all)
 
 @pytest.mark.asyncio
-async def test_get_session_state(init_db, auth_client):
+async def test_get_session_state(init_db, teacher_auth_client):
     session_id = init_db
     
-    res = await auth_client.get(f"/api/v2/sessions/{session_id}")
+    res = await teacher_auth_client.get(f"/api/v2/sessions/{session_id}")
     assert res.status_code == 200
     data = res.json()
     assert data["session_id"] == session_id

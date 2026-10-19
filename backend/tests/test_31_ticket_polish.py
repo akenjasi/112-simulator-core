@@ -42,11 +42,11 @@ def test_ticket_generator_plot_and_speaker():
 def test_tts_phone_number_formatting():
     from backend.api.router_tickets import format_phone_for_tts
     clean = format_phone_for_tts("+79443759255")
-    assert clean == "7 9 4 4 3 7 5 9 2 5 5"
+    assert clean == "плюс семь, девятьсот сорок четыре, триста семьдесят пять, девяносто два, пятьдесят пять"
 
 
 @pytest.mark.asyncio
-async def test_ticket_delete_endpoint(auth_client):
+async def test_ticket_delete_endpoint(teacher_auth_client):
     import uuid
     from backend.database import AsyncSessionLocal
     from backend.models.domain_02 import GeneratedTicket, ScenarioTicket
@@ -75,18 +75,18 @@ async def test_ticket_delete_endpoint(auth_client):
         await session.commit()
 
     # Verify delete
-    res = await auth_client.delete(f"/api/tickets/{ticket_id}")
+    res = await teacher_auth_client.delete(f"/api/tickets/{ticket_id}")
     assert res.status_code == 200
     data = res.json()
     assert data["status"] == "ok"
 
     # Verify not found after deletion
     async with AsyncSessionLocal() as session:
-        assert await session.get(GeneratedTicket, ticket_id) is None
-        assert await session.get(ScenarioTicket, ticket_id) is None
+        assert (await session.get(GeneratedTicket, ticket_id)).is_deleted is True
+        assert (await session.get(ScenarioTicket, ticket_id)).is_deleted is True
 
-    # Delete non-existent
-    res_404 = await auth_client.delete(f"/api/tickets/{ticket_id}")
+    # A genuinely absent identifier returns 404; archived rows are retained.
+    res_404 = await teacher_auth_client.delete(f"/api/tickets/missing-{ticket_id}")
     assert res_404.status_code == 404
 
 

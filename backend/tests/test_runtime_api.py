@@ -1,41 +1,28 @@
+import base64
+from unittest.mock import AsyncMock
 import pytest
-from fastapi.testclient import TestClient
-from backend.main import app
-from unittest.mock import patch, AsyncMock
+from backend.database import AsyncSessionLocal
+from backend.models.domain_03 import SessionStateModel
+from backend.schemas.bricks import Intent
 
-from backend.core.deps import get_current_user
-from backend.models.domain_01 import User
-
-client = TestClient(app)
-
-@pytest.fixture(autouse=True)
-def override_auth():
-    app.dependency_overrides[get_current_user] = lambda: User(
-        user_id="cadet_123",
-        role="CADET",
-        is_active=True,
-    )
-    yield
-    app.dependency_overrides.pop(get_current_user, None)
-
-def test_api_process_turn():
-
-    # Мокаем работу с БД, чтобы не усложнять тест
-    with patch("backend.api.router_call.get_db") as mock_db, \
-         patch("backend.core.intent_classifier.classify_intent", new_callable=AsyncMock) as mock_classify, \
-         patch("backend.core.tts_engine.generate_audio", new_callable=AsyncMock) as mock_tts:
-        
-        from backend.schemas.bricks import Intent
-        mock_classify.return_value = Intent.situation
-        mock_tts.return_value = b"audio"
-        
-        response = client.post(
-            "/api/v1/call/process_turn",
-            json={
-                "session_id": "sess-123",
-                "operator_text": "Что случилось?"
-            }
-        )
-        assert response.status_code == 200
-        data = response.json()
-        assert "audio_url" in data or "text" in data
+@pytest.mark.asyncio
+async def test_api_process_turn(saved_call, cadet_auth_client, monkeypatch):
+    session_id, _ = saved_call
+    classify = AsyncMock(return_value=Intent.situation)
+    audio = b'RIFF-test-wave'
+    tts = AsyncMock(return_value=audio)
+    monkeypatch.setattr('backend.api.router_call.classify_intent', classify)
+    monkeypatch.setattr('backend.api.router_call.generate_audio', tts)
+    response = await cadet_auth_client.post('/api/v1/call/process_turn', json={
+        'session_id': session_id, 'operator_text': 'Что случилось?',
+    })
+    assert response.status_code == 200, response.text
+    assert response.json()['text'] == 'У нас сильное задымление и пожар, срочно приезжайте!'
+    assert response.json()['audio_url'] == 'data:audio/wav;base64,' + base64.b64encode(audio).decode()
+    classify.assert_awaited_once_with('Что случилось?')
+    tts.assert_awaited_once_with(response.json()['text'])
+    async with AsyncSessionLocal() as db:
+        from sqlalchemy import select
+        state = await db.scalar(select(SessionStateModel).where(SessionStateModel.session_id == session_id))
+        assert state is not None
+        assert 'situation' in state.asked_intents

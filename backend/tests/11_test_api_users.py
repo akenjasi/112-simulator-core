@@ -17,7 +17,7 @@ async def test_users_crud(auth_client):
     # Create
     res = await auth_client.post("/api/admin/users", json={
         "username": "new_cadet",
-        "password": "pwd",
+        "password": "test_password_123",
         "role": "CADET",
         "full_name": "Ivanov I.I."
     })

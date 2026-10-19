@@ -12,8 +12,8 @@ client = TestClient(app)
 @pytest.fixture(autouse=True)
 def override_auth():
     app.dependency_overrides[get_current_user] = lambda: User(
-        user_id="admin_123",
-        role="ADMIN",
+        user_id="teacher_123",
+        role="TEACHER",
         is_active=True,
     )
     yield

@@ -164,8 +164,11 @@ async def test_reset_group_passwords_endpoint(auth_client):
         assert "fio" in item
         assert "email" in item
         assert "new_password" in item
-        assert len(item["new_password"]) == 5
-        assert item["new_password"].isdigit()
+        assert len(item["new_password"]) >= 12
+        async with AsyncSessionLocal() as db:
+            saved_user = await db.get(User, item["user_id"])
+            from backend.core.security import verify_password
+            assert verify_password(item["new_password"], saved_user.password_hash)
 
     # 3. Cleanup
     async with AsyncSessionLocal() as session:
