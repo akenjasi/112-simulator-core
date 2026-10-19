@@ -23,7 +23,7 @@
     "app/operator/journal/page.tsx": "1f87972aa4fe49a761c9fa501260e58a3e2356eb54471bf2d51fe19bc32e9288",
     "app/operator/page.tsx": "f9254d385418f6ae976833add3267340526162306b8746c57c642495b6e64a80",
     "app/page.tsx": "fca3741ea12d86b9345c7103468275c12e278cc1a70495de6a6a13245139924d",
-    "app/student/layout.tsx": "d05ff2675767fd48ae42ac33cd6c391548ccb8ef1e92d1449195385f9e027503",
+    "app/student/layout.tsx": "bb0b67daa66bdb13c843b1cc38130c716eb429605084b51a77832b07c0acde5a",
     "app/student/profile/page.tsx": "6a333c1977c28e8af8696f27d4c0fd272c214ae6b6c723de1d79f36adc09d86b",
     "app/teacher/analytics/page.tsx": "012eccab53f31e324c3b1c3d3fbf628b31e92d47799e3ace472009814726b7b2",
     "app/teacher/groups/page.tsx": "ef141038cb01d2c7609bbd746dc4d85822af0fa4ae2f274775d503b8927b934a",
@@ -32,7 +32,7 @@
     "app/teacher/page.tsx": "4aa1f4e4cbc5e91529b4f41211f680037920abf52120c0f16841597f6369d6bc",
     "app/teacher/profile/page.tsx": "141bb72db287b8cee58b643fac68d210bbcf8a95470b4f1bd808a9b93fb8a7bf",
     "app/teacher/sessions/live/layout.tsx": "1af4ec4e75f82f37f59b7054e6c7d09c3abf9f297933650d04a6232d4fa852df",
-    "app/teacher/sessions/live/page.tsx": "98b2b3010f49882695ca7257fa50929a0636e057f2b829f6b015898b2a69fb3d",
+    "app/teacher/sessions/live/page.tsx": "1c157919ab2fad127f0e3c875bf220f3e6a3f6a2e2e8568a27ec93d2d14c6bcb",
     "app/teacher/sessions/new/page.tsx": "ef0a6a310db05515b9cfc378e43aa6a9de665f0d7b4aa82196fd16867e680d43",
     "app/teacher/sessions/page.tsx": "e8e6d9de39af41c993c4a2bf4647a846393eeba542dd64435c12ceffce066461",
     "app/teacher/tickets/page.tsx": "b83fd31f79f5e5880e8155310fee1afeb7e33b4a849f823ba33c4a88e86c8d29",
@@ -110,7 +110,20 @@
     "public/placeholder.jpg": "14be0c7aa11cca1e78f0966176b286a6d36d00ec64be027775dfeb33d8e2dfdf",
     "public/placeholder.svg": "64badf7aabda0b9630b87020ffb6095cb858ccbcf66b355c2aa08b1063954d3b",
     "store/useCallStore.ts": "b94d5e7ae3f42159e0216ab5a63d4f71bf55218cc20b4e4e3f8b43ff9f9824d3",
-    "tsconfig.json": "f2fc3309a966ecb35a51a17b2b7ab03c92d88b7c663ddbed5cb626f597c83277"
+    "tsconfig.json": "f2fc3309a966ecb35a51a17b2b7ab03c92d88b7c663ddbed5cb626f597c83277",
+    "components/student/student-review.tsx": "82b0771f650016bd12fc5c7707f230f259d8ba6f2073afd0537d15621ed0ac78",
+    "lib/teacher-groups.ts": "575232089a27df1deae32dd621c335e7bbd8c236751664df8368472d35d13213",
+    "components/student/profile-materials.tsx": "3bbc991662117d04adaf09c3ee4e292518662f2c13cd6866145f1f6cf1e99572",
+    "components/teacher/ticket-presentation.tsx": "c28d135047a5ebe4f59faa0e137e223adbbddfd79c291d93f57424a2239e5ef0",
+    "components/teacher/live-dashboard.tsx": "98b2b3010f49882695ca7257fa50929a0636e057f2b829f6b015898b2a69fb3d",
+    "components/student/profile-assignments.tsx": "c3d5672192e5b862604bd5be4ae894a93d017373d32b433c4cdd9714899c0b71",
+    "lib/student-review.ts": "b9a25fe4a7bf595fca0c2fe00c9be92d307e859b3fc691504466837d6c0db52b",
+    "components/student/student-review.module.css": "45ac924bd0b63f1420e09ff8556c6bb5b64abf218c8251964dedbf04e360da55",
+    "lib/teacher-knowledge.ts": "45e6ade31b8bf11dd78b29fa1b1b921b55c9ec6877e7bc98ffa07bb70e9485c1",
+    "components/student/training-dialog.tsx": "531e226b5fb21573fa8fc3db64d3fd385bb32047ee2b4489075a302f5b665cb1",
+    "app/student/review/page.tsx": "1e53ed3f0f250163c8bcdc65e5fc7eb7df45b86bc0eca183f5e3216ed4aa0205",
+    "lib/student-workspace.ts": "a4387cf96a78ce6079952dddfaa2b5887a81f3016dd18075fb13211d2d67dad9",
+    "app/student/profile/student-profile.module.css": "34b8818ffccc2c7d880c6d29e6778848925ea24be090fa89978d6bbf652f6a2b"
   },
   "approved_integrations": [
     {
@@ -122,5 +135,26 @@
         "lib/theme.ts"
       ]
     }
-  ]
+  ],
+  "upstream_ui_baseline": {
+    "commit": "3f8f543a2697d08926a151fc317031ff5fecfbdd",
+    "reason": "Freeze the already committed student/DDS UI referenced by the user before the teacher UI refresh.",
+    "paths": [
+      "app/student/layout.tsx",
+      "app/student/profile/student-profile.module.css",
+      "app/student/review/page.tsx",
+      "app/teacher/sessions/live/page.tsx",
+      "components/student/profile-assignments.tsx",
+      "components/student/profile-materials.tsx",
+      "components/student/student-review.module.css",
+      "components/student/student-review.tsx",
+      "components/student/training-dialog.tsx",
+      "components/teacher/live-dashboard.tsx",
+      "components/teacher/ticket-presentation.tsx",
+      "lib/student-review.ts",
+      "lib/student-workspace.ts",
+      "lib/teacher-groups.ts",
+      "lib/teacher-knowledge.ts"
+    ]
+  }
 }

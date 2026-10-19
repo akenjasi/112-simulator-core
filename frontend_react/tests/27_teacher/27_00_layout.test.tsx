@@ -9,7 +9,7 @@ vi.mock('next/navigation', () => ({
 import TeacherLayout from '@/app/teacher/layout';
 import TeacherMainPage from '@/app/teacher/page';
 
-describe('27.0: Layout и Главная страница (UX 60+)', () => {
+describe('27.0: Навигация и главная страница преподавателя', () => {
   beforeEach(() => {
     localStorage.setItem('access_token', 'teacher-token');
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(
@@ -17,7 +17,7 @@ describe('27.0: Layout и Главная страница (UX 60+)', () => {
     ));
   });
 
-  it('should render persistent sidebar with simple terminology', async () => {
+  it('should keep every teacher section reachable from navigation', async () => {
     render(<TeacherLayout><div>Content</div></TeacherLayout>);
     await waitFor(() => expect(screen.getByRole('link', { name: /Начать урок/i })).toBeInTheDocument());
     expect(screen.getByRole('link', { name: /Начать урок/i })).toBeInTheDocument();
@@ -29,7 +29,7 @@ describe('27.0: Layout и Главная страница (UX 60+)', () => {
     expect(screen.getByText('Content')).toBeInTheDocument();
   });
 
-  it('should render large tiles on the main page', async () => {
+  it('should expose the primary lesson action and the other teacher sections', async () => {
     render(<TeacherMainPage />);
     await waitFor(() => expect(screen.getByText(/Начать урок/i)).toBeInTheDocument());
     expect(screen.getByText(/Начать урок/i)).toBeInTheDocument();

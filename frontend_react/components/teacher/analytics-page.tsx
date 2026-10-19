@@ -931,15 +931,15 @@ export default function AnalyticsPage({ initialTab = "split" }: AnalyticsPagePro
   })
 
   return (
-    <div className="container mx-auto p-4 md:p-6 space-y-6 max-w-7xl">
+    <div className="teacher-page space-y-5">
       {/* ────────────────── Header & Tab Navigation ────────────────── */}
-      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 border-b pb-4">
+      <div className="teacher-page-header flex flex-col xl:flex-row xl:items-center xl:justify-between gap-4 pb-4">
         <div>
           <div className="flex items-center gap-3">
-            <GraduationCap className="h-8 w-8 text-primary" />
+            <div className="h-11 w-11 rounded-xl bg-primary/10 flex items-center justify-center shrink-0"><GraduationCap className="h-6 w-6 text-primary" /></div>
             <div>
-              <h1 className="text-2xl md:text-3xl font-bold tracking-tight">Журнал оценок</h1>
-              <p className="text-muted-foreground mt-0.5 text-sm md:text-base">
+              <h1 className="text-2xl md:text-[28px] font-bold tracking-tight">Журнал оценок</h1>
+              <p className="text-muted-foreground mt-1 text-sm">
                 История групповых уроков, детальная статистика курсантов и экспертный разбор карточек
               </p>
             </div>
@@ -947,7 +947,7 @@ export default function AnalyticsPage({ initialTab = "split" }: AnalyticsPagePro
         </div>
 
         {/* Action Buttons & Tab Switcher */}
-        <div className="flex flex-wrap items-center gap-3">
+        <div className="flex flex-wrap items-center gap-2.5">
           <Button
             variant="outline"
             size="sm"
@@ -965,7 +965,7 @@ export default function AnalyticsPage({ initialTab = "split" }: AnalyticsPagePro
           </Button>
 
           {/* Tab Switcher */}
-          <div className="flex items-center bg-muted/60 p-1 rounded-xl border">
+          <div className="flex flex-wrap items-center gap-1 bg-muted/50 p-1 rounded-xl border border-border/70">
           <button
             type="button"
             onClick={() => setActiveTab("all")}
@@ -1042,7 +1042,7 @@ export default function AnalyticsPage({ initialTab = "split" }: AnalyticsPagePro
 
       {/* ────────────────── SECTION 0: ДАШБОРДЫ И ГРАФИКИ (ТЗ 75) ────────────────── */}
       {(activeTab === "all" || activeTab === "charts") && (
-        <div className="space-y-8 mb-10" data-testid="analytics-dashboards">
+        <div className="space-y-5 mb-8" data-testid="analytics-dashboards">
           {/* Section Header */}
           <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 bg-card/60 backdrop-blur-xs p-5 rounded-2xl border">
             <div>
@@ -1379,16 +1379,16 @@ export default function AnalyticsPage({ initialTab = "split" }: AnalyticsPagePro
 
       {/* ────────────────── SECTION 1: ИСТОРИЯ УРОКОВ (ACCORDION) ────────────────── */}
       {(activeTab === "all" || activeTab === "history") && (
-        <div className="space-y-6">
-          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-            <div className="flex flex-col sm:flex-row sm:items-center gap-3 w-full sm:max-w-xl">
+        <div className="space-y-5">
+          <div className="teacher-toolbar flex flex-col xl:flex-row xl:items-center xl:justify-between gap-3">
+            <div className="flex flex-col md:flex-row md:items-center gap-3 w-full">
               <div className="relative flex-1">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                 <Input
                   placeholder="Поиск по группе, ID или заметкам..."
                   value={historySearchQuery}
                   onChange={(e) => setHistorySearchQuery(e.target.value)}
-                  className="pl-9 text-sm"
+                  className="pl-9 h-10 text-sm"
                 />
               </div>
 
@@ -1404,7 +1404,7 @@ export default function AnalyticsPage({ initialTab = "split" }: AnalyticsPagePro
                     setSelectedGroupId(e.target.value)
 
                   }}
-                  className="h-9 rounded-md border border-input bg-background px-3 py-1 text-sm shadow-xs focus:outline-none focus:ring-1 focus:ring-ring"
+                  className="h-10 rounded-lg border border-input bg-background px-3 py-1 text-sm focus:outline-none focus:ring-1 focus:ring-ring"
                 >
                   <option value="ALL">Все группы</option>
                   {allGroupOptions.map((g) => (
@@ -1428,7 +1428,7 @@ export default function AnalyticsPage({ initialTab = "split" }: AnalyticsPagePro
             </Button>
           </div>
 
-          <label className="flex items-center gap-2 text-sm cursor-pointer w-fit">
+          <label className="flex items-center gap-2 text-sm cursor-pointer w-fit rounded-lg border border-border/70 bg-card px-3 py-2">
             <input
               type="checkbox"
               checked={hideCompletedLessons}
@@ -1502,7 +1502,7 @@ export default function AnalyticsPage({ initialTab = "split" }: AnalyticsPagePro
                 return (
                   <Card
                     key={lesson.id}
-                    className={`transition-all border shadow-xs ${
+                    className={`transition-all border rounded-2xl shadow-none ${
                       isExpanded ? "border-primary/40 ring-1 ring-primary/20" : "hover:border-primary/30"
                     }`}
                   >
@@ -2092,7 +2092,7 @@ export default function AnalyticsPage({ initialTab = "split" }: AnalyticsPagePro
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
             {/* Sidebar: Детализация по курсантам */}
             <div className="lg:col-span-4 space-y-4">
-              <Card className="h-full">
+              <Card className="h-full rounded-2xl shadow-none">
                 <CardHeader className="pb-3 border-b">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
@@ -2116,7 +2116,7 @@ export default function AnalyticsPage({ initialTab = "split" }: AnalyticsPagePro
                   </div>
                 </CardHeader>
 
-                <CardContent className="pt-4 px-3 space-y-3 max-h-[750px] overflow-y-auto">
+                <CardContent className="pt-4 px-4 space-y-3">
                   {filteredCadets.length === 0 ? (
                     <div className="text-center py-8 text-muted-foreground text-sm">
                       {isLoadingSession
@@ -2267,7 +2267,7 @@ export default function AnalyticsPage({ initialTab = "split" }: AnalyticsPagePro
 
       {/* ────────────────── SECTION 3: ОТЧЕТ ИИ ПО ГРУППЕ (QWEN 3.5 9B) ────────────────── */}
       {(activeTab === "all" || activeTab === "ai_report") && (
-        <Card className="border shadow-md">
+        <Card className="border rounded-2xl shadow-none">
           <CardHeader className="bg-muted/15 border-b p-5">
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
               <div className="flex items-center gap-3">

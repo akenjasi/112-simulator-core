@@ -26,6 +26,18 @@ TESTER_FIX_ALLOWLIST = {
     "components/dispatcher/dds-assigned-console.tsx",
     "components/dispatcher/services-bar.tsx",
 }
+# The user subsequently requested the six teacher sections and their shared
+# navigation to be restyled. The student/DDS workspace remains frozen.
+TEACHER_UI_ALLOWLIST = {
+    "app/teacher/layout.tsx",
+    "app/teacher/teacher-workspace.module.css",
+    "app/teacher/page.tsx",
+    "app/teacher/groups/page.tsx",
+    "app/teacher/knowledge/page.tsx",
+    "app/teacher/tickets/page.tsx",
+    "app/teacher/sessions/new/page.tsx",
+    "components/teacher/analytics-page.tsx",
+}
 PRODUCT_DIRS = ("app", "components", "hooks", "lib", "store", "public")
 PRODUCT_FILES = ("package.json", "package-lock.json", "next.config.mjs", "postcss.config.mjs", "tsconfig.json", "next-env.d.ts")
 
@@ -34,12 +46,12 @@ def product_files():
     files = {path for directory in PRODUCT_DIRS for path in (FRONTEND / directory).rglob("*") if path.is_file()}
     files.update(FRONTEND / name for name in PRODUCT_FILES if (FRONTEND / name).is_file())
     return {path.relative_to(FRONTEND).as_posix(): path for path in files
-            if path.relative_to(FRONTEND).as_posix() not in LOBBY_ALLOWLIST | TESTER_FIX_ALLOWLIST}
+            if path.relative_to(FRONTEND).as_posix() not in LOBBY_ALLOWLIST | TESTER_FIX_ALLOWLIST | TEACHER_UI_ALLOWLIST}
 
 
 def test_only_lobby_frontend_may_change():
     expected = {name: digest for name, digest in json.loads(MANIFEST.read_text())["sha256"].items()
-                if name not in TESTER_FIX_ALLOWLIST}
+                if name not in TESTER_FIX_ALLOWLIST | TEACHER_UI_ALLOWLIST}
     files = product_files()
     changes = [f"removed: {name}" for name in expected.keys() - files.keys()]
     changes.extend(f"added outside lobby: {name}" for name in files.keys() - expected.keys())

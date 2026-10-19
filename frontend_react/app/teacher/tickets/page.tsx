@@ -1014,18 +1014,18 @@ export default function TicketsPage() {
   const retryTickets = approvableTickets.filter((ticket) => failedIds.has(ticket.ticket_id || ticket.id || ""))
 
   return (
-    <div className="container mx-auto p-4 sm:p-6 max-w-6xl space-y-6">
+    <div className="teacher-page teacher-workspace mx-auto max-w-7xl space-y-5">
       {/* Page Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b pb-5">
+      <div className="teacher-page-header flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-4">
         <div className="flex items-center gap-3">
-          <div className="p-3 bg-primary/10 rounded-xl text-primary shrink-0">
-            <Ticket className="h-8 w-8" />
+          <div className="p-2 bg-primary/10 rounded-xl text-primary shrink-0">
+            <Ticket className="h-6 w-6" />
           </div>
           <div>
-            <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-foreground">
+            <h1 className="text-2xl font-bold tracking-tight text-foreground">
               База билетов
             </h1>
-            <p className="text-sm sm:text-base text-muted-foreground mt-0.5">
+            <p className="text-sm text-muted-foreground mt-0.5">
               Глобальный склад учебных сценариев для занятий и экзаменов
             </p>
           </div>
@@ -1059,7 +1059,7 @@ export default function TicketsPage() {
             size="lg"
             onClick={handleOpenSmartGenerateModal}
             disabled={isGenerating}
-            className="text-base font-semibold shadow-md px-6 py-2.5 h-11 min-w-[170px]"
+            className="text-sm font-semibold px-4 h-10 min-w-[150px]"
           >
             <Sparkles className="h-5 w-5 mr-2" />
             Сгенерировать
@@ -1147,7 +1147,7 @@ export default function TicketsPage() {
       )}
 
       {/* Filters Panel */}
-      <Card className="shadow-xs border">
+      <Card className="teacher-panel gap-4 py-4 shadow-none border">
         <CardHeader className="pb-3">
           <div className="flex items-center gap-2">
             <Filter className="h-5 w-5 text-primary" />
@@ -1159,7 +1159,7 @@ export default function TicketsPage() {
         </CardHeader>
         <CardContent>
           <form onSubmit={handleApplyFilter} className="space-y-4">
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5 items-end">
+            <div className="teacher-toolbar grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5 items-end">
               {/* Search by ID */}
               <div className="space-y-1.5">
                 <Label htmlFor="filter-search-id" className="text-sm font-semibold">
@@ -1289,7 +1289,7 @@ export default function TicketsPage() {
       </Card>
 
       {/* Ticket Table Card */}
-      <Card className="shadow-xs border">
+      <Card className="teacher-panel gap-4 py-4 shadow-none border">
         <CardHeader className="pb-3">
           <div>
             <CardTitle className="text-lg sm:text-xl">Список билетов</CardTitle>
@@ -1299,7 +1299,7 @@ export default function TicketsPage() {
               {(filterCategory || filterComplexity) && " (с учетом активных фильтров)"}
             </CardDescription>
           </div>
-          <div className="mt-3 flex flex-wrap items-center gap-3">
+          <div className="teacher-toolbar mt-3 flex flex-wrap items-center gap-3">
             <Button
               onClick={() => handleBulkApprove(approvableTickets)}
               disabled={isLoading || isRefreshing || isGenerating || isBulkApproving || approvingTicketId !== null || deletingTicketId !== null || approvableTickets.length === 0}

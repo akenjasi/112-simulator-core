@@ -560,41 +560,34 @@ export default function GroupsPage() {
   }, [catalogTargetGroup, filteredCatalogStudents, isCadetInGroup])
 
   return (
-    <div className="container mx-auto p-6 max-w-6xl space-y-6">
+    <div className="teacher-page space-y-5">
       {/* Header */}
-      <div className="flex flex-col gap-2 border-b pb-5">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-          <div className="flex items-center gap-3">
-            <div className="p-2.5 bg-primary/10 rounded-xl text-primary">
-              <Users className="h-7 w-7" />
-            </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <h1 className="text-3xl font-bold tracking-tight text-foreground">
-                  Ученики и Группы
-                </h1>
-                <Badge variant="outline" className="text-xs">
-                  Управление группами
-                </Badge>
-              </div>
-              <p className="text-sm text-muted-foreground mt-0.5">
-                Формирование учебных смен и потоков, распределение курсантов по группам
-              </p>
-            </div>
-          </div>
+      <div className="teacher-page-header flex flex-col gap-4 border-b border-border pb-4 sm:flex-row sm:items-end sm:justify-between">
+        <div>
+          <p className="text-sm font-medium text-primary">Управление курсантами</p>
+          <h1 className="mt-1 text-2xl font-semibold tracking-tight text-foreground sm:text-[28px]">
+            Ученики и Группы
+          </h1>
+          <Badge variant="outline" className="mt-2 text-xs">Управление группами</Badge>
+          <p className="mt-1 text-sm text-muted-foreground sm:text-base">
+            Формирование учебных смен и потоков, распределение курсантов по группам
+          </p>
+        </div>
 
-          <div className="flex items-center gap-2">
-            <Button
+        <div className="flex flex-wrap items-center gap-2">
+          <Button
               variant={activeTab === "groups" ? "default" : "outline"}
               size="sm"
+              className="min-h-10 px-4 text-sm"
               onClick={() => setActiveTab("groups")}
             >
               <Users className="h-4 w-4 mr-1.5" />
               Группы
-            </Button>
-            <Button
+          </Button>
+          <Button
               variant={activeTab === "all_students" ? "default" : "outline"}
               size="sm"
+              className="min-h-10 px-4 text-sm"
               onClick={() => {
                 setActiveTab("all_students")
                 loadAllStudents()
@@ -602,8 +595,7 @@ export default function GroupsPage() {
             >
               <UserCheck className="h-4 w-4 mr-1.5" />
               Все ученики
-            </Button>
-          </div>
+          </Button>
         </div>
       </div>
 
@@ -646,11 +638,11 @@ export default function GroupsPage() {
 
       {/* TAB 1: GROUPS */}
       {activeTab === "groups" ? (
-        <div className="space-y-6">
+        <div className="space-y-4">
           {/* Action Header Bar */}
-          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 bg-card p-5 rounded-xl border shadow-sm">
+          <div className="teacher-toolbar flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 bg-card p-4 rounded-xl border border-border">
             <div>
-              <h2 className="text-xl font-bold text-foreground">Список групп</h2>
+              <h2 className="text-xl font-semibold tracking-tight text-foreground">Список групп</h2>
               <p className="text-sm text-muted-foreground mt-0.5">
                 Всего учебных групп в системе: {groups.length}. Раскройте состав группы для выбора курсантов из каталога или загрузки CSV.
               </p>
@@ -667,12 +659,12 @@ export default function GroupsPage() {
                 <span className="ml-1.5 hidden sm:inline">Обновить</span>
               </Button>
               <Button
-                size="lg"
+                size="default"
                 onClick={() => {
                   setModalTab("create_group")
                   setIsAddModalOpen(true)
                 }}
-                className="h-10 px-5 text-sm sm:text-base font-semibold shadow-md bg-primary hover:bg-primary/90 text-primary-foreground transition-all flex items-center gap-2"
+                className="h-10 px-4 text-sm font-semibold bg-primary hover:bg-primary/90 text-primary-foreground transition-colors flex items-center gap-2"
               >
                 <FolderPlus className="h-5 w-5" />
                 Добавить группу
@@ -716,11 +708,14 @@ export default function GroupsPage() {
                 return (
                   <div
                     key={group.group_id}
-                    className="border rounded-xl overflow-hidden bg-card shadow-sm transition-all"
+                    className="teacher-panel border border-border rounded-xl overflow-hidden bg-card transition-colors"
                   >
                     {/* Group Accordion Header */}
-                    <div
-                      className="flex items-center justify-between p-4 cursor-pointer hover:bg-muted/40 transition-colors"
+                    <button
+                      type="button"
+                      aria-expanded={isExpanded}
+                      aria-controls={`group-students-${group.group_id}`}
+                      className="flex w-full items-center justify-between p-4 text-left hover:bg-muted/40 transition-colors focus-visible:outline-2 focus-visible:outline-inset focus-visible:outline-ring"
                       onClick={() => toggleGroupExpand(group.group_id)}
                     >
                       <div className="flex items-center gap-3">
@@ -751,11 +746,11 @@ export default function GroupsPage() {
                             : "учеников"}
                         </span>
                       </div>
-                    </div>
+                    </button>
 
                     {/* Group Accordion Content */}
                     {isExpanded && (
-                      <div className="p-4 border-t bg-muted/10 space-y-4">
+                      <div id={`group-students-${group.group_id}`} className="p-4 border-t bg-muted/10 space-y-4">
                         {/* Group Actions Toolbar: Add from catalog / Import CSV */}
                         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 p-3 bg-background border rounded-lg">
                           <div>
@@ -881,10 +876,10 @@ export default function GroupsPage() {
         </div>
       ) : (
         /* TAB 2: ALL STUDENTS */
-        <Card className="shadow-sm">
+        <Card className="teacher-panel border-border shadow-none">
           <CardHeader className="flex flex-row items-center justify-between pb-3">
             <div>
-              <CardTitle className="text-xl">Все ученики</CardTitle>
+              <CardTitle className="text-xl font-semibold tracking-tight">Все ученики</CardTitle>
               <CardDescription>
                 Полный каталог курсантов системы с указанием учебных групп, даты регистрации и статуса
               </CardDescription>
@@ -901,7 +896,7 @@ export default function GroupsPage() {
           </CardHeader>
           <CardContent className="space-y-4">
             {/* Search & Filter Toolbar */}
-            <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3 p-3 bg-muted/20 border rounded-lg">
+            <div className="teacher-toolbar flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3 p-3 bg-muted/20 border border-border rounded-lg">
               <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 flex-1">
                 {/* Search */}
                 <div className="relative flex-1 max-w-sm">
@@ -1041,7 +1036,7 @@ export default function GroupsPage() {
                           </TableCell>
                           <TableCell className="text-foreground">{firstName}</TableCell>
                           <TableCell className="text-muted-foreground">{middleName}</TableCell>
-                          <TableCell className="text-muted-foreground font-mono text-xs">
+                          <TableCell className="text-muted-foreground font-mono text-sm">
                             {student.email || student.username}
                           </TableCell>
                           <TableCell>
@@ -1056,14 +1051,14 @@ export default function GroupsPage() {
                           <TableCell>
                             <Badge variant="outline">{formatRole(student.role)}</Badge>
                           </TableCell>
-                          <TableCell className="text-xs text-muted-foreground font-mono">
+                          <TableCell className="text-sm text-muted-foreground font-mono">
                             {formatDate(student.created_at)}
                           </TableCell>
                           <TableCell>
                             {student.is_active !== false ? (
-                              <span className="text-xs text-green-600 font-medium">Активен</span>
+                              <span className="text-sm text-green-600 font-medium">Активен</span>
                             ) : (
-                              <span className="text-xs text-muted-foreground font-medium">
+                              <span className="text-sm text-muted-foreground font-medium">
                                 Заблокирован
                               </span>
                             )}
