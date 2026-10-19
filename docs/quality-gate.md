@@ -1,3 +1,5 @@
-# Обязательные проверки
+# Quality Gate
 
-Актуальная инструкция: [testing.md](testing.md). Машинные списки: `scripts/checks/backend-core.txt` и `scripts/checks/frontend-core.txt`. Workflow: `.github/workflows/quality.yml`. Не заменяйте независимые acceptance manifests производным результатом проверяемого runner. Полный реестр фактических запусков и ограничений: [аудит](audit/2026-10-19/REPORT.md), [исполнение](audit/2026-10-19/IMPLEMENTATION.md).
+Действующая инструкция и ограничения — в [testing.md](testing.md). Состав gate задают `scripts/checks/backend-core.txt`, `scripts/checks/frontend-core.txt` и `.github/workflows/quality.yml`.
+
+Этот совместимый адрес сохранён для прежних ссылок. Здесь нет второго списка тестов, количества проверок или отдельного реестра задач. Не сокращайте независимые acceptance manifests и не объявляйте локальную проверку опубликованным GitHub run. Открытые вопросы — в [backlog](backlog.md).

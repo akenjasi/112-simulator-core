@@ -24,9 +24,9 @@ mkdir -p \
     /app/data/backups \
     /app/data/uploads
 
-if [ -d "/app/preseeded_tts_cache" ] && [ "$(ls -A /app/preseeded_tts_cache)" ]; then
+if [ -d "/app/assets/tts-cache" ] && [ "$(ls -A /app/assets/tts-cache)" ]; then
     echo "🎵 Copying pre-generated TTS audio files to cache..."
-    cp -rn /app/preseeded_tts_cache/* /app/data/tts_cache/ || true
+    cp -rn /app/assets/tts-cache/* /app/data/tts_cache/ || true
 fi
 
 

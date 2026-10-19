@@ -44,8 +44,9 @@ for lib_name in ["libggml-base.so", "libggml.so", "libggml-cpu.so", "libtranscri
 if os.path.exists(LIB_PATH) and "TRANSCRIBE_LIBRARY" not in os.environ:
     os.environ["TRANSCRIBE_LIBRARY"] = LIB_PATH
 
-if BACKEND_DIR not in sys.path:
-    sys.path.insert(0, BACKEND_DIR)
+NATIVE_BINDINGS_DIR = os.path.join(BACKEND_DIR, "native", "asr")
+if NATIVE_BINDINGS_DIR not in sys.path:
+    sys.path.insert(0, NATIVE_BINDINGS_DIR)
 
 
 def convert_to_pcm16k(input_data: bytes) -> np.ndarray:

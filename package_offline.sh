@@ -37,7 +37,7 @@ No current .env, TLS private key, database or uploads are copied by default.
 
 Example:
   ./package_offline.sh --output /srv/export/simulator112.tar.gz
-See OFFLINE.md. Downloads stay in models/ (ignored by Git). Live stack is unchanged.
+See docs/operations/offline.md. Downloads stay in models/ (ignored by Git). Live stack is unchanged.
 HELP
 }
 die() { printf 'ERROR: %s\n' "$*" >&2; exit 1; }
@@ -166,7 +166,7 @@ log 'Preparing a source context without local secrets or live data'
 git -C "$ROOT" ls-files -z -- backend scripts requirements.lock Dockerfile.backend \
   Dockerfile.frontend docker frontend_react models/classifier \
   data/classifier_ekp.json data/moscow_112_addresses.json data/template_students.csv \
-  preseeded_tts_cache prompts > "$STAGE/source-files"
+  assets/tts-cache > "$STAGE/source-files"
 tar -C "$ROOT" --null --exclude='frontend_react/out' --exclude='*.gguf' \
   --exclude='.env*' --exclude='*.key' --exclude='*.pem' --exclude='*.db' \
   -T "$STAGE/source-files" -cf - | tar -C "$CONTEXT" -xf -

@@ -44,7 +44,7 @@ def test_unknown_required_schema_is_rejected_before_mutation():
 
 def test_private_env_generator_is_portable_and_never_overwrites(tmp_path):
     output = tmp_path / '.env'
-    script = Path(__file__).resolve().parents[1] / 'setup_env.py'
+    script = Path(__file__).resolve().parents[1] / 'scripts' / 'setup_env.py'
     first = subprocess.run([sys.executable, str(script), '--init', '--output', str(output)], capture_output=True, text=True)
     assert first.returncode == 0
     contents = output.read_text()

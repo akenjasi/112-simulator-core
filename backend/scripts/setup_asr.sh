@@ -21,7 +21,7 @@ else
 fi
 
 # Check if binary and shared library already exist
-if [ -f "${BIN_DIR}/transcribe-cli" ] && [ -f "${BIN_DIR}/libtranscribe.so" ] && [ -d "${BACKEND_DIR}/transcribe_cpp" ]; then
+if [ -f "${BIN_DIR}/transcribe-cli" ] && [ -f "${BIN_DIR}/libtranscribe.so" ] && [ -d "${BACKEND_DIR}/native/asr/transcribe_cpp" ]; then
     echo "✓ Бинарник transcribe-cli, библиотека libtranscribe.so и Python-пакет уже установлены в ${BIN_DIR}"
     echo "Для принудительной пересборки передайте аргумент --force"
     if [ "${1:-}" != "--force" ]; then
@@ -49,9 +49,10 @@ cp "${BUILD_DIR}/build-shared/ggml/src/"*.so "${BIN_DIR}/" 2>/dev/null || true
 echo "✓ Библиотеки libtranscribe.so и libggml установлены в ${BIN_DIR}"
 
 echo "Копирование Python-биндингов transcribe_cpp..."
-rm -rf "${BACKEND_DIR}/transcribe_cpp"
-cp -r "${BUILD_DIR}/bindings/python/src/transcribe_cpp" "${BACKEND_DIR}/transcribe_cpp"
-echo "✓ transcribe_cpp установлен в ${BACKEND_DIR}/transcribe_cpp"
+mkdir -p "${BACKEND_DIR}/native/asr"
+rm -rf "${BACKEND_DIR}/native/asr/transcribe_cpp"
+cp -r "${BUILD_DIR}/bindings/python/src/transcribe_cpp" "${BACKEND_DIR}/native/asr/transcribe_cpp"
+echo "✓ transcribe_cpp установлен в ${BACKEND_DIR}/native/asr/transcribe_cpp"
 
 echo "Очистка временных файлов сборки..."
 rm -rf "${BUILD_DIR}"

@@ -72,7 +72,6 @@ docker_standalone/
 !.env.example
 !.env.llm.example
 data/reports/
-docs/audit/
 
 .aws/
 .codex/

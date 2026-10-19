@@ -22,7 +22,7 @@ EXCLUDED_DIR_NAMES: Set[str] = {
     "models",
     "uploads",
     "backups",
-    "preseeded_tts_cache",
+    "assets",
     "frontend_react",
     "node_modules",
     "out",

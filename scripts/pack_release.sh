@@ -13,7 +13,8 @@ docker pull postgres:15-alpine
 docker save -o "$RELEASE_DIR/images.tar.part" "$BACKEND_IMAGE" "$FRONTEND_IMAGE" postgres:15-alpine
 mv "$RELEASE_DIR/images.tar.part" "$RELEASE_DIR/images.tar"
 cp docker-compose.prod.yml "$RELEASE_DIR/docker-compose.yml"
-cp setup_env.py .env.example "$RELEASE_DIR/"
+cp scripts/setup_env.py "$RELEASE_DIR/scripts/"
+cp .env.example "$RELEASE_DIR/"
 cp scripts/generate_certs.sh "$RELEASE_DIR/scripts/"
-cp DOCKER.md "$RELEASE_DIR/README.md"
+cp docs/operations/deployment.md "$RELEASE_DIR/README.md"
 echo 'Release images saved. Configure a fresh .env/certificate and supply external model files before startup.'
