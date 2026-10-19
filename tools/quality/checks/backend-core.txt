@@ -33,6 +33,7 @@ backend/tests/test_integrity_review.py
 backend/tests/test_audit_security.py
 backend/tests/test_audit_infrastructure.py
 backend/tests/test_dds_phone_training.py
+backend/tests/test_dds_phone_defaults.py
 backend/tests/test_74_2fa.py
 backend/tests/test_student_workspace.py
 

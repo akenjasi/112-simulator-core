@@ -1,7 +1,7 @@
 """Acceptance for the ordered DDS workflow; synthetic data and independent API assertions."""
 import asyncio
 from copy import deepcopy
-from datetime import datetime
+from datetime import datetime, timezone, timedelta
 import uuid
 
 import pytest
@@ -63,7 +63,55 @@ async def act(state, user, *, kind="status", status="Принята", **extra):
     return await request("POST", base(state) + "/actions", user, json=payload)
 
 
-async def ready(state, user):
+async def ready(state, user, service_names=None):
+    # Follow the real phone flow; old persisted snapshots still use legacy actions.
+    state = (await request("GET", base(state), user)).json()
+    if state.get("exercise"):
+        async with AsyncSessionLocal() as db:
+            session = await db.get(ExamSession, state["session_id"])
+            plan = deepcopy(session.dynamic_state["dds"]["exercise"]["plan"])
+        for contact in plan["contacts"]:
+            if service_names is not None and contact["service_name"] not in service_names:
+                continue
+            if contact["service_name"] in state["exercise"].get("refused_services", []):
+                continue
+            if any(a["kind"] == "dispatch" and a["service_name"] == contact["service_name"] for a in state["actions"]):
+                continue
+            if not any(a["kind"] == "status" and a["service_name"] == contact["service_name"] for a in state["actions"]):
+                await act(state, user, service_name=contact["service_name"])
+            dialed = await request("POST", base(state) + "/phone", user, json={
+                "request_id": str(uuid.uuid4()), "card_id": state["card_id"], "operation": "dial",
+                "service_name": contact["service_name"], "number": contact["number"]})
+            assert dialed.status_code == 200 and dialed.json()["last_attempt"]["accepted"], dialed.text
+            sent = await act(state, user, kind="dispatch", service_name=contact["service_name"],
+                             who_accepted=f"{contact['position']} {contact['full_name']}", summary="Бригада направлена по адресу")
+            assert sent.json()["last_attempt"]["accepted"], sent.text
+        for report in plan["reports"]:
+            contact = next(c for c in plan["contacts"] if c["id"] == report["contact_id"])
+            if service_names is not None and contact["service_name"] not in service_names:
+                continue
+            if contact["service_name"] in state["exercise"].get("refused_services", []):
+                continue
+            async with AsyncSessionLocal() as db:
+                session = await db.get(ExamSession, state["session_id"])
+                data = deepcopy(session.dynamic_state["dds"])
+                data["exercise"]["due_at"] = (datetime.now(timezone.utc) - timedelta(seconds=1)).isoformat()
+                from backend.core.dds_queue import store_state
+                store_state(session, data)
+                await db.commit()
+            answered = await request("POST", base(state) + "/phone", user, json={
+                "request_id": str(uuid.uuid4()), "card_id": state["card_id"], "operation": "answer", "report_id": report["id"]})
+            assert answered.status_code == 200, answered.text
+            noted = await request("POST", base(state) + "/phone", user, json={
+                "request_id": str(uuid.uuid4()), "card_id": state["card_id"], "operation": "note", "report_id": report["id"],
+                "note": f"{report['text']} Номер бригады {contact['brigade']}."})
+            assert noted.status_code == 200, noted.text
+            response = await act(state, user, status=report["status"], service_name=contact["service_name"],
+                                 order_number=contact["brigade"], comment=report["text"])
+            assert response.json()["last_attempt"]["accepted"], response.text
+        if service_names is None:
+            assert response.json()["can_complete"] is True
+        return response.json()
     accepted = await act(state, user)
     assert accepted.status_code == 200, accepted.text
     dispatch = await act(state, user, kind="dispatch")
@@ -170,14 +218,14 @@ async def test_completion_requires_final_status_and_dispatch_before_final_transi
     _, states = await launch(users, ids)
     current, user = states[0], users["cadets"][0]
     blocked = await complete(current, user)
-    assert blocked.status_code == 409 and blocked.json()["detail"]["code"] == "DDS_CARD_NOT_READY"
-    for status in ["Принята", "Начало реагирования", "Прибытие", "Проведение работ"]:
-        assert (await act(current, user, status=status)).status_code == 200
+    assert blocked.status_code == 200 and blocked.json()["last_attempt"]["reason"] == "completion"
+    await act(current, user)
     response = await act(current, user, status="Работы завершены")
-    assert response.status_code == 409 and response.json()["detail"]["code"] == "DDS_DISPATCH_REQUIRED"
+    assert response.status_code == 200 and response.json()["last_attempt"]["reason"] == "premature"
     assert (await act(current, user, kind="dispatch", who_accepted=" ")).status_code == 422
-    assert (await act(current, user, kind="dispatch")).status_code == 200
-    assert (await act(current, user, status="Работы завершены")).status_code == 200
+    no_call = await act(current, user, kind="dispatch")
+    assert no_call.json()["last_attempt"]["reason"] == "call_required"
+    await ready(current, user)
     assert (await complete(current, user)).json()["current_index"] == 1
 
 
@@ -189,7 +237,8 @@ async def test_motivated_refusal_can_close_card_without_dispatch(status):
     current, user = states[0], users["cadets"][0]
     if status == "Отказ от выполнения работ":
         assert (await act(current, user)).status_code == 200
-    assert (await act(current, user, status=status, comment=" ")).status_code == 422
+    missing_reason = await act(current, user, status=status, comment=" ")
+    assert missing_reason.status_code == 200 and missing_reason.json()["last_attempt"]["reason"] == "refusal"
     assert (await act(current, user, status=status, comment="Вне зоны ответственности службы")).status_code == 200
     assert (await complete(current, user)).json()["current_index"] == 1
 
@@ -389,8 +438,8 @@ async def test_multiple_services_and_concurrent_action_updates_are_not_lost():
     assert len(restored["actions"]) == 4
     assert (await act(current, user, status="Отказ от выполнения работ", comment="Нет бригады")).status_code == 200
     blocked = await complete(current, user)
-    assert blocked.status_code == 409
-    assert blocked.json()["detail"]["blockers"] == [{"code": "DDS_SERVICE_NOT_FINISHED", "service_name": "04 Газ"}]
+    assert blocked.status_code == 200 and blocked.json()["last_attempt"]["accepted"] is False
+    assert {item["code"] for item in blocked.json()["completion_blockers"]} == {"DDS_REPORTS_PENDING", "DDS_SERVICE_NOT_FINISHED"}
     assert (await act(current, user, service_name="04 Газ", status="Не принята", comment="Другой район")).status_code == 200
     assert (await complete(current, user)).json()["submitted_at"]
 
@@ -488,5 +537,7 @@ async def test_queue_is_consistent_in_teacher_stats_student_history_and_journal(
     assert report.status_code == 200, report.text
     session = next(item for item in report.json()["sessions"] if item["session_id"] == current["session_id"])
     assert session["exercise_status"] == "incomplete" and session["completed_cards"] == 1 and session["total_cards"] == 3
-    assert session["ticket_results"][0]["status"] == "ungraded"
+    results = {item["ticket_id"]: item for item in session["ticket_results"]}
+    assert results[ids[0]]["status"] == "ungraded"
+    assert results[ids[1]]["status"] == "incomplete"
     assert session["ticket_results"][0]["score_total"] is None

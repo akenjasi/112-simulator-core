@@ -64,7 +64,7 @@ export interface DDSContact {
 }
 export interface DDSEvent {
   id: string; kind: string; at: string; card_id: string; service_name?: string;
-  report_id?: string; text?: string; audio?: string | null; message?: string; reason?: string;
+  report_id?: string; text?: string | null; audio?: string | null; message?: string; reason?: string;
   result?: string; delay_seconds?: number; action?: Record<string, unknown>
 }
 export interface DDSCriterion {
@@ -72,15 +72,17 @@ export interface DDSCriterion {
   evidence: Record<string, unknown>[]
 }
 export interface DDSPhonePayload {
-  request_id: string; card_id: string; operation: "dial" | "answer" | "audio";
+  request_id: string; card_id: string; operation: "dial" | "answer" | "audio" | "note";
   service_name?: string; number?: string; report_id?: string; call_id?: string;
   audio_result?: "played" | "unavailable"
+  note?: string
 }
 export interface DDSExercise {
   source: "prepared"; contacts: DDSContact[]; events: DDSEvent[]; refused_services?: string[];
+  presentation?: "text_audio" | "audio_only"; notes?: Record<string, string>;
   incoming: {id: string; contact: DDSContact; ringing: boolean; text: string | null; audio: string | null} | null;
   due_at: string | null; processed_reports: number; total_reports: number;
-  outgoing: Record<string, {contact_id: string; call_id: string; text: string; audio: string | null}>
+  outgoing: Record<string, {contact_id: string; call_id: string; text: string | null; audio: string | null}>
 }
 
 export interface DDSSessionState {

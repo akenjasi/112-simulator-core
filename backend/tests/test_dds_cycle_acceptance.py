@@ -126,7 +126,10 @@ async def test_actions_persist_retry_conflict_dispatch_and_cadet_isolation():
     assert saved["actor_id"] == d["cadets"][0][0] and saved["at"]
     assert (await request("POST", path, d["cadets"][0], json=payload)).json() == r.json()
     assert (await request("POST", path, d["cadets"][0], json={**payload, "comment": "different"})).status_code == 409
-    dispatch = {"request_id": str(uuid.uuid4()), "kind": "dispatch", "service_name": "Аварийная служба", "who_accepted": "Дежурный", "summary": "Направлена бригада"}
+    from backend.tests.test_dds_phone_training import phone
+    called = await phone(s, d["cadets"][0], number="7000", service_name="Аварийная служба")
+    assert called.json()["last_attempt"]["accepted"]
+    dispatch = {"request_id": str(uuid.uuid4()), "kind": "dispatch", "service_name": "Аварийная служба", "who_accepted": "Начальник бригады Иванов Иван Иванович", "summary": "Направлена бригада"}
     r = await request("POST", path, d["cadets"][0], json=dispatch)
     assert r.status_code == 200, r.text
     restored = await state(d, s)
@@ -188,7 +191,7 @@ async def test_completed_ungraded_and_teacher_stop_are_honest_in_history_and_rep
     assert all(p["tickets"][0]["ticket_id"] == d["ticket_id"] for p in people.values())
     report = await request("GET", f"/api/ai-analytics/lessons/{lesson}/data", d["teacher"])
     assert report.status_code == 200, report.text
-    assert report.json()["summary"] == {"student_count": 2, "completed_session_count": 2, "evaluation_count": 0, "ticket_result_count": 1, "incident_card_count": 2}
+    assert report.json()["summary"] == {"student_count": 2, "completed_session_count": 2, "evaluation_count": 0, "ticket_result_count": 2, "incident_card_count": 2}
     async with AsyncSessionLocal() as db:
         group = await db.get(StudentGroup, d["group_id"])
         group.cadet_ids = []; group.students = []

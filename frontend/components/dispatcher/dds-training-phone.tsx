@@ -37,14 +37,20 @@ export function DDSTrainingPhone({exercise, selectedService, onServiceChange, di
   const [historyPage, setHistoryPage] = useState(0)
   const audio = useRef<HTMLAudioElement | null>(null)
   const playbackEpoch = useRef(0)
+  const autoPlay = useRef<{operation: "dial" | "answer"; previous?: string; report?: string} | null>(null)
+  const commandRef = useRef(command)
+  commandRef.current = command
+  const [note, setNote] = useState("")
+  const audioOnly = exercise.presentation === "audio_only"
   const incoming = exercise.incoming
   const outgoing = exercise.outgoing[selectedService]
   const received = exercise.events.filter(event => event.kind === "answered")
   const historyIndex = Math.min(historyPage, Math.max(0, received.length - 1))
   const historical = received[historyIndex]
-  const lastAnswered = [...received].reverse().find(event => event.report_id === incoming?.id)
+  const lastAnswered = incoming ? [...received].reverse().find(event => event.report_id === incoming.id) : undefined
   const message = incoming?.text || outgoing?.text
-  const hasReport = !!incoming?.text
+  const hasReport = !!lastAnswered || !!incoming?.text
+  const savedNote = incoming ? exercise.notes?.[incoming.id] || "" : ""
   const recordDisabled = disabled || !record?.accepted || !outgoing || !!record?.saved
 
   useEffect(() => () => {playbackEpoch.current++; audio.current?.pause()}, [])
@@ -59,37 +65,55 @@ export function DDSTrainingPhone({exercise, selectedService, onServiceChange, di
       record.setWhoAccepted(record.saved.whoAccepted); record.setSummary(record.saved.summary)
     }
   }, [selectedService, record?.saved?.whoAccepted, record?.saved?.summary])
+  useEffect(() => {setNote(savedNote)}, [incoming?.id, savedNote])
 
   const play = (path: string | null | undefined, callId?: string) => {
     playbackEpoch.current++; const epoch = playbackEpoch.current
     audio.current?.pause()
-    if (!path || !callId) {setAudioNotice("Для сообщения доступен текст."); return}
+    if (!path || !callId) {setAudioNotice(audioOnly ? "Запись недоступна. Сообщите преподавателю." : "Для сообщения доступен текст."); return}
     const player = new Audio(path); audio.current = player
     let settled = false
     const done = (result: "played" | "unavailable") => {
       if (settled || playbackEpoch.current !== epoch) return
       settled = true
-      setAudioNotice(result === "played" ? "Реплика воспроизведена." : "Аудио недоступно. Используйте текст сообщения.")
-      void command({operation: "audio", call_id: callId, audio_result: result})
+      setAudioNotice(result === "played" ? "Реплика воспроизведена." : audioOnly ? "Аудио недоступно. Повторите прослушивание или сообщите преподавателю." : "Аудио недоступно. Используйте текст сообщения.")
+      void commandRef.current({operation: "audio", call_id: callId, audio_result: result})
     }
     player.onended = () => done("played"); player.onerror = () => done("unavailable")
+    setAudioNotice("Воспроизведение записи…")
     player.play().catch(() => done("unavailable"))
+  }
+
+  // Only an explicit successful call arms autoplay. Polling, replay and reload do not.
+  useEffect(() => {
+    const intent = autoPlay.current
+    if (!intent || disabled) return
+    const callId = intent.operation === "answer" ? lastAnswered?.id : outgoing?.call_id
+    if (!callId || (intent.operation === "answer" ? intent.report !== incoming?.id : callId === intent.previous)) return
+    autoPlay.current = null
+    play(intent.operation === "answer" ? incoming?.audio : outgoing?.audio, callId)
+  }, [disabled, lastAnswered?.id, outgoing?.call_id, incoming?.id])
+
+  const call = async (payload: Command) => {
+    autoPlay.current = payload.operation === "answer" ? {operation: "answer", report: payload.report_id}
+      : {operation: "dial", previous: outgoing?.call_id}
+    if (!await command(payload)) autoPlay.current = null
   }
 
   return <section className="min-h-0 text-sm text-[#1e2327]" aria-label="Телефон ДДС">
     <div className="flex items-center gap-3">
       <button type="button" aria-expanded={opened} className="rounded bg-green-700 px-3 py-2 font-semibold text-white" onClick={() => setOpened(value => !value)}>☎ Телефон</button>
       {incoming?.ringing && <div role="status" className="flex min-w-0 flex-1 items-center justify-between gap-2 rounded border border-[#b4b9bc] bg-[#fbfdfe] px-3 py-2">
-        <span className="truncate">Входящий: {incoming.contact.service_name} · {incoming.contact.full_name}</span>
+        <span className="truncate">Входящий: {incoming.contact.service_name}{!audioOnly && ` · ${incoming.contact.full_name}`}</span>
         <button type="button" disabled={disabled} className="shrink-0 rounded bg-green-700 px-3 py-1 text-white disabled:opacity-50"
-          onClick={() => {setOpened(true); setView("call"); void command({operation: "answer", report_id: incoming.id})}}>Принять звонок</button>
+          onClick={() => {setOpened(true); setView("call"); void call({operation: "answer", report_id: incoming.id})}}>Принять звонок</button>
       </div>}
     </div>
     {opened && <div className="mt-2 border border-[#b4b9bc] bg-[#fbfdfe] p-3">
       {view === "directory" ? <div aria-label="Справочник телефонов">
         <div className="mb-3 flex items-center justify-between"><strong>Справочник</strong><button type="button" onClick={() => setView("call")}>Назад к телефону</button></div>
         <ul className="space-y-2">{exercise.contacts.slice(directoryPage * 4, directoryPage * 4 + 4).map(contact => <li key={contact.id}>
-          <button type="button" disabled={disabled} className="underline" onClick={() => {setNumber(contact.number); setView("call")}}>{contact.number}</button> · {contact.service_name} · {contact.position} {contact.full_name} · бригада {contact.brigade}
+          <button type="button" disabled={disabled} className="underline" onClick={() => {setNumber(contact.number); setView("call")}}>{contact.number}</button> · {contact.service_name}{!audioOnly && ` · ${contact.position} ${contact.full_name} · бригада ${contact.brigade}`}
         </li>)}</ul>
         {exercise.contacts.length > 4 && <div className="mt-3 flex justify-between">
           <button type="button" disabled={directoryPage === 0} onClick={() => setDirectoryPage(value => value - 1)}>Предыдущие контакты</button>
@@ -97,7 +121,8 @@ export function DDSTrainingPhone({exercise, selectedService, onServiceChange, di
         </div>}
       </div> : view === "history" ? <div aria-label="Полученные сообщения">
         <div className="mb-3 flex items-center justify-between"><strong>Полученные сообщения</strong><button type="button" onClick={() => setView("call")}>Назад к телефону</button></div>
-        {historical ? <><p className="mb-2 font-medium">{historical.service_name}</p><MessageText text={historical.text || ""}/>
+        {historical ? <><p className="mb-2 font-medium">{historical.service_name}</p>{!audioOnly && <MessageText text={historical.text || ""}/>}
+          {audioOnly && <p className="whitespace-pre-wrap">Ваша запись: {exercise.notes?.[historical.report_id || ""] || "не сохранена"}</p>}
           <button type="button" className="mt-2 underline" disabled={disabled} onClick={() => play(historical.audio, historical.id)}>Прослушать сообщение</button>
           <div className="mt-3 flex items-center justify-between">
             <button type="button" disabled={historyIndex === 0} onClick={() => setHistoryPage(historyIndex - 1)}>Предыдущее сообщение</button>
@@ -116,14 +141,24 @@ export function DDSTrainingPhone({exercise, selectedService, onServiceChange, di
         </div>
         <div className="flex gap-2">
           <input aria-label="Номер учебного телефона" placeholder="Номер телефона" value={number} maxLength={24} disabled={disabled} onChange={event => setNumber(event.target.value)} className="min-w-0 flex-1 border border-[#b4b9bc] p-1.5"/>
-          <button type="button" disabled={disabled || !number.trim()} className="bg-green-700 px-4 text-white disabled:opacity-50" onClick={() => void command({operation: "dial", number: number.trim(), service_name: selectedService})}>Набрать</button>
+          <button type="button" disabled={disabled || !number.trim()} className="bg-green-700 px-4 text-white disabled:opacity-50" onClick={() => void call({operation: "dial", number: number.trim(), service_name: selectedService})}>Набрать</button>
         </div>
-        {message && <div className="border border-[#b4b9bc] bg-[#efefef] p-2">
+        {(hasReport || outgoing) && <div className="border border-[#b4b9bc] bg-[#efefef] p-2">
           <span className="text-xs font-semibold">{hasReport ? `Принятый доклад · ${incoming!.contact.service_name}` : `Ответ · ${selectedService}`}</span>
-          <MessageText text={message}/>
+          {!audioOnly && <MessageText text={message || ""}/>}
           <button type="button" disabled={disabled} className="mt-1 text-xs underline" onClick={() => play(hasReport ? incoming?.audio : outgoing?.audio, hasReport ? lastAnswered?.id : outgoing?.call_id)}>{hasReport ? "Прослушать доклад" : "Прослушать ответ"}</button>
         </div>}
-        {record && <div className="space-y-2 border-t border-[#b4b9bc] pt-2">
+        {audioOnly && hasReport && <div className="space-y-1">
+          <label className="block text-xs">Запись принятого доклада
+            <textarea aria-label="Запись принятого доклада" rows={2} maxLength={1000} disabled={disabled} value={note}
+              placeholder="ФИО, должность, номер бригады и этап работ — по услышанному"
+              onChange={event => setNote(event.target.value)} className="mt-1 w-full resize-none border border-[#b4b9bc] p-1.5"/>
+          </label>
+          <button type="button" disabled={disabled || !note.trim() || note === savedNote}
+            onClick={() => void command({operation: "note", report_id: incoming!.id, note: note.trim()})}
+            className="bg-[#157dbd] px-3 py-1 text-white disabled:opacity-50">{savedNote && note === savedNote ? "Доклад записан" : "Сохранить запись доклада"}</button>
+        </div>}
+        {record && !hasReport && <div className="space-y-2 border-t border-[#b4b9bc] pt-2">
           <label className="flex items-center gap-2"><span className="w-24 shrink-0">Кто принял:</span><input aria-label="Кто принял" disabled={recordDisabled} value={record.saved?.whoAccepted ?? record.whoAccepted} onChange={event => record.setWhoAccepted(event.target.value)} placeholder="ФИО, должность" className="min-w-0 flex-1 border border-[#b4b9bc] p-1.5"/></label>
           <label className="flex items-center gap-2"><span className="w-24 shrink-0">Суть:</span><input aria-label="Суть сообщения" disabled={recordDisabled} value={record.saved?.summary ?? record.summary} onChange={event => record.setSummary(event.target.value)} placeholder="Переданное поручение" className="min-w-0 flex-1 border border-[#b4b9bc] p-1.5"/></label>
           <div className="flex justify-end"><button type="button" disabled={recordDisabled || !record.whoAccepted.trim() || !record.summary.trim()} onClick={() => void record.onSave()} className="bg-[#157dbd] px-3 py-1.5 text-white disabled:opacity-50">{record.saved ? "Сохранено" : "Сохранить телефонограмму"}</button></div>

@@ -73,9 +73,10 @@ it("teacher saves an explicit prepared plan using existing card services", async
 })
 
 it("teacher protocol is usable independently of AI report generation", async () => {
-  vi.stubGlobal("fetch",vi.fn().mockResolvedValue(new Response(JSON.stringify({sessions:[{session_id:"s",cadet_id:"student",exercise_protocols:[{card_id:"c",criteria:[{key:"stage",label:"Соответствие этапу",status:"completed",evidence:[]}],events:[]}]}]}),{status:200})))
+  vi.stubGlobal("fetch",vi.fn(async (url: string) => new Response(JSON.stringify(url.endsWith("/phone-notes") ? {cards:[]}
+    : {sessions:[{session_id:"s",cadet_id:"student",exercise_protocols:[{card_id:"c",criteria:[{key:"stage",label:"Соответствие этапу",status:"completed",evidence:[]}],events:[]}]}]}),{status:200})))
   render(<DDSLessonProtocol lessonId="l1"/>); await flush()
-  expect(screen.getByText("Выполнено")).toBeTruthy()
+  expect(await screen.findByText("Выполнено")).toBeTruthy()
   expect(screen.getByText(/независимо от ИИ/)).toBeTruthy()
 })
 
@@ -194,4 +195,57 @@ it("pages a long received message without adding a growing report feed", () => {
   expect(screen.queryByText("Конец сообщения")).toBeNull()
   fireEvent.click(screen.getByRole("button",{name:"Следующая часть"}))
   expect(screen.getByText("Конец сообщения")).toBeTruthy()
+})
+
+it("plays an explicitly answered audio-only report once, permits replay and never exposes its transcript", async () => {
+  const played = vi.fn().mockResolvedValue(undefined)
+  vi.stubGlobal("Audio", class {onended:any; onerror:any; pause() {} play = played})
+  const command = vi.fn().mockResolvedValue(true), ex = exercise()
+  ex.presentation = "audio_only"
+  ex.incoming = {id:"r1", contact, ringing:true, text:null, audio:null}
+  const props = {selectedService:"Аварийная служба",onServiceChange:vi.fn(),disabled:false,command}
+  const view = render(<DDSTrainingPhone exercise={ex} {...props}/> )
+  fireEvent.click(screen.getByRole("button",{name:"Принять звонок"})); await flush()
+  const answered: DDSExercise = {...ex, incoming:{...ex.incoming!,ringing:false,text:"SECRET TRANSCRIPT",audio:"/api/dds/audio/dds_ivanov_0.wav"},
+    events:[{id:"call1",kind:"answered",report_id:"r1",at:"now",card_id:"c",text:"SECRET TRANSCRIPT"}]}
+  view.rerender(<DDSTrainingPhone exercise={answered} {...props}/>); await flush()
+  expect(played).toHaveBeenCalledTimes(1)
+  expect(screen.queryByText("SECRET TRANSCRIPT")).toBeNull()
+  fireEvent.click(screen.getByRole("button",{name:"Прослушать доклад"})); await flush()
+  expect(played).toHaveBeenCalledTimes(2)
+  view.rerender(<DDSTrainingPhone exercise={{...answered,notes:{r1:"Моя запись"}}} {...props}/>); await flush()
+  expect(played).toHaveBeenCalledTimes(2)
+  view.unmount()
+  render(<DDSTrainingPhone exercise={answered} {...props}/>); await flush()
+  expect(played).toHaveBeenCalledTimes(2)
+  expect(command.mock.calls.filter(([payload]) => payload.operation === "answer")).toHaveLength(1)
+})
+
+it("preserves the report draft during polling, saves it and restores only the trainee's own words", async () => {
+  const command = vi.fn().mockResolvedValue(true), ex = exercise()
+  ex.presentation = "audio_only"
+  ex.incoming = {id:"r1",contact,ringing:false,text:null,audio:"/api/dds/audio/dds_ivanov_0.wav"}
+  ex.events = [{id:"call1",kind:"answered",report_id:"r1",at:"now",card_id:"c"}]
+  const props = {selectedService:"Аварийная служба",onServiceChange:vi.fn(),disabled:false,command}
+  const view = render(<DDSTrainingPhone exercise={ex} {...props}/> )
+  fireEvent.click(screen.getByRole("button",{name:"☎ Телефон"}))
+  fireEvent.change(screen.getByLabelText("Запись принятого доклада"),{target:{value:"Иванов. Бригада 1 выехала."}})
+  view.rerender(<DDSTrainingPhone exercise={{...ex}} {...props}/> )
+  expect(screen.getByLabelText("Запись принятого доклада")).toHaveValue("Иванов. Бригада 1 выехала.")
+  fireEvent.click(screen.getByRole("button",{name:"Сохранить запись доклада"})); await flush()
+  expect(command).toHaveBeenCalledExactlyOnceWith({operation:"note",report_id:"r1",note:"Иванов. Бригада 1 выехала."})
+  view.rerender(<DDSTrainingPhone exercise={{...ex,notes:{r1:"Иванов. Бригада 1 выехала."}}} {...props}/> )
+  expect(screen.getByRole("button",{name:"Доклад записан"})).toBeDisabled()
+  fireEvent.click(screen.getByRole("button",{name:"Сообщения"}))
+  expect(screen.getByText("Ваша запись: Иванов. Бригада 1 выехала.")).toBeTruthy()
+})
+
+it("lets the owning teacher compare a trainee report note with the recording transcript", async () => {
+  vi.stubGlobal("fetch",vi.fn(async (url: string) => new Response(JSON.stringify(url.endsWith("/phone-notes")
+    ? {cards:[{card_id:"c",notes:[{report_id:"r1",service_name:"Газ",note:"Моя запись доклада",expected_text:"Эталон произнесённой реплики"}]}]}
+    : {sessions:[{session_id:"s",cadet_id:"student",exercise_protocols:[{card_id:"c",criteria:[],events:[]}]}]}),{status:200})))
+  render(<DDSLessonProtocol lessonId="l"/>)
+  await screen.findByText("Запись обучаемого · Газ")
+  expect(screen.getByText("Моя запись доклада",{exact:false})).toBeTruthy()
+  expect(screen.getByText("Эталон произнесённой реплики",{exact:false})).toBeTruthy()
 })

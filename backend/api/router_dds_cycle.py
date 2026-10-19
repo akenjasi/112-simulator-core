@@ -43,6 +43,16 @@ router_dds_cycle = APIRouter(
 )
 
 
+@router_dds_cycle.get("/audio/{filename}")
+async def get_phone_recording(filename: str):
+    # Public canned training material, never user uploads or session recordings.
+    from fastapi.responses import FileResponse
+    from backend.core.dds_phone_catalog import AUDIO_DIR, recordings
+    if filename not in recordings() or not (AUDIO_DIR / filename).is_file():
+        raise HTTPException(404, "Phone recording not found")
+    return FileResponse(AUDIO_DIR / filename, media_type="audio/wav")
+
+
 @router_dds_cycle.get(
     "/tickets",
     response_model=List[DDSTicketSummary],
@@ -301,6 +311,27 @@ async def post_phone(session_id: str, payload: PhoneCommand,
     return await phone_command(db, session_id, payload, user)
 
 
+@router_dds_cycle.get("/sessions/{session_id}/phone-notes", dependencies=[Depends(require_role("TEACHER", "ADMIN"))])
+async def get_phone_notes(session_id: str, user: User = Depends(get_current_user), db: AsyncSession = Depends(get_db)):
+    # Reuse the session/lesson ownership checks before reading private transcripts.
+    await get_dds_session_state(session_id, user, db)
+    from backend.models.domain_03 import ExamSession
+    session = await db.get(ExamSession, session_id)
+    data = (session.dynamic_state or {}).get("dds", {})
+    cards = [*data.get("completed_cards", [])]
+    if not any(card["card_id"] == data.get("card_id") for card in cards):
+        cards.append(data)
+    result = []
+    for card in cards:
+        exercise = card.get("exercise") or {}
+        contacts = {c["id"]: c for c in exercise.get("plan", {}).get("contacts", [])}
+        notes = [{"report_id": r["id"], "service_name": contacts[r["contact_id"]]["service_name"],
+                  "note": exercise["notes"][r["id"]], "expected_text": r["text"]}
+                 for r in exercise.get("plan", {}).get("reports", []) if r["id"] in exercise.get("notes", {})]
+        result.append({"card_id": card.get("card_id"), "notes": notes})
+    return {"cards": result}
+
+
 @router_dds_cycle.get("/tickets/{ticket_id}/exercise", dependencies=[Depends(require_role("TEACHER", "ADMIN"))])
 async def get_exercise_plan(ticket_id: str, db: AsyncSession = Depends(get_db)):
     from backend.core.dds_cycle import incoming_card_from_ticket
@@ -308,8 +339,10 @@ async def get_exercise_plan(ticket_id: str, db: AsyncSession = Depends(get_db)):
     if not ticket or ticket.is_deleted:
         raise HTTPException(404, "Ticket not found")
     incoming = incoming_card_from_ticket(ticket)
-    return {"services": [s["name"] for s in incoming["services"]],
-            "plan": (ticket.content or {}).get("dds_exercise")}
+    from backend.core.dds_phone_catalog import default_phone_plan
+    services = [s["name"] for s in incoming["services"]]
+    return {"services": services,
+            "plan": (ticket.content or {}).get("dds_exercise") or default_phone_plan(services)}
 
 
 @router_dds_cycle.put("/tickets/{ticket_id}/exercise", dependencies=[Depends(require_role("TEACHER", "ADMIN"))])

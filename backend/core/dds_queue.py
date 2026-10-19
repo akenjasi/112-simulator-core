@@ -39,10 +39,12 @@ async def load_pool(db: AsyncSession, ticket_ids: list[str], *, training: bool =
                 or (not training and not is_approved_dds_ticket(ticket))):
             raise HTTPException(409, detail={"code": "DDS_TICKET_UNAVAILABLE"})
         from backend.core.dds_exercise import validated_plan
+        from backend.core.dds_phone_catalog import default_phone_plan
         incoming = incoming_card_from_ticket(ticket)
         raw_plan = (ticket.content or {}).get("dds_exercise")
         try:
-            plan = validated_plan(raw_plan, [s["name"] for s in incoming["services"]]) if raw_plan else None
+            services = [s["name"] for s in incoming["services"]]
+            plan = validated_plan(raw_plan, services) if raw_plan else default_phone_plan(services)
         except ValueError as exc:
             raise HTTPException(422, "Invalid DDS exercise plan") from exc
         pool.append({"exercise_plan": plan, "ticket_id": ticket_id, "title": extract_dds_ticket_metadata(ticket)[3],

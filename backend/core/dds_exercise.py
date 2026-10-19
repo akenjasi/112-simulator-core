@@ -17,6 +17,7 @@ MESSAGES = {
     "completion": "Карточка ещё не готова: обработайте доклады и завершите работу служб.",
     "transition": "Переход из текущего статуса недоступен.",
     "refusal": "Для отказа необходимо указать причину.",
+    "report_note": "Запишите услышанный доклад: ФИО, должность, номер бригады и этап работ.",
 }
 
 
@@ -121,6 +122,13 @@ def action_issue(data, payload, service_status):
         return "wrong_stage"
     if payload.status not in allowed_statuses(service_status):
         return "transition"
+    if ex["plan"].get("presentation") == "audio_only":
+        note = ex.get("notes", {}).get(report["id"], "")
+        number = norm(contact["brigade"])
+        spoken_number = {"1": "один", "2": "два", "3": "три", "4": "четыре"}.get(number, number)
+        heard_number = any(f" {value} " in f" {norm(note)} " for value in (number, spoken_number))
+        if not heard_number or not contains(note, [contact["full_name"], contact["position"], report["status"]]):
+            return "report_note"
     if norm(payload.order_number) != norm(contact["brigade"]) or not contains(payload.comment, report["comment_keywords"]):
         return "record_accuracy"
     return None
@@ -154,12 +162,12 @@ def criteria(data, closed=False):
     failures = [e for e in events if e["kind"] == "mistake"]
     groups = {"service": {"wrong_service", "wrong_contact"},
               "stage": {"premature", "wrong_stage", "transition", "call_required", "refusal"},
-              "accuracy": {"record_accuracy", "unknown_number"},
+              "accuracy": {"record_accuracy", "unknown_number", "report_note"},
               "completion": {"completion"}}
     confirmations = []
     for name in dict.fromkeys(c["service_name"] for c in ex["plan"]["contacts"]):
         action = next((a for a in data["actions"] if a["kind"] == "status" and a["service_name"] == name and a.get("status") in ("Принята", "Не принята")), None)
-        confirmations.append({"service_name": name, "seconds": max(0, (parse_time(action["at"]) - parse_time(data["received_at"])).total_seconds()) if action else None})
+        confirmations.append({"service_name": name, "seconds": max(0, (parse_time(action["at"]) - parse_time(data["received_at"])).total_seconds()) if action and action.get("at") and data.get("received_at") else None})
     result = []
     finished = ex["index"] == len(ex["plan"]["reports"])
     for key, label in keys:
@@ -181,17 +189,28 @@ def projection(data, editable):
     if not ex:
         return result
     report = current(ex)
+    audio_only = ex["plan"].get("presentation") == "audio_only"
+    def public_contact(contact):
+        return contact_public(contact, hide_identity=audio_only)
     ringing = bool(editable and report and ex["due_at"] and not ex["accepted"] and now_utc() >= parse_time(ex["due_at"]))
     incoming = None
     if report and (ringing or ex["accepted"]):
         contact = contact_for(ex, report)
-        incoming = {"id": report["id"], "contact": contact_public(contact), "ringing": ringing,
-                    "text": report["text"] if ex["accepted"] else None,
+        incoming = {"id": report["id"], "contact": public_contact(contact), "ringing": ringing,
+                    "text": report["text"] if ex["accepted"] and not audio_only else None,
                     "audio": report.get("audio") if ex["accepted"] else None}
+    events, outgoing = deepcopy(ex["events"]), deepcopy(ex["outgoing"])
+    if audio_only:
+        for item in [*events, *outgoing.values()]:
+            item["text"] = None
+            if item.get("contact"):
+                item["contact"] = public_contact(item["contact"])
     last = ex["requests"][-1] if ex["requests"] else None
-    result.update(exercise={"source": "prepared", "contacts": [contact_public(c) for c in ex["plan"]["contacts"]],
+    result.update(exercise={"source": "prepared", "presentation": ex["plan"].get("presentation", "text_audio"),
+                            "notes": deepcopy(ex.get("notes", {})),
+                            "contacts": [public_contact(c) for c in ex["plan"]["contacts"]],
                             "incoming": incoming, "due_at": ex["due_at"] if editable else None,
-                            "events": deepcopy(ex["events"]), "outgoing": deepcopy(ex["outgoing"]),
+                            "events": events, "outgoing": outgoing,
                             "refused_services": ex.get("refused_services", []),
                             "processed_reports": ex["index"] - sum(e["kind"] == "report_skipped" for e in ex["events"]), "total_reports": len(ex["plan"]["reports"])},
                   last_attempt={"request_id": last["payload"]["request_id"], "accepted": last["accepted"],
@@ -199,8 +218,9 @@ def projection(data, editable):
     return result
 
 
-def contact_public(contact):
-    return {key: contact[key] for key in ("id", "service_name", "number", "full_name", "position", "brigade")}
+def contact_public(contact, hide_identity=False):
+    return {key: "" if hide_identity and key in ("full_name", "position", "brigade") else contact[key]
+            for key in ("id", "service_name", "number", "full_name", "position", "brigade")}
 
 
 async def finalize_result(db, session, data, status):

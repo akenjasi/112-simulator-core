@@ -428,8 +428,9 @@ def _exercise_protocols(data):
                 continue
             entry = {key: e[key] for key in ("id", "kind", "at", "service_name", "report_id", "text", "reason", "message", "delay_seconds") if key in e}
             if "action" in e:
-                entry["action"] = {key: e["action"][key] for key in ("kind", "status", "service_name", "comment", "order_number", "who_accepted", "summary", "operation", "number") if key in e["action"]}
+                entry["action"] = {key: e["action"][key] for key in ("kind", "status", "service_name", "order_number", "who_accepted", "summary", "operation", "number") if key in e["action"]}
             events.append(entry)
-        actions = [{key: a[key] for key in ("request_id", "kind", "service_name", "at", "status", "comment", "order_number", "who_accepted", "summary") if key in a} for a in item.get("actions", [])]
+        # Free trainee notes stay in the saved session/teacher review, not the LLM input.
+        actions = [{key: a[key] for key in ("request_id", "kind", "service_name", "at", "status", "order_number", "who_accepted", "summary") if key in a} for a in item.get("actions", [])]
         result.append({"card_id": item.get("card_id"), "criteria": checks, "events": events, "actions": actions})
     return result

@@ -1,4 +1,7 @@
-"""Service decisions must remain valid through direct API, retries and races."""
+"""Pre-phone saved sessions retain their service policy through retries and races.
+
+New sessions use the phone policy tested in test_dds_phone_training/defaults.
+"""
 import asyncio
 from copy import deepcopy
 
@@ -11,6 +14,18 @@ async def fixture():
     users = await setup_group(1)
     _, sessions = await start(users)
     session = sessions[0]
+    # Reproduce persisted sessions from before automatic phone plans, not a runtime bypass.
+    from backend.database import AsyncSessionLocal
+    from backend.models.domain_03 import ExamSession
+    async with AsyncSessionLocal() as db:
+        stored = await db.get(ExamSession, session["session_id"])
+        data = deepcopy(stored.dynamic_state)
+        data["dds"]["exercise"] = None
+        for card in data["dds"]["queue"]:
+            card["exercise_plan"] = None
+        stored.dynamic_state = data
+        await db.commit()
+    session = await state(users, session)
     return users, session, f"/api/dds/sessions/{session['session_id']}/actions"
 
 

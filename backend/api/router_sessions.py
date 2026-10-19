@@ -397,7 +397,7 @@ async def create_demo_session(
             await lock_cadets(db, [current_user.user_id])
         from backend.core.dds_cycle import incoming_card_from_ticket, is_suitable_dds_ticket, extract_dds_ticket_metadata
 
-        from backend.core.dds_queue import available_for_training, initialize_queue
+        from backend.core.dds_queue import available_for_training, initialize_queue, load_pool
 
         chosen_id = req.ticket_id if req else None
         if chosen_id:
@@ -431,7 +431,8 @@ async def create_demo_session(
                 categories=[category], complexity=str(complexity))
             db.add(session)
             await db.flush()
-            await initialize_queue(db, session, [{"ticket_id": saved_ticket.scenario_id, "incoming_card": incoming}],
+            pool = await load_pool(db, [saved_ticket.scenario_id], training=True)
+            await initialize_queue(db, session, pool,
                                    datetime.datetime.now(datetime.timezone.utc))
             # Preserve the legacy demo API's incoming-card origin and active result marker.
             card = await db.get(IncidentCard, session.dynamic_state["dds"]["card_id"])

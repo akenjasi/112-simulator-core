@@ -73,18 +73,6 @@ async def test_lobby_demo_card_actions_finish_and_reload(path, cadet_auth_client
     retry = await cadet_auth_client.post(state_url + "/actions", json=action)
     assert retry.status_code == 200, retry.text
     assert len(retry.json()["actions"]) == 1
-    dispatched = await cadet_auth_client.post(state_url + "/actions", json={
-        "request_id": str(uuid.uuid4()), "kind": "dispatch", "service_name": card.services[0].name,
-        "who_accepted": "Учебный дежурный", "summary": "Учебный вызов принят",
-    })
-    assert dispatched.status_code == 200, dispatched.text
-    assert len(dispatched.json()["actions"]) == 2
-    for stage in ["Начало реагирования", "Прибытие", "Проведение работ", "Работы завершены"]:
-        saved = await cadet_auth_client.post(state_url + "/actions", json={
-            "request_id": str(uuid.uuid4()), "kind": "status", "service_name": card.services[0].name, "status": stage,
-            "order_number": "Н-101",
-        })
-        assert saved.status_code == 200, saved.text
     for service in card.services[1:]:
         saved = await cadet_auth_client.post(state_url + "/actions", json={
             "request_id": str(uuid.uuid4()), "kind": "status", "service_name": service.name,
@@ -92,6 +80,11 @@ async def test_lobby_demo_card_actions_finish_and_reload(path, cadet_auth_client
             "order_number": "Н-101",
         })
         assert saved.status_code == 200, saved.text
+    from backend.tests.test_dds_queue import ready
+    user_id = retry.json()["actions"][0]["actor_id"]
+    trained = await ready(initial, (user_id, "CADET"))
+    assert trained["exercise"]["processed_reports"] == 4
+    assert any(a["kind"] == "dispatch" and a["service_name"] == card.services[0].name for a in trained["actions"])
     finished = await cadet_auth_client.post(state_url + f"/cards/{initial['card_id']}/complete",
                                             json={"request_id": str(uuid.uuid4())})
     assert finished.status_code == 200, finished.text

@@ -21,8 +21,8 @@ class Contact(BaseModel):
     @field_validator("audio")
     @classmethod
     def local_audio(cls, value):
-        if value is not None and not re.fullmatch(r"/audio/tts/[a-zA-Z0-9_-]+\.wav", value):
-            raise ValueError("Only bundled /audio/tts/*.wav assets are allowed")
+        if value is not None and not re.fullmatch(r"/(?:audio/tts|api/dds/audio)/[a-zA-Z0-9_-]+\.wav", value):
+            raise ValueError("Only bundled DDS audio assets are allowed")
         return value
 
     @field_validator("dispatch_keywords")
@@ -49,11 +49,14 @@ class ExercisePlan(BaseModel):
     model_config = ConfigDict(extra="forbid")
     version: Literal[1] = 1
     source: Literal["prepared"] = "prepared"
+    presentation: Literal["text_audio", "audio_only"] = "text_audio"
     contacts: list[Contact] = Field(min_length=1, max_length=100)
     reports: list[Report] = Field(min_length=4, max_length=400)
 
     @model_validator(mode="after")
     def consistent(self):
+        if self.presentation == "audio_only" and any(not item.audio for item in [*self.contacts, *self.reports]):
+            raise ValueError("Audio-only exercises require a recording for every call")
         ids = [c.id for c in self.contacts]
         numbers = [c.number for c in self.contacts]
         if len(set(ids)) != len(ids) or len(set(numbers)) != len(numbers):
@@ -79,12 +82,13 @@ class PhoneCommand(BaseModel):
     model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
     request_id: str = Field(min_length=1, max_length=128)
     card_id: str = Field(min_length=1)
-    operation: Literal["dial", "answer", "audio"]
+    operation: Literal["dial", "answer", "audio", "note"]
     service_name: str | None = Field(None, max_length=255)
     number: str | None = Field(None, max_length=24)
     report_id: str | None = Field(None, max_length=64)
     call_id: str | None = Field(None, max_length=128)
     audio_result: Literal["played", "unavailable"] | None = None
+    note: str | None = Field(None, min_length=1, max_length=1000)
 
     @model_validator(mode="after")
     def required(self):
@@ -94,4 +98,6 @@ class PhoneCommand(BaseModel):
             raise ValueError("Answer requires report_id")
         if self.operation == "audio" and (not self.call_id or not self.audio_result):
             raise ValueError("Audio acknowledgement requires call_id and audio_result")
+        if self.operation == "note" and (not self.report_id or not self.note):
+            raise ValueError("A report note requires report_id and nonempty note")
         return self

@@ -194,9 +194,9 @@
       "reason": "Prepared DDS exercise protocol already present before audit"
     },
     "components/dispatcher/dds-training-phone.tsx": {
-      "sha256": "f3ff4cdf33bd1c00c4b97dd0f1ff947ed95977101b84bde71b9479640eedf66c",
-      "source_revision": "d51076c",
-      "reason": "Prepared DDS phone exercise already present before audit"
+      "sha256": "011c3227cb16ef9f588eabfd46744a478d2b077386b375df62e4f642185abb0b",
+      "source_revision": "codex/dds-phone-audio-cycle (base 54f83a8)",
+      "reason": "Explicit user request 2026-10-19: automatic audio-only DDS cycle, replay, saved trainee notes and owning-teacher review; optional teacher configuration"
     },
     "components/dispatcher/dispatch-panel.tsx": {
       "sha256": "9ed4c3fd8e5d0ce4c06e079819e633aef38f458c27e56bbb023f19d322b8244e",
@@ -209,14 +209,14 @@
       "reason": "Prepared phone exercise controls already present before audit"
     },
     "components/teacher/dds-exercise-editor.tsx": {
-      "sha256": "89c0850d8db9f1847fb2916e03eba2f0b469ddeba216ed8a956d94abc7f04c31",
-      "source_revision": "d51076c",
-      "reason": "Prepared DDS exercise editor already present before audit"
+      "sha256": "e833fa0e75d5ca5cf0c6716f5fdd0db8490db78d9ef31a420ea30848aa7059ae",
+      "source_revision": "codex/dds-phone-audio-cycle (base 54f83a8)",
+      "reason": "Explicit user request 2026-10-19: automatic audio-only DDS cycle, replay, saved trainee notes and owning-teacher review; optional teacher configuration"
     },
     "components/teacher/dds-lesson-protocol.tsx": {
-      "sha256": "8e9ff2e6481c8aeae98ddcda153c6d7a98697cb17ffcf4c15d40e01762855c13",
-      "source_revision": "d51076c",
-      "reason": "Prepared teacher lesson protocol already present before audit"
+      "sha256": "1e484b7f1695240c01818a04727db036a43160291823298d9cd47b0bfb1b3781",
+      "source_revision": "codex/dds-phone-audio-cycle (base 54f83a8)",
+      "reason": "Explicit user request 2026-10-19: automatic audio-only DDS cycle, replay, saved trainee notes and owning-teacher review; optional teacher configuration"
     },
     "hooks/useTelephony.ts": {
       "sha256": "b6641cf7a8e9895d799523c307b8a0546a41817097e79aaa1cca8fa8f2ca3d47",
@@ -244,5 +244,5 @@
       "reason": "User-requested student teacher-assessment display restored after stash pop across the component directory reorganization."
     }
   },
-  "update_policy": "2026-10-19: explicitly reconciled under the user request to repair obsolete tests. Original sha256 values are unchanged. Exact supplemental hashes preserve the integrated changes; these paths are not open-ended exceptions."
+  "update_policy": "2026-10-19: explicitly reconciled under the user request to repair obsolete tests. Original sha256 values are unchanged. Exact supplemental hashes preserve the integrated changes; these paths are not open-ended exceptions. 2026-10-19: the user explicitly requested the DDS audio-only cycle and teacher review; only the three existing supplemental entries were updated, preserving the original map and guarded path set."
 }

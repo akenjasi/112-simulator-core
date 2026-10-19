@@ -74,6 +74,13 @@ async def phone_command(db, session_id, payload, user):
                        available_at=ex["due_at"], service_name=contact["service_name"],
                        contact=training.contact_public(contact), text=report["text"], audio=report.get("audio"))
         ex["accepted"] = report["id"]
+    elif payload.operation == "note":
+        report = training.current(ex)
+        if not report or report["id"] != payload.report_id or ex["accepted"] != report["id"]:
+            raise HTTPException(409, detail={"code": "DDS_REPORT_NOT_ACCEPTED"})
+        ex.setdefault("notes", {})[report["id"]] = payload.note
+        training.event(ex, "note", at, data["card_id"], report_id=report["id"], note=payload.note,
+                       service_name=training.contact_for(ex, report)["service_name"])
     else:
         call = next((e for e in ex["events"] if e["id"] == payload.call_id and e["kind"] in ("answered", "dialed")), None)
         if not call or not call.get("audio"):

@@ -147,8 +147,9 @@ async def test_refusal_requires_both_order_number_and_reason():
         "service_name": "01 Пожарные", "status": "Не принята",
         "comment": "   ", "order_number": "П-999",
     })
-    assert res2.status_code == 422, res2.text
-    assert res2.json().get("detail", {}).get("code") == "DDS_REFUSAL_REASON_REQUIRED"
+    assert res2.status_code == 200, res2.text
+    assert res2.json()["last_attempt"]["accepted"] is False
+    assert res2.json()["last_attempt"]["reason"] == "refusal"
 
     # Valid with both
     res3 = await api_request("POST", f"{prefix}/actions", cadet, json={
@@ -173,16 +174,21 @@ async def test_dispatch_action_does_not_require_order_number():
     ))
     assert accept_res.status_code == 200, accept_res.text
 
+    called = await api_request("POST", f"{prefix}/phone", cadet, json={
+        "request_id": str(uuid.uuid4()), "card_id": accept_res.json()["card_id"], "operation": "dial",
+        "service_name": "01 Пожарные", "number": "7000",
+    })
+    assert called.json()["last_attempt"]["accepted"]
     # Dispatch action without order_number
     disp_res = await api_request("POST", f"{prefix}/actions", cadet, json={
         "request_id": str(uuid.uuid4()),
         "kind": "dispatch",
         "service_name": "01 Пожарные",
-        "who_accepted": "Капитан Иванов",
-        "summary": "Бригада выехала на автоцистерне",
+        "who_accepted": "Начальник бригады Иванов Иван Иванович",
+        "summary": "Бригада направлена на автоцистерне",
     })
     assert disp_res.status_code == 200, disp_res.text
     actions = disp_res.json()["actions"]
     assert len(actions) == 2
     assert actions[-1]["kind"] == "dispatch"
-    assert actions[-1]["who_accepted"] == "Капитан Иванов"
+    assert actions[-1]["who_accepted"] == "Начальник бригады Иванов Иван Иванович"

@@ -55,7 +55,7 @@ export function DDSExerciseEditor({ticketId}: {ticketId: string}) {
   const reportField = (index: number, key: keyof Report, value: string | string[]) => setPlan(p => p && ({...p, reports: p.reports.map((r,i) => i === index ? {...r, [key]: value} : r)}))
   return <details className="rounded border p-3" aria-label="Настройка учебного цикла ДДС" onToggle={e => {if (e.currentTarget.open) setOpened(true)}}>
     <summary className="cursor-pointer font-semibold">Телефон и доклады ДДС</summary>
-    <p className="my-2 text-sm">Подготовленные реплики, без генерации ИИ. Один обучаемый может отрабатывать несколько служб. До 10 номеров на ДДС.</p>
+    <p className="my-2 text-sm">Телефонный план подготавливается автоматически по службам билета. Ручная настройка необязательна. Один обучаемый может отрабатывать несколько служб; до 10 номеров на ДДС.</p>
     {!loaded ? <p>Загрузка…</p> : !plan ? <><p>План докладов не включён.</p><button type="button" className="my-2 rounded border p-2" disabled={!services.length} onClick={create}>Подготовить план по службам билета</button></> : <div className="space-y-3">
       {plan.contacts.map((c, i) => <fieldset key={c.id} className="space-y-2 rounded border p-3" disabled={busy}><legend>{c.service_name}</legend>
         {([["number","Условный номер"],["full_name","ФИО исполнителя"],["position","Должность"],["brigade","Номер бригады"],["reply","Ответ на исходящий звонок"]] as const).map(([key,label]) => <label className="block text-xs" key={key}>{label}<input className={input} value={c[key]} onChange={e => contactField(i,key,e.target.value)}/></label>)}

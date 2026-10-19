@@ -212,8 +212,16 @@ async def test_configuration_is_snapshot_and_legacy_criteria_are_ungraded():
     assert state["exercise"]["contacts"][0]["full_name"] == "Иванов Иван Иванович"
     legacy_users, legacy_ids = await exercise(n=1, count=1)
     _, legacy = await launch(legacy_users, legacy_ids)
-    assert legacy[0]["exercise"] is None
-    assert all(c["status"] == "not_evaluated" for c in legacy[0]["criteria"])
+    # Explicitly reproduce a snapshot saved before automatic phone preparation.
+    async with AsyncSessionLocal() as db:
+        session = await db.get(ExamSession, legacy[0]["session_id"])
+        data = deepcopy(session.dynamic_state)
+        data["dds"]["exercise"] = None
+        session.dynamic_state = data
+        await db.commit()
+    restored = (await request("GET", base(legacy[0]), legacy_users["cadets"][0])).json()
+    assert restored["exercise"] is None
+    assert all(c["status"] == "not_evaluated" for c in restored["criteria"])
 
 
 @pytest.mark.asyncio
