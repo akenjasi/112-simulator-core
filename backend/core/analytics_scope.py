@@ -3,7 +3,7 @@ from fastapi import Depends, HTTPException, Request
 from sqlalchemy import event, select
 from sqlalchemy.orm import with_loader_criteria
 
-from backend.core.access import teacher_cadet_ids, visible_session_ids
+from backend.core.access import teacher_cadet_ids, visible_session_ids, require_session, require_assignment
 from backend.core.deps import get_current_user
 from backend.database import get_db
 from backend.models.domain_01 import StudentGroup, User
@@ -24,6 +24,20 @@ async def get_scoped_analytics_db(request: Request, db=Depends(get_db), user=Dep
             raise HTTPException(404, "Group not found")
         if group.teacher_id != user.user_id:
             raise HTTPException(403, "Group access denied")
+    # Check explicit object routes before collection criteria hide foreign rows.
+    # This preserves the public 403 contract while applying the same ownership boundary.
+    if request.path_params.get("session_id"):
+        await require_session(db, user, request.path_params["session_id"])
+    if request.path_params.get("lesson_id"):
+        await require_assignment(db, user, await db.get(Assignment, request.path_params["lesson_id"]))
+    record_id = request.path_params.get("record_id")
+    if record_id:
+        record = (await db.get(TicketResult, record_id) or await db.get(IncidentCard, record_id)
+                  or await db.get(EvaluationResult, record_id))
+        if record:
+            if not record.session_id:
+                raise HTTPException(403, "Record is not attached to an accessible session")
+            await require_session(db, user, record.session_id)
     cadets = await teacher_cadet_ids(db, user.user_id)
     target = request.path_params.get("user_id") or request.query_params.get("cadet_id")
     if target and target not in cadets:

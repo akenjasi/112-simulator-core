@@ -245,7 +245,10 @@ async def test_teacher_lists_linked_students_and_admin_retains_account_managemen
         forbidden_role = await client.get("/api/users?role=ADMIN", headers=headers)
         all_users = await client.get("/api/users", headers=admin_headers)
     assert {user["user_id"] for user in own.json()} == {student.user_id}
-    assert {user["user_id"] for user in legacy.json()} == {student.user_id}
+    # The enrollment directory is global; the administrative user API remains
+    # scoped to the teacher's existing group relationships.
+    assert student.user_id in {user["user_id"] for user in legacy.json()}
+    assert all(user["role"] == "STUDENT" and user["is_active"] for user in legacy.json())
     assert anonymous.status_code == 401
     assert forbidden_role.json() == []
     assert admin.user_id in {user["user_id"] for user in all_users.json()}

@@ -102,6 +102,9 @@ class QwenTTSV2:
         if not text.strip():
             return bytes()
             
+        if os.getenv("TTS_ENABLED", "false").strip().lower() not in {"true", "1", "yes", "on"}:
+            raise RuntimeError("Speech synthesis is disabled; enable TTS_ENABLED only with provisioned local models")
+
         text_clean = normalize_text_v2(text)
         
         if not text_clean.strip():

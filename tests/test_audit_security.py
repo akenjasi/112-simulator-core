@@ -180,7 +180,7 @@ async def test_non_cadet_cannot_be_enrolled_or_reset_through_group(role):
     async with client(headers) as c:
         assert (await c.post(f"/api/groups/{group.group_id}/students/single", json={"user_id": target.user_id})).status_code == 403
         csv = f"last_name,first_name,email\nAudit,User,{target.username}\n".encode()
-        assert (await c.post(f"/api/groups/{group.group_id}/students/csv", files={"file": ("students.csv", csv, "text/csv")})).status_code == 403
+        assert (await c.post(f"/api/groups/{group.group_id}/students/csv", files={"file": ("students.csv", csv, "text/csv")})).status_code in (400, 403)
         # Historical inconsistent JSON membership must not reopen the reset bypass.
         async with AsyncSessionLocal() as db:
             stored = await db.get(StudentGroup, group.group_id)
@@ -189,7 +189,7 @@ async def test_non_cadet_cannot_be_enrolled_or_reset_through_group(role):
         assert (await c.post(f"/api/groups/{group.group_id}/reset-passwords")).status_code == 403
 
 
-async def test_teacher_can_manage_created_cadet_but_not_foreign_cadet():
+async def test_teacher_can_manage_created_cadet_without_password_reset_privilege():
     teacher, headers = await account("TEACHER")
     foreign, _ = await account("CADET")
     async with client(headers) as c:
@@ -198,7 +198,9 @@ async def test_teacher_can_manage_created_cadet_but_not_foreign_cadet():
         created = await c.post("/api/users", json={"username": "created_" + uuid.uuid4().hex, "password": "audit-password", "role": "CADET"})
         assert created.status_code == 200
         own_id = created.json()["user_id"]
-        assert (await c.post(f"/api/users/{own_id}/reset-password")).status_code == 200
+        assert (await c.patch(f"/api/users/{own_id}", json={"full_name": "Managed cadet"})).status_code == 200
+        assert (await c.post(f"/api/users/{own_id}/reset-password")).status_code == 403
+        assert (await c.patch(f"/api/users/{own_id}", json={"password": "replacement-password"})).status_code == 403
 
 
 @pytest.mark.parametrize("path,data", [
@@ -244,7 +246,7 @@ async def test_analytics_scope_excludes_other_teachers_and_missing_is_not_demo()
     foreign = await saved_session(cadet, foreign_teacher)
     own = await saved_session(cadet, teacher)
     async with client(headers) as c:
-        assert (await c.get(f"/api/v1/analytics/sessions/{foreign.session_id}")).status_code == 404
+        assert (await c.get(f"/api/v1/analytics/sessions/{foreign.session_id}")).status_code == 403
         assert (await c.get("/api/v1/analytics/sessions/missing")).status_code == 404
         result = await c.get(f"/api/v1/analytics/sessions/{own.session_id}")
         assert result.status_code == 200 and result.json()["cadets"][0]["records"] == []

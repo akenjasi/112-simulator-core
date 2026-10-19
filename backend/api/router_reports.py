@@ -74,6 +74,7 @@ async def _background_generate_report(
     group_id: Optional[str] = None,
     session_ids: Optional[List[str]] = None,
     custom_records: Optional[List[Dict[str, Any]]] = None,
+    output_format: str = "pdf",
 ) -> None:
     """Export recorded measurements; missing metrics remain absent."""
     from backend.core.dds_cycle import get_session_score
@@ -86,8 +87,21 @@ async def _background_generate_report(
 
     try:
         cadets_data = []
-        if custom_records:
+        if custom_records is not None:
             for rec in custom_records:
+                if "final_score" in rec:
+                    # Explicit export rows are caller-supplied, never persisted assessments.
+                    # Preserve unknown components rather than inventing a perfect breakdown.
+                    cadets_data.append({
+                        **rec,
+                        **{key: finite(rec.get(key)) for key in ("final_score", "comm_score", "card_score", "sla_score", "time_to_first_dispatch_sec")},
+                        "cadet_name": rec.get("cadet_name") or "Курсант",
+                        "ticket_id": rec.get("ticket_id") or "Билет",
+                        "penalties_list": rec.get("penalties_list") or [],
+                        "over_dispatched_services": rec.get("over_dispatched_services") or [],
+                        "missed_critical_factoids": rec.get("missed_critical_factoids") or [],
+                    })
+                    continue
                 if not all(isinstance(rec.get(key), dict) and rec[key] for key in ("comm_metrics", "card_metrics", "sla_metrics")):
                     raise ValueError("Explicit measured metrics are required")
                 comm, card, sla = (rec[key] for key in ("comm_metrics", "card_metrics", "sla_metrics"))
@@ -139,8 +153,9 @@ async def _background_generate_report(
         output_xlsx.write_bytes(await asyncio.to_thread(generate_excel_from_data, cadets_data))
         pdf_path = None
         try:
-            await asyncio.to_thread(generate_pdf_from_html, render_report_html(context), str(output_pdf))
-            pdf_path = str(output_pdf)
+            if output_format == "pdf":
+                await asyncio.to_thread(generate_pdf_from_html, render_report_html(context), str(output_pdf))
+                pdf_path = str(output_pdf)
         except Exception:
             logger.warning("PDF renderer unavailable; CSV and Excel are ready for task %s", task_id)
         TASKS[task_id].update(status="ready", file_path=pdf_path, csv_path=str(output_csv), excel_path=str(output_xlsx))
@@ -173,9 +188,9 @@ async def generate_report(
         req.session_ids = list((await db.scalars((await visible_session_ids(db, current_user)).where(
             ExamSession.assignment_id.in_(select(Assignment.assignment_id).where(Assignment.group_id == req.group_id))
         ))).all())
-    if not req.custom_records and not req.session_ids and not req.group_id:
+    if req.custom_records is None and not req.session_ids and not req.group_id:
         req.session_ids = list((await db.scalars(await visible_session_ids(db, current_user))).all())
-    if not req.custom_records and not req.session_ids:
+    if req.custom_records is None and not req.session_ids:
         raise HTTPException(422, "No recorded sessions are available for export")
     if sum(task.get("owner_id") == current_user.user_id and task.get("status") == "processing" for task in TASKS.values()) >= 5:
         raise HTTPException(429, "Wait for your running reports to finish")
@@ -196,6 +211,7 @@ async def generate_report(
         group_id=req.group_id,
         session_ids=req.session_ids,
         custom_records=req.custom_records,
+        output_format=req.format,
     )
 
     return {"task_id": task_id}

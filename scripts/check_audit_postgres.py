@@ -53,7 +53,7 @@ def main():
                         '-e', 'POSTGRES_DB=audit', 'postgres:15-alpine'], check=True, stdout=subprocess.DEVNULL)
         created = True
         for _ in range(60):
-            result = subprocess.run(['docker', 'exec', name, 'pg_isready', '-U', 'audit', '-d', 'audit'], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            result = subprocess.run(['docker', 'exec', '-e', f'PGPASSWORD={password}', name, 'psql', '-h', '127.0.0.1', '-U', 'audit', '-d', 'audit', '-t', '-A', '-v', 'ON_ERROR_STOP=1', '-c', 'SELECT 1'], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
             if result.returncode == 0:
                 break
             time.sleep(.25)

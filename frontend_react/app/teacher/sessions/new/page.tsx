@@ -74,6 +74,20 @@ export interface StudentGroup {
   student_count?: number
 }
 
+export interface GroupCadet {
+  user_id: string
+  id?: string
+  full_name?: string
+  username: string
+  role?: string
+}
+
+export interface DdsCategoryItem {
+  category: string
+  total: number
+  subcategories: Array<{ name: string; count: number }>
+}
+
 export type TargetRole = "OPERATOR_112" | "DISPATCHER_DDS"
 export type ComplexityLevel = "level_1" | "level_2" | "level_3" | "adaptive" | "mixed"
 export type DistributionMode = "live_stream" | "exam"
@@ -116,12 +130,7 @@ const getCategoryIcon = (category: string) => {
 }
 
 export default function SessionSetupPage() {
-  let router: any = null
-  try {
-    router = useRouter()
-  } catch {
-    // Router context not available in unit test environments
-  }
+  const router = useRouter()
 
   const [groups, setGroups] = useState<StudentGroup[]>([])
   const [availableRoles, setAvailableRoles] = useState<TargetRole[]>(["DISPATCHER_DDS"])
@@ -134,12 +143,20 @@ export default function SessionSetupPage() {
   
   // NEW: Ticket counts
   const [ticketCounts, setTicketCounts] = useState<any[]>([])
+  const [ddsCategoriesData, setDdsCategoriesData] = useState<DdsCategoryItem[]>([])
 
   // Stage 1 (Main Categories) & Stage 2 (Subcategories) selection
   // Mode: all categories selected by default
   const [isAllCategoriesSelected, setIsAllCategoriesSelected] = useState<boolean>(true)
   const [selectedMainCategories, setSelectedMainCategories] = useState<string[]>([])
   const [selectedSubcategories, setSelectedSubcategories] = useState<string[]>([])
+
+  // Individual vs Group Assignment
+  const [assignmentMode, setAssignmentMode] = useState<"group" | "cadet">("group")
+  const [groupCadets, setGroupCadets] = useState<GroupCadet[]>([])
+  const [isLoadingCadets, setIsLoadingCadets] = useState<boolean>(false)
+  const [selectedCadetId, setSelectedCadetId] = useState<string>("")
+  const groupCadetsRequestRef = useRef(0)
 
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
@@ -156,11 +173,11 @@ export default function SessionSetupPage() {
   } = useForm<SessionFormData>({
     defaultValues: {
       group_id: "",
-      target_role: "DISPATCHER_DDS",
+      target_role: "OPERATOR_112",
       categories: [],
       complexity: "adaptive",
       distribution_mode: "live_stream",
-      time_limit_seconds: "30",
+      time_limit_seconds: 30,
       error_limit: "",
     },
   })
@@ -303,6 +320,59 @@ export default function SessionSetupPage() {
 
   // Load classifier incident categories in strictly alphabetical order
 
+  // Load actual group members. The group detail endpoint only returns group metadata.
+  const fetchGroupCadets = useCallback(async (groupId: string) => {
+    const requestId = ++groupCadetsRequestRef.current
+    setSelectedCadetId("")
+    setGroupCadets([])
+    if (!groupId) {
+      setIsLoadingCadets(false)
+      return
+    }
+    setIsLoadingCadets(true)
+    try {
+      const res = await fetch(`/api/v1/groups/${encodeURIComponent(groupId)}/students`, {
+        headers: getAuthHeaders(),
+      })
+      if (res.ok) {
+        const data = await res.json()
+        if (requestId !== groupCadetsRequestRef.current) return
+        let rawList: any[] = []
+        if (Array.isArray(data)) {
+          rawList = data
+        } else if (Array.isArray(data?.students)) {
+          rawList = data.students
+        } else if (Array.isArray(data?.cadets)) {
+          rawList = data.cadets
+        }
+        const parsed: GroupCadet[] = rawList.map((c: any) => ({
+          user_id: c.user_id || c.id || c.student_id,
+          id: c.id || c.user_id,
+          full_name: c.full_name || c.name || c.username || `Курсант ${c.user_id || c.id}`,
+          username: c.username || c.email || "",
+          role: c.role || "CADET",
+        }))
+        setGroupCadets(parsed)
+      } else {
+        if (requestId === groupCadetsRequestRef.current) setGroupCadets([])
+      }
+    } catch (e) {
+      console.error("Failed to fetch group cadets", e)
+      if (requestId === groupCadetsRequestRef.current) setGroupCadets([])
+    } finally {
+      if (requestId === groupCadetsRequestRef.current) setIsLoadingCadets(false)
+    }
+  }, [getAuthHeaders])
+
+  useEffect(() => {
+    if (selectedGroupId) {
+      fetchGroupCadets(selectedGroupId)
+    } else {
+      setGroupCadets([])
+      setSelectedCadetId("")
+    }
+  }, [selectedGroupId, fetchGroupCadets])
+
   const loadTicketCounts = useCallback(async (complexity?: number | null) => {
     try {
       const url = complexity ? `/api/v1/tickets/counts?complexity=${complexity}` : "/api/v1/tickets/counts"
@@ -331,7 +401,6 @@ export default function SessionSetupPage() {
       if (res.ok) {
         const data = await res.json()
         if (Array.isArray(data)) {
-          // Filter to incident categories only (exclude service names if any)
           const incidentCategories = data.filter((cat: string) => {
             const lower = cat.toLowerCase()
             return (
@@ -354,16 +423,105 @@ export default function SessionSetupPage() {
     }
   }, [getAuthHeaders])
 
+  // Load incident categories and incident types with ticket counts via GET /api/dds/tickets/categories
+  const loadDdsTicketCategories = useCallback(async (complexityParam?: string) => {
+    try {
+      setIsLoadingCategories(true)
+      const activeComplexity = complexityParam !== undefined ? complexityParam : selectedComplexity
+      const compLevel = COMPLEXITY_LEVEL_MAP[activeComplexity] ?? null
+      const url = compLevel !== null ? `/api/dds/tickets/categories?complexity=${compLevel}` : "/api/dds/tickets/categories"
+      const res = await fetch(url, { headers: getAuthHeaders() })
+
+      if (res.ok) {
+        const data = await res.json()
+        const rawList: any[] = Array.isArray(data)
+          ? data
+          : Array.isArray(data?.categories)
+          ? data.categories
+          : []
+
+        if (rawList.length > 0) {
+          const parsedDds: DdsCategoryItem[] = rawList.map((item: any) => {
+            const catName = item.category || item.name || ""
+            const total = item.count ?? item.total ?? 0
+            const subList: Array<{ name: string; count: number }> = []
+
+            if (Array.isArray(item.subcategories)) {
+              item.subcategories.forEach((s: any) => {
+                const sName = s.name || s.subcategory || String(s)
+                subList.push({ name: sName, count: s.count ?? 0 })
+              })
+            } else if (Array.isArray(item.items)) {
+              item.items.forEach((s: any) => {
+                const sName = s.subcategory || s.name || String(s)
+                subList.push({ name: sName, count: s.count ?? 0 })
+              })
+            } else if (item.subcategories && typeof item.subcategories === "object") {
+              Object.entries(item.subcategories).forEach(([k, v]) => {
+                subList.push({ name: k, count: Number(v) || 0 })
+              })
+            }
+
+            return {
+              category: catName,
+              total,
+              subcategories: subList,
+            }
+          })
+
+          parsedDds.sort((a, b) => a.category.localeCompare(b.category, "ru"))
+          setDdsCategoriesData(parsedDds)
+
+          const ticketCountsFormat = parsedDds.map((p) => {
+            const subMap: Record<string, number> = {}
+            p.subcategories.forEach((s) => {
+              subMap[s.name] = s.count
+            })
+            return {
+              category: p.category,
+              total: p.total,
+              subcategories: subMap,
+            }
+          })
+          setTicketCounts(ticketCountsFormat)
+
+          const catNames = parsedDds.map((p) => p.category)
+          setClassifierCategories(catNames)
+
+          const newSubMap: Record<string, string[]> = {}
+          parsedDds.forEach((p) => {
+            newSubMap[p.category] = p.subcategories.map((s) => s.name).sort((a, b) => a.localeCompare(b, "ru"))
+          })
+          setSubcategoriesMap((prev) => ({ ...prev, ...newSubMap }))
+          return
+        }
+      }
+
+      loadCategories()
+      loadTicketCounts(compLevel)
+    } catch {
+      const fallbackLevel = COMPLEXITY_LEVEL_MAP[complexityParam !== undefined ? complexityParam : selectedComplexity] ?? null
+      loadCategories()
+      loadTicketCounts(fallbackLevel)
+    } finally {
+      setIsLoadingCategories(false)
+    }
+  }, [selectedComplexity, getAuthHeaders, loadCategories, loadTicketCounts])
+
   useEffect(() => {
     loadGroups()
     loadAvailableRoles()
-    loadCategories()
-  }, [loadGroups, loadAvailableRoles, loadCategories])
+  }, [loadGroups, loadAvailableRoles])
 
   useEffect(() => {
-    const compNum = COMPLEXITY_LEVEL_MAP[selectedComplexity] ?? null
-    loadTicketCounts(compNum)
-  }, [selectedComplexity, loadTicketCounts])
+    if (selectedTargetRole === "DISPATCHER_DDS") {
+      loadDdsTicketCategories(selectedComplexity)
+    } else {
+      loadCategories()
+      const compNum = COMPLEXITY_LEVEL_MAP[selectedComplexity] ?? null
+      loadTicketCounts(compNum)
+    }
+  }, [selectedTargetRole, selectedComplexity, loadDdsTicketCategories, loadCategories, loadTicketCounts])
 
   // DDS Subcategory loader when category filter changes
   useEffect(() => {
@@ -533,6 +691,11 @@ export default function SessionSetupPage() {
         return
       }
 
+      if (assignmentMode === "cadet" && !selectedCadetId) {
+        setErrorMessage("Пожалуйста, выберите конкретного курсанта для назначения")
+        return
+      }
+
       if (data.target_role === "DISPATCHER_DDS") {
         if (isLoadingDdsTickets || ddsTicketsError || selectedDdsTickets.length === 0) {
           setErrorMessage("Пожалуйста, выберите подготовленный билет ДДС")
@@ -549,37 +712,27 @@ export default function SessionSetupPage() {
       const payload: Record<string, any> = {
         group_id: data.group_id,
         target_role: data.target_role,
+        ...(assignmentMode === "cadet" && selectedCadetId ? { cadet_id: selectedCadetId } : {}),
         ticket_ids: isDds ? selectedDdsTickets.map(ticket => ticket.ticket_id) : undefined,
         categories: isDds ? [] : (isAllCategoriesSelected ? [] : (data.categories || [])),
         complexity: data.complexity,
-        distribution_mode: data.distribution_mode,
+        mode: data.distribution_mode === "exam" ? "EXAM" : "TRAINING",
         time_limit_seconds:
           data.time_limit_seconds !== "" && data.time_limit_seconds !== undefined
             ? Number(data.time_limit_seconds)
             : 30,
         error_limit:
-          isDds
-            ? undefined
-            : data.error_limit !== "" && data.error_limit !== undefined
+          data.error_limit !== "" && data.error_limit !== undefined
             ? Number(data.error_limit)
             : undefined,
       }
 
-      // POST to /api/v1/lessons (fallback to /api/v1/sessions only for operator on 404)
+      // Create the selected lesson type without silently switching to a different entity API.
       let res = await fetch("/api/v1/lessons", {
         method: "POST",
         headers: { "Content-Type": "application/json", ...getAuthHeaders() },
         body: JSON.stringify(payload),
       })
-
-      if (!res.ok && res.status === 404 && !isDds) {
-        // Fallback to /api/v1/sessions if lessons not mounted (operator only)
-        res = await fetch("/api/v1/sessions", {
-          method: "POST",
-          headers: { "Content-Type": "application/json", ...getAuthHeaders() },
-          body: JSON.stringify(payload),
-        })
-      }
 
       if (!res.ok) {
         const errorData = await res.json().catch(() => null)
@@ -587,19 +740,15 @@ export default function SessionSetupPage() {
       }
 
       const lessonData = await res.json()
-      const lessonId =
-        lessonData.id || lessonData.lesson_id || lessonData.assignment_id || lessonData.session_id || "new"
+      const redirectId =
+        lessonData.id || lessonData.assignment_id || lessonData.lesson_id || lessonData.session_id || "new"
 
-      setCreatedSessionId(lessonId)
+      setCreatedSessionId(redirectId)
       setSuccessMessage(`Урок успешно создан и подготовлен к запуску!`)
 
       // Redirect teacher to live lobby
-      const liveUrl = `/teacher/sessions/live?id=${lessonId}`
-      if (router && typeof router.push === "function") {
-        router.push(liveUrl)
-      } else if (typeof window !== "undefined") {
-        window.location.href = liveUrl
-      }
+      const liveUrl = `/teacher/sessions/live?id=${encodeURIComponent(redirectId)}&source=lesson`
+      router.push(liveUrl)
     } catch (err: any) {
       setErrorMessage(err.message || "Не удалось создать занятие")
     } finally {
@@ -619,7 +768,14 @@ export default function SessionSetupPage() {
     if (!Array.isArray(ticketCounts)) return 0
     const c = ticketCounts.find((t) => t?.category === catName)
     if (!c || !c.subcategories) return 0
-    return c.subcategories[subName] || 0
+    if (typeof c.subcategories === "object" && !Array.isArray(c.subcategories)) {
+      return c.subcategories[subName] ?? 0
+    }
+    if (Array.isArray(c.subcategories)) {
+      const sub = c.subcategories.find((s: any) => (s.name || s.subcategory) === subName)
+      return sub ? (sub.count ?? 0) : 0
+    }
+    return 0
   }
 
   const getTotalAvailableTickets = () => {
@@ -680,10 +836,12 @@ export default function SessionSetupPage() {
     ? selectedDdsTickets.length === 0
     : Boolean((ticketCounts.length > 0 || !isAllCategoriesSelected) && totalAvailableTickets === 0)
 
+  const isCadetSelectionInvalid = assignmentMode === "cadet" && !selectedCadetId
   const isSubmitDisabled =
     isSubmitting ||
     !selectedGroupId ||
     (selectedGroupObj ? selectedGroupCadetCount === 0 : false) ||
+    isCadetSelectionInvalid ||
     isCategoriesInvalid ||
     isNoTickets
 
@@ -806,6 +964,93 @@ export default function SessionSetupPage() {
                 {!errors.group_id && selectedGroupObj && selectedGroupCadetCount === 0 && (
                   <p className="text-xs text-destructive">Невозможно создать занятие для пустой группы (0 человек)</p>
                 )}
+
+                {/* Переключатель индивидуального или группового назначения */}
+                {selectedGroupId && selectedGroupCadetCount > 0 && (
+                  <div className="pt-2 space-y-2 border-t border-border/50">
+                    <Label className="text-xs font-semibold text-foreground flex items-center justify-between">
+                      <span className="flex items-center gap-1.5">
+                        <Users className="h-3.5 w-3.5 text-primary" />
+                        Назначение задания
+                      </span>
+                      <span className="text-[11px] text-muted-foreground font-normal">
+                        {assignmentMode === "group" ? "Вся группа" : "Конкретный курсант"}
+                      </span>
+                    </Label>
+
+                    <div className="grid grid-cols-2 gap-2">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setAssignmentMode("group")
+                          setSelectedCadetId("")
+                        }}
+                        className={`py-1.5 px-3 rounded-lg border text-xs font-semibold transition-all ${
+                          assignmentMode === "group"
+                            ? "border-primary bg-primary/10 text-primary ring-1 ring-primary shadow-xs"
+                            : "border-border hover:bg-muted/40 text-muted-foreground"
+                        }`}
+                      >
+                        Вся группа
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setAssignmentMode("cadet")}
+                        className={`py-1.5 px-3 rounded-lg border text-xs font-semibold transition-all ${
+                          assignmentMode === "cadet"
+                            ? "border-primary bg-primary/10 text-primary ring-1 ring-primary shadow-xs"
+                            : "border-border hover:bg-muted/40 text-muted-foreground"
+                        }`}
+                      >
+                        Конкретный курсант
+                      </button>
+                    </div>
+
+                    {assignmentMode === "cadet" && (
+                      <div className="space-y-1 pt-1">
+                        <Label htmlFor="cadet_id_select" className="text-xs text-muted-foreground flex items-center justify-between">
+                          <span>Курсант группы (ФИО) <span className="text-destructive">*</span></span>
+                          {isLoadingCadets && (
+                            <span className="flex items-center gap-1 text-[11px] text-primary">
+                              <Loader2 className="h-3 w-3 animate-spin" /> Загрузка...
+                            </span>
+                          )}
+                        </Label>
+                        {isLoadingCadets ? (
+                          <div className="h-9 w-full rounded-md border border-input bg-muted/20 animate-pulse flex items-center px-3 text-xs text-muted-foreground">
+                            Загрузка списка курсантов...
+                          </div>
+                        ) : groupCadets.length === 0 ? (
+                          <div className="p-2 border rounded-md bg-amber-500/10 border-amber-500/20 text-xs text-amber-700 dark:text-amber-300">
+                            В этой группе нет зарегистрированных курсантов
+                          </div>
+                        ) : (
+                          <select
+                            id="cadet_id_select"
+                            aria-label="Выбор курсанта"
+                            value={selectedCadetId}
+                            onChange={(e) => setSelectedCadetId(e.target.value)}
+                            className="w-full h-9 px-3 rounded-md border border-input bg-background text-sm text-foreground focus:outline-none focus:ring-1 focus:ring-ring"
+                          >
+                            <option value="">-- Выберите курсанта (ФИО) --</option>
+                            {groupCadets.map((cadet) => {
+                              const cadetName = cadet.full_name || cadet.username || `Курсант ${cadet.user_id}`
+                              const usernameHint = cadet.username && cadet.full_name && cadet.full_name !== cadet.username ? ` (${cadet.username})` : ""
+                              return (
+                                <option key={cadet.user_id} value={cadet.user_id}>
+                                  {cadetName}{usernameHint}
+                                </option>
+                              )
+                            })}
+                          </select>
+                        )}
+                        {assignmentMode === "cadet" && !selectedCadetId && (
+                          <p className="text-[11px] text-destructive">Необходимо выбрать курсанта для назначения</p>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
 
               {/* 2. Уровень сложности */}
@@ -847,7 +1092,7 @@ export default function SessionSetupPage() {
                         },
                         {
                           value: "adaptive",
-                          title: "Адаптивный",
+                          title: "Все уровни (Адаптивный)",
                           accent: "border-blue-500/40 bg-blue-500/5 hover:border-blue-500 text-muted-foreground",
                           activeAccent: "border-blue-600 bg-blue-500/10 ring-1 ring-blue-600 text-foreground font-semibold",
                           dotClass: "bg-blue-500",
@@ -957,42 +1202,49 @@ export default function SessionSetupPage() {
                   control={control}
                   rules={{ required: true }}
                   render={({ field }) => (
-                    <RadioGroup
-                      value={field.value}
-                      onValueChange={field.onChange}
-                      className="grid grid-cols-2 gap-2"
-                    >
-                      {[
-                        {
-                          value: "live_stream",
-                          title: "Поток в реальном времени",
-                        },
-                        {
-                          value: "exam",
-                          title: "Экзаменационный режим",
-                        },
-                      ].map((mode) => {
-                        const isSelected = field.value === mode.value
-                        return (
-                          <label
-                            key={mode.value}
-                            htmlFor={`mode-${mode.value}`}
-                            className={`flex items-center p-2 rounded-lg border cursor-pointer transition-all ${
-                              isSelected
-                                ? "border-primary bg-primary/5 ring-1 ring-primary shadow-xs"
-                                : "border-border hover:bg-muted/40 text-muted-foreground"
-                            }`}
-                          >
-                            <div className="flex items-center gap-2 overflow-hidden">
-                              <RadioGroupItem id={`mode-${mode.value}`} value={mode.value} />
-                              <span className="font-medium text-xs text-foreground truncate">
-                                {mode.title}
-                              </span>
-                            </div>
-                          </label>
-                        )
-                      })}
-                    </RadioGroup>
+                    <div>
+                      <RadioGroup
+                        value={field.value}
+                        onValueChange={field.onChange}
+                        className="grid grid-cols-2 gap-2"
+                      >
+                        {[
+                          {
+                            value: "live_stream",
+                            title: "Поток в реальном времени",
+                          },
+                          {
+                            value: "exam",
+                            title: "Экзаменационный режим",
+                          },
+                        ].map((mode) => {
+                          const isSelected = field.value === mode.value
+                          return (
+                            <label
+                              key={mode.value}
+                              htmlFor={`mode-${mode.value}`}
+                              className={`flex items-center p-2 rounded-lg border cursor-pointer transition-all ${
+                                isSelected
+                                  ? "border-primary bg-primary/5 ring-1 ring-primary shadow-xs"
+                                  : "border-border hover:bg-muted/40 text-muted-foreground"
+                              }`}
+                            >
+                              <div className="flex items-center gap-2 overflow-hidden">
+                                <RadioGroupItem id={`mode-${mode.value}`} value={mode.value} />
+                                <span className="font-medium text-xs text-foreground truncate">
+                                  {mode.title}
+                                </span>
+                              </div>
+                            </label>
+                          )
+                        })}
+                      </RadioGroup>
+                      <p className="text-[11px] text-muted-foreground mt-1.5">
+                        {field.value === "exam"
+                          ? "Экзамен: лимит времени действует на всю текущую карточку от серверной выдачи. По истечении лимита редактирование завершается. Норматив первого решения службы (SLA 30 сек) рассчитывается независимо."
+                          : "Поток в реальном времени (обучение): курсант продолжает работу после норматива, система фиксирует факт просрочки."}
+                      </p>
+                    </div>
                   )}
                 />
               </div>
@@ -1051,34 +1303,56 @@ export default function SessionSetupPage() {
                       className="h-8 text-xs bg-background"
                     >
                       <SelectItem value="">Все категории</SelectItem>
-                      {[...new Set([...ddsCatalogCategories, ...classifierCategories])].map((cat) => (
-                        <SelectItem key={cat} value={cat}>
-                          {cat}
-                        </SelectItem>
-                      ))}
+                      {ddsCategoriesData.length > 0
+                        ? ddsCategoriesData.map((item) => (
+                            <SelectItem key={item.category} value={item.category}>
+                              {item.category} ({item.total})
+                            </SelectItem>
+                          ))
+                        : classifierCategories.map((cat) => {
+                            const cnt = getCategoryCount(cat)
+                            return (
+                              <SelectItem key={cat} value={cat}>
+                                {cat} {cnt > 0 ? `(${cnt})` : ""}
+                              </SelectItem>
+                            )
+                          })}
                     </Select>
                   </div>
 
-                  {/* Фильтр Подкатегории */}
+                  {/* Фильтр Вида происшествия */}
                   <div className="space-y-1.5">
                     <Label htmlFor="dds-filter-subcategory" className="text-xs font-medium text-muted-foreground">
-                      Подкатегория происшествия
+                      Вид происшествия
                     </Label>
                     <Select
                       id="dds-filter-subcategory"
                       name="ddsFilterSubcategory"
-                      aria-label="Фильтр подкатегории ДДС"
+                      aria-label="Фильтр вида происшествия ДДС"
                       value={ddsFilterSubcategory}
                       onChange={(e) => setDdsFilterSubcategory(e.target.value)}
                       disabled={!ddsFilterCategory || isLoadingDdsSubcategories}
                       className="h-8 text-xs bg-background disabled:opacity-50"
                     >
-                      <SelectItem value="">Все подкатегории</SelectItem>
-                      {ddsSubcategories.map((sub) => (
-                        <SelectItem key={sub} value={sub}>
-                          {sub}
-                        </SelectItem>
-                      ))}
+                      <SelectItem value="">Все виды происшествий</SelectItem>
+                      {(() => {
+                        const activeDdsCat = ddsCategoriesData.find((c) => c.category === ddsFilterCategory)
+                        if (activeDdsCat && activeDdsCat.subcategories.length > 0) {
+                          return activeDdsCat.subcategories.map((sub) => (
+                            <SelectItem key={sub.name} value={sub.name}>
+                              {sub.name} ({sub.count})
+                            </SelectItem>
+                          ))
+                        }
+                        return ddsSubcategories.map((sub) => {
+                          const cnt = getSubcategoryCount(ddsFilterCategory, sub)
+                          return (
+                            <SelectItem key={sub} value={sub}>
+                              {sub} {cnt > 0 ? `(${cnt})` : ""}
+                            </SelectItem>
+                          )
+                        })
+                      })()}
                     </Select>
                   </div>
                 </div>
@@ -1126,7 +1400,7 @@ export default function SessionSetupPage() {
                 <div className="flex items-center justify-between">
                   <Label className="font-semibold text-foreground flex items-center gap-1.5 text-sm">
                     <Layers className="h-4 w-4 text-primary" />
-                    Категории и подкатегории происшествий
+                    {isDdsRole ? "Категории и виды происшествий" : "Категории и подкатегории происшествий"}
                   </Label>
                 {(selectedMainCategories.length > 0 || selectedSubcategories.length > 0 || categorySearchQuery) && (
                   <Button
@@ -1142,7 +1416,7 @@ export default function SessionSetupPage() {
                 )}
               </div>
 
-              {/* Выбранные чипы (Категории и Подкатегории) */}
+              {/* Выбранные чипы (Категории и Подкатегории / Виды) */}
               {(selectedMainCategories.length > 0 || selectedSubcategories.length > 0) && (
                 <div className="flex flex-wrap gap-1 p-2 bg-muted/30 rounded-lg border border-border/60 max-h-16 overflow-y-auto">
                   {selectedMainCategories.map((cat) => {
@@ -1172,12 +1446,12 @@ export default function SessionSetupPage() {
                       variant="outline"
                       className="pl-2 pr-1 py-0.5 text-[11px] flex items-center gap-1 bg-background shadow-2xs"
                     >
-                      <span>{sub}</span>
+                      <span>{isDdsRole ? "Вид: " : ""}{sub}</span>
                       <button
                         type="button"
                         onClick={() => handleToggleSubcategory(sub)}
                         className="rounded-full p-0.5 hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
-                        aria-label={`Удалить подкатегорию ${sub}`}
+                        aria-label={isDdsRole ? `Удалить вид происшествия ${sub}` : `Удалить подкатегорию ${sub}`}
                       >
                         <X className="h-2.5 w-2.5" />
                       </button>
@@ -1267,11 +1541,11 @@ export default function SessionSetupPage() {
                   </div>
                 </div>
 
-                {/* Правый столбик: Подкатегории */}
+                {/* Правый столбик: Подкатегории / Вид происшествия */}
                 <div className="border rounded-xl p-2.5 bg-card space-y-2 shadow-2xs flex flex-col h-full">
                   <div className="border-b pb-1.5 flex items-center justify-between">
                     <h4 className="text-xs font-semibold text-foreground flex items-center gap-1.5">
-                      <span>Этап 2: Подкатегории происшествий</span>
+                      <span>Этап 2: {isDdsRole ? "Вид происшествия" : "Подкатегории происшествий"}</span>
                       {selectedSubcategories.length > 0 && (
                         <Badge variant="secondary" className="text-[9px] px-1 py-0">
                           {selectedSubcategories.length}
@@ -1283,9 +1557,13 @@ export default function SessionSetupPage() {
                     {selectedMainCategories.length === 0 ? (
                       <div className="rounded-lg border border-dashed p-4 text-center text-muted-foreground bg-muted/10 h-full min-h-[140px] flex flex-col items-center justify-center">
                         <Layers className="h-6 w-6 mx-auto mb-1.5 opacity-40" />
-                        <p className="text-xs font-medium text-foreground">Подкатегории заблокированы</p>
+                        <p className="text-xs font-medium text-foreground">
+                          {isDdsRole ? "Виды происшествий заблокированы" : "Подкатегории заблокированы"}
+                        </p>
                         <p className="text-[11px] text-muted-foreground mt-0.5">
-                          Выберите категорию для просмотра подкатегорий
+                          {isDdsRole
+                            ? "Выберите категорию для просмотра видов происшествий"
+                            : "Выберите категорию для просмотра подкатегорий"}
                         </p>
                       </div>
                     ) : (
@@ -1389,7 +1667,9 @@ export default function SessionSetupPage() {
                                     Загрузка...
                                   </div>
                                 ) : displaySubs.length === 0 ? (
-                                  <p className="text-[11px] text-muted-foreground italic py-0.5">Нет подкатегорий</p>
+                                  <p className="text-[11px] text-muted-foreground italic py-0.5">
+                                    {isDdsRole ? "Нет видов происшествий" : "Нет подкатегорий"}
+                                  </p>
                                 ) : (
                                   <div className="flex flex-col gap-1">
                                     {displaySubs.map((sub) => renderSubItem(cat, sub))}
@@ -1440,7 +1720,9 @@ export default function SessionSetupPage() {
                                     Загрузка...
                                   </div>
                                 ) : zeroSubs.length === 0 ? (
-                                  <p className="text-[11px] text-muted-foreground italic py-0.5">Нет подкатегорий</p>
+                                  <p className="text-[11px] text-muted-foreground italic py-0.5">
+                                    {isDdsRole ? "Нет видов происшествий" : "Нет подкатегорий"}
+                                  </p>
                                 ) : (
                                   <div className="flex flex-col gap-1">
                                     {zeroSubs.map((sub) => renderSubItem(cat, sub))}
@@ -1468,7 +1750,9 @@ export default function SessionSetupPage() {
                                   </div>
                                   <div className="relative flex justify-center text-[10px]">
                                     <span className="bg-card px-2 text-muted-foreground font-medium">
-                                      Категории и подкатегории без доступных билетов (0)
+                                      {isDdsRole
+                                        ? "Категории и виды происшествий без доступных билетов (0)"
+                                        : "Категории и подкатегории без доступных билетов (0)"}
                                     </span>
                                   </div>
                                 </div>
@@ -1502,13 +1786,16 @@ export default function SessionSetupPage() {
                     className="h-8 text-xs"
                     {...register("time_limit_seconds")}
                   />
+                  <p className="text-[11px] text-muted-foreground">
+                    Лимит времени на карточку от момента выдачи. Норматив SLA 30 сек на первичное решение службы действует параллельно в интерфейсе ДДС.
+                  </p>
                 </div>
 
                 <div className="space-y-1">
                   <Label htmlFor="error_limit" className="text-xs text-foreground font-medium flex items-center justify-between">
                     <span>Допустимое количество ошибок</span>
                     <span className="text-[11px] text-muted-foreground font-normal">
-                      {isDdsRole ? "Не применимо для ДДС" : `По умолчанию: ${defaultErrors}`}
+                      {`По умолчанию: ${defaultErrors}`}
                     </span>
                   </Label>
                   <Input
@@ -1516,15 +1803,12 @@ export default function SessionSetupPage() {
                     type="number"
                     min={0}
                     max={10}
-                    disabled={isDdsRole}
-                    placeholder={isDdsRole ? "Оценивание и пороги не настроены" : `По умолчанию: ${defaultErrors} (от сложности)`}
-                    className="h-8 text-xs disabled:opacity-50 disabled:bg-muted"
+                    placeholder={`По умолчанию: ${defaultErrors} (от сложности)`}
+                    className="h-8 text-xs"
                     {...register("error_limit")}
                   />
                   <p className="text-[11px] text-muted-foreground">
-                    {isDdsRole
-                      ? "Для роли «Диспетчер ДДС» оценивание и порог ошибок не настроены; карточка определяется выбранным сценарием."
-                      : `По умолчанию для выбранной сложности: ${defaultErrors}`}
+                    {`По умолчанию для выбранной сложности: ${defaultErrors}`}
                   </p>
                 </div>
               </div>

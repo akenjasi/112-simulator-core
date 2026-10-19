@@ -24,7 +24,7 @@ async def exercise(n=2, count=3):
             card["caller"]["address"] = f"Учебная улица, {index + 1}"
             card["incident"]["number"] = f"QUEUE-{index}"
             ticket = ScenarioTicket(title=f"Упражнение {index}", content={"incoming_card": card},
-                                    ground_truth={"HIDDEN_ETALON": "secret"}, workflow_state={"status": "published"})
+                                    ground_truth={"HIDDEN_ETALON": "secret"}, workflow_state={"status": "APPROVED"})
             db.add(ticket)
             ids.append(ticket.scenario_id)
         await db.commit()
@@ -56,6 +56,7 @@ async def act(state, user, *, kind="status", status="Принята", **extra):
                "kind": kind, "service_name": "Аварийная служба"}
     if kind == "status":
         payload["status"] = status
+        payload.setdefault("order_number", "Н-101")
     else:
         payload.update(who_accepted="Начальник учебной бригады", summary="Бригада направлена по адресу")
     payload.update(extra)

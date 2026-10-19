@@ -2,7 +2,7 @@
 
 import { apiFetch as fetch } from "@/lib/api-fetch"
 
-import React, { useState, useEffect, useCallback } from "react"
+import React, { useState, useEffect, useCallback, useMemo } from "react"
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card"
 import {
   Table,
@@ -34,79 +34,14 @@ import {
   Download,
   UserCheck,
   Search,
-  KeyRound,
-  Printer,
-  Copy,
   Check,
   X,
+  Calendar,
+  AlertTriangle,
 } from "lucide-react"
 
-export interface StudentGroup {
-  group_id: string
-  group_name: string
-  department?: string | null
-  cadet_ids: string[]
-  created_at?: string
-  is_active?: boolean
-}
-
-export interface StudentItem {
-  user_id: string
-  id?: string
-  username: string
-  email?: string
-  full_name?: string | null
-  role: string
-  groups?: string[]
-  is_active?: boolean
-  created_at?: string
-}
-
-export interface PasswordResetItem {
-  user_id: string
-  fio: string
-  email: string
-  new_password: string
-}
-
-/**
- * Splits full_name string into lastName, firstName, middleName.
- * Handles cases where full_name has 1, 2, 3+ words or is empty/null.
- */
-export function splitFullName(fullName?: string | null, username?: string): {
-  lastName: string
-  firstName: string
-  middleName: string
-} {
-  const nameToSplit = (fullName && fullName.trim()) || (username && username.trim()) || ""
-  if (!nameToSplit) {
-    return { lastName: "—", firstName: "—", middleName: "—" }
-  }
-  const parts = nameToSplit.split(/\s+/)
-  if (parts.length === 1) {
-    return { lastName: parts[0], firstName: "—", middleName: "—" }
-  }
-  if (parts.length === 2) {
-    return { lastName: parts[0], firstName: parts[1], middleName: "—" }
-  }
-  return {
-    lastName: parts[0],
-    firstName: parts[1],
-    middleName: parts.slice(2).join(" "),
-  }
-}
-
-/**
- * Localizes user roles from system codes (CADET, TEACHER, ADMIN) to Russian.
- */
-export function formatRole(role?: string): string {
-  if (!role) return "Ученик"
-  const upper = role.toUpperCase()
-  if (upper === "CADET") return "Ученик"
-  if (upper === "TEACHER") return "Преподаватель"
-  if (upper === "ADMIN") return "Администратор"
-  return role
-}
+import {splitFullName, formatRole, formatDate, type StudentGroup, type StudentItem, type BulkLinkResult} from "@/lib/teacher-groups"
+export type {StudentGroup, StudentItem, BulkLinkResult} from "@/lib/teacher-groups"
 
 export default function GroupsPage() {
   const [activeTab, setActiveTab] = useState<"groups" | "all_students">("groups")
@@ -119,7 +54,7 @@ export default function GroupsPage() {
 
   // Creation modal & form states
   const [isAddModalOpen, setIsAddModalOpen] = useState(false)
-  const [modalTab, setModalTab] = useState<"create_group" | "upload_csv">("create_group")
+  const [modalTab, setModalTab] = useState<"create_group" | "link_catalog" | "upload_csv">("create_group")
   const [groupName, setGroupName] = useState("")
   const [department, setDepartment] = useState("")
   const [isSubmitting, setIsSubmitting] = useState(false)
@@ -134,11 +69,21 @@ export default function GroupsPage() {
   const [groupStudents, setGroupStudents] = useState<Record<string, StudentItem[]>>({})
   const [loadingGroupStudents, setLoadingGroupStudents] = useState<Record<string, boolean>>({})
 
-  // Single student add form in expanded group
-  const [singleStudentForm, setSingleStudentForm] = useState<
-    Record<string, { last_name: string; first_name: string; middle_name: string; email: string }>
-  >({})
-  const [isAddingStudent, setIsAddingStudent] = useState<Record<string, boolean>>({})
+  // Catalog picker modal states
+  const [isCatalogModalOpen, setIsCatalogModalOpen] = useState(false)
+  const [catalogTargetGroupId, setCatalogTargetGroupId] = useState<string>("")
+  const [catalogSearch, setCatalogSearch] = useState("")
+  const [catalogOnlyWithoutGroup, setCatalogOnlyWithoutGroup] = useState(false)
+  const [selectedCatalogUserIds, setSelectedCatalogUserIds] = useState<string[]>([])
+  const [isLinkingStudents, setIsLinkingStudents] = useState(false)
+
+  // Student removal confirmation modal states
+  const [confirmRemoveStudent, setConfirmRemoveStudent] = useState<{
+    groupId: string
+    groupName: string
+    student: StudentItem
+  } | null>(null)
+  const [isRemovingStudent, setIsRemovingStudent] = useState(false)
 
   // All students tab states
   const [allStudents, setAllStudents] = useState<StudentItem[]>([])
@@ -148,37 +93,6 @@ export default function GroupsPage() {
   const [selectedStudentIds, setSelectedStudentIds] = useState<string[]>([])
   const [bulkTargetGroupId, setBulkTargetGroupId] = useState<string>("")
   const [isBulkAdding, setIsBulkAdding] = useState<boolean>(false)
-
-  // Password reset confirmation modal states
-  const [confirmResetStudent, setConfirmResetStudent] = useState<StudentItem | null>(null)
-  const [confirmResetGroup, setConfirmResetGroup] = useState<StudentGroup | null>(null)
-
-  // Password reset modal states (Single student)
-  const [resetModalData, setResetModalData] = useState<{
-    isOpen: boolean
-    fio: string
-    email: string
-    newPassword: string
-  }>({
-    isOpen: false,
-    fio: "",
-    email: "",
-    newPassword: "",
-  })
-  const [isResettingSingle, setIsResettingSingle] = useState<Record<string, boolean>>({})
-  const [copiedPin, setCopiedPin] = useState(false)
-
-  // Group batch reset / print modal states
-  const [groupPrintModalData, setGroupPrintModalData] = useState<{
-    isOpen: boolean
-    groupName: string
-    list: PasswordResetItem[]
-  }>({
-    isOpen: false,
-    groupName: "",
-    list: [],
-  })
-  const [isResettingGroup, setIsResettingGroup] = useState<Record<string, boolean>>({})
 
   // Authentication headers helper
   const getAuthHeaders = useCallback((): HeadersInit => {
@@ -210,30 +124,36 @@ export default function GroupsPage() {
       if (!bulkTargetGroupId && groupList.length > 0) {
         setBulkTargetGroupId(groupList[0].group_id)
       }
+      if (!catalogTargetGroupId && groupList.length > 0) {
+        setCatalogTargetGroupId(groupList[0].group_id)
+      }
     } catch (err: any) {
       setError(err.message || "Не удалось загрузить список групп")
     } finally {
       setIsLoading(false)
     }
-  }, [bulkTargetGroupId, getAuthHeaders])
+  }, [bulkTargetGroupId, catalogTargetGroupId, getAuthHeaders])
 
   // Fetch students for a specific group
-  const loadGroupStudents = useCallback(async (groupId: string) => {
-    try {
-      setLoadingGroupStudents((prev) => ({ ...prev, [groupId]: true }))
-      const res = await fetch(`/api/v1/groups/${groupId}/students`, {
-        headers: getAuthHeaders(),
-      })
-      if (res.ok) {
-        const data = await res.json()
-        setGroupStudents((prev) => ({ ...prev, [groupId]: Array.isArray(data) ? data : [] }))
+  const loadGroupStudents = useCallback(
+    async (groupId: string) => {
+      try {
+        setLoadingGroupStudents((prev) => ({ ...prev, [groupId]: true }))
+        const res = await fetch(`/api/v1/groups/${groupId}/students`, {
+          headers: getAuthHeaders(),
+        })
+        if (res.ok) {
+          const data = await res.json()
+          setGroupStudents((prev) => ({ ...prev, [groupId]: Array.isArray(data) ? data : [] }))
+        }
+      } catch (err) {
+        console.error(err)
+      } finally {
+        setLoadingGroupStudents((prev) => ({ ...prev, [groupId]: false }))
       }
-    } catch (err) {
-      console.error(err)
-    } finally {
-      setLoadingGroupStudents((prev) => ({ ...prev, [groupId]: false }))
-    }
-  }, [getAuthHeaders])
+    },
+    [getAuthHeaders]
+  )
 
   // Toggle group accordion
   const toggleGroupExpand = (groupId: string) => {
@@ -246,7 +166,7 @@ export default function GroupsPage() {
     })
   }
 
-  // Fetch all students
+  // Fetch all students (full catalog)
   const loadAllStudents = useCallback(async () => {
     try {
       setLoadingAllStudents(true)
@@ -275,15 +195,60 @@ export default function GroupsPage() {
   }, [activeTab, loadAllStudents])
 
   // Helper to get group names for a student
-  const getStudentGroupNames = (student: StudentItem): string => {
-    if (student.groups && student.groups.length > 0) {
-      return student.groups.join(", ")
-    }
-    const matched = groups
-      .filter((g) => g.cadet_ids && g.cadet_ids.includes(student.user_id))
-      .map((g) => g.group_name)
-    return matched.length > 0 ? matched.join(", ") : "—"
-  }
+  const getStudentGroupNames = useCallback(
+    (student: StudentItem): string => {
+      if (student.groups && student.groups.length > 0) {
+        return student.groups.join(", ")
+      }
+      const matched = groups
+        .filter((g) => g.cadet_ids && g.cadet_ids.includes(student.user_id))
+        .map((g) => g.group_name)
+      return matched.length > 0 ? matched.join(", ") : "—"
+    },
+    [groups]
+  )
+
+  // Helper to check if student is already in target group
+  const isCadetInGroup = useCallback(
+    (student: StudentItem, targetGroup?: StudentGroup) => {
+      if (!targetGroup) return false
+      if (targetGroup.cadet_ids && targetGroup.cadet_ids.includes(student.user_id)) {
+        return true
+      }
+      if (
+        student.groups &&
+        (student.groups.includes(targetGroup.group_name) ||
+          student.groups.includes(targetGroup.group_id))
+      ) {
+        return true
+      }
+      const currentList = groupStudents[targetGroup.group_id]
+      if (currentList && currentList.some((s) => s.user_id === student.user_id)) {
+        return true
+      }
+      return false
+    },
+    [groupStudents]
+  )
+
+  // Open Catalog Modal for a group
+  const openCatalogModal = useCallback(
+    async (groupId?: string) => {
+      if (groupId) {
+        setCatalogTargetGroupId(groupId)
+      } else if (!catalogTargetGroupId && groups.length > 0) {
+        setCatalogTargetGroupId(groups[0].group_id)
+      }
+      setSelectedCatalogUserIds([])
+      setCatalogSearch("")
+      setCatalogOnlyWithoutGroup(false)
+      setIsCatalogModalOpen(true)
+      if (allStudents.length === 0) {
+        await loadAllStudents()
+      }
+    },
+    [allStudents.length, catalogTargetGroupId, groups, loadAllStudents]
+  )
 
   // Handle group creation
   const handleCreateGroup = async (e: React.FormEvent) => {
@@ -365,6 +330,7 @@ export default function GroupsPage() {
       if (expandedGroupIds[selectedGroupId]) {
         await loadGroupStudents(selectedGroupId)
       }
+      await loadAllStudents()
     } catch (err: any) {
       setError(err.message || "Ошибка импорта CSV")
     } finally {
@@ -372,60 +338,75 @@ export default function GroupsPage() {
     }
   }
 
-  // Handle single student add inside group accordion
-  const handleAddSingleStudent = async (groupId: string) => {
-    const form = singleStudentForm[groupId] || {
-      last_name: "",
-      first_name: "",
-      middle_name: "",
-      email: "",
+  // Handle linking students from catalog (bulk-link)
+  const handleLinkCatalogStudents = async () => {
+    if (!catalogTargetGroupId) {
+      setError("Выберите целевую группу для добавления курсантов")
+      return
     }
-    if (!form.email.trim()) {
-      setError("Укажите email ученика")
+    if (selectedCatalogUserIds.length === 0) {
+      setError("Выберите хотя бы одного курсанта из каталога")
       return
     }
 
     try {
-      setIsAddingStudent((prev) => ({ ...prev, [groupId]: true }))
+      setIsLinkingStudents(true)
       setError(null)
       setSuccessMessage(null)
 
-      const res = await fetch(`/api/v1/groups/${groupId}/students/single`, {
+      const res = await fetch(`/api/v1/groups/${catalogTargetGroupId}/students/bulk-link`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
           ...getAuthHeaders(),
         },
-        body: JSON.stringify({
-          last_name: form.last_name.trim(),
-          first_name: form.first_name.trim(),
-          middle_name: form.middle_name.trim() || undefined,
-          email: form.email.trim(),
-        }),
+        body: JSON.stringify({ user_ids: selectedCatalogUserIds }),
       })
 
       if (!res.ok) {
         const errData = await res.json().catch(() => null)
-        throw new Error(errData?.detail || `Не удалось добавить ученика (${res.status})`)
+        throw new Error(errData?.detail || `Не удалось добавить курсантов (${res.status})`)
       }
 
-      setSuccessMessage(`Ученик ${form.email} успешно добавлен в группу!`)
-      setSingleStudentForm((prev) => ({
-        ...prev,
-        [groupId]: { last_name: "", first_name: "", middle_name: "", email: "" },
-      }))
-      await loadGroupStudents(groupId)
+      const results: BulkLinkResult[] = await res.json()
+      const addedCount = Array.isArray(results)
+        ? results.filter((r) => r.status === "success").length
+        : 0
+      const alreadyCount = Array.isArray(results)
+        ? results.filter((r) => r.status === "already_in_group").length
+        : 0
+      const errorCount = Array.isArray(results)
+        ? results.filter((r) => r.status === "error").length
+        : 0
+
+      if (errorCount > 0) {
+        setError(
+          `Результат операции: добавлено ${addedCount}, уже в группе ${alreadyCount}, ошибок ${errorCount}`
+        )
+      } else {
+        setSuccessMessage(
+          `Курсанты успешно добавлены в группу: ${addedCount}${
+            alreadyCount > 0 ? ` (уже состояли: ${alreadyCount})` : ""
+          }`
+        )
+      }
+
+      setIsCatalogModalOpen(false)
+      setSelectedCatalogUserIds([])
       await loadGroups()
+      await loadGroupStudents(catalogTargetGroupId)
+      await loadAllStudents()
     } catch (err: any) {
-      setError(err.message || "Ошибка при добавлении ученика")
+      setError(err.message || "Ошибка при добавлении курсантов в группу")
     } finally {
-      setIsAddingStudent((prev) => ({ ...prev, [groupId]: false }))
+      setIsLinkingStudents(false)
     }
   }
 
-  // Remove student from group
+  // Remove student from group (unlink)
   const handleRemoveStudent = async (groupId: string, userId: string) => {
     try {
+      setIsRemovingStudent(true)
       setError(null)
       const res = await fetch(`/api/v1/groups/${groupId}/students/${userId}`, {
         method: "DELETE",
@@ -433,152 +414,24 @@ export default function GroupsPage() {
       })
       if (!res.ok) {
         const errData = await res.json().catch(() => null)
-        throw new Error(errData?.detail || "Ошибка при удалении ученика из группы")
+        throw new Error(errData?.detail || "Ошибка при исключении ученика из группы")
       }
-      setSuccessMessage("Ученик успешно удален из группы")
+      setSuccessMessage(
+        "Ученик успешно исключен из группы (учетная запись и история результатов сохранены)"
+      )
       await loadGroupStudents(groupId)
       await loadGroups()
-    } catch (err: any) {
-      setError(err.message || "Ошибка при удалении ученика")
-    }
-  }
-
-  // Reset single student password
-  const handleResetUserPassword = async (student: StudentItem) => {
-    try {
-      setIsResettingSingle((prev) => ({ ...prev, [student.user_id]: true }))
-      setError(null)
-      const res = await fetch(`/api/users/${student.user_id}/reset-password`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          ...getAuthHeaders(),
-        },
-      })
-      if (!res.ok) {
-        const errData = await res.json().catch(() => null)
-        throw new Error(errData?.detail || "Не удалось сбросить пароль")
+      if (activeTab === "all_students") {
+        await loadAllStudents()
       }
-      const data = await res.json()
-      setCopiedPin(false)
-      setResetModalData({
-        isOpen: true,
-        fio: student.full_name || student.username,
-        email: student.email || student.username,
-        newPassword: data.new_password,
-      })
     } catch (err: any) {
-      setError(err.message || "Ошибка сброса пароля")
+      setError(err.message || "Ошибка при исключении ученика")
     } finally {
-      setIsResettingSingle((prev) => ({ ...prev, [student.user_id]: false }))
+      setIsRemovingStudent(false)
     }
   }
 
-  // Reset all passwords for a group
-  const handleResetGroupPasswords = async (group: StudentGroup) => {
-    try {
-      setIsResettingGroup((prev) => ({ ...prev, [group.group_id]: true }))
-      setError(null)
-      const res = await fetch(`/api/groups/${group.group_id}/reset-passwords`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          ...getAuthHeaders(),
-        },
-      })
-      if (!res.ok) {
-        const errData = await res.json().catch(() => null)
-        throw new Error(errData?.detail || "Не удалось сбросить пароли группы")
-      }
-      const data = await res.json()
-      const list: PasswordResetItem[] = Array.isArray(data)
-        ? data
-        : Array.isArray(data?.list)
-        ? data.list
-        : []
-      setGroupPrintModalData({
-        isOpen: true,
-        groupName: group.group_name,
-        list,
-      })
-    } catch (err: any) {
-      setError(err.message || "Ошибка при сбросе паролей группы")
-    } finally {
-      setIsResettingGroup((prev) => ({ ...prev, [group.group_id]: false }))
-    }
-  }
-
-  // Print generated accesses
-  const handlePrintAccesses = () => {
-    const { groupName, list } = groupPrintModalData
-    const printWin = window.open("", "_blank")
-    if (!printWin) {
-      alert("Разрешите всплывающие окна для печати")
-      return
-    }
-
-    const htmlContent = `
-      <!DOCTYPE html>
-      <html>
-        <head>
-          <meta charset="utf-8">
-          <title>Доступы группы - ${groupName}</title>
-          <style>
-            body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif; padding: 24px; color: #111; }
-            h2 { margin: 0 0 4px 0; font-size: 20px; }
-            .meta { font-size: 13px; color: #555; margin-bottom: 20px; }
-            table { width: 100%; border-collapse: collapse; margin-top: 10px; }
-            th, td { border: 1px solid #ccc; padding: 8px 12px; text-align: left; font-size: 14px; }
-            th { background-color: #f3f4f6; font-weight: 600; }
-            .pwd { font-family: monospace; font-size: 16px; font-weight: bold; letter-spacing: 2px; }
-            @media print {
-              body { padding: 0; }
-              @page { margin: 1.5cm; }
-            }
-          </style>
-        </head>
-        <body>
-          <h2>Список доступов: ${groupName}</h2>
-          <div class="meta">Симулятор 112 • Сформировано: ${new Date().toLocaleString("ru-RU")}</div>
-          <table>
-            <thead>
-              <tr>
-                <th style="width: 40px;">№</th>
-                <th>ФИО</th>
-                <th>Email / Логин</th>
-                <th style="width: 120px;">Новый пароль</th>
-              </tr>
-            </thead>
-            <tbody>
-              ${list
-                .map(
-                  (item, idx) => `
-                <tr>
-                  <td>${idx + 1}</td>
-                  <td>${item.fio || "—"}</td>
-                  <td>${item.email}</td>
-                  <td class="pwd">${item.new_password}</td>
-                </tr>
-              `
-                )
-                .join("")}
-            </tbody>
-          </table>
-          <script>
-            window.onload = function() {
-              window.focus();
-              window.print();
-            };
-          </script>
-        </body>
-      </html>
-    `
-    printWin.document.open()
-    printWin.document.write(htmlContent)
-    printWin.document.close()
-  }
-
-  // Bulk add selected students to group
+  // Bulk add selected students to group from "Все ученики" tab
   const handleBulkAddToGroup = async () => {
     if (!bulkTargetGroupId) {
       setError("Выберите целевую группу")
@@ -592,22 +445,51 @@ export default function GroupsPage() {
     try {
       setIsBulkAdding(true)
       setError(null)
-      for (const studentId of selectedStudentIds) {
-        await fetch(`/api/v1/groups/${bulkTargetGroupId}/students/single`, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            ...getAuthHeaders(),
-          },
-          body: JSON.stringify({ user_id: studentId }),
-        })
+      setSuccessMessage(null)
+
+      const res = await fetch(`/api/v1/groups/${bulkTargetGroupId}/students/bulk-link`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          ...getAuthHeaders(),
+        },
+        body: JSON.stringify({ user_ids: selectedStudentIds }),
+      })
+
+      if (!res.ok) {
+        const errData = await res.json().catch(() => null)
+        throw new Error(errData?.detail || `Ошибка добавления (${res.status})`)
       }
-      setSuccessMessage(`Успешно добавлено учеников: ${selectedStudentIds.length}`)
+
+      const results: BulkLinkResult[] = await res.json()
+      const addedCount = Array.isArray(results)
+        ? results.filter((r) => r.status === "success").length
+        : 0
+      const alreadyCount = Array.isArray(results)
+        ? results.filter((r) => r.status === "already_in_group").length
+        : 0
+      const errorCount = Array.isArray(results)
+        ? results.filter((r) => r.status === "error").length
+        : 0
+
+      if (errorCount > 0) {
+        setError(
+          `Результат операции: добавлено ${addedCount}, уже в группе ${alreadyCount}, ошибок ${errorCount}`
+        )
+      } else {
+        setSuccessMessage(
+          `Успешно добавлено учеников в группу: ${addedCount}${
+            alreadyCount > 0 ? ` (уже состояли: ${alreadyCount})` : ""
+          }`
+        )
+      }
+
       setSelectedStudentIds([])
       await loadGroups()
       if (expandedGroupIds[bulkTargetGroupId]) {
         await loadGroupStudents(bulkTargetGroupId)
       }
+      await loadAllStudents()
     } catch (err: any) {
       setError(err.message || "Ошибка при массовом добавлении учеников")
     } finally {
@@ -615,28 +497,67 @@ export default function GroupsPage() {
     }
   }
 
-  const filteredAllStudents = allStudents.filter((s) => {
-    const q = studentSearch.toLowerCase().trim()
-    const matchesSearch =
-      !q ||
-      s.username.toLowerCase().includes(q) ||
-      (s.full_name && s.full_name.toLowerCase().includes(q)) ||
-      (s.email && s.email.toLowerCase().includes(q))
+  // Filtered students for All Students tab
+  const filteredAllStudents = useMemo(() => {
+    return allStudents.filter((s) => {
+      const q = studentSearch.toLowerCase().trim()
+      const matchesSearch =
+        !q ||
+        s.username.toLowerCase().includes(q) ||
+        (s.full_name && s.full_name.toLowerCase().includes(q)) ||
+        (s.email && s.email.toLowerCase().includes(q))
 
-    if (!matchesSearch) return false
+      if (!matchesSearch) return false
 
-    if (!filterGroupId) return true
+      if (!filterGroupId) return true
 
-    const group = groups.find((g) => g.group_id === filterGroupId)
-    if (!group) return true
+      const group = groups.find((g) => g.group_id === filterGroupId)
+      if (!group) return true
 
-    const inCadetIds = group.cadet_ids && group.cadet_ids.includes(s.user_id)
-    const inStudentGroups =
-      s.groups &&
-      (s.groups.includes(group.group_name) || s.groups.includes(group.group_id))
+      const inCadetIds = group.cadet_ids && group.cadet_ids.includes(s.user_id)
+      const inStudentGroups =
+        s.groups &&
+        (s.groups.includes(group.group_name) || s.groups.includes(group.group_id))
 
-    return inCadetIds || inStudentGroups
-  })
+      return inCadetIds || inStudentGroups
+    })
+  }, [allStudents, filterGroupId, groups, studentSearch])
+
+  // Target group for Catalog Modal
+  const catalogTargetGroup = useMemo(() => {
+    return groups.find((g) => g.group_id === catalogTargetGroupId)
+  }, [groups, catalogTargetGroupId])
+
+  // Filtered students for Catalog Modal
+  const filteredCatalogStudents = useMemo(() => {
+    return allStudents.filter((student) => {
+      const q = catalogSearch.toLowerCase().trim()
+      const matchesSearch =
+        !q ||
+        student.username.toLowerCase().includes(q) ||
+        (student.full_name && student.full_name.toLowerCase().includes(q)) ||
+        (student.email && student.email.toLowerCase().includes(q))
+
+      if (!matchesSearch) return false
+
+      if (catalogOnlyWithoutGroup) {
+        const hasAnyGroup =
+          (student.groups && student.groups.length > 0) ||
+          groups.some((g) => g.cadet_ids?.includes(student.user_id))
+        if (hasAnyGroup) return false
+      }
+
+      return true
+    })
+  }, [allStudents, catalogOnlyWithoutGroup, catalogSearch, groups])
+
+  // Available students in catalog (not already in target group)
+  const availableCatalogStudents = useMemo(() => {
+    if (!catalogTargetGroup) return []
+    return filteredCatalogStudents.filter(
+      (student) => !isCadetInGroup(student, catalogTargetGroup)
+    )
+  }, [catalogTargetGroup, filteredCatalogStudents, isCadetInGroup])
 
   return (
     <div className="container mx-auto p-6 max-w-6xl space-y-6">
@@ -657,7 +578,7 @@ export default function GroupsPage() {
                 </Badge>
               </div>
               <p className="text-sm text-muted-foreground mt-0.5">
-                Формирование учебных смен и потоков, назначение учеников, генерация и печать паролей доступа
+                Формирование учебных смен и потоков, распределение курсантов по группам
               </p>
             </div>
           </div>
@@ -674,7 +595,10 @@ export default function GroupsPage() {
             <Button
               variant={activeTab === "all_students" ? "default" : "outline"}
               size="sm"
-              onClick={() => setActiveTab("all_students")}
+              onClick={() => {
+                setActiveTab("all_students")
+                loadAllStudents()
+              }}
             >
               <UserCheck className="h-4 w-4 mr-1.5" />
               Все ученики
@@ -728,7 +652,7 @@ export default function GroupsPage() {
             <div>
               <h2 className="text-xl font-bold text-foreground">Список групп</h2>
               <p className="text-sm text-muted-foreground mt-0.5">
-                Всего учебных групп в системе: {groups.length}. Нажмите на строку группы, чтобы раскрыть состав и управлять паролями.
+                Всего учебных групп в системе: {groups.length}. Раскройте состав группы для выбора курсантов из каталога или загрузки CSV.
               </p>
             </div>
             <div className="flex items-center gap-2.5">
@@ -767,7 +691,7 @@ export default function GroupsPage() {
               <Users className="h-12 w-12 text-muted-foreground/60 mb-3" />
               <h3 className="font-semibold text-lg text-foreground">Группы пока не созданы</h3>
               <p className="text-sm text-muted-foreground mt-1 max-w-md">
-                Нажмите «Добавить группу», чтобы создать первую смену или импортировать учеников из CSV.
+                Нажмите «Добавить группу», чтобы создать первую учебную группу и привязать к ней курсантов.
               </p>
               <Button
                 size="lg"
@@ -788,14 +712,6 @@ export default function GroupsPage() {
                 const isExpanded = !!expandedGroupIds[group.group_id]
                 const students = groupStudents[group.group_id] || []
                 const isLoadingStudents = loadingGroupStudents[group.group_id]
-                const form = singleStudentForm[group.group_id] || {
-                  last_name: "",
-                  first_name: "",
-                  middle_name: "",
-                  email: "",
-                }
-                const isAdding = isAddingStudent[group.group_id]
-                const isBatchResetting = isResettingGroup[group.group_id]
 
                 return (
                   <div
@@ -827,7 +743,12 @@ export default function GroupsPage() {
 
                       <div className="flex items-center gap-3">
                         <span className="inline-flex items-center justify-center px-3 py-1 rounded-full text-xs font-semibold bg-secondary text-secondary-foreground">
-                          {studentCount} {studentCount === 1 ? "ученик" : studentCount >= 2 && studentCount <= 4 ? "ученика" : "учеников"}
+                          {studentCount}{" "}
+                          {studentCount === 1
+                            ? "ученик"
+                            : studentCount >= 2 && studentCount <= 4
+                            ? "ученика"
+                            : "учеников"}
                         </span>
                       </div>
                     </div>
@@ -835,92 +756,37 @@ export default function GroupsPage() {
                     {/* Group Accordion Content */}
                     {isExpanded && (
                       <div className="p-4 border-t bg-muted/10 space-y-4">
-                        {/* Group Actions Toolbar */}
+                        {/* Group Actions Toolbar: Add from catalog / Import CSV */}
                         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 p-3 bg-background border rounded-lg">
                           <div>
                             <h4 className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
-                              Управление доступом группы
+                              Управление составом группы
                             </h4>
                             <p className="text-xs text-muted-foreground mt-0.5">
-                              Сгенерируйте новые 5-значные пароли для всех учеников этой смены
+                              Добавляйте существующих курсантов из каталога или загружайте списки через CSV
                             </p>
                           </div>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            disabled={isBatchResetting || studentCount === 0}
-                            onClick={() => setConfirmResetGroup(group)}
-                            className="text-amber-700 border-amber-300 hover:bg-amber-50 dark:text-amber-400 dark:border-amber-800 dark:hover:bg-amber-950/40"
-                          >
-                            {isBatchResetting ? (
-                              <Loader2 className="h-4 w-4 mr-1.5 animate-spin" />
-                            ) : (
-                              <Printer className="h-4 w-4 mr-1.5" />
-                            )}
-                            Сбросить пароли всей группе
-                          </Button>
-                        </div>
-
-                        {/* Inline Form: Quick add student */}
-                        <div className="p-3 border rounded-lg bg-background space-y-2">
-                          <h4 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-                            Быстрое добавление ученика в группу
-                          </h4>
-                          <div className="grid grid-cols-1 sm:grid-cols-5 gap-2">
-                            <Input
-                              placeholder="Фамилия"
-                              value={form.last_name}
-                              onChange={(e) =>
-                                setSingleStudentForm((prev) => ({
-                                  ...prev,
-                                  [group.group_id]: { ...form, last_name: e.target.value },
-                                }))
-                              }
-                            />
-                            <Input
-                              placeholder="Имя"
-                              value={form.first_name}
-                              onChange={(e) =>
-                                setSingleStudentForm((prev) => ({
-                                  ...prev,
-                                  [group.group_id]: { ...form, first_name: e.target.value },
-                                }))
-                              }
-                            />
-                            <Input
-                              placeholder="Отчество (необяз.)"
-                              value={form.middle_name}
-                              onChange={(e) =>
-                                setSingleStudentForm((prev) => ({
-                                  ...prev,
-                                  [group.group_id]: { ...form, middle_name: e.target.value },
-                                }))
-                              }
-                            />
-                            <Input
-                              placeholder="Email / Логин *"
-                              type="email"
-                              value={form.email}
-                              onChange={(e) =>
-                                setSingleStudentForm((prev) => ({
-                                  ...prev,
-                                  [group.group_id]: { ...form, email: e.target.value },
-                                }))
-                              }
-                            />
+                          <div className="flex items-center gap-2">
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => {
+                                setSelectedGroupId(group.group_id)
+                                setModalTab("upload_csv")
+                                setIsAddModalOpen(true)
+                              }}
+                              className="text-xs"
+                            >
+                              <Upload className="h-3.5 w-3.5 mr-1.5" />
+                              Импорт CSV
+                            </Button>
                             <Button
                               size="sm"
-                              onClick={() => handleAddSingleStudent(group.group_id)}
-                              disabled={isAdding || !form.email.trim()}
+                              onClick={() => openCatalogModal(group.group_id)}
+                              className="text-xs bg-primary hover:bg-primary/90 text-primary-foreground font-semibold"
                             >
-                              {isAdding ? (
-                                <Loader2 className="h-4 w-4 animate-spin" />
-                              ) : (
-                                <>
-                                  <UserPlus className="h-4 w-4 mr-1" />
-                                  Добавить
-                                </>
-                              )}
+                              <UserPlus className="h-3.5 w-3.5 mr-1.5" />
+                              Выбрать из каталога
                             </Button>
                           </div>
                         </div>
@@ -931,8 +797,16 @@ export default function GroupsPage() {
                             <Loader2 className="h-6 w-6 animate-spin text-primary" />
                           </div>
                         ) : students.length === 0 ? (
-                          <div className="text-center py-8 text-sm text-muted-foreground border rounded-lg bg-background">
-                            В этой группе пока нет учеников. Загрузите CSV или добавьте ученика через форму выше.
+                          <div className="text-center py-8 text-sm text-muted-foreground border rounded-lg bg-background space-y-3">
+                            <p>В этой группе пока нет курсантов.</p>
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => openCatalogModal(group.group_id)}
+                            >
+                              <UserPlus className="h-4 w-4 mr-1.5" />
+                              Выбрать курсантов из каталога
+                            </Button>
                           </div>
                         ) : (
                           <div className="border rounded-lg bg-background overflow-x-auto w-full">
@@ -949,7 +823,6 @@ export default function GroupsPage() {
                               </TableHeader>
                               <TableBody>
                                 {students.map((student) => {
-                                  const isResetting = isResettingSingle[student.user_id]
                                   const { lastName, firstName, middleName } = splitFullName(
                                     student.full_name,
                                     student.username
@@ -974,34 +847,22 @@ export default function GroupsPage() {
                                         </Badge>
                                       </TableCell>
                                       <TableCell className="text-right">
-                                        <div className="flex items-center justify-end gap-1.5">
-                                          <Button
-                                            variant="outline"
-                                            size="sm"
-                                            disabled={isResetting}
-                                            onClick={() => setConfirmResetStudent(student)}
-                                            className="text-xs text-amber-700 hover:bg-amber-50 dark:text-amber-400 dark:hover:bg-amber-950/40"
-                                            title="Сбросить пароль"
-                                          >
-                                            {isResetting ? (
-                                              <Loader2 className="h-3.5 w-3.5 animate-spin mr-1" />
-                                            ) : (
-                                              <KeyRound className="h-3.5 w-3.5 mr-1" />
-                                            )}
-                                            Сбросить пароль
-                                          </Button>
-                                          <Button
-                                            variant="ghost"
-                                            size="sm"
-                                            className="text-destructive hover:bg-destructive/10"
-                                            onClick={() =>
-                                              handleRemoveStudent(group.group_id, student.user_id)
-                                            }
-                                            title="Удалить из группы"
-                                          >
-                                            <Trash2 className="h-4 w-4" />
-                                          </Button>
-                                        </div>
+                                        <Button
+                                          variant="ghost"
+                                          size="sm"
+                                          className="text-destructive hover:bg-destructive/10"
+                                          onClick={() =>
+                                            setConfirmRemoveStudent({
+                                              groupId: group.group_id,
+                                              groupName: group.group_name,
+                                              student,
+                                            })
+                                          }
+                                          title="Исключить из группы"
+                                          aria-label={`Исключить ${student.full_name || student.username} из группы`}
+                                        >
+                                          <Trash2 className="h-4 w-4" />
+                                        </Button>
                                       </TableCell>
                                     </TableRow>
                                   )
@@ -1025,7 +886,7 @@ export default function GroupsPage() {
             <div>
               <CardTitle className="text-xl">Все ученики</CardTitle>
               <CardDescription>
-                Главная таблица всех учеников системы с указанием учебных смен и управлением паролями
+                Полный каталог курсантов системы с указанием учебных групп, даты регистрации и статуса
               </CardDescription>
             </div>
             <Button
@@ -1073,7 +934,7 @@ export default function GroupsPage() {
                 </div>
               </div>
 
-              {/* Bulk Action: Add to group */}
+              {/* Bulk Action: Add to group via bulk-link */}
               <div className="flex items-center gap-2 border-t md:border-t-0 pt-2 md:pt-0">
                 <Select
                   value={bulkTargetGroupId}
@@ -1117,7 +978,7 @@ export default function GroupsPage() {
               </div>
             ) : (
               <div className="border rounded-lg overflow-x-auto w-full">
-                <Table className="min-w-[650px]">
+                <Table className="min-w-[750px]">
                   <TableHeader>
                     <TableRow>
                       <TableHead className="w-12 text-center">
@@ -1142,14 +1003,13 @@ export default function GroupsPage() {
                       <TableHead>Email / Логин</TableHead>
                       <TableHead>Группа</TableHead>
                       <TableHead>Роль</TableHead>
+                      <TableHead>Дата регистрации</TableHead>
                       <TableHead>Статус</TableHead>
-                      <TableHead className="text-right">Действия</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
                     {filteredAllStudents.map((student) => {
                       const isChecked = selectedStudentIds.includes(student.user_id)
-                      const isResetting = isResettingSingle[student.user_id]
                       const groupNames = getStudentGroupNames(student)
                       const { lastName, firstName, middleName } = splitFullName(
                         student.full_name,
@@ -1179,42 +1039,34 @@ export default function GroupsPage() {
                           <TableCell className="font-semibold text-foreground">
                             {lastName}
                           </TableCell>
-                          <TableCell className="text-foreground">
-                            {firstName}
-                          </TableCell>
-                          <TableCell className="text-muted-foreground">
-                            {middleName}
-                          </TableCell>
-                          <TableCell className="text-muted-foreground">
+                          <TableCell className="text-foreground">{firstName}</TableCell>
+                          <TableCell className="text-muted-foreground">{middleName}</TableCell>
+                          <TableCell className="text-muted-foreground font-mono text-xs">
                             {student.email || student.username}
                           </TableCell>
                           <TableCell>
-                            <span className="text-sm font-medium text-foreground">
-                              {groupNames}
-                            </span>
+                            {groupNames !== "—" ? (
+                              <span className="text-sm font-medium text-foreground">
+                                {groupNames}
+                              </span>
+                            ) : (
+                              <span className="text-xs text-muted-foreground italic">Без группы</span>
+                            )}
                           </TableCell>
                           <TableCell>
                             <Badge variant="outline">{formatRole(student.role)}</Badge>
                           </TableCell>
-                          <TableCell>
-                            <span className="text-xs text-green-600 font-medium">Активен</span>
+                          <TableCell className="text-xs text-muted-foreground font-mono">
+                            {formatDate(student.created_at)}
                           </TableCell>
-                          <TableCell className="text-right">
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              disabled={isResetting}
-                              onClick={() => setConfirmResetStudent(student)}
-                              className="text-xs text-amber-700 border-amber-300 hover:bg-amber-50 dark:text-amber-400 dark:border-amber-800 dark:hover:bg-amber-950/40"
-                              title="Сбросить пароль"
-                            >
-                              {isResetting ? (
-                                <Loader2 className="h-3.5 w-3.5 animate-spin mr-1" />
-                              ) : (
-                                <KeyRound className="h-3.5 w-3.5 mr-1" />
-                              )}
-                              Сбросить пароль
-                            </Button>
+                          <TableCell>
+                            {student.is_active !== false ? (
+                              <span className="text-xs text-green-600 font-medium">Активен</span>
+                            ) : (
+                              <span className="text-xs text-muted-foreground font-medium">
+                                Заблокирован
+                              </span>
+                            )}
                           </TableCell>
                         </TableRow>
                       )
@@ -1227,7 +1079,7 @@ export default function GroupsPage() {
         </Card>
       )}
 
-      {/* ─── MODAL 1: ADD GROUP / UPLOAD CSV ───────────────────────────────────── */}
+      {/* ─── MODAL 1: ADD GROUP / CSV / CATALOG ───────────────────────────────────── */}
       {isAddModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 overflow-y-auto">
           <div className="relative w-full max-w-xl bg-card border rounded-2xl shadow-2xl p-6 space-y-5 animate-in fade-in zoom-in-95 duration-200">
@@ -1240,7 +1092,7 @@ export default function GroupsPage() {
                 <div>
                   <h3 className="text-xl font-bold text-foreground">Добавить группу / учеников</h3>
                   <p className="text-xs text-muted-foreground">
-                    Создайте новую смену или импортируйте учеников из CSV
+                    Создайте новую учебную группу или загрузите курсантов
                   </p>
                 </div>
               </div>
@@ -1404,273 +1256,319 @@ export default function GroupsPage() {
         </div>
       )}
 
-      {/* ─── MODAL: CONFIRM SINGLE PASSWORD RESET ─────────────────────────────── */}
-      {confirmResetStudent && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-          <div className="relative w-full max-w-md bg-card border rounded-2xl shadow-2xl p-6 space-y-4 animate-in fade-in zoom-in-95 duration-200">
-            <div className="flex items-center gap-3">
-              <div className="p-2.5 bg-amber-500/10 text-amber-600 rounded-xl">
-                <KeyRound className="h-6 w-6" />
-              </div>
-              <div>
-                <h3 className="text-lg font-bold text-foreground">Сброс пароля</h3>
-                <p className="text-xs text-muted-foreground">Требуется подтверждение действия</p>
-              </div>
-            </div>
-
-            <div className="text-sm text-muted-foreground space-y-2">
-              <p>
-                Вы действительно хотите сбросить пароль для ученика{" "}
-                <strong className="text-foreground">
-                  {confirmResetStudent.full_name || confirmResetStudent.username}
-                </strong>{" "}
-                ({confirmResetStudent.email || confirmResetStudent.username})?
-              </p>
-              <p className="text-xs text-muted-foreground/80">
-                Будет сгенерирован новый 5-значный пароль доступа. Старый пароль станет недействительным.
-              </p>
-            </div>
-
-            <div className="flex items-center justify-end gap-2 pt-3 border-t">
-              <Button
-                variant="outline"
-                onClick={() => setConfirmResetStudent(null)}
-                disabled={isResettingSingle[confirmResetStudent.user_id]}
-              >
-                Отмена
-              </Button>
-              <Button
-                onClick={async () => {
-                  const s = confirmResetStudent
-                  setConfirmResetStudent(null)
-                  await handleResetUserPassword(s)
-                }}
-                disabled={isResettingSingle[confirmResetStudent.user_id]}
-                className="bg-amber-600 hover:bg-amber-700 text-white"
-              >
-                {isResettingSingle[confirmResetStudent.user_id] ? (
-                  <>
-                    <Loader2 className="h-4 w-4 animate-spin mr-1.5" />
-                    Сброс...
-                  </>
-                ) : (
-                  <>
-                    <KeyRound className="h-4 w-4 mr-1.5" />
-                    Сбросить пароль
-                  </>
-                )}
-              </Button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* ─── MODAL: CONFIRM GROUP PASSWORDS RESET ──────────────────────────────── */}
-      {confirmResetGroup && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-          <div className="relative w-full max-w-md bg-card border rounded-2xl shadow-2xl p-6 space-y-4 animate-in fade-in zoom-in-95 duration-200">
-            <div className="flex items-center gap-3">
-              <div className="p-2.5 bg-amber-500/10 text-amber-600 rounded-xl">
-                <Printer className="h-6 w-6" />
-              </div>
-              <div>
-                <h3 className="text-lg font-bold text-foreground">Сбросить пароли группе</h3>
-                <p className="text-xs text-muted-foreground">Массовый сброс паролей</p>
-              </div>
-            </div>
-
-            <div className="text-sm text-muted-foreground space-y-2">
-              <p>
-                Вы действительно хотите сбросить пароли всем ученикам группы{" "}
-                <strong className="text-foreground">{confirmResetGroup.group_name}</strong>?
-              </p>
-              <p className="text-xs text-muted-foreground/80">
-                Будут сгенерированы новые 5-значные коды доступа для всех учеников с возможностью распечатать ведомость.
-              </p>
-            </div>
-
-            <div className="flex items-center justify-end gap-2 pt-3 border-t">
-              <Button
-                variant="outline"
-                onClick={() => setConfirmResetGroup(null)}
-                disabled={isResettingGroup[confirmResetGroup.group_id]}
-              >
-                Отмена
-              </Button>
-              <Button
-                onClick={async () => {
-                  const g = confirmResetGroup
-                  setConfirmResetGroup(null)
-                  await handleResetGroupPasswords(g)
-                }}
-                disabled={isResettingGroup[confirmResetGroup.group_id]}
-                className="bg-amber-600 hover:bg-amber-700 text-white"
-              >
-                {isResettingGroup[confirmResetGroup.group_id] ? (
-                  <>
-                    <Loader2 className="h-4 w-4 animate-spin mr-1.5" />
-                    Сброс...
-                  </>
-                ) : (
-                  <>
-                    <KeyRound className="h-4 w-4 mr-1.5" />
-                    Сбросить пароли
-                  </>
-                )}
-              </Button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* ─── MODAL 2: SINGLE PASSWORD RESET ────────────────────────────────────── */}
-      {resetModalData.isOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
-          <div className="relative w-full max-w-md bg-card border rounded-2xl shadow-2xl p-6 space-y-5 animate-in fade-in zoom-in-95 duration-200 text-center">
-            <div className="mx-auto w-12 h-12 rounded-full bg-amber-100 text-amber-600 flex items-center justify-center dark:bg-amber-950/60 dark:text-amber-400">
-              <KeyRound className="h-6 w-6" />
-            </div>
-
-            <div>
-              <h3 className="text-xl font-bold text-foreground">Пароль успешно сброшен</h3>
-              <p className="text-sm text-muted-foreground mt-1">
-                Для ученика <span className="font-semibold text-foreground">{resetModalData.fio}</span> (
-                {resetModalData.email}) сгенерирован новый код доступа:
-              </p>
-            </div>
-
-            {/* Big PIN Code Box */}
-            <div className="flex items-center justify-center py-4 bg-muted/30 border rounded-xl">
-              <span className="font-mono text-4xl font-extrabold tracking-widest text-primary">
-                {resetModalData.newPassword}
-              </span>
-            </div>
-
-            <div className="flex items-center justify-center gap-3">
-              <Button
-                variant="outline"
-                onClick={() => {
-                  navigator.clipboard.writeText(resetModalData.newPassword)
-                  setCopiedPin(true)
-                  setTimeout(() => setCopiedPin(false), 2000)
-                }}
-              >
-                {copiedPin ? (
-                  <>
-                    <Check className="h-4 w-4 mr-1.5 text-green-600" />
-                    Скопировано
-                  </>
-                ) : (
-                  <>
-                    <Copy className="h-4 w-4 mr-1.5" />
-                    Скопировать пароль
-                  </>
-                )}
-              </Button>
-              <Button
-                onClick={() =>
-                  setResetModalData({
-                    isOpen: false,
-                    fio: "",
-                    email: "",
-                    newPassword: "",
-                  })
-                }
-              >
-                Закрыть
-              </Button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* ─── MODAL 3: GROUP PASSWORDS PRINT ACCESSES ───────────────────────────── */}
-      {groupPrintModalData.isOpen && (
+      {/* ─── MODAL: CATALOG STUDENT PICKER ────────────────────────────────────── */}
+      {isCatalogModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 overflow-y-auto">
           <div className="relative w-full max-w-3xl bg-card border rounded-2xl shadow-2xl p-6 space-y-4 animate-in fade-in zoom-in-95 duration-200">
             {/* Header */}
             <div className="flex items-center justify-between border-b pb-4">
-              <div className="flex items-center gap-2.5">
-                <div className="p-2 bg-amber-500/10 rounded-lg text-amber-600">
-                  <Printer className="h-5 w-5" />
+              <div className="flex items-center gap-3">
+                <div className="p-2.5 bg-primary/10 rounded-xl text-primary">
+                  <UserPlus className="h-6 w-6" />
                 </div>
                 <div>
                   <h3 className="text-xl font-bold text-foreground">
-                    Доступы группы: {groupPrintModalData.groupName}
+                    Выбор курсантов из каталога
                   </h3>
-                  <p className="text-xs text-muted-foreground">
-                    Сгенерированы новые пароли для всех {groupPrintModalData.list.length} учеников. Распечатайте для раздачи.
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    {catalogTargetGroup
+                      ? `Целевая группа: ${catalogTargetGroup.group_name}`
+                      : "Выберите группу и отметьте курсантов для привязки"}
                   </p>
                 </div>
               </div>
               <button
-                onClick={() =>
-                  setGroupPrintModalData({
-                    isOpen: false,
-                    groupName: "",
-                    list: [],
-                  })
-                }
+                onClick={() => setIsCatalogModalOpen(false)}
                 className="p-1.5 text-muted-foreground hover:text-foreground rounded-lg hover:bg-muted transition-colors"
               >
                 <X className="h-5 w-5" />
               </button>
             </div>
 
-            {/* Table */}
-            <div className="max-h-96 overflow-y-auto overflow-x-auto border rounded-lg w-full">
-              <Table className="min-w-[500px]">
-                <TableHeader>
-                  <TableRow>
-                    <TableHead className="w-12 text-center">№</TableHead>
-                    <TableHead>ФИО</TableHead>
-                    <TableHead>Email / Логин</TableHead>
-                    <TableHead className="text-right">Новый пароль</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {groupPrintModalData.list.map((item, idx) => (
-                    <TableRow key={item.user_id || idx}>
-                      <TableCell className="text-center font-mono text-muted-foreground">
-                        {idx + 1}
-                      </TableCell>
-                      <TableCell className="font-semibold text-foreground">
-                        {item.fio || "—"}
-                      </TableCell>
-                      <TableCell className="text-muted-foreground font-mono text-xs">
-                        {item.email}
-                      </TableCell>
-                      <TableCell className="text-right">
-                        <span className="font-mono text-base font-bold tracking-wider text-primary bg-primary/10 px-2.5 py-0.5 rounded-md">
-                          {item.new_password}
-                        </span>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
+            {/* Target Group & Filter bar */}
+            <div className="space-y-3">
+              <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3">
+                <div className="flex items-center gap-2 flex-1 max-w-xs">
+                  <Label className="text-xs font-semibold whitespace-nowrap">Группа:</Label>
+                  <Select
+                    value={catalogTargetGroupId}
+                    onChange={(e) => {
+                      setCatalogTargetGroupId(e.target.value)
+                      setSelectedCatalogUserIds([])
+                    }}
+                    className="w-full"
+                  >
+                    {groups.map((g) => (
+                      <SelectItem key={g.group_id} value={g.group_id}>
+                        {g.group_name}
+                      </SelectItem>
+                    ))}
+                  </Select>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <Button
+                    type="button"
+                    variant={catalogOnlyWithoutGroup ? "default" : "outline"}
+                    size="sm"
+                    onClick={() => setCatalogOnlyWithoutGroup((prev) => !prev)}
+                    className="text-xs"
+                  >
+                    Только без группы
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => {
+                      if (selectedCatalogUserIds.length === availableCatalogStudents.length) {
+                        setSelectedCatalogUserIds([])
+                      } else {
+                        setSelectedCatalogUserIds(availableCatalogStudents.map((s) => s.user_id))
+                      }
+                    }}
+                    disabled={availableCatalogStudents.length === 0}
+                    className="text-xs text-primary"
+                  >
+                    {selectedCatalogUserIds.length === availableCatalogStudents.length &&
+                    availableCatalogStudents.length > 0
+                      ? "Снять выбор"
+                      : "Выбрать всех доступных"}
+                  </Button>
+                </div>
+              </div>
+
+              {/* Search bar */}
+              <div className="relative">
+                <Search className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
+                <Input
+                  placeholder="Поиск курсантов по ФИО, логину или email..."
+                  value={catalogSearch}
+                  onChange={(e) => setCatalogSearch(e.target.value)}
+                  className="pl-9"
+                />
+              </div>
             </div>
 
-            {/* Footer Buttons */}
-            <div className="flex items-center justify-end gap-3 pt-3 border-t">
+            {/* Students Table */}
+            <div className="max-h-80 overflow-y-auto overflow-x-auto border rounded-xl w-full">
+              {loadingAllStudents && allStudents.length === 0 ? (
+                <div className="flex justify-center py-12">
+                  <Loader2 className="h-6 w-6 animate-spin text-primary" />
+                </div>
+              ) : filteredCatalogStudents.length === 0 ? (
+                <div className="text-center py-10 text-muted-foreground text-sm">
+                  Курсанты не найдены
+                </div>
+              ) : (
+                <Table className="min-w-[620px]">
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead className="w-12 text-center">
+                        <input
+                          type="checkbox"
+                          checked={
+                            availableCatalogStudents.length > 0 &&
+                            selectedCatalogUserIds.length === availableCatalogStudents.length
+                          }
+                          disabled={availableCatalogStudents.length === 0}
+                          onChange={(e) => {
+                            if (e.target.checked) {
+                              setSelectedCatalogUserIds(
+                                availableCatalogStudents.map((s) => s.user_id)
+                              )
+                            } else {
+                              setSelectedCatalogUserIds([])
+                            }
+                          }}
+                        />
+                      </TableHead>
+                      <TableHead>ФИО</TableHead>
+                      <TableHead>Email / Логин</TableHead>
+                      <TableHead>Текущая группа</TableHead>
+                      <TableHead>Статус</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {filteredCatalogStudents.map((student) => {
+                      const alreadyInGroup = isCadetInGroup(student, catalogTargetGroup)
+                      const isSelected = selectedCatalogUserIds.includes(student.user_id)
+                      const groupNames = getStudentGroupNames(student)
+                      const { lastName, firstName, middleName } = splitFullName(
+                        student.full_name,
+                        student.username
+                      )
+
+                      return (
+                        <TableRow
+                          key={student.user_id}
+                          className={
+                            alreadyInGroup
+                              ? "opacity-60 bg-muted/20"
+                              : isSelected
+                              ? "bg-primary/5"
+                              : ""
+                          }
+                        >
+                          <TableCell className="text-center">
+                            <input
+                              type="checkbox"
+                              checked={alreadyInGroup || isSelected}
+                              disabled={alreadyInGroup}
+                              onChange={(e) => {
+                                if (alreadyInGroup) return
+                                if (e.target.checked) {
+                                  setSelectedCatalogUserIds((prev) => [...prev, student.user_id])
+                                } else {
+                                  setSelectedCatalogUserIds((prev) =>
+                                    prev.filter((id) => id !== student.user_id)
+                                  )
+                                }
+                              }}
+                            />
+                          </TableCell>
+                          <TableCell>
+                            <span className="font-semibold text-foreground">
+                              {lastName} {firstName} {middleName !== "—" ? middleName : ""}
+                            </span>
+                          </TableCell>
+                          <TableCell className="text-muted-foreground font-mono text-xs">
+                            {student.email || student.username}
+                          </TableCell>
+                          <TableCell>
+                            {alreadyInGroup ? (
+                              <Badge
+                                variant="secondary"
+                                className="bg-emerald-500/15 text-emerald-700 dark:text-emerald-400 font-medium text-xs"
+                              >
+                                Уже в этой группе
+                              </Badge>
+                            ) : groupNames !== "—" ? (
+                              <Badge variant="outline" className="text-xs">
+                                {groupNames}
+                              </Badge>
+                            ) : (
+                              <span className="text-xs text-muted-foreground italic">
+                                Без группы
+                              </span>
+                            )}
+                          </TableCell>
+                          <TableCell>
+                            {student.is_active !== false ? (
+                              <span className="text-xs text-green-600 font-medium">Активен</span>
+                            ) : (
+                              <span className="text-xs text-muted-foreground font-medium">
+                                Заблокирован
+                              </span>
+                            )}
+                          </TableCell>
+                        </TableRow>
+                      )
+                    })}
+                  </TableBody>
+                </Table>
+              )}
+            </div>
+
+            {/* Modal Footer */}
+            <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-3 border-t">
+              <span className="text-xs text-muted-foreground">
+                Выбрано курсантов:{" "}
+                <strong className="text-foreground">{selectedCatalogUserIds.length}</strong>
+              </span>
+
+              <div className="flex items-center gap-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setIsCatalogModalOpen(false)}
+                  disabled={isLinkingStudents}
+                >
+                  Отмена
+                </Button>
+                <Button
+                  type="button"
+                  onClick={handleLinkCatalogStudents}
+                  disabled={
+                    isLinkingStudents ||
+                    selectedCatalogUserIds.length === 0 ||
+                    !catalogTargetGroupId
+                  }
+                  className="bg-primary text-primary-foreground font-semibold"
+                >
+                  {isLinkingStudents ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Добавление...
+                    </>
+                  ) : (
+                    <>
+                      <UserPlus className="mr-2 h-4 w-4" />
+                      Добавить в группу ({selectedCatalogUserIds.length})
+                    </>
+                  )}
+                </Button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ─── MODAL: CONFIRM REMOVE STUDENT FROM GROUP ─────────────────────────── */}
+      {confirmRemoveStudent && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm p-4">
+          <div className="relative w-full max-w-md bg-card border rounded-2xl shadow-2xl p-6 space-y-4 animate-in fade-in zoom-in-95 duration-200">
+            <div className="flex items-center gap-3">
+              <div className="p-2.5 bg-destructive/10 text-destructive rounded-xl">
+                <Trash2 className="h-6 w-6" />
+              </div>
+              <div>
+                <h3 className="text-lg font-bold text-foreground">Исключение из группы</h3>
+                <p className="text-xs text-muted-foreground">Требуется подтверждение</p>
+              </div>
+            </div>
+
+            <div className="text-sm text-muted-foreground space-y-2">
+              <p>
+                Вы действительно хотите исключить ученика{" "}
+                <strong className="text-foreground">
+                  {confirmRemoveStudent.student.full_name || confirmRemoveStudent.student.username}
+                </strong>{" "}
+                из группы <strong className="text-foreground">{confirmRemoveStudent.groupName}</strong>?
+              </p>
+              <p className="text-xs text-muted-foreground bg-muted/60 p-3 rounded-lg border">
+                Ученик будет исключен из группы, но его учетная запись и история результатов сохранятся.
+              </p>
+            </div>
+
+            <div className="flex items-center justify-end gap-2 pt-3 border-t">
               <Button
                 variant="outline"
-                onClick={() =>
-                  setGroupPrintModalData({
-                    isOpen: false,
-                    groupName: "",
-                    list: [],
-                  })
-                }
+                onClick={() => setConfirmRemoveStudent(null)}
+                disabled={isRemovingStudent}
               >
-                Закрыть
+                Отмена
               </Button>
               <Button
-                onClick={handlePrintAccesses}
-                className="bg-primary text-primary-foreground shadow"
+                variant="destructive"
+                onClick={async () => {
+                  const { groupId, student } = confirmRemoveStudent
+                  await handleRemoveStudent(groupId, student.user_id)
+                  setConfirmRemoveStudent(null)
+                }}
+                disabled={isRemovingStudent}
               >
-                <Printer className="h-4 w-4 mr-2" />
-                Распечатать доступы
+                {isRemovingStudent ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin mr-1.5" />
+                    Исключение...
+                  </>
+                ) : (
+                  <>
+                    <Trash2 className="h-4 w-4 mr-1.5" />
+                    Исключить из группы
+                  </>
+                )}
               </Button>
             </div>
           </div>

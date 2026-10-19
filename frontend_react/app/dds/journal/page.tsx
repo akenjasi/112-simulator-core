@@ -286,25 +286,25 @@ function DdsJournalContent() {
       {/* Left 50%: Search | Right 50%: Operator, Clock, Nav & Orange Btn */}
       {/* ============================================================== */}
       <div className="w-full flex flex-col md:flex-row border-b border-[#2f353a] shrink-0 h-[96px]">
-        {/* Left Half (50%): Search Box (White Background) */}
-        <div className="w-full md:w-1/2 bg-white text-gray-900 px-6 py-2.5 flex flex-col justify-between border-b md:border-b-0 md:border-r border-gray-300 shrink-0">
+        {/* Left Half (50%): Search Box (White Background in light, Card in dark) */}
+        <div className="w-full md:w-1/2 bg-white dark:bg-card text-gray-900 dark:text-foreground px-6 py-2.5 flex flex-col justify-between border-b md:border-b-0 md:border-r border-gray-300 dark:border-border shrink-0">
           <div>
-            <div className="text-[19px] font-normal text-gray-900 tracking-tight mb-0.5">
+            <div className="text-[19px] font-normal text-gray-900 dark:text-foreground tracking-tight mb-0.5">
               Поиск происшествий
             </div>
             {/* Input with Search Icon */}
-            <div className="relative flex items-center border-b border-gray-400 pb-1">
+            <div className="relative flex items-center border-b border-gray-400 dark:border-border pb-1">
               <input
                 type="text"
                 value={searchQuery}
                 onChange={(e) => {setSearchQuery(e.target.value); setPage(1)}}
                 placeholder=""
-                className="w-full text-sm text-gray-800 outline-none pr-8 bg-transparent"
+                className="w-full text-sm text-gray-800 dark:text-foreground outline-none pr-8 bg-transparent"
                 aria-label="Поиск происшествий"
               />
               <button
                 type="button"
-                className="absolute right-0 text-gray-800 hover:text-black cursor-pointer p-0.5"
+                className="absolute right-0 text-gray-800 dark:text-foreground hover:text-black dark:hover:text-primary cursor-pointer p-0.5"
                 title="Искать"
                 onClick={() => showToast(`Поиск: ${searchQuery || "все записи"}`)}
               >
@@ -314,14 +314,14 @@ function DdsJournalContent() {
           </div>
 
           {/* Sub-row: Advanced Search dropdown & Reset button */}
-          <div className="flex items-center justify-between mt-1 text-[11px] text-gray-600">
+          <div className="flex items-center justify-between mt-1 text-[11px] text-gray-600 dark:text-muted-foreground">
             <button
               type="button"
               onClick={() => {
                 setShowAdvancedSearch(!showAdvancedSearch)
                 showToast(showAdvancedSearch ? "Скрыт расширенный поиск" : "Открыт расширенный поиск")
               }}
-              className="hover:text-gray-900 flex items-center gap-1 cursor-pointer"
+              className="hover:text-gray-900 dark:hover:text-foreground flex items-center gap-1 cursor-pointer"
             >
               <span>расширенный по параметрам</span>
               <ChevronDown size={13} className={`transition-transform ${showAdvancedSearch ? "rotate-180" : ""}`} />
@@ -330,17 +330,17 @@ function DdsJournalContent() {
             <button
               type="button"
               onClick={handleResetSearch}
-              className="border border-gray-400 rounded px-3 py-0.5 text-gray-700 hover:bg-gray-100 hover:text-black cursor-pointer text-[11px] font-medium"
+              className="border border-gray-400 dark:border-border rounded px-3 py-0.5 text-gray-700 dark:text-muted-foreground hover:bg-gray-100 dark:hover:bg-accent hover:text-black dark:hover:text-foreground cursor-pointer text-[11px] font-medium"
             >
               сбросить
             </button>
           </div>
 
           {showAdvancedSearch && (
-            <div className="absolute top-[96px] left-0 z-40 w-1/2 p-3 border border-gray-300 grid grid-cols-3 gap-2 text-xs text-gray-700 bg-white shadow-xl">
+            <div className="absolute top-[96px] left-0 z-40 w-1/2 p-3 border border-gray-300 dark:border-border grid grid-cols-3 gap-2 text-xs text-gray-700 dark:text-foreground bg-white dark:bg-card shadow-xl">
               <div>
-                <label className="block text-[10px] text-gray-500 font-medium">Статус:</label>
-                <select className="w-full border rounded p-1 text-xs bg-white">
+                <label className="block text-[10px] text-gray-500 dark:text-muted-foreground font-medium">Статус:</label>
+                <select className="w-full border dark:border-border rounded p-1 text-xs bg-white dark:bg-background text-foreground">
                   <option>Все статусы</option>
                   <option>Отработана</option>
                   <option>Завершена</option>
@@ -348,12 +348,12 @@ function DdsJournalContent() {
                 </select>
               </div>
               <div>
-                <label className="block text-[10px] text-gray-500 font-medium">АРМ / Оператор:</label>
-                <input type="text" placeholder="Номер..." className="w-full border rounded p-1 text-xs bg-white" />
+                <label className="block text-[10px] text-gray-500 dark:text-muted-foreground font-medium">АРМ / Оператор:</label>
+                <input type="text" placeholder="Номер..." className="w-full border dark:border-border rounded p-1 text-xs bg-white dark:bg-background text-foreground" />
               </div>
               <div>
-                <label className="block text-[10px] text-gray-500 font-medium">Период:</label>
-                <input type="date"  className="w-full border rounded p-1 text-xs bg-white" />
+                <label className="block text-[10px] text-gray-500 dark:text-muted-foreground font-medium">Период:</label>
+                <input type="date" className="w-full border dark:border-border rounded p-1 text-xs bg-white dark:bg-background text-foreground" />
               </div>
             </div>
           )}

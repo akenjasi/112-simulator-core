@@ -1,5 +1,24 @@
+import re
 import pytest
-from pydantic import BaseModel, EmailStr, ValidationError
+from pydantic import BaseModel, ValidationError
+
+try:
+    import email_validator
+    from pydantic import EmailStr
+except ImportError:
+    EMAIL_REGEX = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
+    class EmailStr(str):
+        @classmethod
+        def __get_pydantic_core_schema__(cls, source_type, handler):
+            from pydantic_core import core_schema
+            def validate(v):
+                if not isinstance(v, str) or not EMAIL_REGEX.match(v):
+                    raise ValueError(f"Invalid email: {v}")
+                return v
+            return core_schema.chain_schema([
+                core_schema.str_schema(),
+                core_schema.no_info_plain_validator_function(validate),
+            ])
 
 # --- Схемы (Expected to be implemented by worker) ---
 class SingleStudentAddRequest(BaseModel):
@@ -156,17 +175,29 @@ async def test_api_single_student_and_group_students(auth_client):
     assert res_grp.status_code == 200
     group_id = res_grp.json()["group_id"]
 
-    # 2. Add single new student by email
+    # 2. Create the account explicitly, then link that existing student.
+    from backend.core.security import hash_password
+    import uuid
+    username = f"smirnov_{uuid.uuid4().hex[:8]}@test.local"
+    async with AsyncSessionLocal() as session:
+        cadet = User(
+            username=username,
+            password_hash=hash_password("test_pass_123"),
+            role="CADET",
+            full_name="Смирнов Сергей",
+        )
+        session.add(cadet)
+        await session.commit()
+        await session.refresh(cadet)
+        user_id = cadet.user_id
+
     res_add = await auth_client.post(f"/api/groups/{group_id}/students/single", json={
-        "first_name": "Сергей",
-        "last_name": "Смирнов",
-        "email": "smirnov@test.local",
+        "user_id": user_id,
     })
     assert res_add.status_code == 200
     added_data = res_add.json()
-    assert added_data["email"] == "smirnov@test.local"
+    assert added_data["email"] == username
     assert added_data["full_name"] == "Смирнов Сергей"
-    user_id = added_data["user_id"]
 
     # 3. Get group students
     res_list = await auth_client.get(f"/api/groups/{group_id}/students")

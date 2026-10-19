@@ -46,6 +46,7 @@ class StudentResponse(BaseModel):
 
     user_id: str
     id: Optional[str] = None
+    student_id: Optional[str] = None
     username: str
     email: Optional[str] = None
     full_name: Optional[str] = None
@@ -54,3 +55,12 @@ class StudentResponse(BaseModel):
     is_active: bool = True
     created_at: Optional[str] = None
 
+
+class StudentBulkLinkRequest(BaseModel):
+    user_ids: list[str] = []
+
+
+class BulkLinkItemResult(BaseModel):
+    user_id: str
+    status: str
+    error: Optional[str] = None

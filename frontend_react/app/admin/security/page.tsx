@@ -1,9 +1,10 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Button, Card, Col, Form, Input, Row, Switch, notification } from "antd";
+import { Button, Card, Col, Form, Input, Row, Switch, notification, ConfigProvider, theme as antdTheme } from "antd";
 import { DownloadOutlined, SaveOutlined } from "@ant-design/icons";
 import { getAuthHeaders } from "@/lib/admin-api";
+import { useTheme } from "@/components/theme-provider";
 
 interface SecurityPolicy {
   key: string;
@@ -11,6 +12,21 @@ interface SecurityPolicy {
 }
 
 export default function SecurityPoliciesPage() {
+  const themeContext = useTheme();
+  const [isDark, setIsDark] = useState(false);
+
+  useEffect(() => {
+    const checkDark = () => {
+      if (typeof document !== "undefined") {
+        setIsDark(document.documentElement.classList.contains("dark"));
+      }
+    };
+    checkDark();
+    const observer = new MutationObserver(checkDark);
+    observer.observe(document.documentElement, { attributes: true, attributeFilter: ["class"] });
+    return () => observer.disconnect();
+  }, [themeContext?.theme]);
+
   const [form] = Form.useForm();
   const [loading, setLoading] = useState(false);
   const [operator112Enabled, setOperator112Enabled] = useState(false);
@@ -128,66 +144,82 @@ export default function SecurityPoliciesPage() {
   };
 
   return (
-    <div style={{ padding: 24 }}>
-      <Row justify="space-between" align="middle" style={{ marginBottom: 24 }}>
-        <Col>
-          <h2>Политики Безопасности</h2>
-        </Col>
-        <Col>
-          <Button
-            type="primary"
-            icon={<DownloadOutlined />}
-            onClick={handleDownloadReport}
-            style={{ backgroundColor: "#ff4d4f", borderColor: "#ff4d4f" }}
-          >
-            Скачать отчет о сбоях (PDF)
-          </Button>
-        </Col>
-      </Row>
+    <ConfigProvider
+      theme={{
+        algorithm: isDark ? antdTheme.darkAlgorithm : antdTheme.defaultAlgorithm,
+        components: { Button: { primaryColor: isDark ? "#0B131E" : "#ffffff" } },
+        token: isDark
+          ? {
+              colorBgContainer: "#192330",
+              colorBgElevated: "#222E3E",
+              colorBorder: "#334155",
+              colorPrimary: "#7CA8DC",
+              colorText: "#E6EDF5",
+              colorTextSecondary: "#A6B4C6",
+              colorTextTertiary: "#A6B4C6",
+            }
+          : undefined,
+      }}
+    >
+      <div style={{ padding: 24 }}>
+        <Row justify="space-between" align="middle" style={{ marginBottom: 24 }}>
+          <Col>
+            <h2 className="text-2xl font-black text-foreground tracking-tight">Политики Безопасности</h2>
+          </Col>
+          <Col>
+            <Button
+              icon={<DownloadOutlined />}
+              onClick={handleDownloadReport}
+            >
+              Скачать отчет о сбоях (PDF)
+            </Button>
+          </Col>
+        </Row>
 
-      <Card loading={loading}>
-        <Form form={form} layout="vertical" onFinish={handleSave}>
-          <Form.Item
-            name="MIN_PASSWORD_LENGTH"
-            label="Минимальная длина пароля"
-            rules={[{ required: true, message: "Введите длину" }]}
-          >
-            <Input type="number" />
-          </Form.Item>
+        <Card loading={loading}>
+          <Form form={form} layout="vertical" onFinish={handleSave}>
+            <Form.Item
+              name="MIN_PASSWORD_LENGTH"
+              label="Минимальная длина пароля"
+              rules={[{ required: true, message: "Введите длину" }]}
+            >
+              <Input type="number" />
+            </Form.Item>
 
-          <Form.Item
-            name="SESSION_TIMEOUT_MINUTES"
-            label="Таймаут сессии (минуты)"
-            rules={[{ required: true, message: "Введите таймаут" }]}
-          >
-            <Input type="number" />
-          </Form.Item>
+            <Form.Item
+              name="SESSION_TIMEOUT_MINUTES"
+              label="Таймаут сессии (минуты)"
+              rules={[{ required: true, message: "Введите таймаут" }]}
+            >
+              <Input type="number" />
+            </Form.Item>
 
-          <Form.Item
-            name="REQUIRE_2FA_ALL"
-            label="Принудительная 2FA для всех"
-            valuePropName="checked"
-          >
-            <Switch />
-          </Form.Item>
+            <Form.Item
+              name="REQUIRE_2FA_ALL"
+              label="Принудительная 2FA для всех"
+              valuePropName="checked"
+            >
+              <Switch />
+            </Form.Item>
 
-          <Form.Item
-            label="Разрешить роль «Оператор 112» при создании уроков"
-            extra="При выключенной настройке преподаватели видят и могут выбрать только роль «Диспетчер ДДС»."
-          >
-            <Switch
-              checked={operator112Enabled}
-              loading={isSavingOperator112Access}
-              onChange={handleOperator112AccessChange}
-              aria-label="Разрешить роль «Оператор 112» при создании уроков"
-            />
-          </Form.Item>
+            <Form.Item
+              label="Разрешить роль «Оператор 112» при создании уроков"
+              extra="При выключенной настройке преподаватели видят и могут выбрать только роль «Диспетчер ДДС»."
+            >
+              <Switch
+                checked={operator112Enabled}
+                loading={isSavingOperator112Access}
+                onChange={handleOperator112AccessChange}
+                aria-label="Разрешить роль «Оператор 112» при создании уроков"
+              />
+            </Form.Item>
 
-          <Button type="primary" htmlType="submit" icon={<SaveOutlined />}>
-            Сохранить настройки
-          </Button>
-        </Form>
-      </Card>
-    </div>
+            <Button type="primary" htmlType="submit" icon={<SaveOutlined />}>
+              Сохранить настройки
+            </Button>
+          </Form>
+        </Card>
+      </div>
+    </ConfigProvider>
   );
 }

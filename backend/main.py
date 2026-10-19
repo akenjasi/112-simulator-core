@@ -17,6 +17,7 @@ from backend.api.router_call import router_call
 from backend.api.router_classifier import classifier_router, classifier_v1_router
 from backend.api.router_dds import router_dds
 from backend.api.router_dds_cycle import router_dds_cycle
+from backend.api.router_student_workspace import router as student_workspace_router
 from backend.api.router_scenario import router as scenario_router
 from backend.api.router_groups import (
     groups_router,
@@ -151,6 +152,7 @@ app.include_router(sessions_v1_router)
 app.include_router(lessons_router)
 app.include_router(router_call)
 app.include_router(router_dds_cycle)
+app.include_router(student_workspace_router)
 app.include_router(router_dds)
 app.include_router(classifier_router)
 app.include_router(classifier_v1_router)

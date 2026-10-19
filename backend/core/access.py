@@ -29,7 +29,8 @@ async def require_cadet_link(db, user, cadet):
         return
     memberships = (await db.scalars(select(StudentGroup))).all()
     linked = await db.scalar(select(student_group_link.c.user_id).where(student_group_link.c.user_id == cadet.user_id).limit(1))
-    if cadet.created_by_id or linked or cadet.group_ids or any(cadet.user_id in (g.cadet_ids or []) for g in memberships):
+    creator = await db.get(User, cadet.created_by_id) if cadet.created_by_id else None
+    if (creator and creator.role == "TEACHER") or linked or cadet.group_ids or any(cadet.user_id in (g.cadet_ids or []) for g in memberships):
         raise HTTPException(403, "Cadet is already managed by another teacher")
 
 

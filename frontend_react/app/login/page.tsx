@@ -1,5 +1,7 @@
 "use client"
 
+import { ThemeSelect } from "@/components/theme-select"
+
 import React, { useState } from "react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
@@ -26,7 +28,6 @@ export default function LoginPage() {
   const [step, setStep] = useState<"credentials" | "2fa">("credentials")
   const [username, setUsername] = useState("")
   const [password, setPassword] = useState("")
-  const [role, setRole] = useState("ADMIN")
   const [totpCode, setTotpCode] = useState("")
   const [userId, setUserId] = useState("")
   const [challengeToken, setChallengeToken] = useState("")
@@ -45,7 +46,6 @@ export default function LoginPage() {
         body: JSON.stringify({
           username: username.trim(),
           password,
-          role,
         }),
       })
 
@@ -127,7 +127,7 @@ export default function LoginPage() {
     }
 
     // Redirect to corresponding dashboard
-    const userRole = (data.role || role || "").toUpperCase()
+    const userRole = (data.role || "").toUpperCase()
     if (userRole === "ADMIN") {
       router.push("/admin")
     } else if (userRole === "TEACHER") {
@@ -138,15 +138,16 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-slate-50 to-slate-100 dark:from-slate-950 dark:to-slate-900 flex flex-col justify-center items-center p-4">
+    <div className="min-h-screen bg-background flex flex-col justify-center items-center px-4 py-8 sm:px-8">
+      <div className="w-full max-w-5xl overflow-hidden rounded-2xl border border-border bg-card shadow-lg">
       {/* Brand header */}
-      <div className="mb-8 text-center flex flex-col items-center">
+      <header className="flex flex-wrap items-center justify-between gap-4 border-b border-border px-6 py-5 sm:px-8">
         <Link href="/" className="inline-flex items-center gap-3 group">
           <div className="h-12 w-12 rounded-2xl bg-primary text-primary-foreground flex items-center justify-center font-black text-xl shadow-md group-hover:scale-105 transition-transform">
             112
           </div>
           <div className="text-left">
-            <span className="font-extrabold tracking-tight text-xl block text-slate-900 dark:text-slate-50">
+            <span className="font-extrabold tracking-tight text-xl block text-foreground">
               Система-112
             </span>
             <span className="text-xs text-muted-foreground block -mt-1">
@@ -154,9 +155,11 @@ export default function LoginPage() {
             </span>
           </div>
         </Link>
-      </div>
+        <div className="shrink-0"><ThemeSelect compact /></div>
+      </header>
 
-      <Card className="w-full max-w-md shadow-xl border-border/80 bg-card/95 backdrop-blur-sm">
+      <div className="grid w-full items-stretch md:grid-cols-[1fr_1.1fr]">
+      <Card className="w-full rounded-none border-0 bg-transparent justify-center py-8 shadow-none sm:px-2">
         {step === "credentials" ? (
           <>
             <CardHeader className="text-center pb-2">
@@ -165,7 +168,7 @@ export default function LoginPage() {
               </div>
               <CardTitle className="text-2xl font-bold tracking-tight">Вход в систему</CardTitle>
               <CardDescription>
-                Введите учетные данные для доступа к платформе тренажера
+                Введите логин и пароль для доступа к тренажёру
               </CardDescription>
             </CardHeader>
 
@@ -179,39 +182,15 @@ export default function LoginPage() {
                 )}
 
                 <div className="space-y-2">
-                  <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider block">
-                    Роль пользователя
-                  </label>
-                  <div className="grid grid-cols-3 gap-2">
-                    {[
-                      { id: "ADMIN", label: "Админ" },
-                      { id: "TEACHER", label: "Преподаватель" },
-                      { id: "CADET", label: "Курсант" },
-                    ].map((item) => (
-                      <button
-                        key={item.id}
-                        type="button"
-                        onClick={() => setRole(item.id)}
-                        className={`py-2 px-3 text-xs font-medium rounded-lg border transition-all ${
-                          role === item.id
-                            ? "bg-primary text-primary-foreground border-primary shadow-sm"
-                            : "bg-muted/50 border-border text-foreground hover:bg-muted"
-                        }`}
-                      >
-                        {item.label}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                <div className="space-y-2">
-                  <label className="text-sm font-medium text-foreground block">Имя пользователя / Логин</label>
+                  <label htmlFor="login-username" className="text-sm font-medium text-foreground block">Логин</label>
                   <div className="relative">
                     <User className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
                     <Input
+                      id="login-username"
+                      autoComplete="username"
                       type="text"
                       required
-                      placeholder="admin"
+                      placeholder="Логин"
                       value={username}
                       onChange={(e) => setUsername(e.target.value)}
                       className="pl-9"
@@ -220,10 +199,12 @@ export default function LoginPage() {
                 </div>
 
                 <div className="space-y-2">
-                  <label className="text-sm font-medium text-foreground block">Пароль</label>
+                  <label htmlFor="login-password" className="text-sm font-medium text-foreground block">Пароль</label>
                   <div className="relative">
                     <Lock className="absolute left-3 top-2.5 h-4 w-4 text-muted-foreground" />
                     <Input
+                      id="login-password"
+                      autoComplete="current-password"
                       type="password"
                       required
                       placeholder="••••••••"
@@ -333,6 +314,33 @@ export default function LoginPage() {
           </>
         )}
       </Card>
+
+      <section aria-labelledby="prototype-access-title" className="border-t border-border bg-muted/30 p-6 text-card-foreground md:border-t-0 md:border-l sm:p-8">
+        <h2 id="prototype-access-title" className="text-xl font-semibold">Доступ к прототипу</h2>
+        <p className="mt-2 text-sm text-muted-foreground">
+          Временные учётные записи для демонстрации. Введите логин и пароль — система откроет ваш кабинет.
+        </p>
+        <div className="mt-5 grid gap-3 sm:grid-cols-2">
+          {[
+            { role: "Курсант 1", login: "petrov@student.ru", password: "12345" },
+            { role: "Курсант 2", login: "sidorov@student.ru", password: "12345" },
+            { role: "Преподаватель", login: "teacher", password: "teacher123" },
+            { role: "Администратор", login: "admin", password: "admin123" },
+          ].map((account) => (
+            <div key={account.login} className="rounded-lg border border-border bg-muted/40 p-3">
+              <h3 className="text-sm font-semibold">{account.role}</h3>
+              <dl className="mt-2 grid grid-cols-1 gap-y-1 text-sm">
+                <dt className="text-muted-foreground">Логин</dt>
+                <dd className="min-w-0"><code className="select-all break-all font-mono">{account.login}</code></dd>
+                <dt className="text-muted-foreground">Пароль</dt>
+                <dd><code className="select-all font-mono">{account.password}</code></dd>
+              </dl>
+            </div>
+          ))}
+        </div>
+      </section>
+      </div>
+      </div>
     </div>
   )
 }

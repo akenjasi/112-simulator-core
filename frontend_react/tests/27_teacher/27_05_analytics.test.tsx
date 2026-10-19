@@ -96,7 +96,6 @@ describe('27.5: Пост-аналитика и Апелляция', () => {
   };
 
   beforeEach(() => {
-    window.history.replaceState({}, '', '/teacher/analytics');
     vi.stubGlobal(
       'fetch',
       vi.fn((url: string, init?: RequestInit) => {
@@ -124,8 +123,8 @@ describe('27.5: Пост-аналитика и Апелляция', () => {
           });
         }
 
-        // PATCH record appeal
-        if (urlStr.includes('/appeal') && init?.method === 'PATCH') {
+        // Unified record grading accepts status without a numeric score.
+        if (urlStr.endsWith('/grade-override') && init?.method === 'POST') {
           const body = JSON.parse(init.body as string);
           return Promise.resolve({
             ok: true,
@@ -152,10 +151,19 @@ describe('27.5: Пост-аналитика и Апелляция', () => {
     vi.restoreAllMocks();
   });
 
+  const loadTestSession = async () => {
+    fireEvent.change(screen.getByLabelText(/Идентификатор сессии/i), { target: { value: 'session-test-100' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Обновить' }));
+    await waitFor(() => expect(screen.getByText(/50% успеха/i)).toBeInTheDocument());
+  };
+
   it('should render split screen and appeal button', async () => {
-    render(<AnalyticsPage initialTab="split" />);
-    fireEvent.change(screen.getByPlaceholderText("ID сессии..."), {target:{value:"session-test-100"}});
-    expect(await screen.findByRole('button', { name: /Изменить оценку/i })).toBeInTheDocument();
+    render(<AnalyticsPage />);
+    expect(global.fetch).not.toHaveBeenCalledWith('/api/v1/analytics/sessions', expect.anything());
+    fireEvent.click(screen.getByRole('button', { name: 'Обновить' }));
+    expect(global.fetch).not.toHaveBeenCalledWith('/api/v1/analytics/sessions', expect.anything());
+    await loadTestSession();
+    expect(screen.getByRole('button', { name: /Изменить оценку/i })).toBeInTheDocument();
     expect(screen.getByText(/Эталон/i)).toBeInTheDocument();
 
     await waitFor(() => {
@@ -164,8 +172,8 @@ describe('27.5: Пост-аналитика и Апелляция', () => {
   });
 
   it('should render cadets list with success rates', async () => {
-    render(<AnalyticsPage initialTab="split" />);
-    fireEvent.change(screen.getByPlaceholderText("ID сессии..."), {target:{value:"session-test-100"}});
+    render(<AnalyticsPage />);
+    await loadTestSession();
 
     expect(screen.getByText(/Детализация по курсантам/i)).toBeInTheDocument();
 
@@ -178,8 +186,8 @@ describe('27.5: Пост-аналитика и Апелляция', () => {
   });
 
   it('should render split-screen with dual columns and highlight errors in red or yellow', async () => {
-    render(<AnalyticsPage initialTab="split" />);
-    fireEvent.change(screen.getByPlaceholderText("ID сессии..."), {target:{value:"session-test-100"}});
+    render(<AnalyticsPage />);
+    await loadTestSession();
 
     await waitFor(() => {
       expect(screen.getByTestId('split-screen-columns')).toBeInTheDocument();
@@ -204,11 +212,11 @@ describe('27.5: Пост-аналитика и Апелляция', () => {
     expect(screen.getAllByText(/Не все службы вызваны/i).length).toBeGreaterThan(0);
   });
 
-  it('should open appeal modal with Textarea when clicking Изменить оценку and send PATCH request', async () => {
-    render(<AnalyticsPage initialTab="split" />);
-    fireEvent.change(screen.getByPlaceholderText("ID сессии..."), {target:{value:"session-test-100"}});
+  it('should open the grading modal and send the selected status without a numeric score', async () => {
+    render(<AnalyticsPage />);
+    await loadTestSession();
 
-    const appealBtn = await screen.findByRole('button', { name: /Изменить оценку/i });
+    const appealBtn = screen.getByRole('button', { name: /Изменить оценку/i });
     fireEvent.click(appealBtn);
 
     // Verify modal is open
@@ -222,20 +230,22 @@ describe('27.5: Пост-аналитика и Апелляция', () => {
 
     // Fill in comment
     fireEvent.change(commentInput, { target: { value: 'Опечатка в адресе, курсант исправил устно' } });
+    fireEvent.change(screen.getByLabelText('Новый статус оценки'), { target: { value: 'passed' } });
 
     // Click Save
     const saveBtn = screen.getByRole('button', { name: /Сохранить/i });
     fireEvent.click(saveBtn);
 
-    // Verify PATCH request
+    // The selected status and optional score use the same audited endpoint.
     await waitFor(() => {
       expect(global.fetch).toHaveBeenCalledWith(
-        expect.stringMatching(/\/api\/v1\/analytics\/records\/.*\/appeal/),
+        expect.stringMatching(/\/api\/v1\/analytics\/records\/.*\/grade-override/),
         expect.objectContaining({
-          method: 'PATCH',
+          method: 'POST',
           headers: expect.objectContaining({ 'Content-Type': 'application/json' }),
           body: JSON.stringify({
             status: 'passed',
+            reason: 'Опечатка в адресе, курсант исправил устно',
             comment: 'Опечатка в адресе, курсант исправил устно',
           }),
         })
@@ -248,7 +258,7 @@ describe('27.5: Пост-аналитика и Апелляция', () => {
     });
   });
 
-  it('should render SplitScreen component independently', async () => {
+  it('should render SplitScreen component independently', () => {
     const mockRecord: RecordDetail = {
       record_id: 'rec-custom-1',
       title: 'Билет #99: Пожар',
@@ -275,13 +285,12 @@ describe('27.5: Пост-аналитика и Апелляция', () => {
 
     expect(screen.getByText(/Эталон/i)).toBeInTheDocument();
     expect(screen.getByText(/Ввод курсанта/i)).toBeInTheDocument();
-    expect(await screen.findByRole('button', { name: /Изменить оценку/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Изменить оценку/i })).toBeInTheDocument();
     expect(screen.getAllByText(/Ошибка в номере дома/i).length).toBeGreaterThan(0);
   });
 
   it('should render Export to Excel button and trigger generation', async () => {
-    render(<AnalyticsPage initialTab="split" />);
-    fireEvent.change(screen.getByPlaceholderText("ID сессии..."), {target:{value:"session-test-100"}});
+    render(<AnalyticsPage />);
     const exportBtn = screen.getByRole('button', { name: /Экспорт в Excel/i });
     expect(exportBtn).toBeInTheDocument();
 

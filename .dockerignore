@@ -41,9 +41,11 @@ data/backups/
 data/tts_cache/
 data/uploads/
 
-# ─── GGUF model weights (downloaded at container startup via init.sh) ─────────
-# These are large binary files; use named Docker volume instead.
+# ─── GGUF model weights (provisioned separately; offline packager downloads Qwen)
+# Keep weights and incomplete downloads out of application image layers.
 *.gguf
+*.gguf.part
+*.gguf.lock
 backend/core/qwen_tts/models/
 
 # ─── IDE / OS artifacts ───────────────────────────────────────────────────────

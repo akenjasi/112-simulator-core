@@ -186,7 +186,7 @@ async def test_background_generate_report_creates_excel():
         }
     ]
 
-    await _background_generate_report(task_id=task_id, custom_records=custom_records)
+    await _background_generate_report(task_id=task_id, custom_records=custom_records, output_format="excel")
 
     assert TASKS[task_id]["status"] == "ready"
     excel_path = TASKS[task_id]["excel_path"]

@@ -47,7 +47,7 @@ async def setup_group(n=2):
                              cadet_ids=[u.user_id for u in users[:n]])
         # Overlapping membership must be deduplicated, not treated as two separate rosters.
         group.students = users[:1]
-        ticket = ScenarioTicket(title=f"Авария {tag}", content={"incoming_card": deepcopy(INCOMING)},
+        ticket = ScenarioTicket(workflow_state={"status": "APPROVED"}, title=f"Авария {tag}", content={"incoming_card": deepcopy(INCOMING)},
                                 ground_truth={"SECRET_ETALON": "must not reach cadet"})
         bad = ScenarioTicket(title=f"Неполный {tag}", content={})
         db.add_all([group, ticket, bad]); await db.commit()
@@ -164,14 +164,10 @@ async def test_parallel_start_action_finish_are_not_duplicate_or_lost_updates():
 @pytest.mark.asyncio
 async def test_completed_ungraded_and_teacher_stop_are_honest_in_history_and_report():
     d = await setup_group(); lesson, ss = await start(d)
-    path = f"/api/dds/sessions/{ss[0]['session_id']}"
-    for index, stage in enumerate(["Принята", "Начало реагирования", "Прибытие", "Проведение работ", "Работы завершены"]):
-        if index == 1:
-            dispatched = await request("POST", path+"/actions", d["cadets"][0], json={"request_id":"history-dispatch", "kind":"dispatch", "service_name":"Аварийная служба", "who_accepted":"Дежурный", "summary":"Бригада направлена"})
-            assert dispatched.status_code == 200, dispatched.text
-        result = await request("POST", path+"/actions", d["cadets"][0], json=action(status=stage))
-        assert result.status_code == 200, result.text
-    first = await request("POST", path+f"/cards/{ss[0]['card_id']}/complete", d["cadets"][0], json={"request_id":"complete-history"})
+    # Completing a card and stopping an exercise are separate queue operations.
+    from tests.test_dds_queue import ready, complete
+    await ready(ss[0], d["cadets"][0])
+    first = await complete(ss[0], d["cadets"][0])
     assert first.status_code == 200 and first.json()["score"] is None, first.text
     stop = await request("POST", f"/api/v1/lessons/{lesson}/stop", d["teacher"])
     assert stop.status_code == 200, stop.text
@@ -274,13 +270,20 @@ async def test_ticket_catalog_and_creation_are_protected_and_missing_ticket_star
     assert (await request("GET", "/api/dds/tickets", d["cadets"][0])).status_code == 403
     payload = {"group_id":d["group_id"],"target_role":"DISPATCHER_DDS","ticket_id":d["ticket_id"]}
     assert (await request("POST", "/api/v1/lessons", d["other"], json=payload)).status_code == 403
+    # Public creation rejects missing tickets. A legacy incomplete WAITING row
+    # must still fail atomically when someone tries to start it.
+    missing = await request("POST", "/api/v1/lessons", d["teacher"], json={"group_id":d["group_id"],"target_role":"DISPATCHER_DDS"})
+    assert missing.status_code == 422
     async with AsyncSessionLocal() as db:
-        before = await db.scalar(select(func.count()).select_from(Assignment))
-    invalid = await request("POST", "/api/v1/lessons", d["teacher"], json={"group_id":d["group_id"],"target_role":"DISPATCHER_DDS"})
-    assert invalid.status_code == 422, invalid.text
+        incomplete = Assignment(group_id=d["group_id"], assigned_by=d["teacher"][0], target_role="DISPATCHER_DDS", session_type="CARD_ACTIONS", status="WAITING")
+        db.add(incomplete)
+        await db.commit()
+        lesson = incomplete.assignment_id
+    r = await request("POST", f"/api/v1/lessons/{lesson}/start", d["teacher"])
+    assert r.status_code in (409,422), r.text
     async with AsyncSessionLocal() as db:
-        assert await db.scalar(select(func.count()).select_from(Assignment)) == before
-
+        assert (await db.get(Assignment, lesson)).status == "WAITING"
+        assert await db.scalar(select(func.count()).select_from(ExamSession).where(ExamSession.assignment_id == lesson)) == 0
 
 
 @pytest.mark.asyncio

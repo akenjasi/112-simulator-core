@@ -1,3 +1,4 @@
+import random
 import secrets
 import string
 from datetime import datetime, timezone
@@ -123,7 +124,7 @@ async def create_user(
         password_hash=hash_password(user_in.password),
         role=user_in.role,
         full_name=user_in.full_name,
-        student_id=user_in.student_id,
+        student_id=((user_in.student_id or "").strip() or None) if user_in.role == "CADET" else None,
         created_by_id=current_user.user_id,
     )
     db.add(user)
@@ -159,6 +160,8 @@ async def update_user(
     )
 
     await require_managed_cadet(db, current_user, user)
+    if current_user.role == "TEACHER" and user_in.password is not None:
+        raise HTTPException(403, "Преподавателям запрещен сброс паролей учеников")
     security_changed = False
 
     if user_in.full_name is not None:
@@ -229,14 +232,23 @@ async def delete_user(
 
 @api_users_router.post("/{user_id}/reset-password")
 @api_users_router.post("/{user_id}/reset-password/", include_in_schema=False)
-@users_router.post("/{user_id}/reset-password")
-@users_router.post("/{user_id}/reset-password/", include_in_schema=False)
-async def reset_user_password(
+async def reset_user_password_quick(
     user_id: str,
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
     reset_in: Optional[PasswordResetRequest] = None,
 ):
+    if current_user.role == "TEACHER":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Преподавателям запрещен сброс паролей учеников",
+        )
+    if current_user.role != "ADMIN":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Access denied. Required roles: ['ADMIN']",
+        )
+
     stmt = select(User).where(User.user_id == user_id)
     result = await db.execute(stmt)
     user = result.scalar_one_or_none()
@@ -250,10 +262,77 @@ async def reset_user_password(
             detail="Пользователь не найден",
         )
 
-    check_teacher_user_management(
-        current_user_role=current_user.role,
-        target_user_role=user.role,
-    )
+    has_custom_password = reset_in is not None and reset_in.password is not None
+    if has_custom_password:
+        requested_password = reset_in.password.strip()
+        policy_min = await db.scalar(
+            select(SecurityPolicy).where(SecurityPolicy.key == "MIN_PASSWORD_LENGTH")
+        )
+        min_len = int(policy_min.value) if policy_min and policy_min.value.isdigit() else 8
+        if len(requested_password) < min_len:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Password must be at least {min_len} characters",
+            )
+        new_password = requested_password
+        password_was_generated = False
+    else:
+        new_password = str(random.randint(10000, 99999))
+        password_was_generated = True
+
+    user.password_hash = hash_password(new_password)
+    user.password_changed_at = datetime.now(timezone.utc)
+    user.failed_login_attempts = 0
+    user.locked_until = None
+    revoke_sessions = reset_in.revoke_sessions if (reset_in and reset_in.revoke_sessions is not None) else True
+    if revoke_sessions:
+        await revoke_all_user_sessions(db, user_id=user.user_id)
+    await db.commit()
+    await db.refresh(user)
+
+    return {
+        "user_id": user.user_id,
+        "username": user.username,
+        "email": user.username,
+        "fio": user.full_name or user.username,
+        "new_password": new_password,
+        "password_was_generated": password_was_generated,
+        "sessions_revoked": revoke_sessions,
+        "message": "Пароль успешно сброшен",
+    }
+
+
+@users_router.post("/{user_id}/reset-password")
+@users_router.post("/{user_id}/reset-password/", include_in_schema=False)
+async def reset_user_password_admin(
+    user_id: str,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+    reset_in: Optional[PasswordResetRequest] = None,
+):
+    if current_user.role == "TEACHER":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Преподавателям запрещен сброс паролей учеников",
+        )
+    if current_user.role != "ADMIN":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Access denied. Required roles: ['ADMIN']",
+        )
+
+    stmt = select(User).where(User.user_id == user_id)
+    result = await db.execute(stmt)
+    user = result.scalar_one_or_none()
+
+    if not user:
+        user = (await db.execute(select(User).where(User.username == user_id))).scalar_one_or_none()
+
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Пользователь не найден",
+        )
 
     await require_managed_cadet(db, current_user, user)
 

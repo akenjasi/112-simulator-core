@@ -14,7 +14,8 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.database import get_db
-from backend.core.deps import require_role
+from backend.core.deps import require_role, get_current_user
+from backend.models.domain_01 import User
 from backend.models.domain_03 import KnowledgeFile
 from backend.core.file_storage import generate_safe_filename, get_relative_path
 
@@ -35,6 +36,7 @@ class KnowledgeFileResponse(BaseModel):
     size_bytes: int
     content_type: str
     uploaded_at: str
+    uploaded_by: Optional[str] = None
     url: Optional[str] = None
 
     model_config = ConfigDict(from_attributes=True)
@@ -48,6 +50,7 @@ def _to_response(file_record: KnowledgeFile) -> KnowledgeFileResponse:
         size_bytes=file_record.size_bytes,
         content_type=file_record.content_type,
         uploaded_at=file_record.uploaded_at.isoformat() if file_record.uploaded_at else datetime.now(timezone.utc).isoformat(),
+        uploaded_by=file_record.uploaded_by,
         url=f"/api/v1/knowledge/files/{file_record.file_id}/download",
     )
 
@@ -55,6 +58,14 @@ def _to_response(file_record: KnowledgeFile) -> KnowledgeFileResponse:
 def _write_file_sync(file_path: str, content: bytes) -> None:
     with open(file_path, "wb") as f:
         f.write(content)
+
+
+def _stored_file_path(file_path: str) -> str:
+    """Resolve a DB path only when it remains inside the uploads directory."""
+    try:
+        return stored_upload_path(file_path)
+    except HTTPException:
+        raise HTTPException(status_code=404, detail="Файл не найден") from None
 
 
 @knowledge_router.get("/files", response_model=list[KnowledgeFileResponse])
@@ -67,14 +78,15 @@ async def list_knowledge_files(db: AsyncSession = Depends(get_db)):
     return [_to_response(f) for f in files]
 
 
-@knowledge_router.post("/files", response_model=KnowledgeFileResponse, status_code=status.HTTP_201_CREATED)
-@knowledge_router.post("/files/", response_model=KnowledgeFileResponse, status_code=status.HTTP_201_CREATED, include_in_schema=False)
+@knowledge_router.post("/files", response_model=KnowledgeFileResponse, status_code=status.HTTP_201_CREATED, dependencies=[Depends(require_role("TEACHER"))])
+@knowledge_router.post("/files/", response_model=KnowledgeFileResponse, status_code=status.HTTP_201_CREATED, include_in_schema=False, dependencies=[Depends(require_role("TEACHER"))])
 async def upload_knowledge_file(
     file: UploadFile = File(...),
     db: AsyncSession = Depends(get_db),
-    _teacher=Depends(require_role("TEACHER")),
+    current_user: User = Depends(require_role("TEACHER")),
 ):
     """Upload a PDF or DOCX file to the knowledge base."""
+
     if not file.filename:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -103,12 +115,12 @@ async def upload_knowledge_file(
 
     # Create record in DB
     knowledge_file = KnowledgeFile(
-        uploaded_by=_teacher.user_id,
         name=file.filename,
         file_path=rel_path,
         size_bytes=file_size,
         content_type=file.content_type or ("application/pdf" if ext == ".pdf" else "application/vnd.openxmlformats-officedocument.wordprocessingml.document"),
         uploaded_at=datetime.now(timezone.utc),
+        uploaded_by=current_user.user_id,
     )
     db.add(knowledge_file)
     try:
@@ -131,7 +143,7 @@ async def download_knowledge_file(file_id: str, db: AsyncSession = Depends(get_d
     if not knowledge_file:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Файл не найден")
 
-    full_path = stored_upload_path(knowledge_file.file_path)
+    full_path = _stored_file_path(knowledge_file.file_path)
     if not os.path.exists(full_path):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Файл отсутствует на диске")
 
@@ -142,11 +154,11 @@ async def download_knowledge_file(file_id: str, db: AsyncSession = Depends(get_d
     )
 
 
-@knowledge_router.delete("/files/{file_id}")
+@knowledge_router.delete("/files/{file_id}", dependencies=[Depends(require_role("TEACHER"))])
 async def delete_knowledge_file(
     file_id: str,
     db: AsyncSession = Depends(get_db),
-    _teacher=Depends(require_role("TEACHER")),
+    current_user: User = Depends(require_role("TEACHER")),
 ):
     """Delete a document from the knowledge base."""
     stmt = select(KnowledgeFile).where(KnowledgeFile.file_id == file_id)
@@ -155,7 +167,13 @@ async def delete_knowledge_file(
     if not knowledge_file:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Файл не найден")
 
-    full_path = stored_upload_path(knowledge_file.file_path)
+    if knowledge_file.uploaded_by != current_user.user_id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Удаление материалов других преподавателей запрещено",
+        )
+
+    full_path = _stored_file_path(knowledge_file.file_path)
     if os.path.exists(full_path):
         try:
             os.remove(full_path)

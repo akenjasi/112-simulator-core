@@ -7,6 +7,7 @@ from backend.main import app
 from backend.database import engine, AsyncSessionLocal
 from backend.models.base import Base
 from backend.models.domain_01 import User, UserActionLog
+from backend.models.domain_03 import Assignment, ExamSession
 from backend.models.domain_04 import TicketResult
 from backend.core.security import create_access_token, hash_password
 
@@ -41,8 +42,15 @@ async def test_teacher_grade_change_is_audited(monkeypatch=None):
         session.add(teacher)
         await session.flush()
         teacher_id = teacher.user_id
+        assignment = Assignment(assigned_by=teacher_id)
+        session.add(assignment)
+        await session.flush()
+        exam_session = ExamSession(session_type="CALL_SIMULATION", assignment_id=assignment.assignment_id)
+        session.add(exam_session)
+        await session.flush()
 
         tr = TicketResult(
+            session_id=exam_session.session_id,
             ticket_id="ticket-72-audit",
             is_passed=False,
             errors_count=1,
@@ -125,8 +133,15 @@ async def test_teacher_grade_change_v1_router_is_audited():
         session.add(teacher)
         await session.flush()
         teacher_id = teacher.user_id
+        assignment = Assignment(assigned_by=teacher_id)
+        session.add(assignment)
+        await session.flush()
+        exam_session = ExamSession(session_type="CALL_SIMULATION", assignment_id=assignment.assignment_id)
+        session.add(exam_session)
+        await session.flush()
 
         tr = TicketResult(
+            session_id=exam_session.session_id,
             ticket_id="ticket-v1-audit",
             is_passed=False,
             errors_count=2,

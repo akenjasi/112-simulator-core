@@ -29,6 +29,7 @@ services:
         POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-simulator112}
       CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:3000,http://127.0.0.1:3000}
       SECRET_KEY: ${SECRET_KEY:?Set a unique SECRET_KEY in .env}
+      TTS_ENABLED: ${TTS_ENABLED:-false}
       TESTING: 'false'
       INITIAL_ADMIN_USERNAME: ${INITIAL_ADMIN_USERNAME:-admin}
       INITIAL_ADMIN_PASSWORD: ${INITIAL_ADMIN_PASSWORD:-}

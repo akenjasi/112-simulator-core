@@ -1,8 +1,16 @@
 import React from 'react';
-import { render, screen, fireEvent, waitFor, act, cleanup } from '@testing-library/react';
+import { act, cleanup, render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { notification } from 'antd';
 // Load the page during suite import, not inside the 5s behavioral test budget.
 import SecurityPoliciesPage from '../app/admin/security/page';
+
+// Ant Design notifications render in their own root outside RTL's container.
+// Flush and dispose that root before Vitest destroys this file's jsdom window.
+afterEach(async () => {
+  await act(async () => { notification.destroy(); });
+  cleanup();
+});
 
 // Recharts ResponsiveContainer mock for jsdom
 vi.mock('recharts', async () => {
@@ -311,11 +319,6 @@ describe('Admin Panel Pages and Components', () => {
         'Bearer admin-session-token'
       );
     });
+    expect(await screen.findByText('Доступ к роли «Оператор 112» обновлён')).toBeInTheDocument();
   });
-});
-
-// Drain fetch/React scheduler work before jsdom tears down its window.
-afterEach(async () => {
-  await act(async () => { await new Promise((resolve) => setTimeout(resolve, 0)); });
-  cleanup();
 });

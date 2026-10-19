@@ -555,7 +555,7 @@ function OperatorContent() {
   }
 
   return (
-    <div className="h-screen w-full flex flex-col overflow-hidden select-none font-sans" style={{ background: "#efefef" }}>
+    <div className="h-screen w-full flex flex-col overflow-hidden select-none font-sans operator-workspace bg-[#efefef] dark:bg-background">
       {/* Session Training Strip */}
       {sessionId ? (
         <div className="bg-[#1f2b31] border-b border-blue-500/40 text-blue-200 px-4 py-1.5 text-xs flex items-center justify-between shrink-0 shadow-xs z-30">
@@ -645,9 +645,9 @@ function OperatorContent() {
       />
 
       {/* Main Two-Column Workstation Grid (50 / 50 Desktop Split) */}
-      <div className="flex-1 min-h-0 grid grid-cols-2 overflow-hidden" style={{ background: "#efefef" }}>
+      <div className="flex-1 min-h-0 grid grid-cols-2 overflow-hidden bg-[#efefef] dark:bg-background">
         {/* Left Column: Caller Information & Structured Address */}
-        <div className="h-full overflow-hidden" style={{ borderRight: "1px solid #c9ced1" }}>
+        <div className="h-full overflow-hidden border-r border-[#c9ced1] dark:border-border">
           <OperatorLeftPanel
             callerName={callerName}
             setCallerName={setCallerName}

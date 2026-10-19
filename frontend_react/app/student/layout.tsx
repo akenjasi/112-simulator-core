@@ -14,5 +14,3 @@ export default function StudentLayout({
     </RequireAuth>
   )
 }
-
-export { StudentLayout }

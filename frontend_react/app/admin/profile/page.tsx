@@ -337,7 +337,7 @@ export default function AdminProfilePage() {
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-center">
               {/* QR Code Container */}
-              <div className="flex flex-col items-center justify-center p-6 bg-white dark:bg-slate-900 rounded-2xl border shadow-sm">
+              <div className="flex flex-col items-center justify-center p-6 bg-card rounded-2xl border border-border shadow-sm">
                 {otpauthUrl ? (
                   <div className="p-3 bg-white rounded-xl shadow-inner border">
                     <QRCodeSVG

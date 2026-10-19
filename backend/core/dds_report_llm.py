@@ -245,6 +245,52 @@ def build_dds_report_messages(
 
 # ─── Report Generation Service ────────────────────────────────────────────────
 
+def _is_real_ticket_result(tr: Any) -> bool:
+    """Distinguish actual assessed ticket results from empty default placeholders."""
+    if getattr(tr, "score_total", None) is not None:
+        return True
+    status = (getattr(tr, "status", None) or "").strip().lower()
+    if status in ("passed", "failed"):
+        return True
+    if getattr(tr, "errors_count", 0) > 0:
+        return True
+    if getattr(tr, "error_details", None):
+        return True
+    if getattr(tr, "is_passed", False):
+        return True
+    return False
+
+
+async def check_dds_llm_health(
+    client: Optional[httpx.AsyncClient] = None,
+    settings: Optional[DDSLLMSettings] = None,
+) -> Dict[str, Any]:
+    """Read-only health check verifying reachable local LLM server without invoking generation."""
+    if settings is None:
+        settings = get_llm_settings()
+    # llama.cpp exposes /health at the server root, outside the /v1 API.
+    health_url = f"{settings.base_url.rstrip('/').removesuffix('/v1')}/health"
+    try:
+        if client is not None:
+            resp = await client.get(health_url, timeout=5.0)
+        else:
+            async with httpx.AsyncClient(timeout=5.0, trust_env=False) as c:
+                resp = await c.get(health_url)
+        return {
+            "status": "ok" if resp.status_code == 200 else "degraded",
+            "status_code": resp.status_code,
+            "base_url": settings.base_url,
+            "model": settings.model,
+        }
+    except Exception as exc:
+        return {
+            "status": "unreachable",
+            "error": type(exc).__name__,
+            "base_url": settings.base_url,
+            "model": settings.model,
+        }
+
+
 async def generate_dds_lesson_report(
     snapshot: Union[Dict[str, Any], DDSLessonReportDataResponse],
     client: Optional[httpx.AsyncClient] = None,
@@ -291,11 +337,24 @@ async def generate_dds_lesson_report(
             "Недостаточно данных для формирования отчета: в занятии отсутствуют завершенные сессии."
         )
 
-    if summary.evaluation_count <= 0 and summary.ticket_result_count <= 0 and not any(s.exercise_protocols for s in validated.sessions):
-        raise DDSReportGenerationError(
-            "Недостаточно данных для формирования отчета: отсутствуют результаты оценивания и билетов."
-        )
+    has_actions = any(
+        action.get("kind") in ("status", "dispatch")
+        and isinstance(action.get("service_name"), str) and action["service_name"].strip()
+        and action.get("card_id") and action.get("at")
+        and (action.get("kind") == "dispatch" or action.get("status"))
+        for session in validated.sessions for action in session.actions
+    )
+    has_real_ticket_results = any(
+        _is_real_ticket_result(tr)
+        for s in validated.sessions
+        for tr in s.ticket_results
+    )
 
+    if not has_actions and not any(s.exercise_protocols for s in validated.sessions):
+        if summary.evaluation_count <= 0 and (summary.ticket_result_count <= 0 or not has_real_ticket_results):
+            raise DDSReportGenerationError(
+                "Недостаточно данных для формирования отчета: отсутствуют результаты оценивания и билетов."
+            )
     # 4. Check input length against DDS_LLM_MAX_INPUT_CHARS (reject explicitly, never silently truncate)
     raw_snapshot_json = json.dumps(validated.model_dump(mode="json"), ensure_ascii=False)
     if len(raw_snapshot_json) > settings.max_input_chars:

@@ -4,7 +4,8 @@ import {act,cleanup,render,screen} from '@testing-library/react'
 import {afterEach,beforeEach,describe,expect,it,vi} from 'vitest'
 import DDSPage from '@/app/dds/page'
 let query=''
-vi.mock('next/navigation',()=>({useSearchParams:()=>new URLSearchParams(query),useRouter:()=>({push:vi.fn(),replace:vi.fn()})}))
+const navigation = vi.hoisted(() => ({ push: vi.fn(), replace: vi.fn() }))
+vi.mock('next/navigation',()=>({useSearchParams:()=>new URLSearchParams(query),useRouter:()=>navigation}))
 vi.mock('next/link',()=>({default:({children,...props}:any)=><a {...props}>{children}</a>}))
 vi.mock('@/components/dispatcher/dds-assigned-console',()=>({DDSAssignedConsole:({sessionId,ticketId}:any)=><div>assigned {sessionId} {ticketId}</div>}))
 vi.mock('@/components/dispatcher/top-bar',()=>({TopBar:()=>null}))
@@ -14,7 +15,7 @@ vi.mock('@/components/dispatcher/services-bar',()=>({ServicesBar:()=>null}))
 vi.mock('@/components/dispatcher/dispatch-panel',()=>({DispatchPanel:()=>null}))
 vi.mock('@/components/tutorial',()=>({Tutorial:()=>null}))
 let network:ReturnType<typeof vi.fn>
-beforeEach(()=>{query='';network=vi.fn().mockResolvedValue({ok:true,json:async()=>({scenarios:[]})});vi.stubGlobal('fetch',network)})
+beforeEach(()=>{query='';navigation.replace.mockClear();network=vi.fn().mockResolvedValue({ok:true,json:async()=>({scenarios:[]})});vi.stubGlobal('fetch',network)})
 afterEach(()=>{cleanup();vi.unstubAllGlobals()})
 const flush=async()=>{await act(async()=>{for(let i=0;i<8;i++)await Promise.resolve()})}
 describe('DDS route boundary',()=>{
@@ -29,9 +30,10 @@ describe('DDS route boundary',()=>{
   expect(document.body.textContent).toMatch(/назначенн.*заняти/i)
   expect(network).not.toHaveBeenCalled()
  })
- it('the separate demo still renders without removed session or ticket variables',async()=>{
-  query='demo=true';expect(()=>render(<DDSPage/>)).not.toThrow();await flush()
+ it('a route without an assigned session redirects to the persisted incident list',async()=>{
+  expect(()=>render(<DDSPage/>)).not.toThrow();await flush()
   expect(screen.queryByText(/^assigned /)).toBeNull()
+  expect(navigation.replace).toHaveBeenCalledWith('/dds/journal')
   expect(network.mock.calls.every(([url])=>!String(url).includes('/tickets/'))).toBe(true)
  })
 })

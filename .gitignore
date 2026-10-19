@@ -11,6 +11,8 @@ data/tts_cache/
 .deps/
 *.tsbuildinfo
 *.gguf
+*.gguf.part
+*.gguf.lock
 backend/core/qwen_tts/models/
 data/records/
 *.raw

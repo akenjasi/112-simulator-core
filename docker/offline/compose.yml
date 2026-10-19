@@ -1,0 +1,96 @@
+services:
+  postgres:
+    image: ${POSTGRES_IMAGE:?Run install.sh first}
+    platform: linux/amd64
+    pull_policy: never
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: simulator112
+      POSTGRES_DB: simulator112
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Missing generated password}
+    volumes:
+      - database:/var/lib/postgresql/data
+    healthcheck:
+      test: [CMD-SHELL, 'pg_isready -U "$$POSTGRES_USER" -d "$$POSTGRES_DB"']
+      interval: 5s
+      timeout: 5s
+      retries: 30
+    networks: [local]
+
+  llm:
+    image: ${LLM_IMAGE:?Run install.sh first}
+    platform: linux/amd64
+    pull_policy: never
+    restart: unless-stopped
+    volumes:
+      - type: bind
+        source: ./models/report.gguf
+        target: /models/report.gguf
+        read_only: true
+        bind: {create_host_path: false}
+    command: [--model, /models/report.gguf, --alias, dds-qwen, --offline,
+              --host, 0.0.0.0, --port, "8080", --n-gpu-layers, "0",
+              --threads, "${LLM_THREADS:-4}", --ctx-size, "${LLM_CONTEXT:-8192}",
+              --parallel, "1", --n-predict, "1200"]
+    networks: [local]
+
+  backend:
+    image: ${BACKEND_IMAGE:?Run install.sh first}
+    platform: linux/amd64
+    pull_policy: never
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: postgresql+asyncpg://simulator112:${POSTGRES_PASSWORD}@postgres:5432/simulator112
+      SECRET_KEY: ${SECRET_KEY:?Missing generated secret}
+      INITIAL_ADMIN_USERNAME: ${INITIAL_ADMIN_USERNAME:-admin}
+      INITIAL_ADMIN_PASSWORD: ${INITIAL_ADMIN_PASSWORD:?Missing initial password}
+      INITIAL_ADMIN_FULL_NAME: Администратор системы 112
+      DDS_LLM_BASE_URL: http://llm:8080/v1
+      DDS_LLM_MODEL: dds-qwen
+      DDS_LLM_TIMEOUT_SECONDS: ${LLM_TIMEOUT_SECONDS:-900}
+      FACTOIDS_LLM_BASE_URL: http://llm:8080/v1
+      FACTOIDS_LLM_MODEL: dds-qwen
+      FACTOIDS_LLM_TIMEOUT_SECONDS: ${LLM_TIMEOUT_SECONDS:-900}
+      ASR_ENABLED: "false"
+      TTS_ENABLED: "false"
+      HF_HUB_OFFLINE: "1"
+      TRANSFORMERS_OFFLINE: "1"
+      HF_HUB_DISABLE_TELEMETRY: "1"
+      CUDA_VISIBLE_DEVICES: ""
+      LDAP_ENABLED: "false"
+    volumes:
+      - application:/app/data
+      - ./models/tts:/app/backend/core/qwen_tts/models:ro
+    depends_on:
+      postgres: {condition: service_healthy}
+      llm: {condition: service_started}
+    healthcheck:
+      test: [CMD, curl, --fail, --silent, http://127.0.0.1:8000/health]
+      interval: 10s
+      timeout: 5s
+      retries: 60
+      start_period: 60s
+    networks: [local]
+
+  frontend:
+    image: ${FRONTEND_IMAGE:?Run install.sh first}
+    platform: linux/amd64
+    pull_policy: never
+    restart: unless-stopped
+    ports:
+      - "${HTTP_PORT:-3000}:3000"
+      - "${HTTPS_PORT:-443}:443"
+    volumes:
+      - ./certs:/etc/nginx/ssl:ro
+    depends_on:
+      backend: {condition: service_healthy}
+    networks: [ingress, local]
+
+volumes:
+  database:
+  application:
+networks:
+  local:
+    internal: true
+  ingress:
+    driver: bridge

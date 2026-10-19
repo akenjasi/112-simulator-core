@@ -1,13 +1,14 @@
 """Persisted sequential DDS exercises. Queue snapshots never leave the server."""
 from copy import deepcopy
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from typing import Any
 
 from fastapi import HTTPException
-from sqlalchemy import select, text
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm.attributes import flag_modified
 
+from backend.core.student_workspace import lock_cadets
 from backend.core.dds_service_policy import canonical_status, current_service_statuses
 from backend.models.domain_02 import ScenarioTicket
 from backend.models.domain_01 import User
@@ -18,11 +19,12 @@ from backend.schemas.dds_cycle import DDSTrainingStartPayload
 
 def available_for_training(ticket: ScenarioTicket) -> bool:
     # Unmarked legacy material remains usable; explicitly unpublished drafts do not.
-    return (ticket.workflow_state or {}).get("status") in (None, "", "active", "published")
+    return (ticket.workflow_state or {}).get("status") in (None, "", "active", "published", "APPROVED")
 
 
 async def load_pool(db: AsyncSession, ticket_ids: list[str], *, training: bool = False) -> list[dict[str, Any]]:
     from backend.core.dds_cycle import incoming_card_from_ticket, is_suitable_dds_ticket, extract_dds_ticket_metadata
+    from backend.core.ticket_lifecycle import is_approved_dds_ticket
 
     if not ticket_ids or len(set(ticket_ids)) != len(ticket_ids):
         raise HTTPException(422, detail={"code": "DDS_INVALID_POOL"})
@@ -32,7 +34,9 @@ async def load_pool(db: AsyncSession, ticket_ids: list[str], *, training: bool =
     pool = []
     for ticket_id in ticket_ids:
         ticket = tickets.get(ticket_id)
-        if not is_suitable_dds_ticket(ticket) or (training and not available_for_training(ticket)):
+        if (not is_suitable_dds_ticket(ticket)
+                or (training and not available_for_training(ticket))
+                or (not training and not is_approved_dds_ticket(ticket))):
             raise HTTPException(409, detail={"code": "DDS_TICKET_UNAVAILABLE"})
         from backend.core.dds_exercise import validated_plan
         incoming = incoming_card_from_ticket(ticket)
@@ -42,7 +46,7 @@ async def load_pool(db: AsyncSession, ticket_ids: list[str], *, training: bool =
         except ValueError as exc:
             raise HTTPException(422, "Invalid DDS exercise plan") from exc
         pool.append({"exercise_plan": plan, "ticket_id": ticket_id, "title": extract_dds_ticket_metadata(ticket)[3],
-                     "incoming_card": incoming_card_from_ticket(ticket)})
+                     "incoming_card": incoming, "gradebook_snapshot": {"ticket_id": ticket_id, "title": ticket.title or extract_dds_ticket_metadata(ticket)[3], "etalon": deepcopy(ticket.ground_truth or {}), "incoming_card": deepcopy(incoming)}})
     return pool
 
 
@@ -82,6 +86,11 @@ async def initialize_queue(db: AsyncSession, session: ExamSession, pool: list[di
     data = {"version": 2, "queue": deepcopy(pool), "completed_cards": [], "submitted_at": None}
     await activate_card(db, session, data, 0, now)
     store_state(session, data)
+    state = deepcopy(session.dynamic_state)
+    state["_gradebook_snapshots"] = {item["ticket_id"]: deepcopy(item["gradebook_snapshot"])
+                                    for item in pool if item.get("gradebook_snapshot")}
+    session.dynamic_state = state
+    flag_modified(session, "dynamic_state")
 
 
 def completion_blockers(data: dict[str, Any], assigned: dict[str, Any]) -> list[dict[str, str]]:
@@ -162,6 +171,8 @@ async def complete_card(db: AsyncSession, session_id: str, card_id: str, request
         # The same card can be acknowledged repeatedly, but never advance twice.
         return await get_dds_session_state(session_id, user, db)
     if session.status != "ACTIVE" or lesson.status != "ACTIVE":
+        if data.get("stop_reason") == "exam_timeout":
+            raise HTTPException(409, detail={"code": "DDS_EXAM_TIME_EXPIRED", "message": "Время выполнения экзамена истекло"})
         raise HTTPException(409, detail={"code": "DDS_SESSION_NOT_ACTIVE"})
     if data.get("card_id") != card_id:
         raise HTTPException(409, detail={"code": "DDS_CARD_NOT_CURRENT"})
@@ -176,6 +187,36 @@ async def complete_card(db: AsyncSession, session_id: str, card_id: str, request
             result = await get_dds_session_state(session_id, user, db)
             result["last_attempt"] = attempt_result(saved)
             return result
+    now = datetime.now(timezone.utc)
+    if (lesson.mode or "").upper() == "EXAM":
+        from backend.core.dds_cycle import _card_started_at
+        limit = (
+            session.time_limit_seconds
+            if (session.time_limit_seconds and session.time_limit_seconds > 0)
+            else (
+                lesson.time_limit_seconds
+                if (lesson and lesson.time_limit_seconds and lesson.time_limit_seconds > 0)
+                else 30
+            )
+        )
+        start_dt = _card_started_at(session, data)
+        if start_dt is not None:
+            if start_dt.tzinfo is None:
+                start_dt = start_dt.replace(tzinfo=timezone.utc)
+        else:
+            start_dt = now
+        if now > (start_dt + timedelta(seconds=limit)):
+            session.status, session.end_time = "COMPLETED", now
+            data["timed_out"] = True
+            data["time_exceeded_seconds"] = max(1, int((now - (start_dt + timedelta(seconds=limit))).total_seconds()))
+            data["stopped_at"] = now.isoformat()
+            data["stop_reason"] = "exam_timeout"
+            data["submitted_at"] = None
+            if card.status != "Отработана":
+                card.status = "Не завершено"
+            store_state(session, data)
+            await db.commit()
+            raise HTTPException(409, detail={"code": "DDS_EXAM_TIME_EXPIRED", "message": "Время выполнения экзамена истекло"})
     blockers = completion_blockers(data, card.assigned_services or {})
     if blockers and data.get("exercise"):
         from backend.core.dds_phone import retry, record
@@ -256,7 +297,7 @@ async def start_training(db: AsyncSession, payload: DDSTrainingStartPayload, use
     if user.role != "CADET":
         raise HTTPException(403, "Self-training requires a cadet")
     # Serialize retries for this user, not all users, including first insertion.
-    await db.execute(text("UPDATE users SET is_active = is_active WHERE user_id = :uid"), {"uid": user.user_id})
+    await lock_cadets(db, [user.user_id])
     sessions = (await db.scalars(select(ExamSession).join(Assignment).where(
         ExamSession.cadet_id == user.user_id, Assignment.card_pool_source == "self_training"))).all()
     for session in sessions:
@@ -286,7 +327,7 @@ async def start_training(db: AsyncSession, payload: DDSTrainingStartPayload, use
 
 def queue_ticket_details(session, evaluations, results):
     """One honest detail per queue entry, including unreceived/ungraded cards."""
-    from backend.core.dds_cycle import get_session_score
+    from backend.core.gradebook_records import latest_evaluation, resolve_attempt_score_and_status
     from backend.schemas.lessons import CadetTicketDetail
 
     data = session.dynamic_state["dds"]
@@ -300,9 +341,9 @@ def queue_ticket_details(session, evaluations, results):
         actions = saved["actions"] if saved else data["actions"] if current else []
         evs = [ev for ev in evaluations if card_id and ev.card_id == card_id]
         trs = [result for result in results if result.ticket_id == ticket_id]
-        score = get_session_score(evs, trs)
-        graded = [result for result in trs if result.status in ("completed", "evaluated")]
-        status = ("failed" if any(not result.is_passed for result in graded) else "passed") if graded else (
+        result = max(trs, key=lambda value: (bool(value.is_appealed), str(value.updated_at or value.created_at), value.result_id), default=None)
+        score, passed, saved_status, _, _ = resolve_attempt_score_and_status(None, result, latest_evaluation(evs))
+        status = saved_status if (score is not None or isinstance(passed, bool)) else (
             "ungraded" if saved else "in_progress" if current and session.status == "ACTIVE" else
             "incomplete" if session.status == "COMPLETED" else "pending")
         errors = []
@@ -315,6 +356,7 @@ def queue_ticket_details(session, evaluations, results):
         completed = saved.get("card_submitted_at") if saved else None
         details.append(CadetTicketDetail(ticket_id=ticket_id,
             title=item.get("title") or f"Билет #{ticket_id[:8]}",
-            card_id=card_id, status=status, score=score, errors_count=len(errors), errors=errors,
+            card_id=card_id, record_id=result.result_id if result else card_id, session_id=session.session_id,
+            status=status, score=score, errors_count=len(errors), errors=errors,
             actions=actions, completed_at=datetime.fromisoformat(completed) if completed else None))
     return details

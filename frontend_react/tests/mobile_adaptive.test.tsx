@@ -330,16 +330,32 @@ describe('Mobile Adaptivity (task_78)', () => {
       expect(overflowContainer).toBeInTheDocument();
     });
 
-    it('should render Teacher Analytics with overflow-x-auto container', async () => {
-      const AnalyticsPage = (await import('../app/teacher/analytics/page')).default;
-      const { container } = render(<AnalyticsPage />);
+    it('should keep the lesson results table horizontally scrollable after removing the heatmap', async () => {
+      localStorage.setItem('token', 'teacher-token');
+      const originalFetch = global.fetch;
+      global.fetch = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+        if (String(input) === '/api/v1/lessons') {
+          return Promise.resolve(new Response(JSON.stringify([{
+            id: 'mobile-lesson', group_name: 'Мобильная группа', status: 'COMPLETED',
+            target_role: 'DISPATCHER_DDS',
+            students: [{ cadet_id: 'c1', cadet_name: 'Курсант таблицы', passed: 0, failed: 0, progress: 0 }],
+          }]), { status: 200, headers: { 'Content-Type': 'application/json' } }));
+        }
+        return originalFetch(input, init);
+      });
+      const AnalyticsPage = (await import('../components/teacher/analytics-page')).default;
+      const { container } = render(<AnalyticsPage initialTab="history" />);
 
-      const overflowContainers = container.querySelectorAll('.overflow-x-auto');
-      expect(overflowContainers.length).toBeGreaterThan(0);
+      fireEvent.click(await screen.findByText('Мобильная группа'));
+      const cadet = await screen.findByText('Курсант таблицы');
+      const table = cadet.closest('table');
+      expect(table).toBeInTheDocument();
+      expect(table?.closest('.overflow-x-auto')).toBeInTheDocument();
+      expect(container).not.toHaveTextContent('Тепловая карта');
     });
 
     it('should render Teacher Live Session table with overflow-x-auto container', async () => {
-      const LiveDashboard = (await import('../app/teacher/sessions/live/page')).default;
+      const LiveDashboard = (await import('../components/teacher/live-dashboard')).default;
       const { container } = render(<LiveDashboard sessionId="sess-101" />);
 
       await waitFor(() => {

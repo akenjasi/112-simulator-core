@@ -61,6 +61,19 @@ describe('27.2 / ТЗ 30: База билетов и генерация', () => 
     },
   ];
 
+  it('allows legacy active tickets to be submitted for approval without treating them as approved', async () => {
+    const previousStatus = mockTickets[0].status;
+    mockTickets[0].status = 'active';
+    render(<TicketsPage />);
+
+    await waitFor(() => {
+      expect(screen.getByText('Не проверен')).toBeInTheDocument();
+      expect(screen.getAllByRole('button', { name: /Утвердить билет/i }).length).toBeGreaterThan(0);
+    });
+    expect(screen.queryByText('Утвержден')).not.toBeInTheDocument();
+    mockTickets[0].status = previousStatus;
+  });
+
   beforeEach(() => {
     vi.stubGlobal('fetch', vi.fn((url: string, init?: RequestInit) => {
       const urlStr = url.toString();
@@ -473,16 +486,8 @@ describe('27.2 / ТЗ 30: База билетов и генерация', () => 
       expect(screen.getByText(/ул\. Тверская/i)).toBeInTheDocument();
     });
 
-    // Click audio playback inside details modal (ТЗ 35: прослушать можно только в деталях)
-    const audioBtn = screen.getByRole('button', { name: /Прослушать аудио/i });
-    expect(audioBtn).toBeInTheDocument();
-    fireEvent.click(audioBtn);
-
-    await waitFor(() => {
-      expect(global.fetch).toHaveBeenCalledWith(
-        expect.stringMatching(/\/api\/tickets\/.*\/audio/)
-      );
-    });
+    // Audio playback button must NOT be in details modal (audio/sound disabled)
+    expect(screen.queryByRole('button', { name: /Прослушать аудио/i })).not.toBeInTheDocument();
 
     // Close modal
     const closeBtns = screen.getAllByRole('button', { name: /Закрыть/i });

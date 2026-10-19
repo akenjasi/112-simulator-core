@@ -41,6 +41,10 @@ jobs:
         env:
           IMBA_VERIFY_REPORT_DIR: reports/ci/backend
         run: bash scripts/verify_build.sh backend-core
+
+      - name: Verify Offline Packaging Contracts
+        run: python -m unittest discover -s scripts/tests -p 'test_offline_*.py' -v
+
       - name: Verify Frontend
         env:
           IMBA_VERIFY_REPORT_DIR: reports/ci/frontend

@@ -1,7 +1,7 @@
 import React from 'react';
 import { render, screen, waitFor, fireEvent, act } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import LiveDashboardPage from '@/app/teacher/sessions/live/page';
+import LiveDashboardPage from '@/components/teacher/live-dashboard';
 
 describe('27.4: Live Dashboard', () => {
   const mockStats = {
@@ -47,8 +47,8 @@ describe('27.4: Live Dashboard', () => {
       'fetch',
       vi.fn((url: string) => {
         const urlStr = url.toString();
-        // The DDS dashboard reads the lesson API; /sessions/:id/stats is the legacy 112 contract.
-        if (urlStr === '/api/v1/lessons/sess-101') {
+        // Explicit lesson and session sources each use their own API contract.
+        if (urlStr === '/api/v1/lessons/sess-101' || urlStr === '/api/v1/sessions/sess-101/stats') {
           return Promise.resolve({
             ok: true,
             status: 200,
@@ -66,7 +66,7 @@ describe('27.4: Live Dashboard', () => {
   });
 
   it('should render live statistics', async () => {
-    render(<LiveDashboardPage sessionId="sess-101" />);
+    render(<LiveDashboardPage sessionId="sess-101" source="session" />);
 
     await waitFor(() => {
       expect(screen.getByText(/Live Мониторинг сессии/i)).toBeInTheDocument();
@@ -92,8 +92,23 @@ describe('27.4: Live Dashboard', () => {
     expect(progressBars.length).toBeGreaterThanOrEqual(1);
   });
 
+  it('routes by explicit source rather than guessing from an ID prefix', async () => {
+    render(<LiveDashboardPage sessionId="sess-looks-like-a-session" source="lesson" />);
+
+    await waitFor(() => {
+      expect(global.fetch).toHaveBeenCalledWith(
+        '/api/v1/lessons/sess-looks-like-a-session',
+        expect.any(Object)
+      );
+    });
+    expect(global.fetch).not.toHaveBeenCalledWith(
+      '/api/v1/sessions/sess-looks-like-a-session/stats',
+      expect.anything()
+    );
+  });
+
   it('should not have pause or intervention buttons (read-only mode)', async () => {
-    render(<LiveDashboardPage sessionId="sess-101" />);
+    render(<LiveDashboardPage sessionId="sess-101" source="session" />);
 
     await waitFor(() => {
       expect(screen.getByText('Иван Иванов')).toBeInTheDocument();
@@ -103,6 +118,7 @@ describe('27.4: Live Dashboard', () => {
     expect(screen.queryByRole('button', { name: /пауза|pause/i })).toBeNull();
     expect(screen.queryByRole('button', { name: /остановить|stop|прервать/i })).toBeNull();
     expect(screen.queryByRole('button', { name: /вмешаться|intervene/i })).toBeNull();
+    expect(screen.queryByRole('button', { name: /сохранить заметки/i })).toBeNull();
 
     // Read-only indicator is displayed
     expect(screen.getByText(/только чтение/i)).toBeInTheDocument();
@@ -111,7 +127,7 @@ describe('27.4: Live Dashboard', () => {
   it('should poll data periodically for updates', async () => {
     vi.useFakeTimers();
 
-    render(<LiveDashboardPage sessionId="sess-101" />);
+    render(<LiveDashboardPage sessionId="sess-101" source="session" />);
 
     // Initial fetch
     expect(global.fetch).toHaveBeenCalledTimes(1);
@@ -134,7 +150,7 @@ describe('27.4: Live Dashboard', () => {
   });
 
   it('should toggle between grid and table view', async () => {
-    render(<LiveDashboardPage sessionId="sess-101" />);
+    render(<LiveDashboardPage sessionId="sess-101" source="session" />);
 
     await waitFor(() => {
       expect(screen.getByText('Иван Иванов')).toBeInTheDocument();
@@ -161,7 +177,7 @@ describe('27.4: Live Dashboard', () => {
   });
 
   it('should filter cadets by search query', async () => {
-    render(<LiveDashboardPage sessionId="sess-101" />);
+    render(<LiveDashboardPage sessionId="sess-101" source="session" />);
 
     await waitFor(() => {
       expect(screen.getByText('Иван Иванов')).toBeInTheDocument();

@@ -50,6 +50,8 @@ def action_error(current: str, payload: Any) -> tuple[int, str] | None:
         if current not in PROGRESS[:-1]:
             return 409, "DDS_SERVICE_NOT_DISPATCHABLE"
         return None
+    if not (getattr(payload, "order_number", None) or "").strip():
+        return 422, "DDS_ORDER_NUMBER_REQUIRED"
     if payload.status in REFUSALS and not (payload.comment or "").strip():
         return 422, "DDS_REFUSAL_REASON_REQUIRED"
     # Legacy aliases are readable; new actions use the methodological names.

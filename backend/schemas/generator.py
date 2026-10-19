@@ -1,5 +1,5 @@
 import uuid
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 from pydantic import BaseModel, Field
 
 from backend.schemas.bricks import TicketData as BaseTicketData
@@ -22,3 +22,4 @@ class TicketData(BaseTicketData):
     factoids: Dict[str, Any] = Field(default_factory=dict)
     ground_truth: Dict[str, Any] = Field(default_factory=dict)
     etalon_services: List[str] = Field(default_factory=list)
+    dds_etalon: Optional[Dict[str, Any]] = None

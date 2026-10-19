@@ -4,6 +4,7 @@ import React, { useEffect, useState } from "react"
 import Link from "next/link"
 import { usePathname } from "next/navigation"
 import RequireAuth from "@/components/auth/RequireAuth"
+import { ThemeSelect } from "@/components/theme-select"
 import { LogoutButton } from "@/components/auth/LogoutButton"
 import {
   LayoutDashboard,
@@ -79,18 +80,18 @@ export default function AdminLayout({
 
   return (
     <RequireAuth allowedRoles={["ADMIN"]}>
-      <div className="flex flex-col md:flex-row min-h-screen bg-slate-100 text-slate-800 font-sans admin-workspace">
+      <div className="flex flex-col md:flex-row min-h-screen bg-background text-foreground font-sans admin-workspace">
       {/* Mobile Top Header */}
-      <header className="md:hidden flex items-center justify-between px-4 py-3 bg-white border-b-2 border-slate-200 sticky top-0 z-30 shadow-xs">
+      <header className="md:hidden flex items-center justify-between px-4 py-3 bg-sidebar border-b border-sidebar-border sticky top-0 z-30 shadow-xs">
         <div className="flex items-center gap-2.5">
-          <div className="p-2 bg-purple-700 text-white rounded-lg shadow-sm">
+          <div className="p-2 bg-primary text-primary-foreground rounded-lg shadow-sm">
             <Shield className="w-5 h-5" />
           </div>
           <div>
-            <span className="text-base font-extrabold text-slate-900 leading-tight block">
+            <span className="text-base font-extrabold text-sidebar-foreground leading-tight block">
               Система-112: Администратор
             </span>
-            <p className="text-[10px] font-semibold text-purple-700 uppercase tracking-wider">
+            <p className="text-[10px] font-semibold text-primary uppercase tracking-wider">
               Панель управления
             </p>
           </div>
@@ -100,7 +101,7 @@ export default function AdminLayout({
           onClick={() => setIsMobileMenuOpen((prev) => !prev)}
           aria-label={isMobileMenuOpen ? "Закрыть меню" : "Открыть меню"}
           data-testid="admin-mobile-menu-toggle"
-          className="p-2 rounded-lg text-slate-600 hover:text-slate-900 hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-purple-600 cursor-pointer"
+          className="p-2 rounded-lg text-sidebar-foreground/80 hover:text-sidebar-foreground hover:bg-sidebar-accent focus:outline-none focus:ring-2 focus:ring-primary cursor-pointer"
         >
           {isMobileMenuOpen ? <X className="w-6 h-6" /> : <Menu className="w-6 h-6" />}
         </button>
@@ -117,19 +118,19 @@ export default function AdminLayout({
           />
           <aside
             aria-label="Мобильное меню администратора"
-            className="fixed inset-y-0 left-0 w-72 max-w-[85vw] bg-white border-r-2 border-slate-200 z-50 flex flex-col justify-between shadow-2xl md:hidden animate-in slide-in-from-left duration-200"
+            className="fixed inset-y-0 left-0 w-72 max-w-[85vw] bg-sidebar border-r border-sidebar-border z-50 flex flex-col justify-between shadow-2xl md:hidden animate-in slide-in-from-left duration-200"
           >
             <div>
-              <div className="p-4 border-b-2 border-slate-200 bg-slate-50 flex items-center justify-between">
+              <div className="p-4 border-b border-sidebar-border bg-sidebar flex items-center justify-between">
                 <div className="flex items-center gap-2.5">
-                  <div className="p-2 bg-purple-700 text-white rounded-xl shadow-md">
+                  <div className="p-2 bg-primary text-primary-foreground rounded-xl shadow-md">
                     <Shield className="w-5 h-5" />
                   </div>
                   <div>
-                    <h2 className="text-sm font-extrabold text-slate-900 leading-tight">
+                    <h2 className="text-sm font-extrabold text-sidebar-foreground leading-tight">
                       Панель администратора
                     </h2>
-                    <p className="text-[10px] font-semibold text-purple-700 uppercase tracking-wider">
+                    <p className="text-[10px] font-semibold text-primary uppercase tracking-wider">
                       Система-112 Core
                     </p>
                   </div>
@@ -139,7 +140,7 @@ export default function AdminLayout({
                   onClick={() => setIsMobileMenuOpen(false)}
                   aria-label="Закрыть панель"
                   data-testid="admin-drawer-close"
-                  className="p-1.5 rounded-lg text-slate-500 hover:text-slate-800 hover:bg-slate-100 cursor-pointer"
+                  className="p-1.5 rounded-lg text-sidebar-foreground/70 hover:text-sidebar-foreground hover:bg-sidebar-accent cursor-pointer"
                 >
                   <X className="w-5 h-5" />
                 </button>
@@ -158,14 +159,14 @@ export default function AdminLayout({
                       key={`mobile-${item.href}`}
                       href={item.href}
                       onClick={() => setIsMobileMenuOpen(false)}
-                      className={`flex items-center gap-3.5 px-4 py-3 rounded-xl font-bold text-base transition-all duration-150 outline-none focus:ring-2 focus:ring-purple-600 ${
+                      className={`flex items-center gap-3.5 px-4 py-3 rounded-xl font-bold text-base transition-all duration-150 outline-none focus:ring-2 focus:ring-primary ${
                         isActive
-                          ? "bg-purple-700 text-white shadow-md font-extrabold"
-                          : "text-slate-600 hover:bg-slate-100 active:bg-slate-200"
+                          ? "bg-primary text-primary-foreground shadow-sm font-extrabold"
+                          : "text-sidebar-foreground/75 hover:text-sidebar-foreground hover:bg-sidebar-accent active:bg-sidebar-accent"
                       }`}
                       aria-current={isActive ? "page" : undefined}
                     >
-                      <Icon className={`w-5 h-5 shrink-0 ${isActive ? "text-white" : "text-slate-500"}`} />
+                      <Icon className={`w-5 h-5 shrink-0 ${isActive ? "text-primary-foreground" : "text-sidebar-foreground/75"}`} />
                       <span className="truncate">{item.name}</span>
                     </Link>
                   )
@@ -173,8 +174,9 @@ export default function AdminLayout({
               </nav>
             </div>
 
-            <div className="p-4 border-t-2 border-slate-200 bg-slate-50">
+            <div className="p-4 border-t border-sidebar-border bg-sidebar">
               <SystemStatus status={systemStatus} variant="admin" />
+              <div className="mt-3"><ThemeSelect /></div>
               <LogoutButton className="mt-3" />
             </div>
           </aside>
@@ -184,20 +186,20 @@ export default function AdminLayout({
       {/* Persistent Desktop Sidebar */}
       <aside
         aria-label="Боковое меню администратора"
-        className="hidden md:flex w-72 shrink-0 bg-white border-r-2 border-slate-200 flex-col justify-between shadow-md z-30 sticky top-0 h-screen"
+        className="hidden md:flex w-72 shrink-0 bg-sidebar border-r border-sidebar-border flex-col justify-between shadow-md z-30 sticky top-0 h-screen"
       >
         <div>
           {/* Header / Brand */}
-          <div className="p-5 border-b-2 border-slate-200 bg-slate-50">
+          <div className="p-5 border-b border-sidebar-border bg-sidebar">
             <div className="flex items-center gap-3">
-              <div className="p-2.5 bg-purple-700 text-white rounded-xl shadow-md">
+              <div className="p-2.5 bg-primary text-primary-foreground rounded-xl shadow-md">
                 <Shield className="w-7 h-7" />
               </div>
               <div>
-                <h1 className="text-lg font-extrabold text-slate-900 leading-tight">
+                <h1 className="text-lg font-extrabold text-sidebar-foreground leading-tight">
                   Панель администратора
                 </h1>
-                <p className="text-xs font-semibold text-purple-700 uppercase tracking-wider">
+                <p className="text-xs font-semibold text-primary uppercase tracking-wider">
                   Система-112 Core
                 </p>
               </div>
@@ -217,14 +219,14 @@ export default function AdminLayout({
                 <Link
                   key={item.href}
                   href={item.href}
-                  className={`flex items-center gap-3.5 px-4 py-3.5 rounded-xl font-bold text-base transition-all duration-150 outline-none focus:ring-2 focus:ring-purple-600 ${
+                  className={`flex items-center gap-3.5 px-4 py-3.5 rounded-xl font-bold text-base transition-all duration-150 outline-none focus:ring-2 focus:ring-primary ${
                     isActive
-                      ? "bg-purple-700 text-white shadow-md font-extrabold"
-                      : "text-slate-600 hover:bg-slate-100 active:bg-slate-200"
+                      ? "bg-primary text-primary-foreground shadow-sm font-extrabold"
+                      : "text-sidebar-foreground/75 hover:text-sidebar-foreground hover:bg-sidebar-accent active:bg-sidebar-accent"
                   }`}
                   aria-current={isActive ? "page" : undefined}
                 >
-                  <Icon className={`w-5 h-5 shrink-0 ${isActive ? "text-white" : "text-slate-500"}`} />
+                  <Icon className={`w-5 h-5 shrink-0 ${isActive ? "text-primary-foreground" : "text-sidebar-foreground/75"}`} />
                   <span className="truncate">{item.name}</span>
                 </Link>
               )
@@ -233,14 +235,15 @@ export default function AdminLayout({
         </div>
 
         {/* Footer / System Status */}
-        <div className="p-4 border-t-2 border-slate-200 bg-slate-50">
+        <div className="p-4 border-t border-sidebar-border bg-sidebar">
           <SystemStatus status={systemStatus} variant="admin" />
-          <LogoutButton className="mt-3" />
+          <div className="mt-3"><ThemeSelect /></div>
+              <LogoutButton className="mt-3" />
         </div>
       </aside>
 
       {/* Main Content Area */}
-      <main className="flex-1 min-w-0 bg-slate-50 text-slate-900 p-4 sm:p-6 md:p-8 overflow-y-auto min-h-screen">
+      <main className="flex-1 min-w-0 bg-background text-foreground p-4 sm:p-6 md:p-8 overflow-y-auto min-h-screen">
         {children}
       </main>
       </div>

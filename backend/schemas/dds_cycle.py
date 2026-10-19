@@ -217,6 +217,11 @@ class DDSSessionStateResponse(BaseModel):
     allowed_service_statuses: Dict[str, List[str]] = Field(default_factory=dict)
     submitted_at: Optional[str] = None
     score: Optional[float] = None
+    time_limit_seconds: Optional[int] = 30
+    time_remaining_seconds: Optional[int] = None
+    is_expired: Optional[bool] = False
+    start_time: Optional[str] = None
+    error_limit: Optional[int] = None
     received_at: Optional[str] = None
     card_submitted_at: Optional[str] = None
     current_index: int = 0
@@ -231,5 +236,7 @@ class DDSSessionStateResponse(BaseModel):
     last_attempt: Optional[Dict[str, Any]] = None
     stopped_at: Optional[str] = None
     stop_reason: Optional[str] = None
+    card_pool_source: Optional[str] = None
+    is_self_training: Optional[bool] = False
 
     model_config = ConfigDict(from_attributes=True)

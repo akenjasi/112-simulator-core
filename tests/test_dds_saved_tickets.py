@@ -45,8 +45,9 @@ async def test_selected_saved_ticket_supplies_exact_services_without_new_ticket_
     names=[item['name'] for item in expected['services']]
     for status in ['Принята','Начало реагирования','Прибытие','Проведение работ','Работы завершены']:
         if status == 'Начало реагирования':
-            dispatched = await request('POST',base+'/actions',users['cadets'][0],json={'request_id':'saved-dispatch','kind':'dispatch','service_name':names[0],'who_accepted':'Дежурный','summary':'Бригада направлена'})
-            assert dispatched.status_code == 200, dispatched.text
+            dispatched=await request('POST',base+'/actions',users['cadets'][0],json=action(
+                service_name=names[0],kind='dispatch',status=None,who_accepted='Учебная бригада',summary='Направлена на место'))
+            assert dispatched.status_code==200,dispatched.text
         saved=await request('POST',base+'/actions',users['cadets'][0],json=action(service_name=names[0],status=status))
         assert saved.status_code==200,saved.text
         assert saved.json()['allowed_service_statuses'][names[1]]==['Принята','Не принята']

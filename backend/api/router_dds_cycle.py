@@ -23,6 +23,7 @@ from backend.core.dds_cycle import (
     list_cadet_dds_assignments,
     matches_dds_ticket_filters,
 )
+from backend.core.ticket_lifecycle import is_approved_dds_ticket
 from backend.database import get_db
 from backend.core.dds_queue import available_for_training, complete_card, start_training
 from backend.models.domain_01 import User
@@ -71,6 +72,9 @@ async def get_prepared_dds_tickets(
 
     suitable: List[DDSTicketSummary] = []
     for t in tickets:
+        if not is_approved_dds_ticket(t):
+            continue
+
         if is_suitable_dds_ticket(t):
             if matches_dds_ticket_filters(
                 t, category=category, subcategory=subcategory, complexity=complexity
@@ -116,6 +120,61 @@ async def post_training(
 
 
 @router_dds_cycle.get(
+    "/tickets/categories",
+    dependencies=[Depends(require_role("ADMIN", "TEACHER"))],
+)
+@router_dds_cycle.get(
+    "/tickets/categories/",
+    include_in_schema=False,
+    dependencies=[Depends(require_role("ADMIN", "TEACHER"))],
+)
+async def get_dds_ticket_categories(
+    complexity: Optional[int] = Query(None, ge=1, le=3, description="Сложность (1-3)"),
+    db: AsyncSession = Depends(get_db),
+):
+    """Категории и подкатегории доступных билетов ДДС со счетчиками (только APPROVED и пригодные)."""
+    stmt = (
+        select(ScenarioTicket)
+        .where(
+            (ScenarioTicket.is_deleted == False) | (ScenarioTicket.is_deleted.is_(None))  # noqa: E712
+        )
+        .order_by(ScenarioTicket.created_at.desc())
+    )
+    tickets = (await db.scalars(stmt)).all()
+
+    counts = {}
+    for t in tickets:
+        if not is_approved_dds_ticket(t):
+            continue
+        if not is_suitable_dds_ticket(t):
+            continue
+
+        cat_name, subcat, comp, _ = extract_dds_ticket_metadata(t)
+        if complexity is not None and comp != complexity:
+            continue
+
+        cat_key = cat_name or "Общее"
+        if cat_key not in counts:
+            counts[cat_key] = {
+                "category": cat_key,
+                "total": 0,
+                "subcategories": {},
+            }
+        counts[cat_key]["total"] += 1
+        if subcat:
+            counts[cat_key]["subcategories"][subcat] = counts[cat_key]["subcategories"].get(subcat, 0) + 1
+
+    result = []
+    for cat_name in sorted(counts.keys()):
+        item = counts[cat_name]
+        subcats = item["subcategories"]
+        item["items"] = [{"subcategory": k, "count": v} for k, v in sorted(subcats.items())]
+        result.append(item)
+
+    return result
+
+
+@router_dds_cycle.get(
     "/assignments",
     response_model=List[DDSSessionStateResponse],
 )
@@ -126,11 +185,14 @@ async def post_training(
 )
 async def get_cadet_assignments(
     include_history: bool = Query(False),
+    include_self_training: bool = Query(True),
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ) -> List[DDSSessionStateResponse]:
     """Return assigned DDS sessions for the logged-in CADET (or ADMIN)."""
     items = await list_cadet_dds_assignments(current_user=current_user, db=db)
+    if not include_self_training:
+        items = [item for item in items if not item.get("is_self_training")]
     if include_history:
         expanded = []
         for item in items:

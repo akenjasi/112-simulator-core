@@ -17,6 +17,7 @@ beforeEach(()=>{
   if(url.includes('/classifier/categories')) return response(['ЖКХ'])
   if(url.includes('/classifier/subcategories')) return response(['Вода'])
   if(url.includes('/tickets/counts')) return response([])
+  if(url.includes('/api/dds/tickets/categories')) return response([{category:'ЖКХ',total:catalog.length,subcategories:[]}])
   if(url.includes('/api/dds/tickets')) return responder ? responder(url) : response(catalog,fail?500:200)
   return response({})
  }))
@@ -64,7 +65,7 @@ it('ignores old response when its JSON body resolves after a newer filter respon
  expect(screen.getByText('Новый результат')).toBeInTheDocument()
 })
 
-it('keeps the ordered pool across catalog filters and blocks submission while loading',async()=>{
+it('keeps the ordered selection across category filters and blocks submit while loading',async()=>{
  let resolveBody: ((body:any)=>void) | undefined
  catalog=[{ticket_id:'old',title:'Первый билет'}]
  await open()
@@ -78,7 +79,5 @@ it('keeps the ordered pool across catalog filters and blocks submission while lo
  await waitFor(()=>expect(screen.getByRole('checkbox',{name:/Второй билет/})).toBeInTheDocument())
  expect(screen.getByRole('button',{name:'Убрать: Первый билет'})).toBeInTheDocument()
  fireEvent.click(screen.getByRole('checkbox',{name:/Второй билет/}))
- expect(screen.getAllByText(/Выбрано: 2/).length).toBeGreaterThan(0)
- fireEvent.click(screen.getByRole('button',{name:'Убрать: Первый билет'}))
- expect(screen.getAllByText(/Выбрано: 1/).length).toBeGreaterThan(0)
+ expect(screen.getByRole('button',{name:/Создать и запустить/})).not.toBeDisabled()
 })

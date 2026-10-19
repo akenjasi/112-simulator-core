@@ -3,6 +3,7 @@
 import {DDSExerciseEditor} from "@/components/teacher/dds-exercise-editor"
 
 import { apiFetch as fetch } from "@/lib/api-fetch"
+import { getStoredToken } from "@/lib/auth-session"
 
 import React, { useState, useEffect, useCallback, useRef } from "react"
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card"
@@ -30,9 +31,6 @@ import {
   RefreshCw,
   Eye,
   X,
-  Play,
-  Pause,
-  Volume2,
   ShieldAlert,
   Flame,
   Ambulance,
@@ -54,56 +52,8 @@ import {
   UploadCloud,
 } from "lucide-react"
 
-export interface GroundTruth {
-  fio?: string
-  phone?: string
-  street?: string
-  house?: string
-  city?: string
-  apartment?: string
-  floor?: string
-  entrance?: string
-  intercom?: string
-  [key: string]: any
-}
-
-export interface TicketItem {
-  id?: string
-  ticket_id: string
-  display_id?: string
-  sequence_number?: number
-  category?: string
-  subcategory?: string | null
-  complexity: number
-  plot: string
-  etalon_services?: string[]
-  factoids?: Record<string, any>
-  ground_truth?: GroundTruth
-  status?: string
-  created_at?: string
-}
-
-export interface GenerationState {
-  status: "in_progress" | "done"
-  targetCount: number
-  remainingSeconds: number
-  startTime: number
-  message?: string
-}
-
-// Format address fields safely preventing literal "null" / "undefined" strings (ТЗ 39.2)
-export const formatAddressField = (val: any): string => {
-  if (val == null) return ""
-  const str = String(val).trim()
-  return str === "null" || str === "undefined" ? "" : str
-}
-
-export const ALL_EMERGENCY_SERVICES = [
-  { code: "01", name: "01 Пожарные", icon: Flame, color: "border-red-400 text-red-700 bg-red-50 dark:bg-red-950/40 dark:text-red-300" },
-  { code: "02", name: "02 Полиция", icon: ShieldAlert, color: "border-blue-400 text-blue-700 bg-blue-50 dark:bg-blue-950/40 dark:text-blue-300" },
-  { code: "03", name: "03 Скорая", icon: Ambulance, color: "border-green-400 text-green-700 bg-green-50 dark:bg-green-950/40 dark:text-green-300" },
-  { code: "04", name: "04 Газ", icon: null, color: "border-amber-400 text-amber-700 bg-amber-50 dark:bg-amber-950/40 dark:text-amber-300" },
-]
+import {getTicketStatus, renderStatusBadge, formatAddressField, ALL_EMERGENCY_SERVICES, type GroundTruth, type DDSEtalonItem, type TicketItem, type GenerationState} from "@/components/teacher/ticket-presentation"
+export type {GroundTruth, DDSEtalonItem, TicketItem, GenerationState} from "@/components/teacher/ticket-presentation"
 
 export default function TicketsPage() {
   const [tickets, setTickets] = useState<TicketItem[]>([])
@@ -136,6 +86,7 @@ export default function TicketsPage() {
   const [editExtraAddress, setEditExtraAddress] = useState<Record<string, any>>({})
   const [isGeneratingAddress, setIsGeneratingAddress] = useState<boolean>(false)
 
+
   // Classifier options (ТЗ 37.1, ТЗ 37.4, ТЗ 39.1)
   const [classifierCategories, setClassifierCategories] = useState<string[]>([])
   const [classifierSubcategories, setClassifierSubcategories] = useState<string[]>([])
@@ -143,11 +94,19 @@ export default function TicketsPage() {
   const [modalSubcategories, setModalSubcategories] = useState<string[]>([])
   const [classifierServices, setClassifierServices] = useState<string[]>([])
 
-  // Audio Playback state
-  const [playingTicketId, setPlayingTicketId] = useState<string | null>(null)
-  const [loadingAudioTicketId, setLoadingAudioTicketId] = useState<string | null>(null)
   const [deletingTicketId, setDeletingTicketId] = useState<string | null>(null)
-  const audioPlayerRef = useRef<HTMLAudioElement | null>(null)
+  const [approvingTicketId, setApprovingTicketId] = useState<string | null>(null)
+  const [isBulkApproving, setIsBulkApproving] = useState(false)
+  const [bulkApproval, setBulkApproval] = useState<{
+    total: number
+    attempted: number
+    succeeded: number
+    failures: { id: string; label: string; message: string }[]
+  } | null>(null)
+  const approvalInFlightRef = useRef(false)
+  // Preserve confirmed mutations if an older list request finishes during approval.
+  const approvalRevisionRef = useRef(0)
+  const approvedTicketIdsRef = useRef(new Map<string, number>())
 
   // Filters state
   const [filterCategory, setFilterCategory] = useState<string>("")
@@ -321,15 +280,11 @@ export default function TicketsPage() {
     }
   }, [filterCategory, filterSubcategory, filterComplexity])
 
-  // Clear timers and audio on unmount
+  // Clear timers on unmount
   useEffect(() => {
     return () => {
       if (pollingRef.current) clearInterval(pollingRef.current)
       if (countdownRef.current) clearInterval(countdownRef.current)
-      if (audioPlayerRef.current) {
-        audioPlayerRef.current.pause()
-        audioPlayerRef.current = null
-      }
     }
   }, [])
 
@@ -388,6 +343,7 @@ export default function TicketsPage() {
       comp = filterComplexity,
       silent = false
     ) => {
+      const requestedAtRevision = approvalRevisionRef.current
       try {
         if (!silent) {
           setIsRefreshing(true)
@@ -406,7 +362,12 @@ export default function TicketsPage() {
         }
         const data = await res.json()
         const ticketList: TicketItem[] = Array.isArray(data) ? data : []
-        setTickets(ticketList)
+        setTickets(ticketList.map((ticket) =>
+          (approvedTicketIdsRef.current.get(ticket.ticket_id || ticket.id || "") ?? 0) > requestedAtRevision &&
+          ["DRAFT", "ACTIVE", "UNDER_REVIEW"].includes(getTicketStatus(ticket))
+            ? { ...ticket, status: "APPROVED", workflow_state: { ...ticket.workflow_state, status: "APPROVED" } }
+            : ticket
+        ))
         return ticketList
       } catch (err: any) {
         if (!silent) {
@@ -473,8 +434,9 @@ export default function TicketsPage() {
 
   const handleSelectImportFile = (file: File) => {
     const name = (file?.name || "").toLowerCase()
-    if (!name.endsWith(".xlsx") && !name.endsWith(".xls")) {
-      setImportError("Поддерживаются только файлы Excel (.xlsx, .xls)")
+    if (!name.endsWith(".xlsx")) {
+      setImportFile(null)
+      setImportError("Поддерживаются файлы Excel .xlsx. Сохраните старый файл .xls в формате .xlsx.")
       return
     }
     setImportError(null)
@@ -620,6 +582,20 @@ export default function TicketsPage() {
       if (pollingRef.current) clearInterval(pollingRef.current)
       pollingRef.current = setInterval(async () => {
         try {
+          let job: { status?: string; generated_count?: number; error_code?: string } | null = null
+          if (responseData.generation_id) {
+            const statusRes = await fetch(`/api/v1/tickets/status?generation_id=${encodeURIComponent(responseData.generation_id)}`)
+            if (statusRes.status === 404) {
+              if (pollingRef.current) clearInterval(pollingRef.current)
+              if (countdownRef.current) clearInterval(countdownRef.current)
+              setIsGenerating(false)
+              setGenerationState(null)
+              setError("Статус генерации недоступен. Обновите список билетов перед повторным запуском.")
+              return
+            }
+            if (!statusRes.ok) throw new Error("Не удалось получить статус генерации")
+            job = await statusRes.json()
+          }
           // Poll ticket list
           const updatedList = await loadTickets(
             activeFiltersRef.current.category,
@@ -632,7 +608,16 @@ export default function TicketsPage() {
           const baseline = baselineTicketIdsRef.current
           const newTickets = updatedList.filter((t) => !baseline.has(t.ticket_id || t.id || ""))
 
-          if (newTickets.length >= countNum || updatedList.length >= baseline.size + countNum) {
+          if (job?.status === "failed") {
+            if (pollingRef.current) clearInterval(pollingRef.current)
+            if (countdownRef.current) clearInterval(countdownRef.current)
+            setIsGenerating(false)
+            setGenerationState(null)
+            const reason = job.error_code === "UNIQUE_TICKETS_EXHAUSTED"
+              ? "Не удалось получить больше уникальных билетов."
+              : "Генерация прервана."
+            setError(`${reason} Сохранено ${job.generated_count ?? 0} из ${countNum}.`)
+          } else if (job ? job.status === "completed" : newTickets.length >= countNum || updatedList.length >= baseline.size + countNum) {
             // Completed! Stop polling
             if (pollingRef.current) clearInterval(pollingRef.current)
             if (countdownRef.current) clearInterval(countdownRef.current)
@@ -640,11 +625,11 @@ export default function TicketsPage() {
             setIsGenerating(false)
             setGenerationState({
               status: "done",
-              targetCount: newTickets.length || countNum,
+              targetCount: job?.generated_count ?? (newTickets.length || countNum),
               remainingSeconds: 0,
               startTime: 0,
             })
-            setSuccessMessage(`Готово! Сгенерировано ${newTickets.length || countNum} билетов`)
+            setSuccessMessage(`Готово! Сгенерировано ${job?.generated_count ?? (newTickets.length || countNum)} билетов`)
           }
         } catch (pollErr) {
           console.warn("Polling error:", pollErr)
@@ -656,77 +641,6 @@ export default function TicketsPage() {
       setIsGenerating(false)
       setGenerationState(null)
       setError(err.message || "Ошибка при запуске генерации билетов")
-    }
-  }
-
-  // Handle audio playback for ticket (ТЗ 30.2)
-  const handlePlayAudio = async (ticketId: string) => {
-    if (!ticketId) return
-
-    // If currently playing, clicking again stops playback
-    if (playingTicketId === ticketId) {
-      if (audioPlayerRef.current) {
-        try {
-          audioPlayerRef.current.pause()
-        } catch {}
-        audioPlayerRef.current = null
-      }
-      setPlayingTicketId(null)
-      setLoadingAudioTicketId(null)
-      return
-    }
-
-    // Stop any existing playback
-    if (audioPlayerRef.current) {
-      try {
-        audioPlayerRef.current.pause()
-      } catch {}
-      audioPlayerRef.current = null
-    }
-
-    setPlayingTicketId(null)
-    setLoadingAudioTicketId(ticketId)
-    setError(null)
-
-    try {
-      const url = `/api/tickets/${encodeURIComponent(ticketId)}/audio`
-      const res = await fetch(url)
-      if (!res.ok) {
-        throw new Error(`Ошибка загрузки аудио (${res.status})`)
-      }
-      const blob = await res.blob()
-      const objectUrl = URL.createObjectURL(blob)
-
-      const audio = new Audio(objectUrl)
-      audioPlayerRef.current = audio
-
-      audio.onplay = () => {
-        setLoadingAudioTicketId(null)
-        setPlayingTicketId(ticketId)
-      }
-      audio.onended = () => {
-        try {
-          URL.revokeObjectURL(objectUrl)
-        } catch {}
-        setPlayingTicketId(null)
-        setLoadingAudioTicketId(null)
-        audioPlayerRef.current = null
-      }
-      audio.onerror = () => {
-        try {
-          URL.revokeObjectURL(objectUrl)
-        } catch {}
-        setPlayingTicketId(null)
-        setLoadingAudioTicketId(null)
-        audioPlayerRef.current = null
-        setError("Не удалось воспроизвести аудиозапись")
-      }
-
-      await audio.play()
-    } catch (err: any) {
-      setLoadingAudioTicketId(null)
-      setPlayingTicketId(null)
-      setError(err.message || "Не удалось загрузить аудиозапись")
     }
   }
 
@@ -754,6 +668,81 @@ export default function TicketsPage() {
       setError(err.message || "Не удалось удалить билет")
     } finally {
       setDeletingTicketId(null)
+    }
+  }
+
+  // Both approval paths use the server's existing validation for each ticket.
+  const approveTicket = async (ticket: TicketItem) => {
+    const ticketId = ticket.ticket_id || ticket.id
+    if (!ticketId) throw new Error("У билета нет ID")
+    const token = getStoredToken()
+    const res = await fetch(`/api/tickets/${encodeURIComponent(ticketId)}/approve`, {
+      method: "POST",
+      headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+    })
+    if (!res.ok) {
+      const data = await res.json().catch(() => null)
+      const detail = data?.detail
+      throw new Error(typeof detail === "string" ? detail : `Ошибка утверждения билета (${res.status})`)
+    }
+    approvedTicketIdsRef.current.set(ticketId, ++approvalRevisionRef.current)
+    const markApproved = (item: TicketItem): TicketItem => ({
+      ...item,
+      status: "APPROVED",
+      workflow_state: { ...item.workflow_state, status: "APPROVED" },
+    })
+    setTickets((prev) => prev.map((item) =>
+      (item.ticket_id || item.id) === ticketId ? markApproved(item) : item
+    ))
+    setSelectedTicket((prev) =>
+      prev && (prev.ticket_id || prev.id) === ticketId ? markApproved(prev) : prev
+    )
+  }
+
+  const handleApproveTicket = async (ticket: TicketItem) => {
+    if (approvalInFlightRef.current) return
+    const ticketId = ticket.ticket_id || ticket.id
+    if (!ticketId) return
+    approvalInFlightRef.current = true
+    try {
+      setApprovingTicketId(ticketId)
+      setError(null)
+      await approveTicket(ticket)
+      setSuccessMessage(`Сценарий ${ticket.display_id || ticketId} успешно утвержден!`)
+      setTimeout(() => setSuccessMessage(null), 4000)
+    } catch (err: any) {
+      setError(err.message || "Не удалось утвердить сценарий")
+    } finally {
+      approvalInFlightRef.current = false
+      setApprovingTicketId(null)
+    }
+  }
+
+  const handleBulkApprove = async (candidates: TicketItem[]) => {
+    if (approvalInFlightRef.current || candidates.length === 0) return
+    approvalInFlightRef.current = true
+    setIsBulkApproving(true)
+    setError(null)
+    setSuccessMessage(null)
+    const result = { total: candidates.length, attempted: 0, succeeded: 0,
+      failures: [] as { id: string; label: string; message: string }[] }
+    setBulkApproval({ ...result })
+    try {
+      for (const ticket of candidates) {
+        const id = ticket.ticket_id || ticket.id || ""
+        try {
+          await approveTicket(ticket)
+          result.succeeded += 1
+        } catch (err: any) {
+          result.failures.push({ id, label: ticket.display_id || id,
+            message: err.message || "Не удалось утвердить билет" })
+        }
+        result.attempted += 1
+        setBulkApproval({ ...result, failures: [...result.failures] })
+      }
+    } finally {
+      approvalInFlightRef.current = false
+      setIsBulkApproving(false)
     }
   }
 
@@ -1016,6 +1005,16 @@ export default function TicketsPage() {
     return displayId.includes(query)
   })
 
+  const seenApprovalIds = new Set<string>()
+  const approvableTickets = filteredTickets.filter((ticket) => {
+    const id = ticket.ticket_id || ticket.id
+    if (!id || seenApprovalIds.has(id) || !["DRAFT", "ACTIVE", "UNDER_REVIEW"].includes(getTicketStatus(ticket))) return false
+    seenApprovalIds.add(id)
+    return true
+  })
+  const failedIds = new Set(bulkApproval?.failures.map((failure) => failure.id))
+  const retryTickets = approvableTickets.filter((ticket) => failedIds.has(ticket.ticket_id || ticket.id || ""))
+
   return (
     <div className="container mx-auto p-4 sm:p-6 max-w-6xl space-y-6">
       {/* Page Header */}
@@ -1029,7 +1028,7 @@ export default function TicketsPage() {
               База билетов
             </h1>
             <p className="text-sm sm:text-base text-muted-foreground mt-0.5">
-              Глобальный склад учебных сценариев и синтез речи для экзаменов
+              Глобальный склад учебных сценариев для занятий и экзаменов
             </p>
           </div>
         </div>
@@ -1039,7 +1038,7 @@ export default function TicketsPage() {
             variant="outline"
             size="default"
             onClick={() => loadTickets()}
-            disabled={isLoading || isGenerating}
+            disabled={isLoading || isGenerating || isBulkApproving}
             title="Обновить список билетов"
             className="text-sm font-medium"
           >
@@ -1113,7 +1112,7 @@ export default function TicketsPage() {
                 Готово! Сгенерировано {generationState.targetCount} билетов
               </div>
               <div className="text-sm sm:text-base text-emerald-800 dark:text-emerald-300 mt-0.5">
-                Все сценарии и аудиофайлы TTS успешно сформированы и добавлены в базу
+                Сценарии добавлены в базу и ожидают проверки преподавателя
               </div>
             </div>
           </div>
@@ -1302,6 +1301,39 @@ export default function TicketsPage() {
               {(filterCategory || filterComplexity) && " (с учетом активных фильтров)"}
             </CardDescription>
           </div>
+          <div className="mt-3 flex flex-wrap items-center gap-3">
+            <Button
+              onClick={() => handleBulkApprove(approvableTickets)}
+              disabled={isLoading || isRefreshing || isGenerating || isBulkApproving || approvingTicketId !== null || deletingTicketId !== null || approvableTickets.length === 0}
+              aria-describedby="bulk-approval-scope"
+            >
+              {isBulkApproving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Check className="mr-2 h-4 w-4" />}
+              Утвердить все ({approvableTickets.length})
+            </Button>
+            <p id="bulk-approval-scope" className="text-sm text-muted-foreground">
+              Только неутверждённые билеты из текущего списка с учётом всех фильтров и поиска по ID.
+            </p>
+          </div>
+          {bulkApproval && (
+            <div className="mt-3 space-y-2 text-sm" aria-live="polite">
+              <p role="status">
+                {isBulkApproving ? `Обработано: ${bulkApproval.attempted} из ${bulkApproval.total}. ` : "Утверждение завершено. "}
+                Утверждено: {bulkApproval.succeeded} из {bulkApproval.total}. Ошибок: {bulkApproval.failures.length}.
+              </p>
+              {bulkApproval.failures.length > 0 && (
+                <div role="alert" className="text-destructive">
+                  <p>Не утверждены:</p>
+                  <ul className="list-disc pl-5">
+                    {bulkApproval.failures.map((failure) => <li key={failure.id}>{failure.label}: {failure.message}</li>)}
+                  </ul>
+                  <Button variant="outline" className="mt-2" onClick={() => handleBulkApprove(retryTickets)}
+                    disabled={isBulkApproving || approvingTicketId !== null || isRefreshing || retryTickets.length === 0}>
+                    Повторить неудачные ({retryTickets.length})
+                  </Button>
+                </div>
+              )}
+            </div>
+          )}
         </CardHeader>
 
         <CardContent>
@@ -1383,10 +1415,13 @@ export default function TicketsPage() {
                     <TableHead className="w-[140px] text-center text-sm font-semibold">
                       Сложность
                     </TableHead>
+                    <TableHead className="w-[130px] text-center text-sm font-semibold">
+                      Статус
+                    </TableHead>
                     <TableHead className="w-[160px] text-sm font-semibold">
                       Дата создания
                     </TableHead>
-                    <TableHead className="w-[140px] text-right text-sm font-semibold">
+                    <TableHead className="w-[220px] text-right text-sm font-semibold">
                       Действия
                     </TableHead>
                   </TableRow>
@@ -1398,6 +1433,8 @@ export default function TicketsPage() {
                     const subcategoryName = ticket.subcategory || "—"
                     const dateFormatted = formatDate(ticket.created_at)
                     const ticketId = ticket.ticket_id || ticket.id || ""
+                    const ticketStatus = getTicketStatus(ticket)
+                    const canApprove = ticketStatus === "DRAFT" || ticketStatus === "UNDER_REVIEW" || ticketStatus === "ACTIVE"
 
                     return (
                       <TableRow
@@ -1428,14 +1465,39 @@ export default function TicketsPage() {
                           </div>
                         </TableCell>
 
+                        {/* Статус утверждения */}
+                        <TableCell className="text-center">
+                          <div className="flex items-center justify-center">
+                            {renderStatusBadge(ticketStatus)}
+                          </div>
+                        </TableCell>
+
                         {/* Дата создания */}
                         <TableCell className="text-xs sm:text-sm text-muted-foreground font-medium">
                           {dateFormatted}
                         </TableCell>
 
-                        {/* Действия: кнопки Детали и Удалить */}
+                        {/* Действия: кнопка Утвердить (для DRAFT / UNDER_REVIEW), Детали и Удалить */}
                         <TableCell className="text-right">
                           <div className="flex items-center justify-end gap-1.5">
+                            {canApprove && (
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => handleApproveTicket(ticket)}
+                                disabled={isBulkApproving || approvingTicketId !== null}
+                                aria-label={`Утвердить билет ${shortId}`}
+                                title="Утвердить сценарий"
+                                className="text-xs sm:text-sm font-medium border-emerald-500/40 text-emerald-700 hover:bg-emerald-50 hover:text-emerald-800 dark:border-emerald-500/40 dark:text-emerald-300 dark:hover:bg-emerald-950/40"
+                              >
+                                {approvingTicketId === ticketId ? (
+                                  <Loader2 className="h-4 w-4 animate-spin mr-1" />
+                                ) : (
+                                  <Check className="h-4 w-4 mr-1 text-emerald-600 dark:text-emerald-400" />
+                                )}
+                                Утвердить
+                              </Button>
+                            )}
                             <Button
                               variant="outline"
                               size="sm"
@@ -1450,7 +1512,7 @@ export default function TicketsPage() {
                               variant="outline"
                               size="sm"
                               onClick={() => handleDeleteTicket(ticket)}
-                              disabled={deletingTicketId === ticketId}
+                              disabled={isBulkApproving || deletingTicketId === ticketId}
                               aria-label={`Удалить билет ${shortId}`}
                               title="Удалить билет"
                               className="text-destructive hover:bg-destructive/10 hover:text-destructive h-8 w-8 p-0"
@@ -1562,7 +1624,7 @@ export default function TicketsPage() {
                   setImportFile(file)
                 }}
                 selectedFile={importFile}
-                accept=".xlsx,.xls,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.ms-excel"
+                accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
                 disabled={isImportUploading}
                 title="2. Загрузить заполненный файл"
                 description="Перетащите сюда Excel-файл (.xlsx) или нажмите для выбора"
@@ -1680,7 +1742,7 @@ export default function TicketsPage() {
                     Генерация билетов
                   </h2>
                   <p className="text-xs sm:text-sm text-muted-foreground mt-0.5">
-                    Фоновая генерация учебных сценариев с синтезом речи TTS
+                    Фоновая генерация учебных сценариев
                   </p>
                 </div>
               </div>
@@ -1807,10 +1869,10 @@ export default function TicketsPage() {
               {/* Estimated generation summary note */}
               <div className="p-3 bg-muted/40 rounded-lg border text-xs text-muted-foreground space-y-1">
                 <div className="flex items-center gap-1.5 font-medium text-foreground">
-                  <Info className="h-4 w-4 text-primary" /> Расчет времени TTS:
+                  <Info className="h-4 w-4 text-primary" /> Расчет времени:
                 </div>
                 <p>
-                  Заказано: <strong>{modalCount} шт.</strong> (~30 сек на 1 билет). Расчетное время синтеза аудио:{" "}
+                  Заказано: <strong>{modalCount} шт.</strong> (~30 сек на 1 билет). Расчетное время генерации:{" "}
                   <strong>{formatEstimatedTime(modalCount * 30)}</strong>. Генерация будет выполняться в фоне.
                 </p>
               </div>
@@ -1851,7 +1913,7 @@ export default function TicketsPage() {
             {/* Modal Header */}
             <div className="flex items-start justify-between border-b pb-4">
               <div>
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 flex-wrap">
                   <h2 id="ticket-modal-title" className="text-xl font-bold text-foreground">
                     {isEditing ? "Редактирование билета" : "Детали билета"}{" "}
                     {selectedTicket.display_id ||
@@ -1860,6 +1922,7 @@ export default function TicketsPage() {
                         : "")}
                   </h2>
                   {renderComplexityBadge(isEditing ? editComplexity : selectedTicket.complexity)}
+                  {renderStatusBadge(getTicketStatus(selectedTicket))}
                 </div>
                 <p className="font-mono text-xs text-muted-foreground mt-1">
                   ID:{" "}
@@ -1869,6 +1932,22 @@ export default function TicketsPage() {
                 </p>
               </div>
               <div className="flex items-center gap-2">
+                {(["DRAFT", "UNDER_REVIEW", "ACTIVE"].includes(getTicketStatus(selectedTicket).toUpperCase())) && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => handleApproveTicket(selectedTicket)}
+                    disabled={isBulkApproving || approvingTicketId !== null}
+                    className="text-xs font-semibold border-emerald-500/40 text-emerald-700 hover:bg-emerald-50 dark:border-emerald-500/40 dark:text-emerald-300 dark:hover:bg-emerald-950/40"
+                  >
+                    {approvingTicketId === (selectedTicket.ticket_id || selectedTicket.id) ? (
+                      <Loader2 className="h-3.5 w-3.5 animate-spin mr-1" />
+                    ) : (
+                      <Check className="h-3.5 w-3.5 mr-1 text-emerald-600 dark:text-emerald-400" />
+                    )}
+                    Утвердить
+                  </Button>
+                )}
                 <Button
                   variant="outline"
                   size="sm"
@@ -1998,38 +2077,6 @@ export default function TicketsPage() {
                   >
                     <Info className="h-4 w-4 text-primary" /> Фабула вызова / Сценарий
                   </Label>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    onClick={() =>
-                      handlePlayAudio(selectedTicket.ticket_id || selectedTicket.id || "")
-                    }
-                    disabled={
-                      loadingAudioTicketId ===
-                      (selectedTicket.ticket_id || selectedTicket.id)
-                    }
-                    className="text-xs font-semibold"
-                  >
-                    {loadingAudioTicketId ===
-                    (selectedTicket.ticket_id || selectedTicket.id) ? (
-                      <>
-                        <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin text-primary" />
-                        Загрузка...
-                      </>
-                    ) : playingTicketId ===
-                      (selectedTicket.ticket_id || selectedTicket.id) ? (
-                      <>
-                        <Pause className="h-3.5 w-3.5 mr-1.5 text-primary fill-primary" />
-                        Остановить
-                      </>
-                    ) : (
-                      <>
-                        <Play className="h-3.5 w-3.5 mr-1.5 text-primary fill-primary" />
-                        Прослушать аудио
-                      </>
-                    )}
-                  </Button>
                 </div>
                 {isEditing ? (
                   <Textarea
@@ -2429,6 +2476,8 @@ export default function TicketsPage() {
                   </div>
                 )}
               </div>
+
+
 
               {/* Factoids block COMPLETELY REMOVED per ТЗ 36.2 */}
             </div>

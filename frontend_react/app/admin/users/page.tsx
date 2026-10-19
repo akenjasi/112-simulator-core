@@ -223,7 +223,10 @@ export default function AdminUsersPage() {
     }
     setIsSubmitting(true)
     try {
-      const created = await createUser(newUser)
+      const created = await createUser({
+        ...newUser,
+        student_id: newUser.role === "CADET" ? newUser.student_id?.trim() || undefined : undefined,
+      })
       setUsers((prev) => [created, ...prev])
       setIsCreateModalOpen(false)
       setNewUser({
@@ -246,7 +249,7 @@ export default function AdminUsersPage() {
     const normalized = role?.toUpperCase()
     if (normalized === "ADMIN") {
       return (
-        <Badge className="bg-purple-100 text-purple-800 border-purple-300 font-semibold gap-1">
+        <Badge className="bg-purple-500/15 text-purple-700 dark:text-purple-300 border-purple-500/30 font-semibold gap-1">
           <Shield className="w-3 h-3" />
           <span>ADMIN</span>
         </Badge>
@@ -254,14 +257,14 @@ export default function AdminUsersPage() {
     }
     if (normalized === "TEACHER") {
       return (
-        <Badge className="bg-blue-100 text-blue-800 border-blue-300 font-semibold gap-1">
+        <Badge className="bg-blue-500/15 text-blue-700 dark:text-blue-300 border-blue-500/30 font-semibold gap-1">
           <Briefcase className="w-3 h-3" />
           <span>TEACHER</span>
         </Badge>
       )
     }
     return (
-      <Badge className="bg-emerald-100 text-emerald-800 border-emerald-300 font-semibold gap-1">
+      <Badge className="bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-500/30 font-semibold gap-1">
         <GraduationCap className="w-3 h-3" />
         <span>CADET</span>
       </Badge>
@@ -271,17 +274,17 @@ export default function AdminUsersPage() {
   return (
     <div className="space-y-6 max-w-7xl mx-auto pb-10">
       {/* Header */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-slate-200 pb-5">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b border-border pb-5">
         <div>
           <div className="flex items-center gap-2">
-            <h1 className="text-2xl sm:text-3xl font-black text-slate-900 tracking-tight">
+            <h1 className="text-2xl sm:text-3xl font-black text-foreground tracking-tight">
               Управление пользователями
             </h1>
-            <Badge variant="outline" className="text-slate-600 font-bold ml-1">
+            <Badge variant="outline" className="text-muted-foreground border-border font-bold ml-1">
               Всего: {users.length}
             </Badge>
           </div>
-          <p className="text-sm text-slate-500 mt-1">
+          <p className="text-sm text-muted-foreground mt-1">
             Просмотр курсантов, преподавателей и администраторов, назначение ролей и блокировка
           </p>
         </div>
@@ -291,7 +294,7 @@ export default function AdminUsersPage() {
             variant="outline"
             onClick={loadUsersList}
             disabled={isLoading}
-            className="flex items-center gap-2 cursor-pointer bg-white"
+            className="flex items-center gap-2 cursor-pointer bg-card hover:bg-accent border-border"
           >
             <RefreshCw className={`w-4 h-4 ${isLoading ? "animate-spin" : ""}`} />
             <span>Обновить</span>
@@ -299,7 +302,7 @@ export default function AdminUsersPage() {
 
           <Button
             onClick={() => setIsCreateModalOpen(true)}
-            className="bg-purple-700 hover:bg-purple-800 text-white flex items-center gap-2 cursor-pointer shadow-sm"
+            className="bg-primary hover:bg-primary/90 text-primary-foreground flex items-center gap-2 cursor-pointer shadow-sm"
           >
             <UserPlus className="w-4 h-4" />
             <span>Добавить пользователя</span>
@@ -326,28 +329,28 @@ export default function AdminUsersPage() {
       )}
 
       {/* Filter and Search Bar */}
-      <Card className="bg-white border-slate-200 shadow-sm">
+      <Card className="bg-card border-border shadow-sm">
         <CardContent className="pt-6">
           <div className="flex flex-col sm:flex-row items-center gap-4">
             {/* Search */}
             <div className="relative w-full sm:flex-1">
-              <Search className="w-4 h-4 text-slate-400 absolute left-3 top-3" />
+              <Search className="w-4 h-4 text-muted-foreground absolute left-3 top-3" />
               <Input
                 placeholder="Поиск по ФИО, логину или номеру билета..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="pl-9 bg-slate-50"
+                className="pl-9 bg-background border-input"
               />
             </div>
 
             {/* Role Filter */}
             <div className="flex items-center gap-2 w-full sm:w-auto">
-              <span className="text-xs font-semibold text-slate-500 whitespace-nowrap">Роль:</span>
+              <span className="text-xs font-semibold text-muted-foreground whitespace-nowrap">Роль:</span>
               <select
                 aria-label="Фильтр по роли"
                 value={roleFilter}
                 onChange={(e) => setRoleFilter(e.target.value)}
-                className="h-9 rounded-md border border-input bg-slate-50 px-3 py-1 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-600"
+                className="h-9 rounded-md border border-input bg-background text-foreground px-3 py-1 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               >
                 <option value="ALL">Все роли</option>
                 <option value="CADET">Курсанты (CADET)</option>
@@ -358,12 +361,12 @@ export default function AdminUsersPage() {
 
             {/* Status Filter */}
             <div className="flex items-center gap-2 w-full sm:w-auto">
-              <span className="text-xs font-semibold text-slate-500 whitespace-nowrap">Статус:</span>
+              <span className="text-xs font-semibold text-muted-foreground whitespace-nowrap">Статус:</span>
               <select
                 aria-label="Фильтр по статусу"
                 value={statusFilter}
                 onChange={(e) => setStatusFilter(e.target.value)}
-                className="h-9 rounded-md border border-input bg-slate-50 px-3 py-1 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-600"
+                className="h-9 rounded-md border border-input bg-background text-foreground px-3 py-1 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               >
                 <option value="ALL">Все статусы</option>
                 <option value="ACTIVE">Активные</option>
@@ -375,23 +378,23 @@ export default function AdminUsersPage() {
       </Card>
 
       {/* Users Table */}
-      <Card className="bg-white border-slate-200 shadow-sm overflow-hidden">
+      <Card className="bg-card border-border shadow-sm overflow-hidden">
         <div className="overflow-x-auto w-full">
           <Table className="min-w-[650px]">
             <TableHeader>
-              <TableRow className="bg-slate-50 border-b border-slate-200">
-                <TableHead className="font-bold text-slate-700">ФИО / Имя</TableHead>
-                <TableHead className="font-bold text-slate-700">Логин (Email)</TableHead>
-                <TableHead className="font-bold text-slate-700">Роль</TableHead>
-                <TableHead className="font-bold text-slate-700">Группа / Номер</TableHead>
-                <TableHead className="font-bold text-slate-700">Статус</TableHead>
-                <TableHead className="font-bold text-slate-700 text-right pr-6">Действия</TableHead>
+              <TableRow className="bg-muted/40 border-b border-border">
+                <TableHead className="font-bold text-foreground">ФИО / Имя</TableHead>
+                <TableHead className="font-bold text-foreground">Логин (Email)</TableHead>
+                <TableHead className="font-bold text-foreground">Роль</TableHead>
+                <TableHead className="font-bold text-foreground">Группа / Номер</TableHead>
+                <TableHead className="font-bold text-foreground">Статус</TableHead>
+                <TableHead className="font-bold text-foreground text-right pr-6">Действия</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {filteredUsers.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={6} className="text-center py-10 text-slate-500">
+                  <TableCell colSpan={6} className="text-center py-10 text-muted-foreground">
                     Пользователи не найдены
                   </TableCell>
                 </TableRow>
@@ -401,15 +404,15 @@ export default function AdminUsersPage() {
                   return (
                     <TableRow
                       key={user.user_id}
-                      className={!isActive ? "bg-red-50/40 opacity-80" : "hover:bg-slate-50/80"}
+                      className={!isActive ? "bg-destructive/10 opacity-80" : "hover:bg-muted/40"}
                     >
                       {/* Name */}
-                      <TableCell className="font-medium text-slate-900">
+                      <TableCell className="font-medium text-foreground">
                         {user.full_name || "—"}
                       </TableCell>
 
                       {/* Username */}
-                      <TableCell className="text-slate-600 font-mono text-xs">
+                      <TableCell className="text-muted-foreground font-mono text-xs">
                         {user.username}
                       </TableCell>
 
@@ -417,19 +420,19 @@ export default function AdminUsersPage() {
                       <TableCell>{renderRoleBadge(user.role)}</TableCell>
 
                       {/* Student ID */}
-                      <TableCell className="text-slate-600 text-xs">
+                      <TableCell className="text-muted-foreground text-xs">
                         {user.student_id || "—"}
                       </TableCell>
 
                       {/* Status */}
                       <TableCell>
                         {isActive ? (
-                          <Badge className="bg-emerald-100 text-emerald-800 border-emerald-300 font-semibold gap-1">
+                          <Badge className="bg-emerald-500/15 text-emerald-700 dark:text-emerald-300 border-emerald-500/30 font-semibold gap-1">
                             <UserCheck className="w-3 h-3" />
                             <span>Активен</span>
                           </Badge>
                         ) : (
-                          <Badge className="bg-red-100 text-red-800 border-red-300 font-semibold gap-1">
+                          <Badge className="bg-destructive/15 text-destructive border-destructive/30 font-semibold gap-1">
                             <UserX className="w-3 h-3" />
                             <span>Заблокирован</span>
                           </Badge>
@@ -444,7 +447,7 @@ export default function AdminUsersPage() {
                             aria-label={`Изменить роль ${user.username}`}
                             value={user.role}
                             onChange={(e) => handleRoleChange(user.user_id, e.target.value)}
-                            className="h-8 rounded border border-slate-300 bg-white px-2 py-0.5 text-xs font-semibold text-slate-700 hover:border-purple-600 focus:outline-none focus:ring-1 focus:ring-purple-600"
+                            className="h-8 rounded border border-input bg-background text-foreground px-2 py-0.5 text-xs font-semibold hover:border-primary focus:outline-none focus:ring-1 focus:ring-ring"
                           >
                             <option value="CADET">CADET</option>
                             <option value="TEACHER">TEACHER</option>
@@ -457,7 +460,7 @@ export default function AdminUsersPage() {
                             size="sm"
                             onClick={() => openPasswordDialog(user.user_id, user.username)}
                             title="Изменить пароль"
-                            className="h-8 px-2 text-xs text-amber-700 border-amber-300 hover:bg-amber-50 cursor-pointer"
+                            className="h-8 px-2 text-xs text-amber-600 dark:text-amber-400 border-amber-500/30 hover:bg-amber-500/10 cursor-pointer"
                           >
                             <KeyRound className="w-3.5 h-3.5" />
                           </Button>
@@ -470,8 +473,8 @@ export default function AdminUsersPage() {
                             title={isActive ? "Заблокировать пользователя" : "Разблокировать пользователя"}
                             className={`h-8 px-2 text-xs cursor-pointer ${
                               isActive
-                                ? "text-red-700 border-red-300 hover:bg-red-50"
-                                : "text-emerald-700 border-emerald-300 hover:bg-emerald-50"
+                                ? "text-destructive border-destructive/30 hover:bg-destructive/10"
+                                : "text-emerald-600 dark:text-emerald-400 border-emerald-500/30 hover:bg-emerald-500/10"
                             }`}
                           >
                             {isActive ? (
@@ -494,17 +497,17 @@ export default function AdminUsersPage() {
       {/* Modal: Create User */}
       {isCreateModalOpen && (
         <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4 backdrop-blur-xs animate-in fade-in">
-          <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 max-w-lg w-full overflow-hidden">
-            <div className="p-5 border-b border-slate-200 flex items-center justify-between bg-slate-50">
+          <div className="bg-card rounded-2xl shadow-2xl border border-border max-w-lg w-full overflow-hidden">
+            <div className="p-5 border-b border-border flex items-center justify-between bg-muted/30">
               <div className="flex items-center gap-2">
-                <div className="p-2 bg-purple-100 text-purple-700 rounded-lg">
+                <div className="p-2 bg-primary/10 text-primary rounded-lg">
                   <UserPlus className="w-5 h-5" />
                 </div>
-                <h3 className="text-lg font-bold text-slate-900">Новый пользователь</h3>
+                <h3 className="text-lg font-bold text-foreground">Новый пользователь</h3>
               </div>
               <button
                 onClick={() => setIsCreateModalOpen(false)}
-                className="text-slate-400 hover:text-slate-600 cursor-pointer"
+                className="text-muted-foreground hover:text-foreground cursor-pointer"
               >
                 <X className="w-5 h-5" />
               </button>
@@ -512,8 +515,8 @@ export default function AdminUsersPage() {
 
             <form onSubmit={handleCreateSubmit} className="p-6 space-y-4">
               <div>
-                <label className="text-xs font-semibold text-slate-700 block mb-1">
-                  Логин / Username <span className="text-red-500">*</span>
+                <label className="text-xs font-semibold text-foreground block mb-1">
+                  Логин / Username <span className="text-destructive">*</span>
                 </label>
                 <Input
                   required
@@ -524,8 +527,8 @@ export default function AdminUsersPage() {
               </div>
 
               <div>
-                <label className="text-xs font-semibold text-slate-700 block mb-1">
-                  Пароль <span className="text-red-500">*</span>
+                <label className="text-xs font-semibold text-foreground block mb-1">
+                  Пароль <span className="text-destructive">*</span>
                 </label>
                 <Input
                   required
@@ -537,13 +540,13 @@ export default function AdminUsersPage() {
               </div>
 
               <div>
-                <label className="text-xs font-semibold text-slate-700 block mb-1">
+                <label className="text-xs font-semibold text-foreground block mb-1">
                   Роль в системе
                 </label>
                 <select
                   value={newUser.role}
-                  onChange={(e) => setNewUser({ ...newUser, role: e.target.value })}
-                  className="w-full h-9 rounded-md border border-input bg-white px-3 py-1 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-600"
+                  onChange={(e) => setNewUser({ ...newUser, role: e.target.value, student_id: "" })}
+                  className="w-full h-9 rounded-md border border-input bg-background text-foreground px-3 py-1 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                 >
                   <option value="CADET">Курсант (CADET)</option>
                   <option value="TEACHER">Преподаватель (TEACHER)</option>
@@ -552,7 +555,7 @@ export default function AdminUsersPage() {
               </div>
 
               <div>
-                <label className="text-xs font-semibold text-slate-700 block mb-1">
+                <label className="text-xs font-semibold text-foreground block mb-1">
                   ФИО
                 </label>
                 <Input
@@ -562,18 +565,25 @@ export default function AdminUsersPage() {
                 />
               </div>
 
-              <div>
-                <label className="text-xs font-semibold text-slate-700 block mb-1">
-                  Номер студенческого билета / группы
-                </label>
-                <Input
-                  placeholder="СМ1-12"
-                  value={newUser.student_id || ""}
-                  onChange={(e) => setNewUser({ ...newUser, student_id: e.target.value })}
-                />
-              </div>
+              {newUser.role === "CADET" && (
+                <div>
+                  <label className="text-xs font-semibold text-foreground block mb-1">
+                    Номер студенческого билета (необязательно)
+                  </label>
+                  <Input
+                    placeholder="Номер документа курсанта"
+                    value={newUser.student_id || ""}
+                    onChange={(e) => setNewUser({ ...newUser, student_id: e.target.value })}
+                  />
+                </div>
+              )}
 
-              <div className="flex justify-end gap-3 pt-4 border-t border-slate-100">
+              <p className="text-xs text-muted-foreground">
+                Учётная запись создаётся без группы. Преподаватель создаёт свои группы
+                в разделе «Ученики» и добавляет в них курсантов. Один преподаватель может вести несколько групп.
+              </p>
+
+              <div className="flex justify-end gap-3 pt-4 border-t border-border">
                 <Button
                   type="button"
                   variant="outline"
@@ -585,7 +595,7 @@ export default function AdminUsersPage() {
                 <Button
                   type="submit"
                   disabled={isSubmitting}
-                  className="bg-purple-700 hover:bg-purple-800 text-white"
+                  className="bg-primary hover:bg-primary/90 text-primary-foreground"
                 >
                   {isSubmitting ? "Создание..." : "Создать"}
                 </Button>
@@ -598,22 +608,22 @@ export default function AdminUsersPage() {
       {/* Modal: Password Change */}
       {passwordDialog && (
         <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4 backdrop-blur-xs animate-in fade-in">
-          <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 max-w-md w-full overflow-hidden">
-            <div className="p-5 border-b border-slate-200 flex items-center justify-between bg-slate-50">
+          <div className="bg-card rounded-2xl shadow-2xl border border-border max-w-md w-full overflow-hidden">
+            <div className="p-5 border-b border-border flex items-center justify-between bg-muted/30">
               <div className="flex items-center gap-2">
-                <div className="p-2 bg-amber-100 text-amber-700 rounded-lg">
+                <div className="p-2 bg-amber-500/10 text-amber-600 dark:text-amber-400 rounded-lg">
                   <KeyRound className="w-5 h-5" />
                 </div>
                 <div>
-                  <h3 className="text-lg font-bold text-slate-900">Изменить пароль</h3>
-                  <p className="text-xs text-slate-500">{passwordDialog.username}</p>
+                  <h3 className="text-lg font-bold text-foreground">Изменить пароль</h3>
+                  <p className="text-xs text-muted-foreground">{passwordDialog.username}</p>
                 </div>
               </div>
               <button
                 type="button"
                 aria-label="Закрыть окно смены пароля"
                 onClick={() => setPasswordDialog(null)}
-                className="text-slate-400 hover:text-slate-600 cursor-pointer"
+                className="text-muted-foreground hover:text-foreground cursor-pointer"
               >
                 <X className="w-5 h-5" />
               </button>
@@ -625,7 +635,7 @@ export default function AdminUsersPage() {
                   type="button"
                   variant={passwordMode === "generated" ? "default" : "outline"}
                   onClick={() => setPasswordMode("generated")}
-                  className={passwordMode === "generated" ? "bg-purple-700 text-white" : ""}
+                  className={passwordMode === "generated" ? "bg-primary text-primary-foreground hover:bg-primary/90" : ""}
                 >
                   Сгенерировать
                 </Button>
@@ -633,7 +643,7 @@ export default function AdminUsersPage() {
                   type="button"
                   variant={passwordMode === "custom" ? "default" : "outline"}
                   onClick={() => setPasswordMode("custom")}
-                  className={passwordMode === "custom" ? "bg-purple-700 text-white" : ""}
+                  className={passwordMode === "custom" ? "bg-primary text-primary-foreground hover:bg-primary/90" : ""}
                 >
                   Задать свой
                 </Button>
@@ -642,7 +652,7 @@ export default function AdminUsersPage() {
               {passwordMode === "custom" && (
                 <div className="space-y-3">
                   <div>
-                    <label className="text-xs font-semibold text-slate-700 block mb-1">
+                    <label className="text-xs font-semibold text-foreground block mb-1">
                       Новый пароль
                     </label>
                     <Input
@@ -654,7 +664,7 @@ export default function AdminUsersPage() {
                     />
                   </div>
                   <div>
-                    <label className="text-xs font-semibold text-slate-700 block mb-1">
+                    <label className="text-xs font-semibold text-foreground block mb-1">
                       Повторите пароль
                     </label>
                     <Input
@@ -668,24 +678,24 @@ export default function AdminUsersPage() {
                 </div>
               )}
 
-              <label className="flex items-start gap-3 rounded-xl border border-slate-200 bg-slate-50 p-3 cursor-pointer">
+              <label className="flex items-start gap-3 rounded-xl border border-border bg-muted/20 p-3 cursor-pointer">
                 <input
                   type="checkbox"
                   checked={revokeSessions}
                   onChange={(e) => setRevokeSessions(e.target.checked)}
-                  className="mt-0.5 h-4 w-4 rounded border-slate-300 accent-purple-700"
+                  className="mt-0.5 h-4 w-4 rounded border-border accent-primary"
                 />
                 <span>
-                  <span className="block text-sm font-semibold text-slate-800">
+                  <span className="block text-sm font-semibold text-foreground">
                     Завершить активные сессии
                   </span>
-                  <span className="block text-xs text-slate-500 mt-0.5">
+                  <span className="block text-xs text-muted-foreground mt-0.5">
                     Включайте, если есть риск, что доступ к аккаунту получил посторонний.
                   </span>
                 </span>
               </label>
 
-              <div className="flex justify-end gap-3 pt-2 border-t border-slate-100">
+              <div className="flex justify-end gap-3 pt-2 border-t border-border">
                 <Button
                   type="button"
                   variant="outline"
@@ -698,7 +708,7 @@ export default function AdminUsersPage() {
                   type="button"
                   onClick={handleResetPassword}
                   disabled={isPasswordSubmitting}
-                  className="bg-purple-700 hover:bg-purple-800 text-white"
+                  className="bg-primary hover:bg-primary/90 text-primary-foreground"
                 >
                   {isPasswordSubmitting ? "Сохранение..." : "Изменить пароль"}
                 </Button>
@@ -711,22 +721,22 @@ export default function AdminUsersPage() {
       {/* Modal: Password Reset Display */}
       {resetResult && (
         <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4 backdrop-blur-xs animate-in fade-in">
-          <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 max-w-md w-full overflow-hidden p-6 text-center space-y-4">
-            <div className="w-12 h-12 mx-auto bg-amber-100 text-amber-700 rounded-full flex items-center justify-center">
+          <div className="bg-card rounded-2xl shadow-2xl border border-border max-w-md w-full overflow-hidden p-6 text-center space-y-4">
+            <div className="w-12 h-12 mx-auto bg-amber-500/10 text-amber-600 dark:text-amber-400 rounded-full flex items-center justify-center">
               <KeyRound className="w-6 h-6" />
             </div>
 
-            <h3 className="text-lg font-bold text-slate-900">Пароль успешно изменён</h3>
-            <p className="text-xs text-slate-600">
-              Для пользователя <span className="font-bold text-slate-800">{resetResult.username}</span>{" "}
+            <h3 className="text-lg font-bold text-foreground">Пароль успешно изменён</h3>
+            <p className="text-xs text-muted-foreground">
+              Для пользователя <span className="font-bold text-foreground">{resetResult.username}</span>{" "}
               {resetResult.wasGenerated ? "сгенерирован" : "установлен"} новый пароль:
             </p>
 
-            <div className="p-3 bg-slate-100 border border-slate-300 rounded-xl font-mono text-xl font-black text-purple-700 select-all tracking-wider">
+            <div className="p-3 bg-muted/50 border border-border rounded-xl font-mono text-xl font-black text-primary select-all tracking-wider">
               {resetResult.newPassword}
             </div>
 
-            <p className="text-xs text-slate-400">
+            <p className="text-xs text-muted-foreground">
               {resetResult.sessionsRevoked
                 ? "Все прежние сессии пользователя завершены."
                 : "Активные сессии пользователя сохранены."}
@@ -734,7 +744,7 @@ export default function AdminUsersPage() {
 
             <Button
               onClick={() => setResetResult(null)}
-              className="w-full bg-purple-700 hover:bg-purple-800 text-white font-semibold cursor-pointer"
+              className="w-full bg-primary hover:bg-primary/90 text-primary-foreground font-semibold cursor-pointer"
             >
               Закрыть
             </Button>

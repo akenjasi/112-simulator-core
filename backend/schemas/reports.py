@@ -1,6 +1,6 @@
 """Pydantic schemas for reports and evaluations."""
 
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Literal, Optional
 from pydantic import BaseModel, Field, field_validator
 
 
@@ -62,6 +62,7 @@ class CadetEvaluationItem(BaseModel):
 
 
 class ReportGenerateRequest(BaseModel):
+    format: Literal["pdf", "excel", "csv"] = "pdf"
     group_id: Optional[str] = None
     session_ids: Optional[List[str]] = Field(None, max_length=1000)
     custom_records: Optional[List[Dict[str, Any]]] = Field(None, max_length=1000)
@@ -69,7 +70,14 @@ class ReportGenerateRequest(BaseModel):
     @field_validator("custom_records")
     @classmethod
     def require_explicit_measurements(cls, records):
+        import math
         for record in records or []:
+            if "final_score" in record:
+                for key in ("final_score", "comm_score", "card_score", "sla_score"):
+                    value = record.get(key)
+                    if value is not None and (isinstance(value, bool) or not isinstance(value, (int, float)) or not math.isfinite(value) or not 0 <= value <= 100):
+                        raise ValueError(f"Invalid explicit score: {key}")
+                continue
             for key, model in (("comm_metrics", CommunicationMetrics), ("card_metrics", CardMetrics), ("sla_metrics", SLAMetrics)):
                 metrics = record.get(key)
                 if not isinstance(metrics, dict) or not model.model_fields.keys() <= metrics.keys():

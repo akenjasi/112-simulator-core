@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useCallback, useRef } from "react"
 import Link from "next/link"
+import {reviewUrl} from "@/lib/student-review"
 import {fetchDDSSessionState, fetchDDSCard, postDDSAction, finishDDSSession, completeDDSCard, postDDSPhone,
   DDSRequestError, ddsBlockerMessage, getStoredToken,
   type DDSPhonePayload, type DDSSessionState, type DDSActionPayload, type DDSFinishPayload} from "@/lib/dds-cycle"
@@ -216,7 +217,9 @@ export function DDSAssignedConsole({sessionId, ticketId, cardId}: Props) {
   const completionNotice = sessionState.readonly && !isCompleted ? "Карточка завершена: просмотр истории" : isCompleted
     ? sessionState.submitted_at
       ? `Выполнено. ${sessionState.score == null ? (sessionState.exercise ? "Результаты сохранены" : "Нет оценки") : `Оценка: ${sessionState.score}`}`
-      : "Занятие завершено. Выполнение не завершено. Нет оценки"
+      : sessionState.stop_reason === "exam_timeout"
+        ? "Время выполнения экзамена истекло. Выполнение не завершено. Нет оценки"
+        : "Занятие завершено. Выполнение не завершено. Нет оценки"
     : null
 
   return (
@@ -247,7 +250,7 @@ export function DDSAssignedConsole({sessionId, ticketId, cardId}: Props) {
         {pendingMutation && <button type="button" onClick={handleRetry} disabled={isSaving} className="font-bold underline disabled:opacity-50">Повторить сохранение</button>}
         <button type="button" onClick={handleRefresh} disabled={isSaving} className="underline disabled:opacity-50">Обновить</button>
       </div>}
-      {completionNotice && <div className="shrink-0 px-4 py-2 text-sm bg-blue-100 text-blue-900">{completionNotice}</div>}
+      {completionNotice && <div className="flex shrink-0 flex-wrap items-center justify-between gap-3 px-4 py-2 text-sm bg-blue-100 text-blue-900"><span>{completionNotice}</span><Link href={reviewUrl(sessionId, sessionState.card_id)} className="inline-flex min-h-10 items-center rounded border border-blue-300 bg-white px-4 py-2 font-semibold hover:bg-blue-50 focus-visible:outline-2 focus-visible:outline-ring">Разбор карточки</Link></div>}
       <TopBar data={card} />
       <div className="flex flex-1 min-h-0 gap-3 px-2 py-1 overflow-hidden" data-testid="dds-reference-columns">
         <CallerPanel data={card} />
