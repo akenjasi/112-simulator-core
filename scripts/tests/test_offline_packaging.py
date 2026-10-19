@@ -53,6 +53,13 @@ import os, pathlib, sys
 args=sys.argv[1:]
 with open(os.environ['CURL_TRACE'],'a') as f: f.write(repr(args)+'\n')
 out=pathlib.Path(args[args.index('--output')+1])
+if os.getenv('SSL_EOF_ONCE'):
+    marker=pathlib.Path(os.environ['SSL_EOF_ONCE'])
+    if not marker.exists():
+        marker.touch()
+        out.write_bytes(b'GGUFinterrupted')
+        sys.exit(56)
+    assert out.read_bytes()==b'GGUFinterrupted', 'Retry discarded saved bytes'
 if os.getenv('FAIL_DOWNLOAD'):
     out.write_bytes(b'GGUFinterrupted')
     sys.exit(18)
@@ -99,6 +106,8 @@ class OfflinePackagingTests(unittest.TestCase):
         (self.bin / "docker").chmod(0o755)
         (self.bin / "curl").write_text(FAKE_CURL)
         (self.bin / "curl").chmod(0o755)
+        (self.bin / "sleep").write_text("#!/bin/sh\nexit 0\n")
+        (self.bin / "sleep").chmod(0o755)
         self.curl_trace = self.base / "curl.txt"
         self.trace = self.base / "docker.jsonl"
         self.output = self.base / "offline.tar.gz"
@@ -110,11 +119,12 @@ class OfflinePackagingTests(unittest.TestCase):
     def git(self, *args):
         subprocess.run(["git", *args], cwd=self.repo, check=True, capture_output=True)
 
-    def run_pack(self, *args, env=None, default_model=False):
+    def run_pack(self, *args, env=None, default_model=False, default_work_dir=False):
         model_args = [] if default_model else ["--llm-model", str(self.llm)]
+        work_args = [] if default_work_dir else ["--work-dir", str(self.work)]
         return subprocess.run(["bash", str(self.repo / "package_offline.sh"), *model_args,
             "--version", "test-release", "--output", str(self.output),
-            "--work-dir", str(self.work), *args], env=env or self.env, capture_output=True, text=True, timeout=30)
+            *work_args, *args], env=env or self.env, capture_output=True, text=True, timeout=30)
 
     def calls(self):
         return [json.loads(line) for line in self.trace.read_text().splitlines()] if self.trace.exists() else []
@@ -164,6 +174,22 @@ class OfflinePackagingTests(unittest.TestCase):
         self.assertFalse(list((self.repo / "models").glob("*.gguf*part")))
         self.assertFalse(any(c[0] == "build" for c in self.calls()))
 
+    def test_ssl_eof_automatically_resumes_with_new_curl_invocation(self):
+        result = self.run_pack(default_model=True,
+                               env={**self.env, "SSL_EOF_ONCE": str(self.base / "ssl-failed")})
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertIn("curl 56", result.stdout)
+        self.assertEqual(len(self.curl_trace.read_text().splitlines()), 2)
+        self.assertEqual((self.unpack() / "models/report.gguf").read_bytes(), self.download_bytes)
+
+    def test_completed_partial_is_verified_without_requesting_invalid_range(self):
+        part = self.repo / "models/Qwen3.5-9B-Q4_K_M.gguf.part"
+        part.write_bytes(self.download_bytes)
+        result = self.run_pack(default_model=True)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertFalse(self.curl_trace.exists())
+        self.assertEqual((self.unpack() / "models/report.gguf").read_bytes(), self.download_bytes)
+
     def test_check_and_no_download_do_not_fetch_missing_default(self):
         for option in ("--check", "--no-download"):
             result = self.run_pack(option, default_model=True)
@@ -185,6 +211,17 @@ class OfflinePackagingTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         self.assertFalse(self.output.exists())
         self.assertEqual([c[0] for c in self.calls()], ["info", "compose"])
+
+    def test_default_staging_uses_output_disk_instead_of_tmpdir(self):
+        small_tmp = self.base / "small-ram-filesystem"
+        result = self.run_pack(default_work_dir=True, env={**self.env, "TMPDIR": str(small_tmp)})
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        builds = [c for c in self.calls() if c[0] == "build"]
+        self.assertEqual(len(builds), 2)
+        for build in builds:
+            self.assertTrue(Path(build[-1]).is_relative_to(self.output.parent / ".work"))
+        self.assertFalse(small_tmp.exists())
+        self.assertEqual(list((self.output.parent / ".work").iterdir()), [])
 
     def test_bundle_contains_all_cpu_services_models_and_valid_checksums(self):
         result = self.run_pack()
