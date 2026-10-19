@@ -6,7 +6,7 @@ ARCHIVE="" DESTINATION="$PWD/simulator112-offline" RESTORE=0 STAGE=""
 PROJECT="${SIMULATOR_PROJECT:-simulator112_offline}"
 usage() {
   cat <<'HELP'
-Usage: bash deploy_offline.sh ARCHIVE.tar.gz [options]
+Usage: bash deploy.sh ARCHIVE.tar.gz [options]
 
 Verify, extract and install the CPU-only offline bundle without downloading anything.
 Copy this script, the archive and its .sha256 file to the server before running.

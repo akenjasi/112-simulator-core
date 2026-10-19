@@ -1,6 +1,12 @@
 # Поставка без интернета и GPU
 
-В корне проекта находится `docker/offline/package.sh`. Он **не запускает и не обновляет
+Скрипты находятся в `docker/offline/`: `package.sh` собирает поставку,
+`deploy.sh` разворачивает её на сервере. Это прежние `package_offline.sh` и
+`deploy_offline.sh`, перенесённые из корня и адаптированные к новой структуре:
+интерфейс берётся из `frontend/`, Dockerfile — из `docker/images/`, зависимости
+backend — из `backend/requirements/`, ресурсы — из `assets/`.
+
+Упаковщик **не запускает и не обновляет
 рабочий стенд**: собирает образы на машине с интернетом и создаёт один архив для
 Linux/amd64. Другие архитектуры не заявляются. Распознавание речи в этой поставке
 отключено: ASR-модель не нужна и в архив не включается.
@@ -20,7 +26,7 @@ Linux/amd64. Другие архитектуры не заявляются. Ра
 
 ```bash
 # Скачать Qwen (если его ещё нет), собрать образы и упаковать всё:
-./docker/offline/package.sh
+make package-offline
 
 ./docker/offline/package.sh \
   --version release-1 \
@@ -67,15 +73,16 @@ PostgreSQL и `/app/data` из существующих контейнеров, 
 Нужен установленный Docker Engine с Compose. Python, Node, PostgreSQL, GPU,
 CUDA и NVIDIA Container Toolkit на хосте не нужны.
 
-Скопируйте на сервер архив, соседний файл `.sha256` и скрипт `docker/offline/deploy.sh` (на сервере сохраните его как `deploy_offline.sh`)
-из корня проекта. Репозиторий целиком переносить не нужно. На сервере:
+Скопируйте на сервер архив, соседний файл `.sha256` и скрипт
+`docker/offline/deploy.sh`, сохранив его как `deploy.sh`. Репозиторий целиком
+переносить не нужно. На сервере:
 
 ```bash
-bash deploy_offline.sh /путь/simulator112.tar.gz \
+bash deploy.sh /путь/simulator112.tar.gz \
   --directory "$HOME/simulator112"
 
 # Если архив собран с --with-data и требуется перенести базу и материалы:
-bash deploy_offline.sh /путь/simulator112.tar.gz \
+bash deploy.sh /путь/simulator112.tar.gz \
   --directory "$HOME/simulator112" --restore
 ```
 
