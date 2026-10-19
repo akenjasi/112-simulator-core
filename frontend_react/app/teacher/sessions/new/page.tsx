@@ -846,18 +846,18 @@ export default function SessionSetupPage() {
     isNoTickets
 
   return (
-    <div className="container mx-auto p-4 max-w-7xl space-y-4">
+    <div className="teacher-page space-y-5">
       {/* Header */}
-      <div className="flex items-center justify-between border-b pb-3">
+      <div className="teacher-page-header flex items-center justify-between pb-4">
         <div className="flex items-center gap-2.5">
-          <div className="p-2 bg-primary/10 rounded-lg text-primary shadow-2xs">
+          <div className="p-2.5 bg-primary/10 rounded-xl text-primary">
             <Settings2 className="h-5 w-5" />
           </div>
           <div>
-            <h1 className="text-2xl font-bold tracking-tight text-foreground">
+            <h1 className="text-2xl md:text-[28px] font-bold tracking-tight text-foreground">
               Запуск урока
             </h1>
-            <p className="text-xs text-muted-foreground">
+            <p className="text-sm text-muted-foreground mt-1">
               Настройка группового занятия, выбор профильной роли, фильтрация происшествий и уровень сложности
             </p>
           </div>
@@ -897,17 +897,19 @@ export default function SessionSetupPage() {
 
       {/* Main Form */}
       <form onSubmit={handleSubmit(onSubmit)}>
-        <Card className="shadow-sm">
-          <CardHeader className="py-3 px-6">
-            <CardTitle className="text-lg">Параметры группового занятия</CardTitle>
-            <CardDescription className="text-xs">
+        <Card className="teacher-panel gap-4 rounded-2xl py-4 shadow-none">
+          <CardHeader className="px-5 md:px-6">
+            <CardTitle className="text-lg md:text-xl">Параметры группового занятия</CardTitle>
+            <CardDescription className="text-sm">
               Сконфигурируйте сценарий проведения тренировочной сессии для учебной группы.
             </CardDescription>
           </CardHeader>
 
-          <CardContent className="px-6 space-y-4">
+          <CardContent className="px-5 md:px-6">
+            <div className="grid items-start gap-6 xl:grid-cols-[minmax(0,0.85fr)_minmax(0,1.15fr)]">
+              <div className="min-w-0 space-y-5">
             {/* РЯД 1: Учебная группа (слева) + Уровень сложности (справа) */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-start">
+            <div className="grid grid-cols-1 gap-4 items-start">
               {/* 1. Выбор Группы */}
               <div className="space-y-1.5">
                 <Label htmlFor="group_id" className="flex items-center gap-1.5 font-semibold text-foreground text-sm">
@@ -1066,7 +1068,7 @@ export default function SessionSetupPage() {
                     <RadioGroup
                       value={field.value}
                       onValueChange={field.onChange}
-                      className="grid grid-cols-2 sm:grid-cols-4 gap-1.5"
+                      className="grid grid-cols-2 gap-2"
                     >
                       {[
                         {
@@ -1131,7 +1133,7 @@ export default function SessionSetupPage() {
             </div>
 
             {/* РЯД 2: Роль для тренировки (слева) + Режим проведения занятия (справа) */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-start">
+            <div className="grid grid-cols-1 gap-4 items-start">
               {/* 3. Роль для тренировки */}
               <div className="space-y-1.5">
                 <Label className="font-semibold text-foreground flex items-center gap-1.5 text-sm">
@@ -1250,6 +1252,52 @@ export default function SessionSetupPage() {
               </div>
             </div>
 
+            {/* РЯД 4: Лимиты времени и ошибок */}
+            <div className="pt-2 border-t">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="space-y-1">
+                  <Label htmlFor="time_limit_seconds" className="text-xs flex items-center gap-1 text-foreground font-medium">
+                    <Clock className="h-3.5 w-3.5 text-muted-foreground" />
+                    Лимит времени (сек)
+                  </Label>
+                  <Input
+                    id="time_limit_seconds"
+                    type="number"
+                    min={5}
+                    max={600}
+                    placeholder="По умолчанию (30 сек)"
+                    className="h-8 text-xs"
+                    {...register("time_limit_seconds")}
+                  />
+                  <p className="text-[11px] text-muted-foreground">
+                    Лимит времени на карточку от момента выдачи. Норматив SLA 30 сек на первичное решение службы действует параллельно в интерфейсе ДДС.
+                  </p>
+                </div>
+
+                <div className="space-y-1">
+                  <Label htmlFor="error_limit" className="text-xs text-foreground font-medium flex items-center justify-between">
+                    <span>Допустимое количество ошибок</span>
+                    <span className="text-[11px] text-muted-foreground font-normal">
+                      {`По умолчанию: ${defaultErrors}`}
+                    </span>
+                  </Label>
+                  <Input
+                    id="error_limit"
+                    type="number"
+                    min={0}
+                    max={10}
+                    placeholder={`По умолчанию: ${defaultErrors} (от сложности)`}
+                    className="h-8 text-xs"
+                    {...register("error_limit")}
+                  />
+                  <p className="text-[11px] text-muted-foreground">
+                    {`По умолчанию для выбранной сложности: ${defaultErrors}`}
+                  </p>
+                </div>
+              </div>
+            </div>
+              </div>
+              <div className="min-w-0">
             {/* РЯД 3: Для ДДС — выбор подготовленного билета с фильтрами, для Оператора 112 — категории */}
             {watch("target_role") === "DISPATCHER_DDS" ? (
               <div className="space-y-3.5 p-4 border rounded-xl bg-card shadow-xs">
@@ -1361,7 +1409,7 @@ export default function SessionSetupPage() {
                 <div className="text-[11px] text-muted-foreground bg-primary/5 border border-primary/10 rounded-md p-2 flex items-start gap-2">
                   <Info className="h-4 w-4 text-primary shrink-0 mt-0.5" />
                   <span>
-                    В каталоге ДДС отображаются подготовленные билеты с заполненной карточкой происшествия (DispatcherData). Сценарии исключительно голосового контура 112 в этом каталоге не отображаются.
+                    Выберите подготовленные билеты ДДС и задайте порядок их прохождения. Для голосовых заданий используйте роль оператора 112, если она доступна.
                   </span>
                 </div>
 
@@ -1418,7 +1466,7 @@ export default function SessionSetupPage() {
 
               {/* Выбранные чипы (Категории и Подкатегории / Виды) */}
               {(selectedMainCategories.length > 0 || selectedSubcategories.length > 0) && (
-                <div className="flex flex-wrap gap-1 p-2 bg-muted/30 rounded-lg border border-border/60 max-h-16 overflow-y-auto">
+                <div className="flex flex-wrap gap-1.5 p-2.5 bg-muted/30 rounded-xl border border-border/60">
                   {selectedMainCategories.map((cat) => {
                     const CatIcon = getCategoryIcon(cat)
                     return (
@@ -1463,7 +1511,7 @@ export default function SessionSetupPage() {
               {/* 2 параллельных вертикальных блока со срезанной наполовину высотой */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                 {/* Левый столбик: Категории */}
-                <div className="border rounded-xl p-2.5 bg-card space-y-2 shadow-2xs flex flex-col h-full">
+                <div className="border rounded-xl p-3.5 bg-card space-y-3 shadow-none flex flex-col h-full">
                   <div className="flex items-center justify-between border-b pb-1.5">
                     <h4 className="text-xs font-semibold text-foreground flex items-center gap-1.5">
                       <span>Этап 1: Выберите категории происшествий</span>
@@ -1492,7 +1540,7 @@ export default function SessionSetupPage() {
                       className="pl-8 text-xs h-8 bg-background"
                     />
                   </div>
-                  <div className="flex-1 overflow-y-auto pr-1" style={{ maxHeight: "190px" }}>
+                  <div className="pr-1">
                     {isLoadingCategories ? (
                       <div className="flex items-center justify-center p-4 text-xs text-muted-foreground gap-2">
                         <Loader2 className="h-3.5 w-3.5 animate-spin text-primary" />
@@ -1542,7 +1590,7 @@ export default function SessionSetupPage() {
                 </div>
 
                 {/* Правый столбик: Подкатегории / Вид происшествия */}
-                <div className="border rounded-xl p-2.5 bg-card space-y-2 shadow-2xs flex flex-col h-full">
+                <div className="border rounded-xl p-3.5 bg-card space-y-3 shadow-none flex flex-col h-full">
                   <div className="border-b pb-1.5 flex items-center justify-between">
                     <h4 className="text-xs font-semibold text-foreground flex items-center gap-1.5">
                       <span>Этап 2: {isDdsRole ? "Вид происшествия" : "Подкатегории происшествий"}</span>
@@ -1553,7 +1601,7 @@ export default function SessionSetupPage() {
                       )}
                     </h4>
                   </div>
-                  <div className="flex-1 overflow-y-auto pr-1" style={{ maxHeight: "190px" }}>
+                  <div className="pr-1">
                     {selectedMainCategories.length === 0 ? (
                       <div className="rounded-lg border border-dashed p-4 text-center text-muted-foreground bg-muted/10 h-full min-h-[140px] flex flex-col items-center justify-center">
                         <Layers className="h-6 w-6 mx-auto mb-1.5 opacity-40" />
@@ -1769,54 +1817,17 @@ export default function SessionSetupPage() {
             </div>
           )}
 
-            {/* РЯД 4: Лимиты времени и ошибок */}
-            <div className="pt-2 border-t">
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div className="space-y-1">
-                  <Label htmlFor="time_limit_seconds" className="text-xs flex items-center gap-1 text-foreground font-medium">
-                    <Clock className="h-3.5 w-3.5 text-muted-foreground" />
-                    Лимит времени (сек)
-                  </Label>
-                  <Input
-                    id="time_limit_seconds"
-                    type="number"
-                    min={5}
-                    max={600}
-                    placeholder="По умолчанию (30 сек)"
-                    className="h-8 text-xs"
-                    {...register("time_limit_seconds")}
-                  />
-                  <p className="text-[11px] text-muted-foreground">
-                    Лимит времени на карточку от момента выдачи. Норматив SLA 30 сек на первичное решение службы действует параллельно в интерфейсе ДДС.
-                  </p>
-                </div>
-
-                <div className="space-y-1">
-                  <Label htmlFor="error_limit" className="text-xs text-foreground font-medium flex items-center justify-between">
-                    <span>Допустимое количество ошибок</span>
-                    <span className="text-[11px] text-muted-foreground font-normal">
-                      {`По умолчанию: ${defaultErrors}`}
-                    </span>
-                  </Label>
-                  <Input
-                    id="error_limit"
-                    type="number"
-                    min={0}
-                    max={10}
-                    placeholder={`По умолчанию: ${defaultErrors} (от сложности)`}
-                    className="h-8 text-xs"
-                    {...register("error_limit")}
-                  />
-                  <p className="text-[11px] text-muted-foreground">
-                    {`По умолчанию для выбранной сложности: ${defaultErrors}`}
-                  </p>
-                </div>
               </div>
             </div>
           </CardContent>
 
-          <CardFooter className="flex flex-col sm:flex-row items-center justify-between gap-3 border-t py-3 px-6">
+          <CardFooter className="sticky bottom-0 z-10 flex flex-col sm:flex-row items-center justify-between gap-4 rounded-b-2xl border-t bg-card py-4 px-5 md:px-6">
             <div className="flex flex-col gap-0.5">
+              <div className="flex flex-wrap gap-1.5 mb-1">
+                <Badge variant="secondary" className="text-xs font-medium">{selectedGroupObj?.group_name || "Группа не выбрана"}</Badge>
+                <Badge variant="outline" className="text-xs">{watch("target_role") === "DISPATCHER_DDS" ? "Диспетчер ДДС" : "Оператор 112"}</Badge>
+                <Badge variant="outline" className="text-xs">{watch("distribution_mode") === "exam" ? "Экзамен" : "Обучение"}</Badge>
+              </div>
               <div className="text-sm font-semibold text-foreground">
                 {isDdsRole ? "Набор билетов ДДС: " : "Будет доступно билетов: "}
                 <span className={isNoTickets ? "text-destructive font-bold" : "text-primary font-bold"}>
@@ -1841,7 +1852,7 @@ export default function SessionSetupPage() {
               disabled={isSubmitDisabled}
               title={isNoTickets ? (isDdsRole && ddsTickets.length ? "Выберите билеты и порядок прохождения" : "Выберите другую категорию или подготовьте билеты") : undefined}
               size="lg"
-              className="w-full sm:w-auto h-11 px-7 text-sm font-bold shadow-md hover:shadow-lg transition-all"
+              className="w-full sm:w-auto h-11 px-7 text-sm font-semibold shadow-none transition-all"
             >
               {isSubmitting ? (
                 <>

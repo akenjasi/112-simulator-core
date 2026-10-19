@@ -1,0 +1,49 @@
+
+> 112-simulator-frontend@0.1.0 build
+> next build
+
+▲ Next.js 16.4.2 (Turbopack)
+✓ Running next.config.mjs took 29ms
+
+  Creating an optimized production build ...
+✓ Compiled successfully in 2.7s
+  Running TypeScript ...
+  Finished TypeScript in 7.3s ...
+  Collecting page data using 11 workers ...
+  Generating static pages using 11 workers (0/26) ...
+  Generating static pages using 11 workers (6/26) 
+  Generating static pages using 11 workers (12/26) 
+  Generating static pages using 11 workers (19/26) 
+✓ Generating static pages using 11 workers (26/26) in 823ms
+  Finalizing page optimization ...
+
+Route (app)
+┌ ○ /
+├ ○ /_not-found
+├ ○ /admin
+├ ○ /admin/logs
+├ ○ /admin/profile
+├ ○ /admin/security
+├ ○ /admin/system
+├ ○ /admin/users
+├ ○ /dds
+├ ○ /dds/journal
+├ ○ /login
+├ ○ /operator
+├ ○ /operator/journal
+├ ○ /student/lobby
+├ ○ /student/profile
+├ ○ /student/review
+├ ○ /teacher
+├ ○ /teacher/analytics
+├ ○ /teacher/groups
+├ ○ /teacher/knowledge
+├ ○ /teacher/profile
+├ ○ /teacher/sessions
+├ ○ /teacher/sessions/live
+├ ○ /teacher/sessions/new
+└ ○ /teacher/tickets
+
+
+○  (Static)  prerendered as static content
+

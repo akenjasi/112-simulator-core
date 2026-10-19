@@ -198,7 +198,7 @@ export default function KnowledgePage() {
   const totalSizeBytes = files.reduce((acc, f) => acc + (f.size ?? f.size_bytes ?? 0), 0)
 
   return (
-    <div className="container mx-auto p-6 max-w-6xl space-y-8">
+    <div className="teacher-page teacher-workspace mx-auto max-w-7xl space-y-5">
       {/* Hidden file input */}
       <input
         ref={fileInputRef}
@@ -210,13 +210,13 @@ export default function KnowledgePage() {
       />
 
       {/* Header */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 border-b pb-5">
+      <div className="teacher-page-header flex flex-col md:flex-row md:items-center justify-between gap-4 pb-4">
         <div className="flex items-center gap-3">
-          <div className="p-2.5 bg-primary/10 rounded-xl text-primary">
-            <BookOpen className="h-8 w-8" />
+          <div className="p-2 bg-primary/10 rounded-xl text-primary">
+            <BookOpen className="h-6 w-6" />
           </div>
           <div>
-            <h1 className="text-3xl font-bold tracking-tight text-foreground">
+            <h1 className="text-2xl font-bold tracking-tight text-foreground">
               База знаний
             </h1>
             <p className="text-sm text-muted-foreground mt-0.5">
@@ -279,72 +279,28 @@ export default function KnowledgePage() {
       )}
 
       {/* Stats Cards */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <Card className="p-4 shadow-sm">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        <Card className="teacher-panel gap-1 p-4 shadow-none">
           <p className="text-xs font-medium text-muted-foreground">Всего документов</p>
           <p className="text-2xl font-bold mt-1 text-foreground">{totalFiles}</p>
         </Card>
-        <Card className="p-4 shadow-sm">
+        <Card className="teacher-panel gap-1 p-4 shadow-none">
           <p className="text-xs font-medium text-muted-foreground">Регламенты PDF</p>
-          <p className="text-2xl font-bold mt-1 text-red-600 dark:text-red-400">{pdfCount}</p>
+          <p className="text-2xl font-bold mt-1 text-foreground">{pdfCount}</p>
         </Card>
-        <Card className="p-4 shadow-sm">
+        <Card className="teacher-panel gap-1 p-4 shadow-none">
           <p className="text-xs font-medium text-muted-foreground">Инструкции DOCX</p>
-          <p className="text-2xl font-bold mt-1 text-blue-600 dark:text-blue-400">{docxCount}</p>
+          <p className="text-2xl font-bold mt-1 text-foreground">{docxCount}</p>
         </Card>
-        <Card className="p-4 shadow-sm">
+        <Card className="teacher-panel gap-1 p-4 shadow-none">
           <p className="text-xs font-medium text-muted-foreground">Общий объем</p>
           <p className="text-2xl font-bold mt-1 text-foreground">{formatBytes(totalSizeBytes)}</p>
         </Card>
       </div>
 
-      {/* Upload Zone Card */}
-      <Card className="shadow-sm border-dashed">
-        <CardHeader className="pb-3">
-          <CardTitle className="text-lg flex items-center gap-2">
-            <Upload className="h-5 w-5 text-primary" />
-            Быстрая загрузка регламентов
-          </CardTitle>
-          <CardDescription>
-            Перетащите файлы нормативных документов или выберите с диска. Поддерживаются только форматы <strong>PDF</strong> и <strong>DOCX</strong>.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <Dropzone
-            onFileSelect={handleDropzoneSelect}
-            selectedFile={selectedFile}
-            accept=".pdf,.docx,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-            title="Перетащите файл регламента сюда (PDF или DOCX)"
-            description="или нажмите для выбора файла на компьютере"
-          />
-
-          {selectedFile && (
-            <div className="flex items-center justify-end pt-1">
-              <Button
-                type="button"
-                onClick={() => uploadFile(selectedFile)}
-                disabled={isUploading}
-                size="sm"
-              >
-                {isUploading ? (
-                  <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Отправка на сервер...
-                  </>
-                ) : (
-                  <>
-                    <FileCheck className="mr-2 h-4 w-4" />
-                    Отправить выбранный файл
-                  </>
-                )}
-              </Button>
-            </div>
-          )}
-        </CardContent>
-      </Card>
-
+      <div className="grid items-start gap-5 xl:grid-cols-[minmax(0,1fr)_340px]">
       {/* File Manager Section */}
-      <Card className="shadow-sm">
+      <Card className="teacher-panel shadow-none">
         <CardHeader className="space-y-4">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <div>
@@ -378,7 +334,7 @@ export default function KnowledgePage() {
           </div>
 
           {/* Search & Filter Toolbar */}
-          <div className="flex flex-col sm:flex-row items-center gap-3">
+          <div className="teacher-toolbar flex flex-col sm:flex-row items-center gap-3">
             <div className="relative w-full sm:max-w-xs">
               <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
               <Input
@@ -590,6 +546,54 @@ export default function KnowledgePage() {
           )}
         </CardContent>
       </Card>
+        <aside aria-label="Загрузка материалов">
+      {/* Upload Zone Card */}
+      <Card className="teacher-panel shadow-none border-dashed">
+        <CardHeader className="pb-3">
+          <CardTitle className="text-lg flex items-center gap-2">
+            <Upload className="h-5 w-5 text-primary" />
+            Быстрая загрузка регламентов
+          </CardTitle>
+          <CardDescription>
+            Перетащите файлы нормативных документов или выберите с диска. Поддерживаются только форматы <strong>PDF</strong> и <strong>DOCX</strong>.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <Dropzone
+            onFileSelect={handleDropzoneSelect}
+            selectedFile={selectedFile}
+            accept=".pdf,.docx,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+            title="Перетащите файл регламента сюда (PDF или DOCX)"
+            description="или нажмите для выбора файла на компьютере"
+          />
+
+          {selectedFile && (
+            <div className="flex items-center justify-end pt-1">
+              <Button
+                type="button"
+                onClick={() => uploadFile(selectedFile)}
+                disabled={isUploading}
+                size="sm"
+              >
+                {isUploading ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Отправка на сервер...
+                  </>
+                ) : (
+                  <>
+                    <FileCheck className="mr-2 h-4 w-4" />
+                    Отправить выбранный файл
+                  </>
+                )}
+              </Button>
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+        </aside>
+      </div>
     </div>
   )
 }

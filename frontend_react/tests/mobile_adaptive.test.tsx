@@ -224,7 +224,7 @@ describe('Mobile Adaptivity (task_78)', () => {
   });
 
   describe('TeacherLayout Mobile Adaptive Header & Drawer', () => {
-    it('should have hidden md:flex on desktop sidebar and render teacher mobile hamburger button', async () => {
+    it('should provide top navigation on desktop and a separate mobile menu', async () => {
       const TeacherLayout = (await import('../app/teacher/layout')).default;
       const { container } = render(
         <TeacherLayout>
@@ -232,13 +232,11 @@ describe('Mobile Adaptivity (task_78)', () => {
         </TeacherLayout>
       );
 
-      // Desktop sidebar has hidden md:flex
-      const desktopSidebar = container.querySelector(
-        'aside[aria-label="Боковое меню преподавателя"]'
-      );
-      expect(desktopSidebar).toBeInTheDocument();
-      expect(desktopSidebar?.className).toContain('hidden');
-      expect(desktopSidebar?.className).toContain('md:flex');
+      const navigation = screen.getByRole('navigation', { name: 'Основная навигация' });
+      expect(navigation).toBeInTheDocument();
+      expect(navigation).toHaveTextContent('Начать урок');
+      expect(container.querySelector('aside[aria-label="Боковое меню преподавателя"]')).not.toBeInTheDocument();
+      expect(screen.getByRole('main')).toHaveTextContent('Teacher Content');
 
       // Mobile hamburger button is present
       const hamburgerBtn = screen.getByTestId('teacher-mobile-menu-toggle');

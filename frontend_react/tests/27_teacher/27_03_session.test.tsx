@@ -208,7 +208,8 @@ describe('ТЗ 41: Запуск урока (Создание сессии) - Н�
     // Select DISPATCHER_DDS role
     const dispatcherRadio = screen.getByRole('radio', { name: /Диспетчер ДДС/i });
     fireEvent.click(dispatcherRadio);
-    fireEvent.click(await screen.findByRole('checkbox', { name: /Подтвержденный билет/i }));
+    const approvedTicket = await screen.findByRole('checkbox', { name: /Подтвержденный билет/i });
+    fireEvent.click(approvedTicket);
 
     // Select adaptive complexity
     const adaptiveRadio = screen.getByText(/Адаптивный/i);

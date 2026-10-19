@@ -1,0 +1,45 @@
+........................................................................ [ 36%]
+........................................................................ [ 73%]
+..............F......................................                    [100%]
+=================================== FAILURES ===================================
+_____________________ test_only_lobby_frontend_may_change ______________________
+tools_tests/test_dds_frontend_scope.py:60: in test_only_lobby_frontend_may_change
+    assert not changes, "Forbidden frontend changes outside the approved fixes:\n" + "\n".join(sorted(changes))
+E   AssertionError: Forbidden frontend changes outside the approved fixes:
+E     added outside lobby: components/dispatcher/dds-protocol.tsx
+E     added outside lobby: components/dispatcher/dds-training-phone.tsx
+E     added outside lobby: components/teacher/dds-exercise-editor.tsx
+E     added outside lobby: components/teacher/dds-lesson-protocol.tsx
+E     changed: app/dds/page.tsx
+E     changed: app/globals.css
+E     changed: app/layout.tsx
+E     changed: app/login/page.tsx
+E     changed: app/operator/page.tsx
+E     changed: components/dispatcher/dispatch-panel.tsx
+E     changed: components/dispatcher/top-bar.tsx
+E     changed: hooks/useTelephony.ts
+E     changed: package-lock.json
+E     changed: package.json
+E   assert not ['added outside lobby: components/teacher/dds-lesson-protocol.tsx', 'added outside lobby: components/dispatcher/dds-tr...nts/teacher/dds-exercise-editor.tsx', 'changed: app/login/page.tsx', 'changed: components/dispatcher/top-bar.tsx', ...]
+=============================== warnings summary ===============================
+test_ai_analytics_ownership_acceptance.py::test_teacher_cannot_read_or_mutate_foreign_or_ownerless_objects[student_get-foreign]
+  /tmp/112-audit-20261019/clean311/lib64/python3.11/site-packages/ldap3/utils/asn1.py:50: DeprecationWarning: tagMap is deprecated. Please use TAG_MAP instead.
+    from pyasn1.codec.ber.encoder import tagMap, typeMap, AbstractItemEncoder
+
+test_ai_analytics_ownership_acceptance.py::test_teacher_cannot_read_or_mutate_foreign_or_ownerless_objects[student_get-foreign]
+  /tmp/112-audit-20261019/clean311/lib64/python3.11/site-packages/ldap3/utils/asn1.py:50: DeprecationWarning: typeMap is deprecated. Please use TYPE_MAP instead.
+    from pyasn1.codec.ber.encoder import tagMap, typeMap, AbstractItemEncoder
+
+test_ai_analytics_ownership_acceptance.py::test_teacher_trigger_requires_explicit_target[payload0-GET]
+test_ai_analytics_ownership_acceptance.py::test_teacher_trigger_requires_explicit_target[payload0-POST]
+test_ai_analytics_ownership_acceptance.py::test_teacher_trigger_requires_explicit_target[payload1-GET]
+test_ai_analytics_ownership_acceptance.py::test_teacher_trigger_requires_explicit_target[payload1-POST]
+test_ai_analytics_ownership_acceptance.py::test_teacher_trigger_requires_explicit_target[payload2-GET]
+test_ai_analytics_ownership_acceptance.py::test_teacher_trigger_requires_explicit_target[payload2-POST]
+  /tmp/112-audit-20261019/clean311/lib64/python3.11/site-packages/fastapi/routing.py:372: StarletteDeprecationWarning: 'HTTP_422_UNPROCESSABLE_ENTITY' is deprecated. Use 'HTTP_422_UNPROCESSABLE_CONTENT' instead.
+    return await dependant.call(**values)
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+FAILED tools_tests/test_dds_frontend_scope.py::test_only_lobby_frontend_may_change
+1 failed, 196 passed, 8 warnings in 93.83s (0:01:33)

@@ -1,0 +1,67 @@
+.workspace {
+  display: flex;
+  flex-direction: column;
+  font-size: 0.9375rem;
+  line-height: 1.5;
+}
+
+.topbar, .navigation, .content, .footer {
+  width: 100%;
+  max-width: 1600px;
+  margin-inline: auto;
+  padding-inline: clamp(16px, 3vw, 40px);
+}
+
+.topbar {
+  display: flex;
+  min-height: 80px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding-block: 14px;
+}
+
+.navigation { flex-wrap: wrap; gap: 4px; padding-bottom: 10px; }
+.navLink {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  border-radius: 9px;
+  padding: 10px 13px;
+  color: var(--muted-foreground);
+  font-size: 0.8125rem;
+  font-weight: 500;
+  text-decoration: none;
+  transition: background-color 120ms, color 120ms;
+}
+.navLink:hover { background: var(--muted); color: var(--foreground); }
+.navLink:focus-visible { outline: 2px solid var(--ring); outline-offset: 2px; }
+.active { background: color-mix(in srgb, var(--primary) 11%, transparent); color: var(--primary); }
+.mobileLink { padding-block: 13px; font-size: 0.9375rem; }
+.content { flex: 1; min-width: 0; padding-block: 24px; }
+.footer { padding-block: 16px; font-size: 0.75rem; color: var(--muted-foreground); }
+.skipLink { position: absolute; left: 16px; top: -100px; z-index: 60; }
+.skipLink:focus { top: 12px; padding: 12px; background: var(--card); outline: 2px solid var(--ring); }
+.systemStatus { border: 0; background: transparent; padding: 0; }
+.systemStatus > div:first-child { width: 7px; height: 7px; animation: none; }
+.systemStatus > div:last-child { font-size: 0.75rem; font-weight: 400; }
+
+/* These hooks affect only the teacher layout, never the cadet or DDS console. */
+.workspace :global(.teacher-page) { width: 100%; max-width: none; margin-inline: 0; }
+.workspace :global(.teacher-page-header) { margin-bottom: 20px; }
+.workspace :global(.teacher-page-header h1) { font-size: 1.625rem; line-height: 1.25; font-weight: 650; letter-spacing: -0.025em; }
+.workspace :global(.teacher-panel) { border-radius: 16px; border-color: var(--border); box-shadow: 0 1px 2px rgb(0 0 0 / 0.025); }
+.workspace :global(.teacher-toolbar) { gap: 10px; }
+.workspace :global(.teacher-page table th),
+.workspace :global(.teacher-page table td) { padding: 0.7rem 0.9rem !important; }
+.workspace :global(.teacher-page table) { font-size: 0.8125rem; }
+.workspace :global(.teacher-page table th) { font-weight: 600; }
+.workspace :global(.teacher-page input),
+.workspace :global(.teacher-page select),
+.workspace :global(.teacher-page textarea) { font-size: 0.875rem; }
+
+@media (max-width: 639px) {
+  .topbar { gap: 8px; min-height: 72px; }
+  .content { padding-block: 20px; }
+  .workspace :global(.teacher-page-header h1) { font-size: 1.375rem; }
+}
