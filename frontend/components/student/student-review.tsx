@@ -75,6 +75,18 @@ export function StudentAttemptReview() {
             <div className={`${styles.scroll} space-y-3 p-4`}>
               {review.savedErrors && review.savedErrors.count > 0 && <div className="rounded-xl border border-border p-4 text-sm leading-relaxed"><h3 className="font-semibold">Ранее сохранённая проверка</h3><p className="mt-2">Сохранённых ошибок: {review.savedErrors.count}. Проверка по пяти критериям для них не передана.</p>{review.savedErrors.messages.length > 0 ? <ul className="mt-2 list-disc space-y-1 pl-5">{review.savedErrors.messages.map((message, i) => <li key={i}>{message}</li>)}</ul> : <p className="mt-2 text-muted-foreground">Подробные замечания не сохранены.</p>}</div>}
               {review.historyUnavailable && <p role="status" className="text-sm text-muted-foreground">Сохранённые замечания из истории не удалось загрузить. Обновите разбор, чтобы повторить загрузку.</p>}
+              <div className="rounded-xl border border-primary/15 bg-primary/5 p-4 text-sm leading-relaxed">
+                <h3 className="font-semibold">Оценка преподавателя</h3>
+                {review.teacherAssessmentStatus === "unavailable" || !review.teacherAssessmentStatus ? <p className="mt-2 text-muted-foreground">Оценку преподавателя для этой карточки не удалось загрузить. Обновите разбор, чтобы повторить загрузку.</p> : review.teacherAssessmentStatus === "not_graded" || !review.teacherAssessment ? <p className="mt-2 text-muted-foreground">Преподаватель ещё не выставил оценку.</p> : <>
+                  <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1">
+                    {review.teacherAssessment.score !== null && <span>Баллы: <strong>{review.teacherAssessment.score}</strong></span>}
+                    {review.teacherAssessment.is_passed !== null && <span>{review.teacherAssessment.is_passed ? "Зачёт" : "Не зачёт"}</span>}
+                    {review.teacherAssessment.score === null && review.teacherAssessment.is_passed === null && <span className="text-muted-foreground">Оценка ещё не выставлена.</span>}
+                  </div>
+                  {review.teacherAssessment.comment && <p className="mt-2 whitespace-pre-wrap">Комментарий преподавателя: {review.teacherAssessment.comment}</p>}
+                  {review.teacherAssessment.graded_at && <p className="mt-2 text-xs text-muted-foreground">Выставлена: {reviewTime(review.teacherAssessment.graded_at)}</p>}
+                </>}
+              </div>
               {REVIEW_CRITERIA.map(definition => {
                 const criterion = review.criteria.find(item => item.key === definition.key)
                 const status = criterion?.status || "not_evaluated"

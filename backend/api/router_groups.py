@@ -2,12 +2,13 @@ from backend.core.limits import read_upload, MAX_IMPORT_BYTES
 import secrets
 from backend.core.access import require_cadet_link
 import io
+import math
 import random
 from collections import Counter
 from datetime import datetime, timezone, timedelta
 from typing import Optional, List, Union
 from fastapi import APIRouter, Depends, UploadFile, File, HTTPException, Response, Query, status, Body
-from sqlalchemy import select
+from sqlalchemy import select, or_
 from sqlalchemy.orm import selectinload
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -18,7 +19,7 @@ from backend.database import get_db
 from backend.models.domain_01 import SecurityPolicy, StudentGroup, User
 from backend.models.domain_02 import GeneratedTicket, ScenarioTicket
 from backend.models.domain_03 import Assignment, ExamSession
-from backend.models.domain_04 import TicketResult, EvaluationResult
+from backend.models.domain_04 import TicketResult, EvaluationResult, IncidentCard
 from backend.schemas.groups import (
     GroupCreate,
     GroupResponse,
@@ -33,8 +34,79 @@ from backend.schemas.students import (
     TopErrorItem,
     StudentLessonHistoryItem,
     StudentLessonHistoryTicket,
+    StudentTeacherAssessment,
 )
 from backend.core.csv_parser import parse_students_csv, generate_csv_template
+from backend.core.gradebook_records import latest_evaluation, resolve_attempt_score_and_status
+
+
+def _student_teacher_assessment(session, ticket_result, evaluation, card_id=None):
+    """Expose only a persisted teacher override for this exact attempt/card."""
+    tr_manual = bool(ticket_result and ticket_result.is_appealed)
+    ev_manual = bool(evaluation and (evaluation.is_appealed or evaluation.expert_modified_at))
+    dds_state = {}
+    state = session.dynamic_state if session and isinstance(session.dynamic_state, dict) else {}
+    if "dds" in state:
+        dds_data = state.get("dds", {})
+        if dds_data.get("version") != 2 or card_id:
+            from backend.core.gradebook_records import dds_state_for_card
+            dds_state = dds_state_for_card(session, card_id)
+    dds_score = dds_state.get("score") if isinstance(dds_state, dict) else None
+    dds_manual = bool(
+        isinstance(dds_state, dict)
+        and dds_state.get("teacher_comment")
+        and dds_score is not None
+    )
+    if not (tr_manual or ev_manual or dds_manual):
+        return None
+
+    score, is_passed, _, _, _ = resolve_attempt_score_and_status(None, ticket_result, evaluation)
+    if ev_manual and isinstance(evaluation.scores, dict) and "expert_score" in evaluation.scores:
+        # Status-only teacher changes deliberately persist expert_score=null,
+        # even when the canonical resolved score still reflects the AI mark.
+        score = evaluation.scores.get("expert_score")
+    elif tr_manual and ticket_result.score_total is not None:
+        score = ticket_result.score_total
+    elif ev_manual:
+        scores = evaluation.scores if isinstance(evaluation.scores, dict) else {}
+        expert_score = scores.get("expert_score")
+        if expert_score is None:
+            expert_score = scores.get("final_score")
+            if expert_score is None:
+                expert_score = scores.get("total")
+        score = expert_score
+    elif dds_manual:
+        score = dds_score
+
+    if dds_manual and not (tr_manual or ev_manual):
+        is_passed = dds_state.get("is_passed") if isinstance(dds_state.get("is_passed"), bool) else None
+        comment = dds_state.get("teacher_comment")
+        graded_at = dds_state.get("expert_modified_at") or dds_state.get("graded_at")
+    elif tr_manual:
+        comment = ticket_result.teacher_comment
+        graded_at = ticket_result.updated_at
+    else:
+        comment = evaluation.teacher_comment if evaluation else None
+        graded_at = evaluation.expert_modified_at if evaluation else None
+
+    if isinstance(score, bool):
+        score = None
+    elif score is not None:
+        try:
+            score = float(score)
+        except (TypeError, ValueError):
+            score = None
+        if score is not None and (not math.isfinite(score) or score < 0 or score > 100):
+            score = None
+
+    if isinstance(graded_at, datetime):
+        graded_at = graded_at.isoformat()
+    return StudentTeacherAssessment(
+        score=score,
+        is_passed=is_passed if isinstance(is_passed, bool) else None,
+        comment=comment,
+        graded_at=graded_at,
+    )
 
 groups_router = APIRouter(
     prefix="/api/admin/groups",
@@ -1020,16 +1092,39 @@ async def get_student_lessons(
 
     session_ids = [s.session_id for s in sessions]
     ticket_results_by_session: dict[str, List[TicketResult]] = {}
+    evaluations_by_session: dict[str, List[EvaluationResult]] = {}
+    cards_by_session: dict[str, List[IncidentCard]] = {}
     if session_ids:
         tr_res = await db.execute(select(TicketResult).where(TicketResult.session_id.in_(session_ids)))
         for tr in tr_res.scalars().all():
             ticket_results_by_session.setdefault(tr.session_id, []).append(tr)
+        card_res = await db.execute(select(IncidentCard).where(IncidentCard.session_id.in_(session_ids)))
+        for card in card_res.scalars().all():
+            cards_by_session.setdefault(card.session_id, []).append(card)
+        card_ids = [card.card_id for card_list in cards_by_session.values() for card in card_list]
+        evaluation_filters = [EvaluationResult.session_id.in_(session_ids)]
+        if card_ids:
+            evaluation_filters.append(EvaluationResult.card_id.in_(card_ids))
+        ev_res = await db.execute(select(EvaluationResult).where(or_(*evaluation_filters)))
+        for ev in ev_res.scalars().all():
+            session_id = ev.session_id
+            if not session_id and ev.card_id:
+                session_id = next((card.session_id for cards in cards_by_session.values()
+                                   for card in cards if card.card_id == ev.card_id), None)
+            if session_id:
+                evaluations_by_session.setdefault(session_id, []).append(ev)
 
     all_ticket_ids = []
     for trs in ticket_results_by_session.values():
         for tr in trs:
             if tr.ticket_id:
                 all_ticket_ids.append(tr.ticket_id)
+    all_ticket_ids.extend(
+        card.scenario_id
+        for cards in cards_by_session.values()
+        for card in cards
+        if card.scenario_id
+    )
 
     ticket_info_map = {}
     if all_ticket_ids:
@@ -1057,22 +1152,49 @@ async def get_student_lessons(
         data = (s.dynamic_state or {}).get("dds", {})
         if data.get("version") == 2:
             from backend.core.dds_queue import queue_ticket_details
-            evs = list((await db.scalars(select(EvaluationResult).where(EvaluationResult.session_id == s.session_id))).all())
+            evs = evaluations_by_session.get(s.session_id, [])
+            trs = ticket_results_by_session.get(s.session_id, [])
             details = queue_ticket_details(s, evs, ticket_results_by_session.get(s.session_id, []))
             scores = [ticket.score for ticket in details if ticket.score is not None]
+            history_tickets = []
+            ticket_occurrences = Counter(ticket.ticket_id for ticket in details)
+            for ticket in details:
+                matching_results = [tr for tr in trs if tr.ticket_id == ticket.ticket_id]
+                # Queue cards are separate attempts. If legacy/corrupt data has
+                # repeated ticket IDs, do not copy one TicketResult grade to each.
+                tr = (matching_results[0] if len(matching_results) == 1
+                      and ticket_occurrences[ticket.ticket_id] == 1 else None)
+                ev = latest_evaluation(evs, ticket.card_id) if ticket.card_id else None
+                ticket_data = ticket.model_dump(exclude={"actions"})
+                ticket_data["teacher_assessment"] = _student_teacher_assessment(
+                    s, tr, ev, ticket.card_id
+                )
+                history_tickets.append(StudentLessonHistoryTicket(**ticket_data))
             results.append(StudentLessonHistoryItem(session_id=s.session_id, lesson_id=s.assignment_id,
                 assignment_id=s.assignment_id, title=f"Занятие #{s.assignment_id[:8]}", target_role=target_role,
                 session_type=s.session_type, status="COMPLETED" if data.get("submitted_at") else "INCOMPLETE" if s.status == "COMPLETED" else s.status,
                 score=scores[0] if len(scores) == 1 else round(sum(scores) / len(scores), 1) if scores else None,
                 date=s.start_time.strftime("%d.%m.%Y %H:%M") if s.start_time else None,
                 created_at=s.start_time, start_time=s.start_time, end_time=s.end_time,
-                tickets=[StudentLessonHistoryTicket(**ticket.model_dump(exclude={"actions"})) for ticket in details]))
+                tickets=history_tickets))
             continue
 
         trs = ticket_results_by_session.get(s.session_id, [])
+        evs = evaluations_by_session.get(s.session_id, [])
+        cards = cards_by_session.get(s.session_id, [])
+        from backend.core.gradebook_records import build_attempt_records
+        matched_attempts = {
+            tr.result_id: (card, ev)
+            for tr, card, ev in build_attempt_records(trs, cards, evs)
+            if tr is not None
+        }
+        matched_card_ids = {
+            card.card_id for card, _ev in matched_attempts.values() if card is not None
+        }
         tickets = []
         score_acc = []
         for tr in trs:
+            matched_card, matched_ev = matched_attempts.get(tr.result_id, (None, None))
             t_id = tr.ticket_id or tr.result_id
             cat, title = ticket_info_map.get(t_id, (None, f"Билет #{t_id[:8]}"))
             if tr.score_total is not None:
@@ -1103,8 +1225,43 @@ async def get_student_lessons(
                     errors_count=tr.errors_count,
                     errors=errors,
                     completed_at=tr.created_at,
+                    card_id=matched_card.card_id if matched_card else None,
+                    teacher_assessment=_student_teacher_assessment(
+                        s, tr, matched_ev, matched_card.card_id if matched_card else None
+                    ),
                 )
             )
+
+        # Legacy DDS/manual evaluations can be saved directly on an incident
+        # card without a TicketResult. Keep that real attempt visible in
+        # history and attach only its card-scoped teacher assessment.
+        for card in cards:
+            if card.card_id in matched_card_ids:
+                continue
+            ev = latest_evaluation(evs, card.card_id)
+            assessment = _student_teacher_assessment(s, None, ev, card.card_id)
+            if assessment is None:
+                continue
+            t_id = card.scenario_id or s.ticket_id or card.card_id
+            cat, title = ticket_info_map.get(t_id, (None, f"Билет #{t_id[:8]}"))
+            score, passed, status_str, error_count, _ = resolve_attempt_score_and_status(None, None, ev)
+            errors = []
+            for error in (ev.errors_list or []) if ev else []:
+                errors.append(error.get("message") if isinstance(error, dict) else str(error))
+            if score is not None:
+                score_acc.append(score)
+            tickets.append(StudentLessonHistoryTicket(
+                ticket_id=t_id,
+                card_id=card.card_id,
+                title=title,
+                category=cat,
+                status=status_str,
+                score=score,
+                errors_count=error_count,
+                errors=errors,
+                completed_at=ev.evaluated_at if ev else card.created_at,
+                teacher_assessment=assessment,
+            ))
 
         avg_score = round(sum(score_acc) / len(score_acc), 1) if score_acc else None
         date_str = s.start_time.strftime("%d.%m.%Y %H:%M") if s.start_time else None

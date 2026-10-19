@@ -41,6 +41,13 @@ class StudentStatsResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 
+class StudentTeacherAssessment(BaseModel):
+    score: Optional[float] = None
+    is_passed: Optional[bool] = None
+    comment: Optional[str] = None
+    graded_at: Optional[str] = None
+
+
 class StudentLessonHistoryTicket(BaseModel):
     ticket_id: str
     card_id: Optional[str] = None
@@ -51,6 +58,7 @@ class StudentLessonHistoryTicket(BaseModel):
     errors_count: int = 0
     errors: List[str] = Field(default_factory=list)
     completed_at: Optional[datetime] = None
+    teacher_assessment: Optional[StudentTeacherAssessment] = None
 
     model_config = ConfigDict(from_attributes=True)
 

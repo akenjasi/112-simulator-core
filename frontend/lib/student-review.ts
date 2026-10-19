@@ -19,9 +19,18 @@ export interface ReviewEvidence {
 }
 export interface ReviewCriterion {key: string; status: ReviewStatus; evidence: ReviewEvidence[]}
 export interface ReviewEvent extends ReviewEvidence {id: string; kind: string; text?: string}
+export interface TeacherAssessment {
+  score: number | null
+  is_passed: boolean | null
+  comment: string | null
+  graded_at: string | null
+}
+export type TeacherAssessmentStatus = "available" | "not_graded" | "unavailable"
 export interface StudentReview {
   state: DDSSessionState; criteria: ReviewCriterion[]; events: ReviewEvent[];
   savedErrors?: {count: number; messages: string[]}; historyUnavailable?: boolean
+  teacherAssessment?: TeacherAssessment | null
+  teacherAssessmentStatus?: TeacherAssessmentStatus
 }
 
 export function reviewUrl(sessionId: string, cardId?: string) {
@@ -64,8 +73,7 @@ export async function fetchStudentReview(sessionId: string, cardId?: string, sig
   const response = await fetch(path, {headers: {Authorization: `Bearer ${token}`}, cache: "no-store", signal})
   if (!response.ok) throw new Error(getSafeHttpErrorMessage(response.status))
   const review = validateStudentReview(await response.json(), sessionId, cardId)
-  if (review.criteria.some(item => item.status !== "not_evaluated")) return review
-  // Older checks have no five-criterion protocol. Preserve their remarks without assigning them to criteria.
+  // Load teacher metadata independently of the five-criterion protocol. Older reviews may have either or both.
   try {
     signal?.throwIfAborted()
     const historyResponse = await fetch("/api/v1/students/me/lessons?role=DISPATCHER_DDS", {
@@ -74,15 +82,39 @@ export async function fetchStudentReview(sessionId: string, cardId?: string, sig
     if (!historyResponse.ok) throw new Error()
     const history: unknown = await historyResponse.json()
     if (!Array.isArray(history)) throw new Error()
-    const lesson = history.find(item => object(item) && item.session_id === sessionId)
-    const ticket = Array.isArray(lesson?.tickets) ? lesson.tickets.find((item: unknown) => object(item) && item.card_id === review.state.card_id) : undefined
-    if (ticket && object(ticket) && Number.isSafeInteger(ticket.errors_count) && Number(ticket.errors_count) >= 0 &&
+    const lesson = history.find(item => object(item) && item.session_id === sessionId &&
+      Array.isArray(item.tickets) && item.tickets.some(ticket =>
+        object(ticket) && ticket.card_id === review.state.card_id))
+    const ticket = Array.isArray(lesson?.tickets) ? lesson.tickets.find((item: unknown) =>
+      object(item) && item.card_id === review.state.card_id) : undefined
+    if (!object(ticket)) throw new Error()
+    if (Object.hasOwn(ticket, "teacher_assessment")) {
+      const rawAssessment = ticket.teacher_assessment
+      if (rawAssessment === null) {
+        review.teacherAssessment = null
+        review.teacherAssessmentStatus = "not_graded"
+      } else if (object(rawAssessment) &&
+        (rawAssessment.score === null || typeof rawAssessment.score === "number" && Number.isFinite(rawAssessment.score) && rawAssessment.score >= 0 && rawAssessment.score <= 100) &&
+        (rawAssessment.is_passed === null || typeof rawAssessment.is_passed === "boolean") &&
+        (rawAssessment.comment === null || typeof rawAssessment.comment === "string") &&
+        (rawAssessment.graded_at === null || typeof rawAssessment.graded_at === "string")) {
+        review.teacherAssessment = rawAssessment as unknown as TeacherAssessment
+        review.teacherAssessmentStatus = "available"
+      } else {
+        throw new Error()
+      }
+    } else {
+      review.teacherAssessmentStatus = "unavailable"
+    }
+    if (!review.criteria.some(item => item.status !== "not_evaluated") &&
+        Number.isSafeInteger(ticket.errors_count) && Number(ticket.errors_count) >= 0 &&
         Array.isArray(ticket.errors) && ticket.errors.every(item => typeof item === "string")) {
       review.savedErrors = {count: Math.max(Number(ticket.errors_count), ticket.errors.length), messages: ticket.errors}
     }
   } catch {
     if (signal?.aborted) signal.throwIfAborted()
     review.historyUnavailable = true
+    review.teacherAssessmentStatus = "unavailable"
   }
   return review
 }

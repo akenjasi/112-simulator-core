@@ -77,3 +77,4 @@ tests/excel_export.test.tsx
 tests/login-roles.test.tsx
 tests/theme-contrast.test.ts
 tests/theme.test.tsx
+tests/student-teacher-assessment.test.tsx

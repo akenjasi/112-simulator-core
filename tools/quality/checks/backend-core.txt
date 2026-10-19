@@ -65,3 +65,4 @@ backend/tests/test_ticket_catalog_deduplication.py
 backend/tests/test_ticket_lifecycle_review.py
 backend/tests/test_user_group_workflow.py
 backend/tests/test_worker6_audit_knowledge.py
+backend/tests/test_student_teacher_assessment.py

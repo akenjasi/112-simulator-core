@@ -232,6 +232,16 @@
       "sha256": "bdc63e3a4c9cb0c1cefe5267e4dbf74853a076996a4dbcec83d8a123b8cf3007",
       "source_revision": "ce9dcf4",
       "reason": "Audited supported runtime and dependency security corrections"
+    },
+    "components/student/student-review.tsx": {
+      "sha256": "1499b77136fe882d1a04dc4cdde3d0d0fb19c91ab5068da5c33bcc6b5bca8fba",
+      "source_revision": "stash:149aed5e0ca98621a9fe107149906272b6c77c44",
+      "reason": "User-requested student teacher-assessment display restored after stash pop across the component directory reorganization."
+    },
+    "lib/student-review.ts": {
+      "sha256": "6051c6f7a191c31bb0721292552e7b2c5f75327e01da61b275a71da3a1cc6ae0",
+      "source_revision": "stash:149aed5e0ca98621a9fe107149906272b6c77c44",
+      "reason": "User-requested student teacher-assessment display restored after stash pop across the component directory reorganization."
     }
   },
   "update_policy": "2026-10-19: explicitly reconciled under the user request to repair obsolete tests. Original sha256 values are unchanged. Exact supplemental hashes preserve the integrated changes; these paths are not open-ended exceptions."

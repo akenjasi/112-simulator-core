@@ -11,6 +11,7 @@ import { TrainingDialog } from "@/components/student/training-dialog"
 import { fetchStudentWorkspace, type StudentWorkspace } from "@/lib/student-workspace"
 import styles from "./student-profile.module.css"
 import {reviewUrl} from "@/lib/student-review"
+import {reviewTime, type TeacherAssessment} from "@/lib/student-review"
 import { getStoredToken } from "@/lib/auth-session"
 
 export interface HistoryTicket {
@@ -20,6 +21,7 @@ export interface HistoryTicket {
   category?: string
   status: string
   score?: number | null
+  teacher_assessment?: TeacherAssessment | null
   errors_count: number
   errors: string[]
   completed_at?: string | null
@@ -67,6 +69,26 @@ function ticketStatus(ticket: HistoryTicket) {
 
 function lessonStatus(status: string) {
   return ({ARCHIVED: "В архиве · тестовое занятие", COMPLETED: "Завершено", ACTIVE: "В процессе", IN_PROGRESS: "В процессе", INCOMPLETE: "Завершено досрочно", CANCELLED: "Отменено", PENDING: "Ожидает начала"} as Record<string, string>)[status] || "Статус не указан"
+}
+
+function teacherAssessmentText(assessment: TeacherAssessment | null | undefined) {
+  if (assessment === null) return "Преподаватель ещё не выставил оценку."
+  if (!assessment) return "Оценка преподавателя для этой карточки пока недоступна."
+  const values = [
+    assessment.score !== null ? `Баллы: ${assessment.score}` : "",
+    assessment.is_passed === true ? "Зачёт" : assessment.is_passed === false ? "Не зачёт" : "",
+  ].filter(Boolean)
+  return values.length ? values.join(" · ") : "Оценка преподавателя ещё не выставлена."
+}
+
+function lessonTeacherAssessmentSummary(lesson: HistoryLesson) {
+  const tickets = lesson.tickets || []
+  const graded = tickets.filter(ticket => ticket.teacher_assessment &&
+    (ticket.teacher_assessment.score !== null || ticket.teacher_assessment.is_passed !== null))
+  if (graded.length === 1) return `Оценка преподавателя: ${teacherAssessmentText(graded[0].teacher_assessment)}`
+  if (graded.length > 1) return `Оценок преподавателя: ${graded.length}`
+  if (tickets.some(ticket => Object.hasOwn(ticket, "teacher_assessment"))) return "Оценка преподавателя ещё не выставлена."
+  return "Оценка преподавателя пока недоступна."
 }
 
 export default function StudentProfilePage() {
@@ -200,13 +222,14 @@ export default function StudentProfilePage() {
                   <p className="mb-4 text-sm text-muted-foreground">Откройте занятие, чтобы посмотреть карточки и замечания.</p>
                   <div className="space-y-3">{(showAll ? lessons : lessons.slice(0, 3)).map(lesson => <details key={lesson.session_id} className="group rounded-xl border border-border bg-background">
                     <summary className="flex cursor-pointer list-none items-center justify-between gap-3 rounded-xl p-4 hover:bg-muted/30 focus-visible:outline-2 focus-visible:outline-ring [&::-webkit-details-marker]:hidden">
-                      <div className="min-w-0"><h3 className="text-sm font-semibold leading-relaxed">{lessonTitle(lesson)}</h3><p className="mt-1.5 flex flex-wrap gap-x-3 gap-y-1 text-xs text-muted-foreground">{lesson.date && <span>{lesson.date}</span>}<span>Карточек: {lesson.tickets?.length ?? 0}</span><span>{lessonStatus(lesson.status)}</span></p></div><ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground transition-transform group-open:rotate-180" aria-hidden="true" />
+                      <div className="min-w-0"><h3 className="text-sm font-semibold leading-relaxed">{lessonTitle(lesson)}</h3><p className="mt-1.5 flex flex-wrap gap-x-3 gap-y-1 text-xs text-muted-foreground">{lesson.date && <span>{lesson.date}</span>}<span>Карточек: {lesson.tickets?.length ?? 0}</span><span>{lessonStatus(lesson.status)}</span><span>{lessonTeacherAssessmentSummary(lesson)}</span></p></div><ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground transition-transform group-open:rotate-180" aria-hidden="true" />
                     </summary>
                     <div className="space-y-3 border-t border-border p-4">
                       {lesson.status === "ARCHIVED" && <p className="text-sm text-muted-foreground">Тестовое занятие перенесено в архив. Карточки и сохранённые результаты оставлены для просмотра.</p>}
                       {lesson.status === "INCOMPLETE" && <p className="text-sm text-muted-foreground">Занятие закончено, но не все карточки обработаны до конца. Это статус выполнения, а не оценка.</p>}
                       {lesson.tickets?.length ? lesson.tickets.map((ticket, index) => <article key={ticket.card_id || `${ticket.ticket_id}-${index}`} className="rounded-lg border border-border p-4">
                         <div className="flex flex-wrap items-start justify-between gap-2"><h4 className="text-sm font-medium">{ticket.title || `Карточка ${index + 1}`}</h4><span className="rounded-md bg-muted px-2 py-1 text-xs text-muted-foreground">{lesson.status === "ARCHIVED" ? "Архивная карточка" : ticketStatus(ticket)}</span></div>
+                        <div className="mt-3 rounded-lg border border-primary/15 bg-primary/5 p-3 text-sm"><p className="font-medium">Оценка преподавателя</p><p className="mt-1">{teacherAssessmentText(ticket.teacher_assessment)}</p>{ticket.teacher_assessment?.comment && <p className="mt-2 whitespace-pre-wrap leading-relaxed text-muted-foreground">{ticket.teacher_assessment.comment}</p>}{ticket.teacher_assessment?.graded_at && <p className="mt-2 text-xs text-muted-foreground">Выставлена: {reviewTime(ticket.teacher_assessment.graded_at)}</p>}</div>
                         {(ticket.errors?.length > 0 || ticket.errors_count > 0) ? <div className="mt-3 text-sm"><p className="font-medium text-destructive">Ошибок в сохранённой проверке: {Math.max(ticket.errors_count || 0, ticket.errors?.length || 0)}</p>{ticket.errors?.length > 0 && <ul className="mt-2 list-disc space-y-1 pl-5 text-muted-foreground">{ticket.errors.map((error, i) => <li key={i}>{error}</li>)}</ul>}</div> : <p className="mt-3 text-sm leading-relaxed text-muted-foreground">{ticket.card_id ? "Результаты проверки и сохранённые действия доступны в разборе." : "Результаты проверки по критериям пока недоступны."}</p>}
                         {ticket.card_id && <div className="mt-3 flex flex-wrap items-center gap-x-5 gap-y-2"><Link className="inline-flex min-h-10 items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 focus-visible:outline-2 focus-visible:outline-ring" href={reviewUrl(lesson.session_id, ticket.card_id)}>Разбор<ArrowRight className="h-4 w-4" aria-hidden="true" /></Link><Link className="inline-flex min-h-10 items-center gap-2 text-sm font-medium text-primary underline-offset-4 hover:underline focus-visible:outline-2 focus-visible:outline-ring" href={`/dds?${new URLSearchParams({session_id: lesson.session_id, ticket_id: ticket.ticket_id, card_id: ticket.card_id})}`}>Открыть карточку<ArrowRight className="h-4 w-4" aria-hidden="true" /></Link></div>}
                       </article>) : <p className="text-sm text-muted-foreground">Подробности по карточкам пока недоступны.</p>}
