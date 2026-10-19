@@ -47,14 +47,18 @@ class Report(BaseModel):
 
 class ExercisePlan(BaseModel):
     model_config = ConfigDict(extra="forbid")
-    version: Literal[1] = 1
+    version: Literal[1, 2] = 1
     source: Literal["prepared"] = "prepared"
     presentation: Literal["text_audio", "audio_only"] = "text_audio"
     contacts: list[Contact] = Field(min_length=1, max_length=100)
     reports: list[Report] = Field(min_length=4, max_length=400)
+    service_profiles: dict[str, Literal["general", "medical", "gas"]] = Field(default_factory=dict)
 
     @model_validator(mode="after")
     def consistent(self):
+        services = {c.service_name for c in self.contacts}
+        if self.version == 2 and set(self.service_profiles) != services:
+            raise ValueError("Version 2 requires a profile for every service")
         if self.presentation == "audio_only" and any(not item.audio for item in [*self.contacts, *self.reports]):
             raise ValueError("Audio-only exercises require a recording for every call")
         ids = [c.id for c in self.contacts]
@@ -72,6 +76,11 @@ class ExercisePlan(BaseModel):
         for service in {c.service_name for c in self.contacts}:
             if [r.status for r in self.reports if by_id[r.contact_id].service_name == service] != list(STAGES):
                 raise ValueError("Each DDS must have the four ordered report stages")
+            if self.version == 2:
+                first = next(r for r in self.reports if by_id[r.contact_id].service_name == service)
+                for contact in (c for c in self.contacts if c.service_name == service):
+                    if contact.id == first.contact_id and (contact.reply != first.text or contact.audio != first.audio):
+                        raise ValueError("First outgoing call must match the departure report")
         for report in self.reports:
             if report.status == STAGES[-1] and not report.comment_keywords:
                 raise ValueError("Final report requires result keywords")

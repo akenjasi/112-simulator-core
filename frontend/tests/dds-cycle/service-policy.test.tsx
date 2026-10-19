@@ -1,5 +1,5 @@
 import React from 'react'
-import {cleanup, fireEvent, render, screen} from '@testing-library/react'
+import {cleanup, fireEvent, render, screen, within} from '@testing-library/react'
 import {afterEach, expect, it, vi} from 'vitest'
 import {ServicesBar} from '@/components/dispatcher/services-bar'
 import {dispatcherData} from '@/lib/dispatcher-data'
@@ -60,4 +60,36 @@ it.each([
   localStorage.setItem('token','test')
   vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ok:false,status:409,json:async () => ({detail:{code,message:'SECRET'}})}))
   await expect(postDDSAction('s',{request_id:'r',kind:'status',service_name:name,status:'Принята'})).rejects.toThrow(message)
+})
+
+it.each([
+  ['Получена службой', ['Принята','Не принята']],
+  ['Не принята', ['Принята']],
+  ['Принята', ['Начало реагирования','Отказ от выполнения работ']],
+  ['Начало реагирования', ['Прибытие','Отказ от выполнения работ']],
+  ['Прибытие', ['Проведение работ','Отказ от выполнения работ']],
+  ['Проведение работ', ['Работы завершены']],
+  ['Работы завершены', []], ['Отказ от выполнения работ', []],
+])('v2 menu for %s exposes only the server-approved next transitions', (current, options) => {
+  render(<ServicesBar data={{...data,services:[{...data.services[0],status:current as string}]}} allowedStatuses={{[name]:options as string[]}}/>)
+  const pencil=screen.getByRole('button',{name:'Редактировать статус'})
+  if (!options.length) {expect(pencil).toBeDisabled(); return}
+  fireEvent.click(pencil)
+  expect(screen.getByRole('button',{name:'Выбрать статус службы'})).toHaveTextContent(options[0])
+  fireEvent.click(screen.getByRole('button',{name:'Выбрать статус службы'}))
+  for (const status of ['Принята','Не принята','Начало реагирования','Прибытие','Проведение работ','Работы завершены','Отказ от выполнения работ']) {
+    const matches=within(screen.getByRole("listbox")).queryAllByRole("option",{name:status})
+    expect(matches.length).toBe((options as string[]).includes(status) ? 1 : 0)
+  }
+})
+
+it('allows medical completion without a brigade number, but requires a result comment', () => {
+  const terminal='Работы завершены: Завершение работ без бригады'
+  render(<ServicesBar data={{...data,services:[{...data.services[0],status:'Получена службой'}]}} allowedStatuses={{[name]:['Принята',terminal]}}/>)
+  fireEvent.click(screen.getByRole('button',{name:'Редактировать статус'}))
+  fireEvent.click(screen.getByRole('button',{name:'Выбрать статус службы'}))
+  fireEvent.click(screen.getByText(terminal))
+  expect(screen.getByRole('button',{name:'Подтвердить'})).toBeDisabled()
+  fireEvent.change(screen.getByPlaceholderText('Результат работ (обязательно)'),{target:{value:'Выезд не требуется; информация передана дежурному'}})
+  expect(screen.getByRole('button',{name:'Подтвердить'})).not.toBeDisabled()
 })

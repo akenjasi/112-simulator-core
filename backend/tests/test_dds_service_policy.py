@@ -81,8 +81,17 @@ async def test_refusal_can_only_be_corrected_to_acceptance():
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("terminal", ["Работы завершены", "Отказ от выполнения работ"])
-async def test_terminal_service_is_read_only_but_original_retries_succeed(terminal):
+async def test_terminal_service_is_read_only_but_original_retries_succeed(terminal, monkeypatch):
     users, session, path = await fixture()
+    # Retry equality tests state persistence, not whether a wall-clock second elapsed.
+    from datetime import datetime, timezone
+    from backend.core import dds_cycle
+    fixed = datetime.now(timezone.utc)
+    class FixedDatetime(datetime):
+        @classmethod
+        def now(cls, tz=None):
+            return fixed if tz else fixed.replace(tzinfo=None)
+    monkeypatch.setattr(dds_cycle, "datetime", FixedDatetime)
     accept = action()
     assert (await request("POST", path, users["cadets"][0], json=accept)).status_code == 200
     if terminal == "Работы завершены":

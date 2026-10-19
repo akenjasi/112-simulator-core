@@ -41,17 +41,18 @@ export function DDSTrainingPhone({exercise, selectedService, onServiceChange, di
   const commandRef = useRef(command)
   commandRef.current = command
   const [note, setNote] = useState("")
+  const sequential = exercise.version === 2
   const audioOnly = exercise.presentation === "audio_only"
   const incoming = exercise.incoming
   const outgoing = exercise.outgoing[selectedService]
-  const received = exercise.events.filter(event => event.kind === "answered")
+  const received = exercise.events.filter(event => event.kind === "answered" || sequential && event.kind === "dialed" && !!event.report_id)
   const historyIndex = Math.min(historyPage, Math.max(0, received.length - 1))
   const historical = received[historyIndex]
   const lastAnswered = incoming ? [...received].reverse().find(event => event.report_id === incoming.id) : undefined
   const message = incoming?.text || outgoing?.text
-  const hasReport = !!lastAnswered || !!incoming?.text
+  const hasReport = incoming?.direction !== "outgoing" && (!!lastAnswered || !!incoming?.text)
   const savedNote = incoming ? exercise.notes?.[incoming.id] || "" : ""
-  const recordDisabled = disabled || !record?.accepted || !outgoing || !!record?.saved
+  const recordDisabled = disabled || (sequential && incoming?.contact.service_name !== selectedService) || !record?.accepted || !outgoing || !!record?.saved
 
   useEffect(() => () => {playbackEpoch.current++; audio.current?.pause()}, [])
   useEffect(() => {
@@ -106,7 +107,7 @@ export function DDSTrainingPhone({exercise, selectedService, onServiceChange, di
       {incoming?.ringing && <div role="status" className="flex min-w-0 flex-1 items-center justify-between gap-2 rounded border border-[#b4b9bc] bg-[#fbfdfe] px-3 py-2">
         <span className="truncate">Входящий: {incoming.contact.service_name}{!audioOnly && ` · ${incoming.contact.full_name}`}</span>
         <button type="button" disabled={disabled} className="shrink-0 rounded bg-green-700 px-3 py-1 text-white disabled:opacity-50"
-          onClick={() => {setOpened(true); setView("call"); void call({operation: "answer", report_id: incoming.id})}}>Принять звонок</button>
+          onClick={() => {setOpened(true); setView("call"); onServiceChange(incoming.contact.service_name); void call({operation: "answer", report_id: incoming.id})}}>Принять звонок</button>
       </div>}
     </div>
     {opened && <div className="mt-2 border border-[#b4b9bc] bg-[#fbfdfe] p-3">
@@ -144,9 +145,9 @@ export function DDSTrainingPhone({exercise, selectedService, onServiceChange, di
           <button type="button" disabled={disabled || !number.trim()} className="bg-green-700 px-4 text-white disabled:opacity-50" onClick={() => void call({operation: "dial", number: number.trim(), service_name: selectedService})}>Набрать</button>
         </div>
         {(hasReport || outgoing) && <div className="border border-[#b4b9bc] bg-[#efefef] p-2">
-          <span className="text-xs font-semibold">{hasReport ? `Принятый доклад · ${incoming!.contact.service_name}` : `Ответ · ${selectedService}`}</span>
+          <span className="text-xs font-semibold">{hasReport ? `Принятый доклад · ${incoming!.contact.service_name}` : `${sequential ? "Доклад о выезде" : "Ответ"} · ${selectedService}`}</span>
           {!audioOnly && <MessageText text={message || ""}/>}
-          <button type="button" disabled={disabled} className="mt-1 text-xs underline" onClick={() => play(hasReport ? incoming?.audio : outgoing?.audio, hasReport ? lastAnswered?.id : outgoing?.call_id)}>{hasReport ? "Прослушать доклад" : "Прослушать ответ"}</button>
+          <button type="button" disabled={disabled} className="mt-1 text-xs underline" onClick={() => play(hasReport ? incoming?.audio : outgoing?.audio, hasReport ? lastAnswered?.id : outgoing?.call_id)}>{hasReport || sequential ? "Прослушать доклад" : "Прослушать ответ"}</button>
         </div>}
         {audioOnly && hasReport && <div className="space-y-1">
           <label className="block text-xs">Запись принятого доклада
@@ -159,8 +160,8 @@ export function DDSTrainingPhone({exercise, selectedService, onServiceChange, di
             className="bg-[#157dbd] px-3 py-1 text-white disabled:opacity-50">{savedNote && note === savedNote ? "Доклад записан" : "Сохранить запись доклада"}</button>
         </div>}
         {record && !hasReport && <div className="space-y-2 border-t border-[#b4b9bc] pt-2">
-          <label className="flex items-center gap-2"><span className="w-24 shrink-0">Кто принял:</span><input aria-label="Кто принял" disabled={recordDisabled} value={record.saved?.whoAccepted ?? record.whoAccepted} onChange={event => record.setWhoAccepted(event.target.value)} placeholder="ФИО, должность" className="min-w-0 flex-1 border border-[#b4b9bc] p-1.5"/></label>
-          <label className="flex items-center gap-2"><span className="w-24 shrink-0">Суть:</span><input aria-label="Суть сообщения" disabled={recordDisabled} value={record.saved?.summary ?? record.summary} onChange={event => record.setSummary(event.target.value)} placeholder="Содержание ответа службы" className="min-w-0 flex-1 border border-[#b4b9bc] p-1.5"/></label>
+          <label className="flex items-center gap-2"><span className="w-24 shrink-0">{sequential ? "Кто доложил:" : "Кто принял:"}</span><input aria-label={sequential ? "Кто доложил" : "Кто принял"} disabled={recordDisabled} value={record.saved?.whoAccepted ?? record.whoAccepted} onChange={event => record.setWhoAccepted(event.target.value)} placeholder="ФИО, должность" className="min-w-0 flex-1 border border-[#b4b9bc] p-1.5"/></label>
+          <label className="flex items-center gap-2"><span className="w-24 shrink-0">Суть:</span><input aria-label="Суть сообщения" disabled={recordDisabled} value={record.saved?.summary ?? record.summary} onChange={event => record.setSummary(event.target.value)} placeholder={sequential ? "Содержание доклада о выезде" : "Содержание ответа службы"} className="min-w-0 flex-1 border border-[#b4b9bc] p-1.5"/></label>
           <div className="flex justify-end"><button type="button" disabled={recordDisabled || !record.whoAccepted.trim() || !record.summary.trim()} onClick={() => void record.onSave()} className="bg-[#157dbd] px-3 py-1.5 text-white disabled:opacity-50">{record.saved ? "Сохранено" : "Сохранить телефонограмму"}</button></div>
         </div>}
       </div>}

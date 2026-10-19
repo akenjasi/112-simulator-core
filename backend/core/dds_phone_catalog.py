@@ -2,6 +2,7 @@
 from pathlib import Path
 
 from backend.schemas.dds_exercise import ExercisePlan, STAGES
+from backend.core.dds_service_policy import service_kind
 
 AUDIO_DIR = Path(__file__).resolve().parents[1] / "static" / "dds_phone"
 AUDIO_PREFIX = "/api/dds/audio/"
@@ -26,6 +27,7 @@ def recordings():
         result[f"dds_{key}_reply_v2.wav"] = f"{introduction} Задание принято. Бригада направлена к месту происшествия. О ходе работ доложу."
         for index, phrase in enumerate(STAGE_PHRASES):
             result[f"dds_{key}_{index}.wav"] = f"{introduction} {phrase}"
+            result[f"dds_{key}_cycle2_{index}.wav"] = f"Докладывает {introduction} {phrase}"
     return result
 
 
@@ -36,13 +38,14 @@ def default_phone_plan(services):
     for index, service in enumerate(dict.fromkeys(services)):
         key, name, brigade, _ = RESPONDERS[index % len(RESPONDERS)]
         contact_id = f"dds-contact-{index}"
-        reply = f"dds_{key}_reply_v2.wav"
+        reply = f"dds_{key}_cycle2_0.wav"
         contacts.append(dict(id=contact_id, service_name=service, number=str(7000 + index),
                              full_name=name, position=POSITION, brigade=brigade,
-                             reply=pool[reply], dispatch_keywords=["направлена"], audio=AUDIO_PREFIX + reply))
+                             reply=pool[reply], dispatch_keywords=["выехала"], audio=AUDIO_PREFIX + reply))
         for stage_index, stage in enumerate(STAGES):
-            filename = f"dds_{key}_{stage_index}.wav"
+            filename = f"dds_{key}_cycle2_{stage_index}.wav"
             reports.append(dict(id=f"dds-report-{index}-{stage_index}", contact_id=contact_id,
                                 status=stage, text=pool[filename], audio=AUDIO_PREFIX + filename,
                                 comment_keywords=["задача выполнена"] if stage_index == 3 else []))
-    return ExercisePlan(presentation="audio_only", contacts=contacts, reports=reports).model_dump()
+    return ExercisePlan(version=2, presentation="audio_only", contacts=contacts, reports=reports,
+                        service_profiles={s: service_kind(s) for s in dict.fromkeys(services)}).model_dump()

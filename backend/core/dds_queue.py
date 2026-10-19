@@ -9,7 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm.attributes import flag_modified
 
 from backend.core.student_workspace import lock_cadets
-from backend.core.dds_service_policy import canonical_status, current_service_statuses
+from backend.core.dds_service_policy import canonical_status, current_service_statuses, WITHOUT_BRIGADE
 from backend.models.domain_02 import ScenarioTicket
 from backend.models.domain_01 import User
 from backend.models.domain_03 import Assignment, ExamSession
@@ -99,14 +99,16 @@ def completion_blockers(data: dict[str, Any], assigned: dict[str, Any]) -> list[
     incoming, actions = data.get("incoming_card", {}), data.get("actions", [])
     statuses = current_service_statuses(incoming, assigned, actions)
     blockers = []
-    if data.get("exercise") and data["exercise"]["index"] < len(data["exercise"]["plan"]["reports"]):
+    ex = data.get("exercise")
+    from backend.core.dds_phone_v2 import finished as finished_v2
+    if ex and not (finished_v2(ex) if ex.get("version") == 2 else ex["index"] == len(ex["plan"]["reports"])):
         blockers.append({"code": "DDS_REPORTS_PENDING", "service_name": ""})
     if not statuses:
         return [{"code": "DDS_NO_SERVICES", "service_name": ""}]
     for name, raw in statuses.items():
         current = canonical_status(raw)
         matching = [action for action in actions if action.get("service_name") == name]
-        if current in ("Не принята", "Отказ", "Отказ от выполнения работ"):
+        if current in ("Не принята", "Отказ", "Отказ от выполнения работ", WITHOUT_BRIGADE):
             reason = next(((action.get("comment") or "") for action in reversed(matching)
                            if action.get("kind") == "status" and action.get("status") == raw), "")
             if not reason.strip():

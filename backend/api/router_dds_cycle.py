@@ -341,8 +341,10 @@ async def get_exercise_plan(ticket_id: str, db: AsyncSession = Depends(get_db)):
     incoming = incoming_card_from_ticket(ticket)
     from backend.core.dds_phone_catalog import default_phone_plan
     services = [s["name"] for s in incoming["services"]]
-    return {"services": services,
-            "plan": (ticket.content or {}).get("dds_exercise") or default_phone_plan(services)}
+    default = default_phone_plan(services)
+    plan = (ticket.content or {}).get("dds_exercise") or default
+    return {"services": services, "plan": plan, "default_plan": default,
+            "needs_upgrade": plan.get("version", 1) != 2}
 
 
 @router_dds_cycle.put("/tickets/{ticket_id}/exercise", dependencies=[Depends(require_role("TEACHER", "ADMIN"))])

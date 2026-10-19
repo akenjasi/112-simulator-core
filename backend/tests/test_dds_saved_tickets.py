@@ -45,7 +45,7 @@ async def test_selected_saved_ticket_supplies_exact_services_without_new_ticket_
     names=[item['name'] for item in expected['services']]
     from backend.tests.test_dds_queue import ready
     saved = await ready(loaded.json(), users['cadets'][0], service_names=[names[0]])
-    assert saved['allowed_service_statuses'][names[1]]==['Принята','Не принята','Начало реагирования','Прибытие','Проведение работ','Работы завершены','Отказ от выполнения работ']
+    assert saved['allowed_service_statuses'][names[1]]==['Принята','Не принята']
     second=await request('POST',base+'/actions',users['cadets'][0],json=action(service_name=names[1],status='Принята'))
     assert second.status_code==200,second.text
     restored=await request('GET',base,users['cadets'][0])

@@ -66,9 +66,9 @@ export function ServicesBar({ data, onStatusChange, onAccept, onNextCard, disabl
       return ["Проведение работ", "Отказ от выполнения работ"]
     }
     if (currentStatus === "Проведение работ") {
-      return ["Работы завершены", "Отказ от выполнения работ"]
+      return ["Работы завершены"]
     }
-    if (currentStatus === "Работы завершены" || currentStatus === "Отказ от выполнения работ") {
+    if (currentStatus === "Работы завершены" || currentStatus === "Отказ от выполнения работ" || currentStatus === "Работы завершены: Завершение работ без бригады") {
       return []
     }
     return ["Добавлена", "Получена службой", "В обработке", "Направлена"].includes(currentStatus || "") ? ["Принята", "Не принята"] : []
@@ -97,12 +97,12 @@ export function ServicesBar({ data, onStatusChange, onAccept, onNextCard, disabl
   const handleConfirmAction = async () => {
     if (!editingService || disabled || submittingRef.current) return
 
-    if (!orderNumber.trim()) {
+    if (!orderNumber.trim() && selectedStatus !== "Работы завершены: Завершение работ без бригады") {
       return
     }
 
     const isRejection = selectedStatus === "Не принята" || selectedStatus === "Отказ от выполнения работ"
-    if ((isRejection || isSupplement) && !commentText.trim()) {
+    if ((isRejection || isSupplement || requiresResult) && !commentText.trim()) {
       return
     }
 
@@ -143,8 +143,9 @@ export function ServicesBar({ data, onStatusChange, onAccept, onNextCard, disabl
   const isRejection = selectedStatus === "Не принята" || selectedStatus === "Отказ от выполнения работ"
   const currentStatus = editingService?.status === "В пути" ? "Начало реагирования" : editingService?.status === "Прибыли" ? "Прибытие" : editingService?.status
   const isSupplement = selectedStatus === currentStatus
-  const isOrderNumberMissing = !orderNumber.trim()
-  const isCommentMissing = (isRejection || isSupplement) && !commentText.trim()
+  const isOrderNumberMissing = !orderNumber.trim() && selectedStatus !== "Работы завершены: Завершение работ без бригады"
+  const requiresResult = selectedStatus === "Работы завершены" || selectedStatus === "Работы завершены: Завершение работ без бригады"
+  const isCommentMissing = (isRejection || isSupplement || requiresResult) && !commentText.trim()
   const isConfirmDisabled = disabled || isSubmitting || isOrderNumberMissing || isCommentMissing
 
   return (
@@ -165,10 +166,11 @@ export function ServicesBar({ data, onStatusChange, onAccept, onNextCard, disabl
 
             {/* Выпадающий список опций */}
             {isSelectDropdownOpen && (
-              <div className="absolute bottom-full left-0 mb-1 2xl:mb-1.5 z-40 w-[220px] 2xl:w-[308px] border border-[#b4b9bc] bg-white py-1 2xl:py-1.5 shadow-md">
+              <div role="listbox" aria-label="Доступные статусы службы" className="absolute bottom-full left-0 mb-1 2xl:mb-1.5 z-40 w-[220px] 2xl:w-[308px] border border-[#b4b9bc] bg-white py-1 2xl:py-1.5 shadow-md">
                 {getStatusOptions(editingService?.status, editingService?.name).map((opt) => (
                   <div
                     key={opt}
+                    role="option" aria-selected={selectedStatus === opt}
                     onClick={() => {
                       setSelectedStatus(opt)
                       setIsSelectDropdownOpen(false)
@@ -205,7 +207,7 @@ export function ServicesBar({ data, onStatusChange, onAccept, onNextCard, disabl
               disabled={disabled || isSubmitting}
               value={commentText}
               onChange={(e) => setCommentText(e.target.value)}
-              placeholder={isRejection ? "Причина отказа (обязательно)" : isSupplement ? "Комментарий (обязательно)" : "Комментарий..."}
+              placeholder={isRejection ? "Причина отказа (обязательно)" : isSupplement ? "Комментарий (обязательно)" : requiresResult ? "Результат работ (обязательно)" : "Комментарий..."}
               className="w-full text-sm 2xl:text-sm text-[#111827] placeholder:text-[#6b7280] outline-none border-b border-transparent focus:border-[#0078d4]"
             />
           </div>

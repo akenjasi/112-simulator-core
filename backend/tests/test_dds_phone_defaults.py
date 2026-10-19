@@ -24,9 +24,9 @@ def test_catalog_is_deterministic_valid_and_has_real_recordings():
     assert [c["number"] for c in plan["contacts"]] == ["7000", "7001"]
     assert len(plan["reports"]) == 8
     for contact in plan["contacts"]:
-        assert "Задание принято. Бригада направлена" in contact["reply"]
+        assert "Начало реагирования. Бригада выехала" in contact["reply"]
         assert "Слушаю" not in contact["reply"]
-        assert contact["audio"].endswith("_reply_v2.wav")
+        assert contact["audio"].endswith("_cycle2_0.wav")
     for filename, transcript in recordings().items():
         assert "Начальник бригады" in transcript and "Бригада номер" in transcript
         with wave.open(str(AUDIO_DIR / filename)) as audio:
@@ -39,11 +39,11 @@ def test_report_note_matches_the_heard_number_without_substring_matches(number, 
     from backend.schemas.dds_cycle import DDSActionPayload
     plan = default_phone_plan(["Газ"])
     data = {"exercise": training.initialize(plan, "card", training.now_utc().isoformat())}
-    report = plan["reports"][0]
+    report = plan["reports"][1]
     data["exercise"].update(accepted=report["id"], notes={report["id"]:
-        f"Начальник бригады Иванов Иван Иванович. Бригада {number}. Начало реагирования."})
+        f"Начальник бригады Иванов Иван Иванович. Бригада {number}. Прибытие."})
     payload = DDSActionPayload(request_id="test", kind="status", service_name="Газ", status=report["status"], order_number="1")
-    assert training.action_issue(data, payload, "Принята") is None
+    assert training.action_issue(data, payload, "Начало реагирования") is None
     assert (not training.accuracy_issues(data, payload)) is accepted
 
 
@@ -79,28 +79,30 @@ async def test_audio_only_note_is_saved_idempotently_and_required_before_status(
     called = await phone(state, user, number="7000", service_name="Аварийная служба")
     assert called.json()["exercise"]["outgoing"]["Аварийная служба"]["text"] is None
     sent = await act(state, user, kind="dispatch", who_accepted="Начальник бригады Иванов Иван Иванович")
+    await act(state, user, status="Начало реагирования", order_number="1")
+    sent = await request("GET", base(state), user)
     monkeypatch.setattr(training, "now_utc", lambda: training.parse_time(sent.json()["exercise"]["due_at"]) + timedelta(seconds=1))
-    answered = await phone(state, user, "answer", report_id="dds-report-0-0")
+    answered = await phone(state, user, "answer", report_id="dds-report-0-1")
     assert answered.json()["exercise"]["incoming"]["text"] is None
     assert all(e.get("text") is None for e in answered.json()["exercise"]["events"])
-    early = await act(state, user, status="Начало реагирования", order_number="1")
+    early = await act(state, user, status="Прибытие", order_number="1")
     assert early.json()["last_attempt"]["reason"] == "report_note"
     payload = {"request_id": str(uuid.uuid4()), "card_id": state["card_id"], "operation": "note",
-               "report_id": "dds-report-0-0", "note": "Начальник бригады Иванов Иван Иванович. Бригада 1. Начало реагирования."}
+               "report_id": "dds-report-0-1", "note": "Начальник бригады Иванов Иван Иванович. Бригада 1. Прибытие."}
     saved = await request("POST", base(state) + "/phone", user, json=payload)
     repeated = await request("POST", base(state) + "/phone", user, json=payload)
-    assert len([e for e in repeated.json()["exercise"]["events"] if e["kind"] == "note"]) == 1
+    assert len([e for e in repeated.json()["exercise"]["events"] if e["kind"] == "note" and e.get("report_id") == payload["report_id"]]) == 1
     assert repeated.json()["exercise"]["notes"] == saved.json()["exercise"]["notes"]
     assert (await request("POST", base(state) + "/phone", user, json={**payload, "note": "changed"})).status_code == 409
     assert (await request("GET", base(state), user)).json()["exercise"]["notes"][payload["report_id"]] == payload["note"]
     teacher_notes = await request("GET", base(state) + "/phone-notes", users["teacher"])
     assert teacher_notes.status_code == 200
-    note = teacher_notes.json()["cards"][0]["notes"][0]
+    note = next(n for n in teacher_notes.json()["cards"][0]["notes"] if n["report_id"] == payload["report_id"])
     assert note["note"] == payload["note"] and "Иванов" in note["expected_text"]
-    assert "Прибытие" not in teacher_notes.text  # Never include future report transcripts.
+    assert "Проведение работ" not in teacher_notes.text  # Never include future report transcripts.
     assert (await request("GET", base(state) + "/phone-notes", user)).status_code == 403
     assert (await request("GET", base(state) + "/phone-notes", users["other"])).status_code == 403
-    progressed = await act(state, user, status="Начало реагирования", order_number="1")
+    progressed = await act(state, user, status="Прибытие", order_number="1")
     assert progressed.json()["last_attempt"]["accepted"]
 
 
@@ -129,7 +131,7 @@ async def test_inaccurate_content_is_saved_and_cycle_finishes_with_card_errors(m
     wire = dict(request_id="inaccurate-dispatch", card_id=state["card_id"], kind="dispatch",
                 service_name="Аварийная служба", who_accepted="Пупкин", summary="123")
     sent = (await request("POST", base(state) + "/actions", user, json=wire)).json()
-    assert sent["last_attempt"]["accepted"] and sent["exercise"]["due_at"]
+    assert sent["last_attempt"]["accepted"] and sent["exercise"]["incoming"]["id"] == "dds-report-0-0"
     assert sent["actions"][-1]["who_accepted"] == "Пупкин" and sent["actions"][-1]["summary"] == "123"
     repeated = (await request("POST", base(state) + "/actions", user, json=wire)).json()
     assert repeated["last_attempt"]["accepted"]
@@ -137,7 +139,8 @@ async def test_inaccurate_content_is_saved_and_cycle_finishes_with_card_errors(m
     plan = default_phone_plan(["Аварийная служба"])
     for index, report in enumerate(plan["reports"]):
         clock[0] += timedelta(seconds=3)
-        assert (await phone(state, user, "answer", report_id=report["id"])).status_code == 200
+        if index > 0:
+            assert (await phone(state, user, "answer", report_id=report["id"])).status_code == 200
         note = "Пупкин. Всё уже закончилось, бригада 99." if index == 0 else report["text"]
         assert (await phone(state, user, "note", report_id=report["id"], note=note)).status_code == 200
         if index == 0:

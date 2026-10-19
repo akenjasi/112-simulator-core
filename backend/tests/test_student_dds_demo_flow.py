@@ -74,12 +74,15 @@ async def test_lobby_demo_card_actions_finish_and_reload(path, cadet_auth_client
     assert retry.status_code == 200, retry.text
     assert len(retry.json()["actions"]) == 1
     for service in card.services[1:]:
+        no_brigade = "Работы завершены: Завершение работ без бригады"
+        rejection = no_brigade if no_brigade in initial["allowed_service_statuses"][service.name] else "Не принята"
         saved = await cadet_auth_client.post(state_url + "/actions", json={
             "request_id": str(uuid.uuid4()), "kind": "status", "service_name": service.name,
-            "status": "Не принята", "comment": "Учебный сценарий: не входит в компетенцию службы",
+            "status": rejection, "comment": "Учебный сценарий: не входит в компетенцию службы",
             "order_number": "Н-101",
         })
         assert saved.status_code == 200, saved.text
+        assert saved.json()["last_attempt"]["accepted"], saved.text
     from backend.tests.test_dds_queue import ready
     user_id = retry.json()["actions"][0]["actor_id"]
     trained = await ready(initial, (user_id, "CADET"))

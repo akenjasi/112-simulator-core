@@ -58,6 +58,9 @@ async def phone_command(db, session_id, payload, user):
             reason = "transition"
         elif any(a["kind"] == "dispatch" and a["service_name"] == payload.service_name for a in data["actions"]):
             raise HTTPException(409, "Assignment already transmitted; use the received report history")
+        elif ex.get("version") == 2:
+            from backend.core.dds_phone_v2 import dial
+            reason = dial(data, contact, at)
         else:
             call = training.event(ex, "dialed", at, data["card_id"], service_name=payload.service_name,
                                   contact_id=contact["id"], number=contact["number"],
@@ -74,6 +77,9 @@ async def phone_command(db, session_id, payload, user):
                        available_at=ex["due_at"], service_name=contact["service_name"],
                        contact=training.contact_public(contact), text=report["text"], audio=report.get("audio"))
         ex["accepted"] = report["id"]
+        if ex.get("version") == 2:
+            from backend.core.dds_phone_v2 import refresh_due
+            refresh_due(ex)
     elif payload.operation == "note":
         report = training.current(ex)
         if not report or report["id"] != payload.report_id or ex["accepted"] != report["id"]:

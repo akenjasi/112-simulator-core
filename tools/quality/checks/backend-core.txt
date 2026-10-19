@@ -67,3 +67,5 @@ backend/tests/test_ticket_lifecycle_review.py
 backend/tests/test_user_group_workflow.py
 backend/tests/test_worker6_audit_knowledge.py
 backend/tests/test_student_teacher_assessment.py
+
+backend/tests/test_dds_phone_v2.py

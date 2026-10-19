@@ -194,9 +194,9 @@
       "reason": "Explicit user feedback 2026-10-19: distinguish saved inaccurate records from rejected actions in instructor protocol."
     },
     "components/dispatcher/dds-training-phone.tsx": {
-      "sha256": "7d2fa25586cdb5231185ec9ef84b95072c5973a19685bec40ecd0ac6277dcca0",
-      "source_revision": "codex/dds-phone-audio-cycle (base e1ef59b)",
-      "reason": "Explicit user feedback 2026-10-19: accept inaccurate trainee content, show specific content errors in card review, and record the service response rather than an outgoing instruction."
+      "sha256": "d039792353924ef6b2a5da300c6e051fd200f2155d014211488681bccbd6b63b",
+      "source_revision": "codex/dds-phone-audio-cycle (base afa0dbb)",
+      "reason": "Explicit user-approved sequential DDS v2 plan 2026-10-19: outgoing departure report, independent services, one active call, service profiles and explicit legacy-plan upgrade."
     },
     "components/dispatcher/dispatch-panel.tsx": {
       "sha256": "9ed4c3fd8e5d0ce4c06e079819e633aef38f458c27e56bbb023f19d322b8244e",
@@ -209,9 +209,9 @@
       "reason": "Prepared phone exercise controls already present before audit"
     },
     "components/teacher/dds-exercise-editor.tsx": {
-      "sha256": "e833fa0e75d5ca5cf0c6716f5fdd0db8490db78d9ef31a420ea30848aa7059ae",
-      "source_revision": "codex/dds-phone-audio-cycle (base 54f83a8)",
-      "reason": "Explicit user request 2026-10-19: automatic audio-only DDS cycle, replay, saved trainee notes and owning-teacher review; optional teacher configuration"
+      "sha256": "74f1ab01fbd785237dfc91348afd7c46a003e22ac2bdacd155f00babe66afb87",
+      "source_revision": "codex/dds-phone-audio-cycle (base afa0dbb)",
+      "reason": "Explicit user-approved sequential DDS v2 plan 2026-10-19: outgoing departure report, independent services, one active call, service profiles and explicit legacy-plan upgrade."
     },
     "components/teacher/dds-lesson-protocol.tsx": {
       "sha256": "1e484b7f1695240c01818a04727db036a43160291823298d9cd47b0bfb1b3781",

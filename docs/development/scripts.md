@@ -7,7 +7,7 @@
 | Backend dev | `make backend [PORT=8000]`, реализация backend/scripts/run.sh |
 | Frontend dev | `make frontend`; обычные npm-команды также доступны из frontend |
 | backend/core/backups.py | Общая реализация backup для API и CLI, не одноразовый скрипт |
-| backend/scripts/db | `python -m backend.scripts.db.backup`, backup_loop для sidecar, schema с явным --apply, restore_tickets, seed_demo и seed_analytics |
+| backend/scripts/db | `python -m backend.scripts.db.backup`, backup_loop для sidecar, schema с явным --apply, restore_tickets, seed_demo и seed_analytics; `make replace-dds-tickets [ARGS=--apply]` — проверенная атомарная замена старых билетов новыми планами v2 с backup и сохранением истории |
 | backend/scripts/speech | setup_asr.sh, download_models.sh и `python -m backend.scripts.speech.generate_static_tts`; требуют подготовленного runtime, не запускаются при обычном старте |
 | backend/scripts/lock_dependencies.py | Явная регенерация runtime.lock на Python 3.11/Linux x86_64; не обычная установка |
 | backend/tests/postgres | check_queue.py, check_phone.py, check_audit.py и check_backup_restore.sh; собственные disposable PostgreSQL, не рабочая БД |

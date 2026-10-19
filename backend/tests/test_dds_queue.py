@@ -73,7 +73,9 @@ async def ready(state, user, service_names=None):
         for contact in plan["contacts"]:
             if service_names is not None and contact["service_name"] not in service_names:
                 continue
-            if contact["service_name"] in state["exercise"].get("refused_services", []):
+            if (contact["service_name"] in state["exercise"].get("refused_services", []) or
+                    state["exercise"].get("service_progress", {}).get(contact["service_name"], {}).get("paused") or
+                    state["exercise"].get("service_progress", {}).get(contact["service_name"], {}).get("terminal")):
                 continue
             if any(a["kind"] == "dispatch" and a["service_name"] == contact["service_name"] for a in state["actions"]):
                 continue
@@ -84,18 +86,30 @@ async def ready(state, user, service_names=None):
                 "service_name": contact["service_name"], "number": contact["number"]})
             assert dialed.status_code == 200 and dialed.json()["last_attempt"]["accepted"], dialed.text
             sent = await act(state, user, kind="dispatch", service_name=contact["service_name"],
-                             who_accepted=f"{contact['position']} {contact['full_name']}", summary="Бригада направлена по адресу")
+                             who_accepted=f"{contact['position']} {contact['full_name']}", summary=(next(r["text"] for r in plan["reports"] if r["contact_id"] == contact["id"]) if plan["version"] == 2 else "Бригада направлена по адресу"))
             assert sent.json()["last_attempt"]["accepted"], sent.text
+            if plan["version"] == 2:
+                departed = await act(state, user, status="Начало реагирования", service_name=contact["service_name"], order_number=contact["brigade"])
+                assert departed.json()["last_attempt"]["accepted"], departed.text
         for report in plan["reports"]:
+            if plan["version"] == 2 and report["status"] == "Начало реагирования":
+                continue
             contact = next(c for c in plan["contacts"] if c["id"] == report["contact_id"])
             if service_names is not None and contact["service_name"] not in service_names:
                 continue
-            if contact["service_name"] in state["exercise"].get("refused_services", []):
+            if (contact["service_name"] in state["exercise"].get("refused_services", []) or
+                    state["exercise"].get("service_progress", {}).get(contact["service_name"], {}).get("paused") or
+                    state["exercise"].get("service_progress", {}).get(contact["service_name"], {}).get("terminal")):
                 continue
             async with AsyncSessionLocal() as db:
                 session = await db.get(ExamSession, state["session_id"])
                 data = deepcopy(session.dynamic_state["dds"])
                 data["exercise"]["due_at"] = (datetime.now(timezone.utc) - timedelta(seconds=1)).isoformat()
+                if plan["version"] == 2:
+                    for name, progress in data["exercise"]["services"].items():
+                        if progress["due_at"]:
+                            progress["due_at"] = (datetime.now(timezone.utc) + timedelta(minutes=1)).isoformat()
+                    data["exercise"]["services"][contact["service_name"]]["due_at"] = data["exercise"]["due_at"]
                 from backend.core.dds_queue import store_state
                 store_state(session, data)
                 await db.commit()

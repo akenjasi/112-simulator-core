@@ -68,18 +68,24 @@ it("separates accepted content errors from rejected attempts in the teacher prot
 })
 
 it("teacher saves an explicit prepared plan using existing card services", async () => {
-  const network = vi.fn().mockResolvedValueOnce(new Response(JSON.stringify({services:["Аварийная служба"],plan:null}),{status:200}))
+  const template = {version:2, source:"prepared", presentation:"audio_only", service_profiles:{"Аварийная служба":"general"},
+    contacts:[{...contact, reply:"Начало реагирования. Бригада выехала", dispatch_keywords:["выехала"], audio:"/api/dds/audio/dds_ivanov_cycle2_0.wav"}],
+    reports:["Начало реагирования","Прибытие","Проведение работ","Работы завершены"].map((status,i) => ({id:`r${i}`,contact_id:contact.id,status,text:status,comment_keywords:i===3?["задача выполнена"]:[],audio:`/api/dds/audio/dds_ivanov_cycle2_${i}.wav`}))}
+  const network = vi.fn().mockResolvedValueOnce(new Response(JSON.stringify({services:["Аварийная служба"],plan:null,default_plan:template}),{status:200}))
     .mockImplementationOnce(async (_url, options) => new Response(JSON.stringify({plan:JSON.parse(options.body)}),{status:200}))
   vi.stubGlobal("fetch",network)
   render(<DDSExerciseEditor ticketId="ticket1"/>); fireEvent.click(screen.getByText("Телефон и доклады ДДС")); await screen.findByText("Подготовить план по службам билета")
   fireEvent.click(screen.getByText("Подготовить план по службам билета"))
   fireEvent.change(screen.getByLabelText("ФИО исполнителя"),{target:{value:"Петров Пётр Петрович"}})
+  fireEvent.change(screen.getByLabelText("Ответ на исходящий звонок"),{target:{value:"Начало реагирования. Бригада выехала к месту происшествия."}})
   fireEvent.click(screen.getByRole("button",{name:"Сохранить план ДДС"})); await flush()
   expect(network.mock.calls[1][0]).toBe("/api/dds/tickets/ticket1/exercise")
   const body = JSON.parse(network.mock.calls[1][1].body)
   expect(body.source).toBe("prepared")
   expect(body.contacts[0].full_name).toBe("Петров Пётр Петрович")
   expect(body.reports).toHaveLength(4)
+  expect(body.reports[0].text).toBe(body.contacts[0].reply)
+  expect(body.reports[0].audio).toBe(body.contacts[0].audio)
 })
 
 it("teacher protocol is usable independently of AI report generation", async () => {
@@ -258,4 +264,18 @@ it("lets the owning teacher compare a trainee report note with the recording tra
   await screen.findByText("Запись обучаемого · Газ")
   expect(screen.getByText("Моя запись доклада",{exact:false})).toBeTruthy()
   expect(screen.getByText("Эталон произнесённой реплики",{exact:false})).toBeTruthy()
+})
+
+it("uses the outgoing departure report as the only first phone record in v2", () => {
+  const ex: DDSExercise={...exercise(),version:2,presentation:"audio_only", incoming:{id:"departure",contact,ringing:false,direction:"outgoing",text:null,audio:"/api/dds/audio/dds_ivanov_cycle2_0.wav"},
+    outgoing:{[contact.service_name]:{contact_id:contact.id,call_id:"dial",report_id:"departure",text:null,audio:"/api/dds/audio/dds_ivanov_cycle2_0.wav"}},
+    events:[{id:"dial",kind:"dialed",at:"2026-10-19T00:00:00Z",card_id:"card",report_id:"departure",service_name:contact.service_name,audio:"/api/dds/audio/dds_ivanov_cycle2_0.wav"}]}
+  const save=vi.fn().mockResolvedValue(true)
+  render(<DDSTrainingPhone exercise={ex} selectedService={contact.service_name} onServiceChange={vi.fn()} disabled={false} command={vi.fn()} record={{accepted:true,whoAccepted:"Опечатка",setWhoAccepted:vi.fn(),summary:"123",setSummary:vi.fn(),onSave:save}}/>)
+  fireEvent.click(screen.getByRole("button",{name:"☎ Телефон"}))
+  expect(screen.getByLabelText("Кто доложил")).toHaveValue("Опечатка")
+  expect(screen.queryByLabelText("Запись принятого доклада")).toBeNull()
+  expect(screen.getByRole("button",{name:"Прослушать доклад"})).toBeTruthy()
+  fireEvent.click(screen.getByRole("button",{name:"Сохранить телефонограмму"}))
+  expect(save).toHaveBeenCalledOnce()
 })

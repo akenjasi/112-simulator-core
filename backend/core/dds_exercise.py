@@ -17,6 +17,8 @@ MESSAGES = {
     "completion": "Карточка ещё не готова: обработайте доклады и завершите работу служб.",
     "transition": "Переход из текущего статуса недоступен.",
     "refusal": "Для отказа необходимо указать причину.",
+    "phone_busy": "Сначала запишите и зарегистрируйте текущий принятый доклад.",
+    "result_comment": "Укажите результат работ в комментарии перед завершением.",
     "report_note": "Запишите услышанный доклад: ФИО, должность, номер бригады и этап работ.",
 }
 
@@ -42,12 +44,19 @@ def validated_plan(raw, services):
     plan = ExercisePlan.model_validate(raw).model_dump()
     if {c["service_name"] for c in plan["contacts"]} != set(services):
         raise ValueError("Exercise contacts must cover exactly the card services")
+    if plan["version"] == 2:
+        plan["contacts"].sort(key=lambda c: services.index(c["service_name"]))
     return plan
 
 
 def initialize(plan, card_id, at):
     if not plan:
         return None
+    if plan.get("version") == 2:
+        from backend.core import dds_phone_v2
+        result = dds_phone_v2.initialize(plan, card_id, at)
+        event(result, "received", at, card_id)
+        return result
     return {"plan": deepcopy(plan), "index": 0, "due_at": None, "accepted": None,
             "outgoing": {}, "events": [{"id": str(uuid.uuid4()), "kind": "received", "at": at,
                                          "card_id": card_id}], "requests": []}
@@ -60,6 +69,9 @@ def event(exercise, kind, at, card_id, **extra):
 
 
 def current(exercise):
+    if exercise.get("version") == 2:
+        from backend.core.dds_phone_v2 import current as current_v2
+        return current_v2(exercise)
     reports = exercise["plan"]["reports"]
     index = exercise["index"]
     return reports[index] if index < len(reports) else None
@@ -81,6 +93,10 @@ def schedule(data, at):
     ex = data.get("exercise")
     if not ex:
         return
+    if ex.get("version") == 2:
+        from backend.core.dds_phone_v2 import refresh_due
+        refresh_due(ex)
+        return
     skip_refused(data, at)
     if ex["due_at"] or ex["accepted"]:
         return
@@ -95,6 +111,9 @@ def schedule(data, at):
 
 
 def action_issue(data, payload, service_status):
+    if data["exercise"].get("version") == 2:
+        from backend.core.dds_phone_v2 import action_issue as issue_v2
+        return issue_v2(data, payload, service_status)
     ex = data["exercise"]
     if payload.kind == "dispatch":
         call = ex["outgoing"].get(payload.service_name)
@@ -167,6 +186,9 @@ def accepted_action(data, payload, at):
     ex = data.get("exercise")
     if not ex:
         return
+    if ex.get("version") == 2:
+        from backend.core.dds_phone_v2 import accepted_action as accepted_v2
+        return accepted_v2(data, payload, at)
     issues = accuracy_issues(data, payload)
     if issues:
         report = current(ex) if payload.kind == "status" else None
@@ -205,10 +227,11 @@ def criteria(data, closed=False):
               "completion": {"completion"}}
     confirmations = []
     for name in dict.fromkeys(c["service_name"] for c in ex["plan"]["contacts"]):
-        action = next((a for a in data["actions"] if a["kind"] == "status" and a["service_name"] == name and a.get("status") in ("Принята", "Не принята")), None)
+        action = next((a for a in data["actions"] if a["kind"] == "status" and a["service_name"] == name and a.get("status") in ("Принята", "Не принята", "Работы завершены: Завершение работ без бригады")), None)
         confirmations.append({"service_name": name, "seconds": max(0, (parse_time(action["at"]) - parse_time(data["received_at"])).total_seconds()) if action and action.get("at") and data.get("received_at") else None})
     result = []
-    finished = ex["index"] == len(ex["plan"]["reports"])
+    from backend.core.dds_phone_v2 import finished as finished_v2
+    finished = finished_v2(ex) if ex.get("version") == 2 else ex["index"] == len(ex["plan"]["reports"])
     for key, label in keys:
         evidence = [e for e in failures if e.get("reason") in groups.get(key, set())]
         done = finished
@@ -218,8 +241,9 @@ def criteria(data, closed=False):
         state = "completed_after_correction" if done and evidence and key != "confirmation" else "completed" if done else "not_completed" if closed or key == "confirmation" and any(item["seconds"] is not None and item["seconds"] > 30 for item in confirmations) else "not_evaluated"
         if key == "accuracy" and any(e.get("blocking") is False for e in evidence):
             state = "not_completed"
-        if ex.get("refused_services") and key in ("service", "stage", "accuracy"):
-            state = "not_evaluated"
+        refused = ex.get("refused_services") or (ex.get("version") == 2 and any(p["paused"] or p["terminal"] and p["index"] < 4 for p in ex["services"].values()))
+        if refused and key in ("service", "stage", "accuracy"):
+            state = "not_completed" if ex.get("version") == 2 and evidence else "not_evaluated"
         result.append({"key": key, "label": label, "status": state, "evidence": evidence})
     return result
 
@@ -247,7 +271,10 @@ def projection(data, editable):
             if item.get("contact"):
                 item["contact"] = public_contact(item["contact"])
     last = ex["requests"][-1] if ex["requests"] else None
-    result.update(exercise={"source": "prepared", "presentation": ex["plan"].get("presentation", "text_audio"),
+    outgoing_report = bool(ex.get("version") == 2 and incoming and any(c.get("report_id") == incoming["id"] for c in outgoing.values()))
+    if incoming:
+        incoming["direction"] = "outgoing" if outgoing_report else "incoming"
+    result.update(exercise={"version": ex.get("version", 1), "service_progress": deepcopy(ex.get("services", {})), "source": "prepared", "presentation": ex["plan"].get("presentation", "text_audio"),
                             "notes": deepcopy(ex.get("notes", {})),
                             "contacts": [public_contact(c) for c in ex["plan"]["contacts"]],
                             "incoming": incoming, "due_at": ex["due_at"] if editable else None,

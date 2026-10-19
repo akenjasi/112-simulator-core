@@ -24,7 +24,7 @@ from backend.models.domain_03 import Assignment, ExamSession
 from backend.models.domain_04 import IncidentCard, EvaluationResult, TicketResult
 from backend.schemas.dds_cycle import DispatcherData, DDSActionPayload
 from backend.schemas.lessons import CadetLessonStats, CadetTicketDetail
-from backend.core.dds_service_policy import action_error, allowed_statuses, current_service_statuses
+from backend.core.dds_service_policy import action_error, allowed_statuses, current_service_statuses, context as policy_context
 from backend.core.dds_queue import archived_cards, card_progress, completion_blockers, has_dispatch, queue_ticket_details
 
 
@@ -443,7 +443,7 @@ def build_session_state_dict(
         "incoming_card": incoming_card,
         "actions": actions,
         "allowed_service_statuses": {
-            name: (["Принята", "Не принята", "Начало реагирования", "Прибытие", "Проведение работ", "Работы завершены", "Отказ от выполнения работ"] if dds_data.get("exercise") and current not in ("Работы завершены", "Отказ от выполнения работ", "Не принята") else [] if dds_data.get("exercise") and current == "Не принята" else allowed_statuses(current)) if editable else [] for name, current in service_statuses.items()
+            name: allowed_statuses(current, **policy_context(dds_data, name)) if editable else [] for name, current in service_statuses.items()
         },
         "submitted_at": submitted_at,
         "score": score,
@@ -681,7 +681,7 @@ async def apply_dds_action(
             store_state(session, dds_data)
             await db.commit()
             return await get_dds_session_state(session_id, current_user, db)
-    error = action_error(service_statuses.get(payload.service_name, ""), payload)
+    error = action_error(service_statuses.get(payload.service_name, ""), payload, **policy_context(dds_data, payload.service_name))
     if error:
         raise HTTPException(status_code=error[0], detail={"code": error[1]})
     if (payload.kind == "status" and payload.status == "Работы завершены"

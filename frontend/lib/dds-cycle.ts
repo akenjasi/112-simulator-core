@@ -17,6 +17,7 @@ export const ALLOWED_DDS_STATUSES = [
   "Отказ",
   "Завершена",
   "Завершение работ без бригады",
+  "Работы завершены: Завершение работ без бригады",
   "Добавлена",
   "Получена службой",
   "В обработке",
@@ -78,11 +79,12 @@ export interface DDSPhonePayload {
   note?: string
 }
 export interface DDSExercise {
+  version?: 1 | 2; service_progress?: Record<string, {index: number; paused: boolean; terminal: boolean; due_at: string | null}>;
   source: "prepared"; contacts: DDSContact[]; events: DDSEvent[]; refused_services?: string[];
   presentation?: "text_audio" | "audio_only"; notes?: Record<string, string>;
-  incoming: {id: string; contact: DDSContact; ringing: boolean; text: string | null; audio: string | null} | null;
+  incoming: {id: string; contact: DDSContact; ringing: boolean; direction?: "outgoing" | "incoming"; text: string | null; audio: string | null} | null;
   due_at: string | null; processed_reports: number; total_reports: number;
-  outgoing: Record<string, {contact_id: string; call_id: string; text: string | null; audio: string | null}>
+  outgoing: Record<string, {contact_id: string; call_id: string; report_id?: string; text: string | null; audio: string | null}>
 }
 
 export interface DDSSessionState {
@@ -652,6 +654,7 @@ export class DDSRequestError extends Error {
 export function ddsBlockerMessage(blocker: {code: string; service_name: string}): string {
   const messages: Record<string, string> = {
     DDS_DISPATCH_REQUIRED: "Сохраните направление: «Кто принял» и «Суть»",
+    DDS_RESULT_COMMENT_REQUIRED: "Укажите результат работ в комментарии перед завершением",
     DDS_REFUSAL_REASON_REQUIRED: "Укажите причину отказа",
     DDS_SERVICE_NOT_FINISHED: "Завершите отработку службы или укажите мотивированный отказ",
     DDS_NO_SERVICES: "В карточке отсутствуют службы",
@@ -663,6 +666,7 @@ async function ddsResponseError(res: Response): Promise<DDSRequestError> {
   const messages: Record<string, string> = {
     DDS_SERVICE_TRANSITION_FORBIDDEN: "Этот переход статуса службы недоступен. Обновите данные",
     DDS_SERVICE_NOT_DISPATCHABLE: "Направление доступно только для принятой службы до завершения работ",
+    DDS_RESULT_COMMENT_REQUIRED: "Укажите результат работ в комментарии перед завершением",
     DDS_REFUSAL_REASON_REQUIRED: "Укажите причину отказа",
     DDS_STATUS_COMMENT_REQUIRED: "Для повторного статуса укажите комментарий",
     DDS_DISPATCH_STATUS_FORBIDDEN: "Изменяйте статус через карандаш службы",
