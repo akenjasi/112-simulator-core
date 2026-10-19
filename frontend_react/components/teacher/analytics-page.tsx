@@ -1336,6 +1336,7 @@ export default function AnalyticsPage({ initialTab = "split" }: AnalyticsPagePro
                         />
                         <YAxis domain={[0, 100]} tick={{ fontSize: 11 }} stroke="var(--muted-foreground)" strokeOpacity={0.7} />
                         <RechartsTooltip
+                          cursor={false}
                           contentStyle={{
                             backgroundColor: "var(--card)",
                             borderColor: "var(--border)",
