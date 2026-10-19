@@ -170,6 +170,13 @@ def render_report_html(context: Dict[str, Any], template_name: str = "report_lay
     return template.render(**context)
 
 
+def spreadsheet_literal(value):
+    """Untrusted text must remain text when an export is opened in Excel."""
+    if isinstance(value, str) and value.lstrip().startswith(("=", "+", "-", "@", "\t", "\r", "\n")):
+        return "'" + value
+    return value
+
+
 def generate_csv_from_data(cadets: List[Dict[str, Any]]) -> str:
     """Generate CSV string from cadet reports with UTF-8 BOM."""
     output = io.StringIO()
@@ -191,7 +198,7 @@ def generate_csv_from_data(cadets: List[Dict[str, Any]]) -> str:
     ])
 
     for c in cadets:
-        writer.writerow([
+        writer.writerow([spreadsheet_literal(value) for value in [
             c.get("cadet_name", "—"),
             c.get("ticket_id", "—"),
             c.get("final_score", 0),
@@ -202,7 +209,7 @@ def generate_csv_from_data(cadets: List[Dict[str, Any]]) -> str:
             ", ".join(c.get("over_dispatched_services", [])) or "Нет",
             ", ".join(c.get("missed_critical_factoids", [])) or "Нет",
             ", ".join(c.get("penalties_list", [])) or "Нет",
-        ])
+        ]])
 
     return output.getvalue()
 
@@ -334,7 +341,7 @@ def generate_excel_from_data(cadets_data: List[Dict[str, Any]]) -> bytes:
         ]
 
         for col_idx, (val, align, flag) in enumerate(row_values, start=1):
-            cell = ws.cell(row=current_row, column=col_idx, value=val)
+            cell = ws.cell(row=current_row, column=col_idx, value=spreadsheet_literal(val))
             cell.alignment = align
             cell.border = cell_border
 

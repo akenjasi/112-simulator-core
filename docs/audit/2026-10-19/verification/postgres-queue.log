@@ -1,0 +1,47 @@
+Could not preload /home/orborus/Desktop/hakaton/112-simulator-core/backend/bin/libggml.so: libggml-cpu.so.0: cannot open shared object file: No such file or directory
+Could not preload /home/orborus/Desktop/hakaton/112-simulator-core/backend/bin/libtranscribe.so: libggml.so.0: cannot open shared object file: No such file or directory
+Failed to initialize transcribe_cpp: libggml.so.0: cannot open shared object file: No such file or directory
+Traceback (most recent call last):
+  File "/home/orborus/Desktop/hakaton/112-simulator-core/backend/api/router_asr.py", line 107, in _init_model
+    import transcribe_cpp
+  File "/home/orborus/Desktop/hakaton/112-simulator-core/backend/transcribe_cpp/__init__.py", line 125, in <module>
+    _lib, _lib_path = load_library()
+                      ^^^^^^^^^^^^^^
+  File "/home/orborus/Desktop/hakaton/112-simulator-core/backend/transcribe_cpp/_library.py", line 344, in load_library
+    return _cdll(path), path
+           ^^^^^^^^^^^
+  File "/home/orborus/Desktop/hakaton/112-simulator-core/backend/transcribe_cpp/_library.py", line 316, in _cdll
+    return ctypes.CDLL(str(path))
+           ^^^^^^^^^^^^^^^^^^^^^^
+  File "/usr/lib64/python3.11/ctypes/__init__.py", line 376, in __init__
+    self._handle = _dlopen(self._name, mode)
+                   ^^^^^^^^^^^^^^^^^^^^^^^^^
+OSError: libggml.so.0: cannot open shared object file: No such file or directory
+PASS test_two_cadets_complete_three_distinct_cards_in_one_session_each {}
+PASS test_future_snapshots_hidden_and_frozen_before_activation_reload_and_history {}
+PASS test_completion_requires_final_status_and_dispatch_before_final_transition {}
+PASS test_motivated_refusal_can_close_card_without_dispatch {'status': 'Не принята'}
+PASS test_motivated_refusal_can_close_card_without_dispatch {'status': 'Отказ от выполнения работ'}
+PASS test_concurrent_close_retries_stale_card_actions_and_request_conflicts {}
+PASS test_queue_ownership_and_teacher_cannot_act_as_cadet {'operation': 'read'}
+PASS test_queue_ownership_and_teacher_cannot_act_as_cadet {'operation': 'history'}
+PASS test_queue_ownership_and_teacher_cannot_act_as_cadet {'operation': 'action'}
+PASS test_queue_ownership_and_teacher_cannot_act_as_cadet {'operation': 'complete'}
+PASS test_queue_ownership_and_teacher_cannot_act_as_cadet {'operation': 'finish'}
+PASS test_early_stop_preserves_completed_card_and_never_marks_queue_submitted {'by_teacher': False}
+PASS test_early_stop_preserves_completed_card_and_never_marks_queue_submitted {'by_teacher': True}
+PASS test_invalid_pool_is_rejected_without_partial_assignment {'invalid': 'empty'}
+PASS test_invalid_pool_is_rejected_without_partial_assignment {'invalid': 'duplicate'}
+PASS test_invalid_pool_is_rejected_without_partial_assignment {'invalid': 'missing'}
+PASS test_invalid_pool_is_rejected_without_partial_assignment {'invalid': 'malformed'}
+PASS test_invalid_pool_is_rejected_without_partial_assignment {'invalid': 'conflicting'}
+PASS test_start_is_atomic_and_idempotent_after_source_changes {}
+PASS test_self_training_catalog_filters_draft_protection_and_idempotent_launch {}
+PASS test_legacy_demo_alias_uses_persistent_queue_and_never_fabricates_a_ticket {'endpoint': '/api/v1/sessions/demo'}
+PASS test_legacy_demo_alias_uses_persistent_queue_and_never_fabricates_a_ticket {'endpoint': '/api/v2/sessions/demo'}
+PASS test_multiple_services_and_concurrent_action_updates_are_not_lost {}
+PASS test_concurrent_stop_and_close_do_not_revive_or_skip_cards {}
+PASS test_completed_legacy_session_and_its_history_are_preserved {}
+PASS test_legacy_single_card_state_is_read_without_rewriting_and_can_complete {}
+PASS test_queue_is_consistent_in_teacher_stats_student_history_and_journal {}
+PostgreSQL 15: 27 queue acceptance cases passed

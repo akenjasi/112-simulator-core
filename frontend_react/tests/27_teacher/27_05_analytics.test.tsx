@@ -96,6 +96,7 @@ describe('27.5: Пост-аналитика и Апелляция', () => {
   };
 
   beforeEach(() => {
+    window.history.replaceState({}, '', '/teacher/analytics');
     vi.stubGlobal(
       'fetch',
       vi.fn((url: string, init?: RequestInit) => {
@@ -152,22 +153,24 @@ describe('27.5: Пост-аналитика и Апелляция', () => {
   });
 
   it('should render split screen and appeal button', async () => {
-    render(<AnalyticsPage />);
-    expect(screen.getByRole('button', { name: /Изменить оценку/i })).toBeInTheDocument();
+    render(<AnalyticsPage initialTab="split" />);
+    fireEvent.change(screen.getByPlaceholderText("ID сессии..."), {target:{value:"session-test-100"}});
+    expect(await screen.findByRole('button', { name: /Изменить оценку/i })).toBeInTheDocument();
     expect(screen.getByText(/Эталон/i)).toBeInTheDocument();
 
     await waitFor(() => {
-      expect(screen.getByText('Иванов Иван Алексеевич')).toBeInTheDocument();
+      expect(screen.getAllByText('Иванов Иван Алексеевич').length).toBeGreaterThan(0);
     });
   });
 
   it('should render cadets list with success rates', async () => {
-    render(<AnalyticsPage />);
+    render(<AnalyticsPage initialTab="split" />);
+    fireEvent.change(screen.getByPlaceholderText("ID сессии..."), {target:{value:"session-test-100"}});
 
     expect(screen.getByText(/Детализация по курсантам/i)).toBeInTheDocument();
 
     await waitFor(() => {
-      expect(screen.getByText('Иванов Иван Алексеевич')).toBeInTheDocument();
+      expect(screen.getAllByText('Иванов Иван Алексеевич').length).toBeGreaterThan(0);
       expect(screen.getByText(/50% успеха/i)).toBeInTheDocument();
       expect(screen.getByText('Петрова Анна Сергеевна')).toBeInTheDocument();
       expect(screen.getByText(/100% успеха/i)).toBeInTheDocument();
@@ -175,7 +178,8 @@ describe('27.5: Пост-аналитика и Апелляция', () => {
   });
 
   it('should render split-screen with dual columns and highlight errors in red or yellow', async () => {
-    render(<AnalyticsPage />);
+    render(<AnalyticsPage initialTab="split" />);
+    fireEvent.change(screen.getByPlaceholderText("ID сессии..."), {target:{value:"session-test-100"}});
 
     await waitFor(() => {
       expect(screen.getByTestId('split-screen-columns')).toBeInTheDocument();
@@ -201,9 +205,10 @@ describe('27.5: Пост-аналитика и Апелляция', () => {
   });
 
   it('should open appeal modal with Textarea when clicking Изменить оценку and send PATCH request', async () => {
-    render(<AnalyticsPage />);
+    render(<AnalyticsPage initialTab="split" />);
+    fireEvent.change(screen.getByPlaceholderText("ID сессии..."), {target:{value:"session-test-100"}});
 
-    const appealBtn = screen.getByRole('button', { name: /Изменить оценку/i });
+    const appealBtn = await screen.findByRole('button', { name: /Изменить оценку/i });
     fireEvent.click(appealBtn);
 
     // Verify modal is open
@@ -243,7 +248,7 @@ describe('27.5: Пост-аналитика и Апелляция', () => {
     });
   });
 
-  it('should render SplitScreen component independently', () => {
+  it('should render SplitScreen component independently', async () => {
     const mockRecord: RecordDetail = {
       record_id: 'rec-custom-1',
       title: 'Билет #99: Пожар',
@@ -270,12 +275,13 @@ describe('27.5: Пост-аналитика и Апелляция', () => {
 
     expect(screen.getByText(/Эталон/i)).toBeInTheDocument();
     expect(screen.getByText(/Ввод курсанта/i)).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /Изменить оценку/i })).toBeInTheDocument();
+    expect(await screen.findByRole('button', { name: /Изменить оценку/i })).toBeInTheDocument();
     expect(screen.getAllByText(/Ошибка в номере дома/i).length).toBeGreaterThan(0);
   });
 
   it('should render Export to Excel button and trigger generation', async () => {
-    render(<AnalyticsPage />);
+    render(<AnalyticsPage initialTab="split" />);
+    fireEvent.change(screen.getByPlaceholderText("ID сессии..."), {target:{value:"session-test-100"}});
     const exportBtn = screen.getByRole('button', { name: /Экспорт в Excel/i });
     expect(exportBtn).toBeInTheDocument();
 

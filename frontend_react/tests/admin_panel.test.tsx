@@ -1,6 +1,6 @@
 import React from 'react';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { render, screen, fireEvent, waitFor, act, cleanup } from '@testing-library/react';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 // Load the page during suite import, not inside the 5s behavioral test budget.
 import SecurityPoliciesPage from '../app/admin/security/page';
 
@@ -312,4 +312,10 @@ describe('Admin Panel Pages and Components', () => {
       );
     });
   });
+});
+
+// Drain fetch/React scheduler work before jsdom tears down its window.
+afterEach(async () => {
+  await act(async () => { await new Promise((resolve) => setTimeout(resolve, 0)); });
+  cleanup();
 });

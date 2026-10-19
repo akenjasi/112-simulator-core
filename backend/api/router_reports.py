@@ -12,7 +12,11 @@ from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Query, s
 from fastapi.responses import FileResponse
 from sqlalchemy import select
 
-from backend.core.deps import require_role
+from backend.core.deps import require_role, get_current_user
+from backend.core.access import require_session, visible_session_ids
+from backend.database import get_db
+from sqlalchemy.ext.asyncio import AsyncSession
+from backend.models.domain_01 import StudentGroup
 from backend.core.reports_engine import (
     calculate_final_score,
     generate_csv_from_data,
@@ -40,6 +44,29 @@ reports_router = APIRouter(
 
 # In-memory dictionary for task status tracking
 TASKS: Dict[str, Dict[str, Any]] = {}
+REPORT_TTL_SECONDS = 86400
+
+
+def prune_completed_reports():
+    """Bound process-local jobs and their private files to one day."""
+    now = datetime.now(timezone.utc)
+    for task_id, task in list(TASKS.items()):
+        if task.get("status") == "processing":
+            continue
+        created = datetime.fromisoformat(task["created_at"])
+        if (now - created).total_seconds() < REPORT_TTL_SECONDS:
+            continue
+        root = Path(os.getenv("REPORT_DIR", "data/reports")).resolve()
+        for key in ("file_path", "csv_path", "excel_path"):
+            if task.get(key):
+                path = Path(task[key])
+                if root in path.resolve().parents and not path.is_symlink():
+                    path.unlink(missing_ok=True)
+                    try:
+                        path.parent.rmdir()
+                    except OSError:
+                        pass
+        del TASKS[task_id]
 
 
 async def _background_generate_report(
@@ -48,227 +75,113 @@ async def _background_generate_report(
     session_ids: Optional[List[str]] = None,
     custom_records: Optional[List[Dict[str, Any]]] = None,
 ) -> None:
-    """Async background task that compiles session data, calculates scores,
+    """Export recorded measurements; missing metrics remain absent."""
+    from backend.core.dds_cycle import get_session_score
+    from backend.models.domain_04 import TicketResult
+    import math
+    import tempfile
 
-    renders Jinja2 HTML, and exports PDF without blocking the event loop.
-    """
+    def finite(value):
+        return value if isinstance(value, (int, float)) and not isinstance(value, bool) and math.isfinite(value) else None
+
     try:
-        cadets_data: List[Dict[str, Any]] = []
-
-        # 1. If custom_records are provided directly (e.g. from API/tests)
+        cadets_data = []
         if custom_records:
             for rec in custom_records:
-                c_comm = rec.get(
-                    "comm_metrics",
-                    {"greeting_success": True, "filler_words": 0, "script_followed_pct": 100},
-                )
-                c_card = rec.get(
-                    "card_metrics",
-                    {
-                        "address_correct": True,
-                        "services_matched": True,
-                        "over_dispatched_services": [],
-                        "missed_critical_factoids": [],
-                    },
-                )
-                c_sla = rec.get(
-                    "sla_metrics",
-                    {"sla_breached_count": 0, "time_to_first_dispatch_sec": 30},
-                )
-
-                score, details = calculate_final_score(c_comm, c_card, c_sla)
-                cadets_data.append({
-                    "cadet_name": rec.get("cadet_name", "Курсант"),
-                    "ticket_id": rec.get("ticket_id", "Билет #1"),
-                    "comm_score": details["comm_score"],
-                    "card_score": details["card_score"],
-                    "sla_score": details["sla_score"],
-                    "final_score": score,
-                    "time_to_first_dispatch_sec": c_sla.get("time_to_first_dispatch_sec", 0),
-                    "over_dispatched_services": c_card.get("over_dispatched_services", []),
-                    "missed_critical_factoids": c_card.get("missed_critical_factoids", []),
-                    "penalties_list": details["penalties_list"],
-                })
-
-        # 2. Query from database if group_id or session_ids are given
-        elif group_id or session_ids:
-            try:
-                async with AsyncSessionLocal() as db:
-                    sessions: List[ExamSession] = []
-                    if session_ids:
-                        stmt = select(ExamSession).where(ExamSession.session_id.in_(session_ids))
-                        res = await db.execute(stmt)
-                        sessions = list(res.scalars().all())
-                    elif group_id:
-                        stmt_as = select(Assignment).where(Assignment.group_id == group_id)
-                        res_as = await db.execute(stmt_as)
-                        assignments = list(res_as.scalars().all())
-                        as_ids = [a.assignment_id for a in assignments]
-                        if as_ids:
-                            stmt_s = select(ExamSession).where(ExamSession.assignment_id.in_(as_ids))
-                            res_s = await db.execute(stmt_s)
-                            sessions = list(res_s.scalars().all())
-
-                    for s in sessions:
-                        # Resolve cadet name
-                        cadet_name = f"Курсант {s.cadet_id or s.session_id[:6]}"
-                        if s.cadet_id:
-                            u_res = await db.execute(select(User).where(User.user_id == s.cadet_id))
-                            user = u_res.scalar_one_or_none()
-                            if user and (user.full_name or user.username):
-                                cadet_name = user.full_name or user.username
-
-                        # Resolve incident card & evaluation result
-                        card_res = await db.execute(
-                            select(IncidentCard).where(IncidentCard.session_id == s.session_id)
-                        )
-                        card = card_res.scalar_one_or_none()
-
-                        eval_res = await db.execute(
-                            select(EvaluationResult).where(EvaluationResult.session_id == s.session_id)
-                        )
-                        evaluation = eval_res.scalar_one_or_none()
-
-                        # Resolve ticket
-                        ticket_id = f"Сессия {s.session_id[:8]}"
-                        if card and card.scenario_id:
-                            ticket_id = f"Билет #{card.scenario_id[:6]}"
-                        elif s.assignment_id:
-                            ticket_id = f"Задание #{s.assignment_id[:6]}"
-
-                        # Build metrics
-                        if evaluation and evaluation.metrics:
-                            m = evaluation.metrics
-                            comm_m = m.get("comm_metrics", {})
-                            card_m = m.get("card_metrics", {})
-                            sla_m = m.get("sla_metrics", {})
-                        else:
-                            time_to_first = 45
-                            if card and card.created_at and s.start_time:
-                                time_to_first = max(0, int((card.created_at - s.start_time).total_seconds()))
-
-                            card_data = card.filled_data if card and card.filled_data else {}
-                            over_dispatched = card_data.get("over_dispatched_services") or []
-                            missed_factoids = card_data.get("missed_critical_factoids") or []
-
-                            comm_m = s.dynamic_state.get(
-                                "comm_metrics",
-                                {"greeting_success": True, "filler_words": 0, "script_followed_pct": 100},
-                            )
-                            card_m = {
-                                "address_correct": bool(card_data.get("address")) if card else True,
-                                "services_matched": True,
-                                "over_dispatched_services": over_dispatched,
-                                "missed_critical_factoids": missed_factoids,
-                            }
-                            sla_m = {
-                                "sla_breached_count": 0,
-                                "time_to_first_dispatch_sec": time_to_first,
-                            }
-
-                        score, details = calculate_final_score(comm_m, card_m, sla_m)
-                        cadets_data.append({
-                            "cadet_name": cadet_name,
-                            "ticket_id": ticket_id,
-                            "comm_score": details["comm_score"],
-                            "card_score": details["card_score"],
-                            "sla_score": details["sla_score"],
-                            "final_score": score,
-                            "time_to_first_dispatch_sec": sla_m.get("time_to_first_dispatch_sec", 0),
-                            "over_dispatched_services": card_m.get("over_dispatched_services", []),
-                            "missed_critical_factoids": card_m.get("missed_critical_factoids", []),
-                            "penalties_list": details["penalties_list"],
-                        })
-            except Exception as db_err:
-                logger.warning("Database query failed during report generation: %s", db_err)
-
-        # 3. Fallback placeholder if no data was found
+                if not all(isinstance(rec.get(key), dict) and rec[key] for key in ("comm_metrics", "card_metrics", "sla_metrics")):
+                    raise ValueError("Explicit measured metrics are required")
+                comm, card, sla = (rec[key] for key in ("comm_metrics", "card_metrics", "sla_metrics"))
+                score, details = calculate_final_score(comm, card, sla)
+                cadets_data.append({**rec, **details, "final_score": score,
+                    "time_to_first_dispatch_sec": sla.get("time_to_first_dispatch_sec"),
+                    "over_dispatched_services": card.get("over_dispatched_services", []),
+                    "missed_critical_factoids": card.get("missed_critical_factoids", [])})
+        elif session_ids:
+            async with AsyncSessionLocal() as db:
+                sessions = (await db.scalars(select(ExamSession).where(ExamSession.session_id.in_(session_ids)))).all()
+                for session in sessions:
+                    evaluations = (await db.scalars(select(EvaluationResult).where(EvaluationResult.session_id == session.session_id))).all()
+                    results = (await db.scalars(select(TicketResult).where(TicketResult.session_id == session.session_id))).all()
+                    score = get_session_score(evaluations, results)
+                    if score is None:
+                        continue
+                    user = await db.get(User, session.cadet_id) if session.cadet_id else None
+                    latest = max(evaluations, key=lambda e: str(e.evaluated_at or ""), default=None)
+                    scores = latest.scores or {} if latest else {}
+                    metrics = latest.metrics or {} if latest else {}
+                    cadets_data.append({
+                        "cadet_name": (user.full_name or user.username) if user else "Курсант",
+                        "ticket_id": session.ticket_id or session.session_id,
+                        "final_score": score,
+                        "comm_score": finite(scores.get("comm_score")),
+                        "card_score": finite(scores.get("card_score")),
+                        "sla_score": finite(scores.get("sla_score")),
+                        "time_to_first_dispatch_sec": finite(metrics.get("time_to_first_dispatch_sec")),
+                        "over_dispatched_services": [], "missed_critical_factoids": [],
+                        "penalties_list": latest.errors_list or [] if latest else [],
+                    })
         if not cadets_data:
-            cadets_data.append({
-                "cadet_name": "Курсант (Демо / Данные отсутствуют)",
-                "ticket_id": group_id or "Билет #0",
-                "comm_score": 100,
-                "card_score": 100,
-                "sla_score": 100,
-                "final_score": 100,
-                "time_to_first_dispatch_sec": 30,
-                "over_dispatched_services": [],
-                "missed_critical_factoids": [],
-                "penalties_list": [],
-            })
+            raise ValueError("No measured numerical evaluations are available; use the DDS criteria protocol")
 
-        # 4. Extract critical error highlights for the template
-        over_dispatch_items = []
-        missed_factoid_items = []
-        for c in cadets_data:
-            if c.get("over_dispatched_services"):
-                over_dispatch_items.append({
-                    "cadet_name": c["cadet_name"],
-                    "ticket_id": c["ticket_id"],
-                    "services": c["over_dispatched_services"],
-                })
-            if c.get("missed_critical_factoids"):
-                missed_factoid_items.append({
-                    "cadet_name": c["cadet_name"],
-                    "ticket_id": c["ticket_id"],
-                    "factoids": c["missed_critical_factoids"],
-                })
+        def average(key):
+            values = [record[key] for record in cadets_data if finite(record.get(key)) is not None]
+            return round(sum(values) / len(values)) if values else None
 
-        critical_errors_count = len(over_dispatch_items) + len(missed_factoid_items)
-
-        avg_final = round(sum(c["final_score"] for c in cadets_data) / len(cadets_data))
-        avg_comm = round(sum(c["comm_score"] for c in cadets_data) / len(cadets_data))
-        avg_card = round(sum(c["card_score"] for c in cadets_data) / len(cadets_data))
-
-        context = {
-            "generated_at": datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC"),
-            "group_id": group_id,
-            "cadets": cadets_data,
-            "avg_final_score": avg_final,
-            "avg_comm_score": avg_comm,
-            "avg_card_score": avg_card,
-            "critical_errors_count": critical_errors_count,
-            "over_dispatch_items": over_dispatch_items,
-            "missed_factoid_items": missed_factoid_items,
-        }
-
-        # 5. Render HTML
-        html_content = render_report_html(context)
-
-        # 6. Save PDF asynchronously via asyncio.to_thread (Event loop is NEVER blocked)
-        output_pdf = f"/tmp/report_{task_id}.pdf"
-        await asyncio.to_thread(generate_pdf_from_html, html_content, output_pdf)
-
-        # Also save CSV for dual export support
-        output_csv = f"/tmp/report_{task_id}.csv"
-        csv_data = generate_csv_from_data(cadets_data)
-        await asyncio.to_thread(Path(output_csv).write_text, csv_data, encoding="utf-8")
-
-        # Save XLSX asynchronously via asyncio.to_thread (Event loop is NEVER blocked)
-        output_xlsx = f"/tmp/report_{task_id}.xlsx"
-        excel_data = await asyncio.to_thread(generate_excel_from_data, cadets_data)
-        await asyncio.to_thread(Path(output_xlsx).write_bytes, excel_data)
-
-        TASKS[task_id]["status"] = "ready"
-        TASKS[task_id]["file_path"] = output_pdf
-        TASKS[task_id]["csv_path"] = output_csv
-        TASKS[task_id]["excel_path"] = output_xlsx
-        logger.info("Report task %s finished successfully -> %s, %s", task_id, output_pdf, output_xlsx)
-
-    except Exception as exc:
-        logger.exception("Background report generation failed for task %s", task_id)
-        TASKS[task_id]["status"] = "failed"
-        TASKS[task_id]["error"] = str(exc)
+        context = {"generated_at": datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC"),
+            "group_id": group_id, "cadets": cadets_data, "avg_final_score": average("final_score"),
+            "avg_comm_score": average("comm_score"), "avg_card_score": average("card_score"),
+            "critical_errors_count": 0, "over_dispatch_items": [], "missed_factoid_items": []}
+        report_root = Path(os.getenv("REPORT_DIR", "data/reports"))
+        report_root.mkdir(parents=True, exist_ok=True)
+        directory = Path(tempfile.mkdtemp(prefix="report-", dir=report_root))
+        output_csv, output_xlsx, output_pdf = (directory / name for name in ("report.csv", "report.xlsx", "report.pdf"))
+        await asyncio.to_thread(output_csv.write_text, generate_csv_from_data(cadets_data), encoding="utf-8")
+        output_xlsx.write_bytes(await asyncio.to_thread(generate_excel_from_data, cadets_data))
+        pdf_path = None
+        try:
+            await asyncio.to_thread(generate_pdf_from_html, render_report_html(context), str(output_pdf))
+            pdf_path = str(output_pdf)
+        except Exception:
+            logger.warning("PDF renderer unavailable; CSV and Excel are ready for task %s", task_id)
+        TASKS[task_id].update(status="ready", file_path=pdf_path, csv_path=str(output_csv), excel_path=str(output_xlsx))
+    except Exception:
+        logger.exception("Report generation failed for task %s", task_id)
+        TASKS[task_id].update(status="failed", error="No measured report data or export renderer is available")
 
 
 @reports_router.post("/generate", response_model=ReportGenerateResponse)
 async def generate_report(
     req: ReportGenerateRequest,
     background_tasks: BackgroundTasks,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
 ):
     """Start asynchronous generation of an evaluation report."""
+    prune_completed_reports()
+    if len(TASKS) >= 1000:
+        raise HTTPException(429, "Report storage capacity reached; retry after expiration")
+    if req.group_id:
+        group = await db.get(StudentGroup, req.group_id)
+        if not group:
+            raise HTTPException(404, "Group not found")
+        if group.teacher_id != current_user.user_id:
+            raise HTTPException(403, "Group access denied")
+    if req.session_ids:
+        for session_id in req.session_ids:
+            await require_session(db, current_user, session_id)
+    elif req.group_id:
+        req.session_ids = list((await db.scalars((await visible_session_ids(db, current_user)).where(
+            ExamSession.assignment_id.in_(select(Assignment.assignment_id).where(Assignment.group_id == req.group_id))
+        ))).all())
+    if not req.custom_records and not req.session_ids and not req.group_id:
+        req.session_ids = list((await db.scalars(await visible_session_ids(db, current_user))).all())
+    if not req.custom_records and not req.session_ids:
+        raise HTTPException(422, "No recorded sessions are available for export")
+    if sum(task.get("owner_id") == current_user.user_id and task.get("status") == "processing" for task in TASKS.values()) >= 5:
+        raise HTTPException(429, "Wait for your running reports to finish")
     task_id = str(uuid.uuid4())
     TASKS[task_id] = {
+        "owner_id": current_user.user_id,
         "status": "processing",
         "file_path": None,
         "csv_path": None,
@@ -289,8 +202,9 @@ async def generate_report(
 
 
 @reports_router.get("/status/{task_id}", response_model=ReportStatusResponse)
-async def get_report_status(task_id: str):
+async def get_report_status(task_id: str, current_user: User = Depends(get_current_user)):
     """Get the current progress status of a report generation task."""
+    prune_completed_reports()
     if task_id not in TASKS:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -298,6 +212,8 @@ async def get_report_status(task_id: str):
         )
 
     task = TASKS[task_id]
+    if task.get("owner_id") != current_user.user_id:
+        raise HTTPException(404, "Task not found")
     return {
         "task_id": task_id,
         "status": task["status"],
@@ -306,7 +222,8 @@ async def get_report_status(task_id: str):
     }
 
 
-async def _download_report_response(task_id: str, format: str):
+async def _download_report_response(task_id: str, format: str, current_user: User):
+    prune_completed_reports()
     if task_id not in TASKS:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
@@ -314,13 +231,15 @@ async def _download_report_response(task_id: str, format: str):
         )
 
     task = TASKS[task_id]
+    if task.get("owner_id") != current_user.user_id:
+        raise HTTPException(404, "Task not found")
     if task["status"] == "processing":
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Report generation is still in progress",
         )
 
-    if task["status"] == "failed" or not task.get("file_path"):
+    if task["status"] == "failed":
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail=f"Report generation failed: {task.get('error')}",
@@ -353,8 +272,8 @@ async def _download_report_response(task_id: str, format: str):
             media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         )
 
-    file_path = task["file_path"]
-    if not os.path.exists(file_path):
+    file_path = task.get("file_path")
+    if not file_path or not os.path.exists(file_path):
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="PDF report file not found",
@@ -370,17 +289,19 @@ async def _download_report_response(task_id: str, format: str):
 @reports_router.get("/download")
 async def download_report_query(
     task_id: str = Query(..., description="Task ID to download"),
+    current_user: User = Depends(get_current_user),
     format: str = Query("pdf", description="Format to download: 'pdf', 'csv', or 'excel'"),
 ):
     """Download the generated report by task_id query parameter."""
-    return await _download_report_response(task_id=task_id, format=format)
+    return await _download_report_response(task_id=task_id, format=format, current_user=current_user)
 
 
 @reports_router.get("/download/{task_id}")
 async def download_report_path(
     task_id: str,
+    current_user: User = Depends(get_current_user),
     format: str = Query("pdf", description="Format to download: 'pdf', 'csv', or 'excel'"),
 ):
     """Download the generated report in PDF, CSV, or Excel format."""
-    return await _download_report_response(task_id=task_id, format=format)
+    return await _download_report_response(task_id=task_id, format=format, current_user=current_user)
 

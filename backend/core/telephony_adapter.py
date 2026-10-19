@@ -105,7 +105,7 @@ class TelephonyAdapter:
         try:
             response = await asyncio.wait_for(self.manager.send_action(action), timeout=5.0)
             logger.info(f"Originate response: {response}")
-            return "call_originated_ami_id_mock" # Panoramisk returns a response object we'd parse
+            return None  # No channel identity has been established by this adapter.
         except Exception as e:
             logger.error(f"Error originating call: {e}")
             return None
@@ -140,7 +140,7 @@ class TelephonyAdapter:
             # Simple check, returning 'Up', 'Ringing', 'Hungup'
             response = await asyncio.wait_for(self.manager.send_action(action), timeout=5.0)
             # Would parse response for channel state, defaulting to mock for now
-            return "Up"
+            return None
         except Exception as e:
             logger.error(f"Error getting call status: {e}")
             return None
@@ -151,6 +151,6 @@ class TelephonyAdapter:
             
         # Play audio via AMI uses AGI or Local channel magic or just Originate.
         # But this adapter represents the Asterisk interface.
-        return True
+        return False
 
 telephony_adapter = TelephonyAdapter()

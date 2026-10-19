@@ -1,83 +1,41 @@
-# 112 Simulator V2
+# Тренажёр 112
 
-Полностью обновленная версия симулятора оператора службы 112.
-Проект переписан на современный асинхронный стек (FastAPI) с фронтендом на Next.js (React) и полностью контейнеризирован (Docker Compose) для простого и надежного развертывания.
+FastAPI API и React/Next.js интерфейс для учебных занятий операторов и диспетчеров ДДС. Основной действующий поток: преподаватель готовит билеты и назначает занятие → курсант последовательно обрабатывает карточки и телефонные доклады → преподаватель просматривает сохранённый протокол и при необходимости запускает нейроотчёт.
 
-Основной упор сделан на локальный запуск нейросетевых моделей для обработки речи и классификации интентов:
-- **TTS (Синтез речи)**: Qwen TTS (GGUF, ~880MB) через локальный С++ бинарник.
-- **ASR (Распознавание речи)**: GigaAM-v3 (GGUF) через `transcribe_cpp`.
-- **NLU (Классификация)**: Локальная ML-модель Rubert-Tiny2.
+Роли: **ADMIN** управляет системой и учётными записями; **TEACHER** — своими группами, занятиями и аналитикой; **CADET** — своими упражнениями. ADMIN не получает права преподавателя автоматически. Операторский сценарий и внешние ASR/TTS/LLM требуют отдельной подготовки; физическая SIP-телефония не завершена. Пустые результаты не заменяются условными 100%.
 
-## Технологический стек
+## Локальная разработка
 
-### Backend
-- **Python 3.11+**
-- **FastAPI** — асинхронный веб-фреймворк.
-- **SQLAlchemy (Async)** — ORM (SQLite `aiosqlite` по умолчанию, возможен `asyncpg` для PostgreSQL).
-- **PyTorch (CPU)** — инференс классификатора намерений (без требований к GPU).
-- **FFmpeg** — цифровая обработка сигналов (DSP, фильтры рации для аудио).
+Поддерживаемый базовый runtime: Linux x86_64, Python 3.11, Node.js 22 (>=22.12), npm 10+. Python lock с SHA256 рассчитан на этот runtime. В другом окружении требуется отдельная генерация и проверка lock.
 
-### Frontend
-- **Next.js 16** — React-фреймворк, работает в режиме статического экспорта (`output: export`).
-- **Tailwind CSS** + **shadcn/ui** — стилизация и компоненты.
-- **Zustand** — управление состоянием (плеер, звонки).
-- **WebSockets** — стриминг аудио для распознавания речи (ASR) в реальном времени.
+```bash
+python3.11 -m venv .venv
+. .venv/bin/activate
+python -m pip install --require-hashes -r requirements.lock
+python setup_env.py --init
+bash run.sh
+```
 
-### Инфраструктура
-- **Docker Compose** — запуск frontend (Nginx) и backend (Uvicorn).
-- Персистентные **Docker Volumes** для хранения базы данных, кэша синтеза речи и весов моделей.
+`setup_env.py` создаёт новый приватный `.env` (0600), отказывается перезаписывать существующий и не печатает пароли. Первоначальный ADMIN создаётся при первом старте из `INITIAL_ADMIN_*`. Секреты находятся в `.env`; пример содержит пустые значения. Старую установку сначала резервируйте и настройте вручную. На отдельном терминале:
 
-## Архитектура диалогового движка
+```bash
+cd frontend_react
+npm ci --ignore-scripts
+npm run dev
+```
 
-Движок симулирует звонящего заявителя и построен по принципу **Functional Core, Imperative Shell**:
-1. **ASR Router (WebSockets)** принимает аудио от микрофона, распознает текст.
-2. **Intent Classifier** классифицирует фразу оператора в один из 10 интентов.
-3. **Dialogue Router (Чистая функция)** рассчитывает ответ, динамику паники и штрафы.
-4. **TTS Engine (Qwen TTS)** синтезирует ответный голос и накладывает DSP-фильтры "рации".
+Интерфейс: http://localhost:3000; API: http://localhost:8000/docs. Next dev проксирует `/api` в backend. Для Docker используется статический export и Nginx. `npm start` предназначен только для обычной Next-сборки, не для `DOCKER_BUILD=true`.
 
-## Документация
+Сохранённые занятия требуют подготовленных билетов; каталог не заполняется вымышленными билетами. Явное локальное демо: `/dds?demo=true`, результаты не сохраняются. Командные сидеры предназначены только для **нового отдельного файла SQLite**, не для рабочей БД.
 
-Подробная информация о развертывании, структуре проекта и Docker находится в файлах:
-- [DOCKER.md](DOCKER.md) — Инструкция по запуску и обслуживанию Docker-контейнеров.
-- [PROJECT_STRUCTURE.md](PROJECT_STRUCTURE.md) — Подробное описание структуры папок и модулей.
+## Проверки и документация
 
-## Безопасность и ФЗ-152
+```bash
+python -m pip install -r tools_tests/requirements.txt
+bash scripts/verify_build.sh all
+python -m pytest -c tools_tests/pytest.ini tools_tests -q
+```
 
-Проект поддерживает работу с PostgreSQL и включает архитектурные решения (в том числе хеширование паролей и инструкции по защите томов БД) для соответствия требованиям ФЗ-152 (защита ПДн). Подробности в [DOCKER.md](DOCKER.md).
+Runner выделяет собственную SQLite; унаследованный `DATABASE_URL` запрещён. [Проверки](docs/testing.md), [Docker и модели](DOCKER.md), [восстановление](RECOVERY.md), [карта кода](PROJECT_STRUCTURE.md), [реестр документации](docs/README.md).
 
-## Быстрый старт (Docker)
-
-1. Создайте файл `.env`:
-   ```bash
-   cp .env.example .env
-   ```
-2. Запустите стек:
-   ```bash
-   docker compose up --build
-   ```
-   *При первом запуске бэкенд скачает необходимые GGUF-веса моделей (~880 MB).*
-
-3. Интерфейсы:
-   - **Frontend:** http://localhost:3000
-   - **Backend API:** http://localhost:8000
-   - **Swagger Docs:** http://localhost:8000/docs
-
-## Environment Variables for Integration
-
-### Asterisk PBX Integration
-- `ASTERISK_HOST` - IP or hostname of the Asterisk server (default: 127.0.0.1)
-- `ASTERISK_PORT` - AMI port (default: 5038)
-- `ASTERISK_LOGIN` - AMI user
-- `ASTERISK_PASSWORD` - AMI password
-
-### SPO-112 Integration
-- `SPO112_PROTOCOL` - REST or SOAP (default: REST)
-- `SPO112_ENDPOINT` - URL to SPO-112 system (default: http://localhost:8080/api/export)
-- `SPO112_USERNAME` - Authentication username
-- `SPO112_PASSWORD` - Authentication password
-
-### LDAP (Active Directory / FreeIPA) Integration
-- `LDAP_ENABLED` - Enable LDAP authentication (default: False)
-- `LDAP_SERVER` - URL of the LDAP server (e.g., `ldap://192.168.1.100`)
-- `LDAP_DOMAIN` - Domain to append for bind (e.g., `corp.local`)
-- `LDAP_BASE_DN` - Base DN to build the uid for bind (e.g., `dc=corp,dc=local`)
+[Технический аудит исходного состояния](docs/audit/2026-10-19/REPORT.md) и [исполнение исправлений](docs/audit/2026-10-19/IMPLEMENTATION.md) содержат доказательства, ограничения и реальные результаты прогонов.

@@ -39,3 +39,16 @@ tests/admin_metrics_and_integrity.test.tsx
 tests/mobile_adaptive.test.tsx
 tests/operator_and_tutorial.test.tsx
 tests/telephony_lifecycle.test.tsx
+tests/27_teacher/27_00_layout.test.tsx
+tests/27_teacher/27_03_session.test.tsx
+tests/27_teacher/27_05_analytics.test.tsx
+tests/56_services_modal_and_calc.test.tsx
+tests/57_frontend_fixes.test.tsx
+tests/58_frontend_ux_improvements.test.tsx
+tests/59_route_guard_and_validation.test.tsx
+tests/75_charts.test.tsx
+tests/dds-cycle/dds-phone-training.test.tsx
+tests/group-ticket-review.test.tsx
+tests/incident-classifier.test.tsx
+tests/student-profile-home.test.tsx
+tests/websocket_resilience.test.ts

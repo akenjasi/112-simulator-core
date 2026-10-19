@@ -8,6 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.core.deps import get_current_user, require_role
 from backend.core.auth_sessions import revoke_all_user_sessions
+from backend.core.access import require_managed_cadet, teacher_cadet_ids
 from backend.core.security import check_teacher_user_management, hash_password
 from backend.database import get_db
 from backend.models.domain_01 import SecurityPolicy, StudentGroup, User, student_group_link
@@ -37,11 +38,6 @@ users_me_router = APIRouter(
 async def get_current_user_profile(
     current_user: User = Depends(get_current_user),
 ):
-    if current_user.role == "CADET":
-        if not current_user.full_name:
-            current_user.full_name = "Иванов Иван Иванович"
-        if not getattr(current_user, "student_id", None):
-            current_user.student_id = "СМ1-12"
     return current_user
 
 
@@ -70,7 +66,7 @@ async def get_users(
     teacher_groups = groups_res.scalars().all()
 
     group_ids = [g.group_id for g in teacher_groups if g.group_id]
-    cadet_ids = set()
+    cadet_ids = set(await teacher_cadet_ids(db, current_user.user_id))
 
     for g in teacher_groups:
         if g.cadet_ids and isinstance(g.cadet_ids, list):
@@ -118,12 +114,17 @@ async def create_user(
         target_user_role=user_in.role,
     )
 
+    policy = await db.scalar(select(SecurityPolicy).where(SecurityPolicy.key == "MIN_PASSWORD_LENGTH"))
+    minimum = int(policy.value) if policy and policy.value.isdigit() else 8
+    if len(user_in.password) < minimum:
+        raise HTTPException(400, f"Password must be at least {minimum} characters")
     user = User(
         username=user_in.username,
         password_hash=hash_password(user_in.password),
         role=user_in.role,
-        full_name=user_in.full_name or ("Иванов Иван Иванович" if user_in.role == "CADET" else None),
-        student_id=user_in.student_id or ("СМ1-12" if user_in.role == "CADET" else None),
+        full_name=user_in.full_name,
+        student_id=user_in.student_id,
+        created_by_id=current_user.user_id,
     )
     db.add(user)
     await db.commit()
@@ -157,6 +158,7 @@ async def update_user(
         new_role=user_in.role,
     )
 
+    await require_managed_cadet(db, current_user, user)
     security_changed = False
 
     if user_in.full_name is not None:
@@ -215,6 +217,8 @@ async def delete_user(
         target_user_role=user.role,
     )
 
+    await require_managed_cadet(db, current_user, user)
+
     # Soft delete: do not drop row to preserve foreign keys
     user.is_active = False
     await revoke_all_user_sessions(db, user_id=user.user_id)
@@ -250,6 +254,8 @@ async def reset_user_password(
         current_user_role=current_user.role,
         target_user_role=user.role,
     )
+
+    await require_managed_cadet(db, current_user, user)
 
     policy_min = await db.scalar(
         select(SecurityPolicy).where(SecurityPolicy.key == "MIN_PASSWORD_LENGTH")

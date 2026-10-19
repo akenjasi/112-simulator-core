@@ -71,6 +71,8 @@ async def test_terminal_service_is_read_only_but_original_retries_succeed(termin
     accept = action()
     assert (await request("POST", path, users["cadets"][0], json=accept)).status_code == 200
     if terminal == "Работы завершены":
+        dispatched = await request("POST", path, users["cadets"][0], json={"request_id":"dispatch-before-completion", "kind":"dispatch", "service_name":"Аварийная служба", "who_accepted":"Учебный дежурный", "summary":"Бригада направлена"})
+        assert dispatched.status_code == 200, dispatched.text
         for stage in ["Начало реагирования", "Прибытие", "Проведение работ"]:
             assert (await request("POST", path, users["cadets"][0], json=action(status=stage))).status_code == 200
     final = action(status=terminal)
@@ -120,6 +122,9 @@ async def test_intermediate_progress_is_sequential_with_comment_supplements(stag
     users, session, path = await fixture()
     progress = ["Принята", "Начало реагирования", "Прибытие", "Проведение работ", "Работы завершены"]
     for target in progress[:progress.index(stage) + 1]:
+        if target == "Начало реагирования":
+            result = await request("POST", path, users["cadets"][0], json={"request_id":"progress-dispatch", "kind":"dispatch", "service_name":"Аварийная служба", "who_accepted":"Дежурный", "summary":"Бригада направлена"})
+            assert result.status_code == 200, result.text
         assert (await request("POST", path, users["cadets"][0], json=action(status=target))).status_code == 200
     before = await state(users, session)
     assert (await request("POST", path, users["cadets"][0], json=action(status="Принята"))).status_code == 409

@@ -1,52 +1,23 @@
-# Структура проекта (112 Simulator V2)
+# Фактическая карта проекта
 
-Ниже описана актуальная структура директорий полностекового приложения (Full-Stack).
+Актуализировано 19.10.2026. Код API находится в `backend/api`, не в отсутствующем `backend/v2_engine`.
 
-## Корень проекта (`/`)
-- `README.md` — Главная документация проекта.
-- `PROJECT_STRUCTURE.md` — Описание архитектуры и директорий.
-- `DOCKER.md` — Инструкция по работе с Docker.
-- `docker-compose.yml` — Конфигурация запуска сервисов `frontend` и `backend`.
-- `Dockerfile.backend` / `Dockerfile.frontend` — Сценарии сборки образов.
-- `.env` и `.env.example` — Конфигурация переменных окружения.
-- `requirements.txt` — Список зависимостей Python бэкенда (включает ML-пакеты).
+| Область | Входы и основные связи |
+|---|---|
+| Приложение | `backend/main.py`: routers, startup/migrations, middleware, `/health`; `backend/database.py`: единый async engine |
+| Вход и права | `router_auth.py` → `security.py`, `auth_sessions.py`, `deps.py`; `access.py` задаёт владение объектами; `socket_auth.py` проверяет первый кадр WS и актуальность сессии |
+| Учётные записи | `router_users.py`, `router_groups.py`; `domain_01.py`: пользователи, группы, auth sessions/challenges, журнал |
+| Администрирование | `router_admin.py`, `router_audit.py`, `integrity.py`, `scripts/backup_db.py`; UI `/admin/*` |
+| Билеты и знания | `router_tickets.py`, `router_scenarios.py`, `router_scenario.py`, `router_knowledge.py`; `domain_02.py`, `domain_05.py`; несколько исторических форматов пока сохраняются |
+| Занятия | `router_lessons.py`, `router_assignments.py`, `router_sessions.py`; `Assignment → ExamSession`, `domain_03.py` |
+| DDS | `router_dds.py` → `dds_cycle.py`, `dds_queue.py`, `dds_phone.py`, `dds_service_policy.py`; UI `/dds`, `dds-assigned-console.tsx`; результаты `IncidentCard`, `TicketResult`, `EvaluationResult` |
+| Отчёты DDS | `router_dds_reports.py` → `dds_report_data.py`, `dds_report_jobs.py`, `dds_report_llm.py`; снимок фактов и persisted job, внешний OpenAI-compatible llama.cpp HTTP |
+| Оператор | `/operator`, `useTelephony.ts`, `useCallStore.ts`; `router_asr.py`, `router_telephony.py`, `runtime_router.py`, `tts_v2.py`; отдельный legacy `router_call.py`/`dialogue_router.py`/`tts_engine.py` сохранён до миграции потребителей |
+| Аналитика/экспорт | `router_analytics.py`, `analytics_scope.py`; `router_reports.py`/`reports_engine.py`; только доступные преподавателю сохранённые данные; неизвестные оценки nullable |
+| Интерфейс | `frontend_react/app` (маршруты), `components`, `hooks`, `lib`; `RequireAuth` + `apiFetch`; браузерные guards дополняют серверную авторизацию |
+| Поставка | `Dockerfile.backend` (корневой Dockerfile — symlink), `Dockerfile.frontend`, Compose, `docker/nginx.conf`; output `out/` генерируется, не хранится в Git |
+| Контроль | `scripts/verify_build.sh`, `scripts/checks/*`, `tests`, независимые `tools_tests`, PostgreSQL check-скрипты, `.github/workflows/quality.yml` |
 
-## Backend (`backend/`)
-Основной код серверной логики на базе FastAPI.
-- `main.py` — Точка входа, инициализация FastAPI, регистрация роутеров.
-- `database.py` — Настройки асинхронного подключения к БД (SQLite/PostgreSQL).
-- `api/` — Роутеры (Endpoints). Разделены на домены (auth, users, tickets, asr, tts и т.д.).
-- `core/` — Основная бизнес-логика и движок диалога:
-  - `intent_classifier.py` — Локальная ML-модель Rubert-Tiny2 (PyTorch) для классификации фраз (интенты 0–9).
-  - `dialogue_router.py` — Чистая функция хода диалога (`process_turn`), расчет паники и обновление стейта.
-  - `tts_v2.py` — Работа с Qwen TTS, интеграция с локальным бинарником `qwen-tts`.
-  - `reports_engine.py` — Генерация отчетов через Jinja2 шаблоны.
-  - `security.py` — JWT и хэширование паролей.
-- `models/` — Описание структур БД (SQLAlchemy Models). Разделены на логические домены (`domain_01`...`domain_05`).
-- `schemas/` — Pydantic-схемы валидации DTO (`bricks.py`, `router.py`, `factoids.py` и др.).
-- `bin/` — Локальные скомпилированные C++ бинарники и разделяемые библиотеки (`libggml`, `transcribe-cli`), необходимые для моделей речи.
-- `qwen_tts/` — Логика работы с TTS, папки для моделей, промптов голоса (`voices`).
+Данные групп исторически продублированы в M2M и JSON; без миграции не удалять ни одно представление. `backend/db/database.py` — совместимый re-export единого engine. Схема: `backend/core/schema_migrations.py`, CLI `scripts/schema.py`; неизвестный обязательный drift блокирует старт до изменения схемы.
 
-## Frontend (`frontend_react/`)
-Клиентская часть на базе Next.js 16 (React).
-- `package.json` — Зависимости и скрипты Node.js.
-- `next.config.mjs` — Конфигурация Next.js, настроенная на статический экспорт (`output: export`) для Docker.
-- `app/` — App Router структура Next.js:
-  - Роутинг по ролям: `operator/`, `teacher/`, `student/`.
-  - Вложенные динамические пути (например, `[id]/live`).
-- `components/` — Переиспользуемые React-компоненты (построены с использованием `shadcn/ui` и `Tailwind CSS`).
-- `lib/` — Вспомогательные утилиты, API-клиенты.
-- `store/` — Глобальное состояние на базе Zustand.
-
-## Data и Models
-- `data/` — Локальное хранилище данных: база `112_simulator.db`, аудио-кэш TTS (`tts_cache`), бэкапы. Смонтировано как Docker Volume.
-- `models/classifier/` — Локальная нейронная сеть Rubert-Tiny2.
-
-## Тестирование (`tests/`)
-Набор unit и интеграционных тестов (Pytest) для проверки функционала. Не требует внешних сервисов благодаря мокированию.
-
-## Docker & Scripts (`docker/`, `scripts/`)
-- `docker/nginx.conf` — Конфигурация Nginx для сервиса frontend (проксирование `/api` к бэкенду).
-- `scripts/init.sh` — Скрипт инициализации бэкенда (автоматическое скачивание тяжелых GGUF-моделей перед запуском `uvicorn`).
-- `scripts/download_models.sh` — Bash-скрипт для ручной загрузки TTS-моделей при запуске без Docker.
-- `scripts/setup_asr.sh` — Инструкция и скрипт для локальной сборки микросервиса `transcribe_cpp`.
+Исторические архитектурные описания сохранены в `docs/architecture/` с пометкой. Подробный перечень функций, незавершённых путей и кандидатов на удаление — в [аудите](docs/audit/2026-10-19/REPORT.md).

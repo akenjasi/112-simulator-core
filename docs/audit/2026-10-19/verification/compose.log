@@ -1,0 +1,4 @@
+Private configuration created: /tmp/112-audit-20261019/compose-test.env. Credentials are stored only in this file.
+('docker-compose.yml',): exit 0
+('docker-compose.prod.yml',): exit 0
+('docker-compose.yml', 'docker-compose.llm.yml'): exit 0

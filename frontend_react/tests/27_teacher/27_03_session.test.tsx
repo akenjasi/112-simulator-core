@@ -3,6 +3,11 @@ import { render, screen, waitFor, fireEvent, act } from '@testing-library/react'
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import SessionSetupPage from '@/app/teacher/sessions/new/page';
 
+async function renderOperatorSetup() {
+  render(<SessionSetupPage />);
+  fireEvent.click(await screen.findByRole('radio', {name:/Оператор 112/i}));
+}
+
 describe('ТЗ 41: Запуск урока (Создание сессии) - Настройка и UI', () => {
   let operator112Enabled = true;
 
@@ -43,6 +48,8 @@ describe('ТЗ 41: Запуск урока (Создание сессии) - Н�
     operator112Enabled = true;
     vi.stubGlobal('fetch', vi.fn((url: string, init?: RequestInit) => {
       const urlStr = url.toString();
+      if(urlStr.endsWith('/api/v1/lessons/available-roles'))return Promise.resolve({ok:true,status:200,json:async()=>({roles:operator112Enabled?['OPERATOR_112','DISPATCHER_DDS']:['DISPATCHER_DDS']})});
+      if(urlStr.includes('/api/dds/tickets'))return Promise.resolve({ok:true,status:200,json:async()=>[{ticket_id:'prepared',title:'Учебный билет',category:'ЖКХ',complexity:1}]});
 
       if (urlStr.endsWith('/api/v1/lessons/available-roles')) {
         return Promise.resolve({
@@ -126,7 +133,7 @@ describe('ТЗ 41: Запуск урока (Создание сессии) - Н�
   });
 
   it('should render form with empty group, disabled submit button, and role options', async () => {
-    render(<SessionSetupPage />);
+    await renderOperatorSetup();
 
     // Header & Submit button
     expect(screen.getByText(/Запуск урока|Создать занятие/i)).toBeInTheDocument();
@@ -182,7 +189,7 @@ describe('ТЗ 41: Запуск урока (Создание сессии) - Н�
   });
 
   it('should submit lesson configuration to POST /api/v1/lessons', async () => {
-    render(<SessionSetupPage />);
+    await renderOperatorSetup();
 
     await waitFor(() => {
       expect(screen.getByText(/Группа 101/i)).toBeInTheDocument();
@@ -198,6 +205,7 @@ describe('ТЗ 41: Запуск урока (Создание сессии) - Н�
     // Select DISPATCHER_DDS role
     const dispatcherRadio = screen.getByRole('radio', { name: /Диспетчер ДДС/i });
     fireEvent.click(dispatcherRadio);
+    fireEvent.click(await screen.findByRole("checkbox", {name:/Учебный билет/}));
 
     // Select adaptive complexity
     const adaptiveRadio = screen.getByText(/Адаптивный/i);
@@ -234,6 +242,8 @@ describe('ТЗ 41: Запуск урока (Создание сессии) - Н�
   it('should handle API errors gracefully', async () => {
     vi.stubGlobal('fetch', vi.fn((url: string, init?: RequestInit) => {
       const urlStr = url.toString();
+      if(urlStr.endsWith('/api/v1/lessons/available-roles'))return Promise.resolve({ok:true,status:200,json:async()=>({roles:operator112Enabled?['OPERATOR_112','DISPATCHER_DDS']:['DISPATCHER_DDS']})});
+      if(urlStr.includes('/api/dds/tickets'))return Promise.resolve({ok:true,status:200,json:async()=>[{ticket_id:'prepared',title:'Учебный билет',category:'ЖКХ',complexity:1}]});
       if (urlStr.endsWith('/api/v1/groups')) {
         return Promise.resolve({
           ok: true,
@@ -258,7 +268,7 @@ describe('ТЗ 41: Запуск урока (Создание сессии) - Н�
       return Promise.resolve({ ok: true, status: 200, json: async () => ({}) });
     }));
 
-    render(<SessionSetupPage />);
+    await renderOperatorSetup();
 
     await waitFor(() => {
       expect(screen.getByText(/Группа 101/i)).toBeInTheDocument();
@@ -276,7 +286,7 @@ describe('ТЗ 41: Запуск урока (Создание сессии) - Н�
   });
 
   it('ТЗ 43: should show cadet counts, mark 0 student groups as disabled and prevent selection', async () => {
-    render(<SessionSetupPage />);
+    await renderOperatorSetup();
 
     await waitFor(() => {
       expect(screen.getByText(/Группа 101/i)).toBeInTheDocument();
@@ -310,7 +320,7 @@ describe('ТЗ 41: Запуск урока (Создание сессии) - Н�
   });
 
   it('ТЗ 43: should handle 2-stage hierarchical category and subcategory selection in alphabetical order', async () => {
-    render(<SessionSetupPage />);
+    await renderOperatorSetup();
 
     await waitFor(() => {
       expect(screen.getByText(/Этап 1: Выберите категории происшествий/i)).toBeInTheDocument();
@@ -366,6 +376,8 @@ describe('ТЗ 41: Запуск урока (Создание сессии) - Н�
     const originalFetch = global.fetch;
     vi.stubGlobal('fetch', vi.fn((url: string, init?: RequestInit) => {
       const urlStr = url.toString();
+      if(urlStr.endsWith('/api/v1/lessons/available-roles'))return Promise.resolve({ok:true,status:200,json:async()=>({roles:operator112Enabled?['OPERATOR_112','DISPATCHER_DDS']:['DISPATCHER_DDS']})});
+      if(urlStr.includes('/api/dds/tickets'))return Promise.resolve({ok:true,status:200,json:async()=>[{ticket_id:'prepared',title:'Учебный билет',category:'ЖКХ',complexity:1}]});
       if (urlStr.includes('/api/v1/tickets/counts')) {
         return Promise.resolve({
           ok: true,
@@ -382,7 +394,7 @@ describe('ТЗ 41: Запуск урока (Создание сессии) - Н�
       return originalFetch(url, init);
     }));
 
-    render(<SessionSetupPage />);
+    await renderOperatorSetup();
 
     // Text "По умолчанию используются все категории" should NOT be present
     expect(screen.queryByText(/По умолчанию используются все категории/i)).not.toBeInTheDocument();
@@ -428,6 +440,8 @@ describe('ТЗ 41: Запуск урока (Создание сессии) - Н�
     const originalFetch = global.fetch;
     vi.stubGlobal('fetch', vi.fn((url: string, init?: RequestInit) => {
       const urlStr = url.toString();
+      if(urlStr.endsWith('/api/v1/lessons/available-roles'))return Promise.resolve({ok:true,status:200,json:async()=>({roles:operator112Enabled?['OPERATOR_112','DISPATCHER_DDS']:['DISPATCHER_DDS']})});
+      if(urlStr.includes('/api/dds/tickets'))return Promise.resolve({ok:true,status:200,json:async()=>[{ticket_id:'prepared',title:'Учебный билет',category:'ЖКХ',complexity:1}]});
       if (urlStr.includes('/api/v1/tickets/counts')) {
         return Promise.resolve({
           ok: true,
@@ -449,7 +463,7 @@ describe('ТЗ 41: Запуск урока (Создание сессии) - Н�
       return originalFetch(url, init);
     }));
 
-    render(<SessionSetupPage />);
+    await renderOperatorSetup();
 
     // Wait for groups to load
     await waitFor(() => {

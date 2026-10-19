@@ -1,3 +1,6 @@
+from pathlib import Path
+from backend.core.limits import stored_upload_path
+from backend.core.limits import read_upload, MAX_DOCUMENT_BYTES
 """Knowledge base API router: file upload and retrieval for teacher workspace."""
 
 import asyncio
@@ -90,16 +93,17 @@ async def upload_knowledge_file(
 
     safe_name = generate_safe_filename(file.filename)
     rel_path = get_relative_path(safe_name)
-    full_path = os.path.join("data", rel_path)
+    full_path = stored_upload_path(rel_path)
 
     # Read and write content
-    content = await file.read()
+    content = await read_upload(file, MAX_DOCUMENT_BYTES)
     file_size = len(content)
 
     await asyncio.to_thread(_write_file_sync, full_path, content)
 
     # Create record in DB
     knowledge_file = KnowledgeFile(
+        uploaded_by=_teacher.user_id,
         name=file.filename,
         file_path=rel_path,
         size_bytes=file_size,
@@ -107,7 +111,12 @@ async def upload_knowledge_file(
         uploaded_at=datetime.now(timezone.utc),
     )
     db.add(knowledge_file)
-    await db.commit()
+    try:
+        await db.commit()
+    except Exception:
+        await db.rollback()
+        Path(full_path).unlink(missing_ok=True)
+        raise
     await db.refresh(knowledge_file)
 
     return _to_response(knowledge_file)
@@ -122,7 +131,7 @@ async def download_knowledge_file(file_id: str, db: AsyncSession = Depends(get_d
     if not knowledge_file:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Файл не найден")
 
-    full_path = os.path.join("data", knowledge_file.file_path)
+    full_path = stored_upload_path(knowledge_file.file_path)
     if not os.path.exists(full_path):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Файл отсутствует на диске")
 
@@ -146,7 +155,7 @@ async def delete_knowledge_file(
     if not knowledge_file:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Файл не найден")
 
-    full_path = os.path.join("data", knowledge_file.file_path)
+    full_path = stored_upload_path(knowledge_file.file_path)
     if os.path.exists(full_path):
         try:
             os.remove(full_path)

@@ -1,3 +1,5 @@
+> Исторический дизайн (пометка 19.10.2026). Текущая реализация: [карта кода](../../PROJECT_STRUCTURE.md), [реестр документов](../README.md). Ниже сохранён исходный материал; это не runbook.
+
 # 07 — Database Schema
 
 > **System:** 112 Emergency-Dispatch Simulator  

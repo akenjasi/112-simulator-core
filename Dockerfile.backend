@@ -27,14 +27,18 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         libstdc++6 \
         gcc \
         python3-dev \
+        libpango-1.0-0 \
+        libpangoft2-1.0-0 \
+        fonts-dejavu-core \
     && rm -rf /var/lib/apt/lists/*
 
 # ─── Python dependencies ──────────────────────────────────────────────────────
 # Install in a separate layer — cached unless requirements.lock changes.
 # sqlalchemy[asyncio] pulls in greenlet (required for async SQLAlchemy).
-COPY requirements.lock ./
-RUN pip install --upgrade pip && pip install torch torchaudio --index-url https://download.pytorch.org/whl/cpu \
-    && pip install -r requirements.lock
+COPY requirements.lock requirements-ml.txt ./
+RUN pip install --no-cache-dir --require-hashes -r requirements.lock
+ARG INSTALL_SPEECH_DEPS=false
+RUN if [ "$INSTALL_SPEECH_DEPS" = "true" ]; then pip install torch==2.14.1 --index-url https://download.pytorch.org/whl/cpu && pip install -r requirements-ml.txt; fi
 
 # ─── PostgreSQL client (pg_dump, psql) ─────────────────────────────────────────
 # Match the PostgreSQL 15 server: newer pg_dump can emit SQL that 15 cannot restore.
@@ -90,6 +94,11 @@ ENV LD_LIBRARY_PATH="/app/backend/bin" \
 # /app/data/                          → SQLite DB, TTS audio cache, uploads
 # /app/backend/core/qwen_tts/models/  → GGUF weights (downloaded once)
 VOLUME ["/app/data", "/app/backend/core/qwen_tts/models"]
+
+RUN useradd --uid 10001 --create-home simulator \
+    && mkdir -p /app/data /app/backend/core/qwen_tts/models \
+    && chown -R simulator:simulator /app/data
+USER simulator
 
 EXPOSE 8000
 

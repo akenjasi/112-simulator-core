@@ -1,0 +1,11 @@
+{
+  "mode": "backend-all",
+  "status": "failed",
+  "stages": [
+    {
+      "name": "backend-all",
+      "status": "failed",
+      "exit_code": 1
+    }
+  ]
+}

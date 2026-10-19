@@ -4,7 +4,7 @@ import {act,cleanup,render,screen} from '@testing-library/react'
 import {afterEach,beforeEach,describe,expect,it,vi} from 'vitest'
 import DDSPage from '@/app/dds/page'
 let query=''
-vi.mock('next/navigation',()=>({useSearchParams:()=>new URLSearchParams(query),useRouter:()=>({push:vi.fn()})}))
+vi.mock('next/navigation',()=>({useSearchParams:()=>new URLSearchParams(query),useRouter:()=>({push:vi.fn(),replace:vi.fn()})}))
 vi.mock('next/link',()=>({default:({children,...props}:any)=><a {...props}>{children}</a>}))
 vi.mock('@/components/dispatcher/dds-assigned-console',()=>({DDSAssignedConsole:({sessionId,ticketId}:any)=><div>assigned {sessionId} {ticketId}</div>}))
 vi.mock('@/components/dispatcher/top-bar',()=>({TopBar:()=>null}))
@@ -30,7 +30,7 @@ describe('DDS route boundary',()=>{
   expect(network).not.toHaveBeenCalled()
  })
  it('the separate demo still renders without removed session or ticket variables',async()=>{
-  expect(()=>render(<DDSPage/>)).not.toThrow();await flush()
+  query='demo=true';expect(()=>render(<DDSPage/>)).not.toThrow();await flush()
   expect(screen.queryByText(/^assigned /)).toBeNull()
   expect(network.mock.calls.every(([url])=>!String(url).includes('/tickets/'))).toBe(true)
  })

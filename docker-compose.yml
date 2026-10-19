@@ -1,69 +1,70 @@
-# ─────────────────────────────────────────────────────────────────────────────
-# 112 Simulator V2 — Docker Compose
-# Services: backend (FastAPI + Qwen TTS) + frontend (Next.js → Nginx)
-#
-# Запуск:  docker compose up --build
-# Первый запуск: backend автоматически скачает GGUF-модели (~880 MB).
-# Последующие запуски: модели берутся из named volume (не скачиваются снова).
-# ─────────────────────────────────────────────────────────────────────────────
-
 services:
-
-  # ─── Backend: FastAPI + Qwen TTS ───────────────────────────────────────────
   postgres:
     image: postgres:15-alpine
     container_name: simulator_postgres
     restart: unless-stopped
     environment:
-      POSTGRES_USER: admin
-      POSTGRES_PASSWORD: securepass
-      POSTGRES_DB: simulator112
+      POSTGRES_USER: ${POSTGRES_USER:-simulator}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set a unique POSTGRES_PASSWORD in .env}
+      POSTGRES_DB: ${POSTGRES_DB:-simulator112}
     volumes:
-      - postgres_data:/var/lib/postgresql/data
+    - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U admin -d simulator112"]
+      test:
+      - CMD-SHELL
+      - pg_isready -U "$${POSTGRES_USER}" -d "$${POSTGRES_DB}"
       interval: 10s
       timeout: 5s
       retries: 5
     networks:
-      - simulator_net
-
+    - simulator_net
   backend:
     build:
       context: .
       dockerfile: Dockerfile.backend
     container_name: simulator_backend
     restart: unless-stopped
-    env_file:
-      - .env
     environment:
-      # Абсолютный путь внутри контейнера (volume монтируется на /app/data)
-      DATABASE_URL: "postgresql+asyncpg://admin:securepass@postgres:5432/simulator112"
-      # CORS: добавь свой домен при необходимости
-      CORS_ORIGINS: "http://localhost:3000,http://localhost:8000"
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-simulator}:${POSTGRES_PASSWORD:?Set
+        POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-simulator112}
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:3000,http://127.0.0.1:3000}
+      SECRET_KEY: ${SECRET_KEY:?Set a unique SECRET_KEY in .env}
+      TESTING: 'false'
+      INITIAL_ADMIN_USERNAME: ${INITIAL_ADMIN_USERNAME:-admin}
+      INITIAL_ADMIN_PASSWORD: ${INITIAL_ADMIN_PASSWORD:-}
+      INITIAL_ADMIN_FULL_NAME: ${INITIAL_ADMIN_FULL_NAME:-Администратор системы 112}
+      DDS_LLM_BASE_URL: ${DDS_LLM_CONTAINER_BASE_URL:-http://llm:8080/v1}
+      DDS_LLM_MODEL: ${DDS_LLM_MODEL:-dds-qwen}
+      GIGAAM_MODEL_PATH: /app/models/gigaam-v3-ctc-Q8_0.gguf
+      LLM_MODEL_PATH: /app/models/Qwen3.5-9B-Q4_K_M.gguf
     ports:
-      - "8000:8000"
+    - 127.0.0.1:${BACKEND_PORT:-8000}:8000
     volumes:
-      # ── Persistent: SQLite DB, TTS cache, uploads ──────────────────────────
-      - simulator_data:/app/data
-      - ./models:/app/models:ro
-      - ./backend/core/qwen_tts/models:/app/backend/core/qwen_tts/models:ro
+    - simulator_data:/app/data
+    - ./data/models:/app/models:ro,z
+    - ./data/tts_models:/app/backend/core/qwen_tts/models:ro,z
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      test:
+      - CMD
+      - curl
+      - -f
+      - http://localhost:8000/health
       interval: 30s
       timeout: 10s
       retries: 10
-      # start_period: время до первого healthcheck.
-      # При первом запуске скачивается ~880 MB → нужен запас.
-      # На быстром интернете ~3-5 мин, на медленном до 30 мин.
       start_period: 600s
     depends_on:
       postgres:
         condition: service_healthy
     networks:
-      - simulator_net
-
-  # ─── Frontend: Next.js static export → Nginx ───────────────────────────────
+    - simulator_net
+    extra_hosts:
+    - host.docker.internal:host-gateway
+    security_opt:
+    - no-new-privileges:true
+    cap_drop:
+    - ALL
+    image: ${BACKEND_IMAGE:-simulator_backend:latest}
   frontend:
     build:
       context: .
@@ -71,30 +72,47 @@ services:
     container_name: simulator_frontend
     restart: unless-stopped
     ports:
-      - "3000:3000"
-      - "443:443"
+    - ${FRONTEND_BIND_ADDRESS:-127.0.0.1}:3000:3000
+    - ${FRONTEND_BIND_ADDRESS:-127.0.0.1}:443:443
     volumes:
-      - ./certs:/etc/nginx/ssl:ro
-    # Frontend стартует сразу; Nginx proxies /api/* → backend.
-    # При недоступном backend Nginx вернёт 502 на API запросы.
+    - ./certs:/etc/nginx/ssl:ro,z
     depends_on:
-      - backend
+      backend:
+        condition: service_healthy
     networks:
-      - simulator_net
-
-# ─── Named volumes ────────────────────────────────────────────────────────────
+    - simulator_net
+  backup:
+    image: ${BACKEND_IMAGE:-simulator_backend:latest}
+    build:
+      context: .
+      dockerfile: Dockerfile.backend
+    restart: unless-stopped
+    command:
+    - python
+    - -m
+    - scripts.backup_loop
+    environment:
+      DATABASE_URL: postgresql+asyncpg://${POSTGRES_USER:-simulator}:${POSTGRES_PASSWORD:?Set
+        POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-simulator112}
+      BACKUP_DIR: /app/data/backups
+      BACKUP_INTERVAL_SECONDS: ${BACKUP_INTERVAL_SECONDS:-86400}
+      BACKUP_RETENTION_DAYS: ${BACKUP_RETENTION_DAYS:-180}
+    volumes:
+    - simulator_data:/app/data
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+    - simulator_net
+    security_opt:
+    - no-new-privileges:true
+    cap_drop:
+    - ALL
 volumes:
-  # SQLite база + TTS аудио-кэш + загружаемые файлы
   simulator_data:
     driver: local
   postgres_data:
     driver: local
-
-# ─── Internal network ─────────────────────────────────────────────────────────
 networks:
   simulator_net:
     driver: bridge
-    ipam:
-      config:
-        # Keep the Compose network clear of the host VPN's 172.19.0.0/24 route.
-        - subnet: "172.25.0.0/16"

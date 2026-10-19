@@ -3,7 +3,7 @@ import {act, cleanup, fireEvent, render, screen} from '@testing-library/react'
 import {afterEach, expect, it, vi} from 'vitest'
 import DDSPage from '@/app/dds/page'
 
-vi.mock('next/navigation', () => ({useSearchParams: () => new URLSearchParams()}))
+vi.mock('next/navigation', () => ({useSearchParams: () => new URLSearchParams("demo=true"), useRouter: () => ({replace:vi.fn()})}))
 vi.mock('next/link', () => ({default: ({children, ...props}: any) => <a {...props}>{children}</a>}))
 vi.mock('@/components/tutorial', () => ({Tutorial: () => null}))
 vi.mock('@/components/dispatcher/dds-assigned-console', () => ({DDSAssignedConsole: () => null}))

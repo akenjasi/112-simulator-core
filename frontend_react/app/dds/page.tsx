@@ -661,7 +661,12 @@ function DdsRoute() {
   const ticketId = searchParams ? searchParams.get("ticket_id") : null
 
   const cardId = searchParams?.get("card_id")
-  useEffect(() => { if (!sessionId && !ticketId) router.replace("/dds/journal") }, [sessionId, ticketId, router])
+  const localDemo = searchParams?.get("demo") === "true"
+  useEffect(() => { if (!localDemo && !sessionId && !ticketId) router.replace("/dds/journal") }, [sessionId, ticketId, router, localDemo])
+
+  if (localDemo && !sessionId && !ticketId) {
+    return <><div className="bg-amber-100 px-3 py-1 text-xs">Локальная демонстрация: результаты не сохраняются</div><DdsDemoSimulator /></>
+  }
 
   if (sessionId) {
     return <DDSAssignedConsole sessionId={sessionId} ticketId={ticketId || undefined} cardId={cardId || undefined} />

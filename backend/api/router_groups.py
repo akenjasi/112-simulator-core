@@ -1,3 +1,6 @@
+from backend.core.limits import read_upload, MAX_IMPORT_BYTES
+import secrets
+from backend.core.access import require_cadet_link
 import io
 import random
 from collections import Counter
@@ -12,7 +15,7 @@ from backend.core.deps import require_role, get_current_user
 from backend.core.auth_sessions import revoke_all_user_sessions
 from backend.core.security import hash_password
 from backend.database import get_db
-from backend.models.domain_01 import StudentGroup, User
+from backend.models.domain_01 import SecurityPolicy, StudentGroup, User
 from backend.models.domain_02 import GeneratedTicket, ScenarioTicket
 from backend.models.domain_03 import Assignment, ExamSession
 from backend.models.domain_04 import TicketResult, EvaluationResult
@@ -259,13 +262,16 @@ async def add_single_student_to_group(
 
         user = User(
             username=username,
-            password_hash=hash_password("cadet123"),
+            password_hash=hash_password(secrets.token_urlsafe(24)),
+            created_by_id=current_user.user_id,
             role="CADET",
             full_name=full_name,
             group_ids=[group_id],
         )
         db.add(user)
         await db.flush()
+
+    await require_cadet_link(db, current_user, user)
 
     # Link user to group via M2M relationship
     if user not in group.students:
@@ -369,7 +375,7 @@ async def upload_students_csv(
 
     _check_group_access(group, current_user)
 
-    content = await file.read()
+    content = await read_upload(file, MAX_IMPORT_BYTES)
     text = content.decode("utf-8-sig", errors="replace")
     try:
         students = parse_students_csv(io.StringIO(text))
@@ -386,7 +392,8 @@ async def upload_students_csv(
             full_name = " ".join(name_parts) if name_parts else None
             user = User(
                 username=student.email,
-                password_hash=hash_password("cadet123"),
+                password_hash=hash_password(secrets.token_urlsafe(24)),
+            created_by_id=current_user.user_id,
                 role="CADET",
                 full_name=full_name,
                 group_ids=[group_id],
@@ -399,6 +406,7 @@ async def upload_students_csv(
                 current_groups.append(group_id)
                 user.group_ids = current_groups
 
+        await require_cadet_link(db, current_user, user)
         if user not in group.students:
             group.students.append(user)
 
@@ -448,9 +456,13 @@ async def reset_group_passwords(
                 group.students.append(u)
             students.append(u)
 
+    if any(student.role not in ("CADET", "STUDENT") for student in students):
+        raise HTTPException(403, "Group contains a non-cadet account; fix membership before resetting passwords")
+    policy = await db.scalar(select(SecurityPolicy).where(SecurityPolicy.key == "MIN_PASSWORD_LENGTH"))
+    min_length = int(policy.value) if policy and policy.value.isdigit() else 8
     results = []
     for student in students:
-        new_pin = str(random.randint(10000, 99999))
+        new_pin = "".join(secrets.choice("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789") for _ in range(max(12, min_length)))
         student.password_hash = hash_password(new_pin)
         student.password_changed_at = datetime.now(timezone.utc)
         await revoke_all_user_sessions(db, user_id=student.user_id)

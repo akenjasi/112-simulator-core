@@ -1,32 +1,19 @@
-#!/bin/bash
-
-# Создать папку release/
-mkdir -p release/
-
-echo "Сборка backend..."
-docker build -t simulator_backend:latest -f Dockerfile.backend .
-
-echo "Сборка frontend..."
-docker build -t simulator_frontend:latest -f Dockerfile.frontend .
-
-echo "Скачивание postgres..."
+#!/usr/bin/env bash
+set -euo pipefail
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+cd "$REPO_ROOT"
+RELEASE_DIR="${RELEASE_DIR:-release}"
+BACKEND_IMAGE="${BACKEND_IMAGE:-simulator_backend:latest}"
+FRONTEND_IMAGE="${FRONTEND_IMAGE:-simulator_frontend:latest}"
+mkdir -p "$RELEASE_DIR/scripts" "$RELEASE_DIR/certs" "$RELEASE_DIR/data/models" "$RELEASE_DIR/data/tts_models"
+docker build -t "$BACKEND_IMAGE" -f Dockerfile.backend .
+docker build -t "$FRONTEND_IMAGE" -f Dockerfile.frontend .
 docker pull postgres:15-alpine
-
-echo "Сохранение образов в архив (это может занять некоторое время)..."
-docker save -o release/images.tar simulator_backend:latest simulator_frontend:latest postgres:15-alpine
-
-echo "Копирование файлов конфигурации..."
-cp docker-compose.prod.yml release/docker-compose.yml
-cp setup_env.py release/
-cp .env.example release/
-
-echo "========================================"
-echo "Релиз успешно создан в папке 'release/'!"
-echo "Вы можете перенести папку 'release/', вместе с '.gguf' моделями (если они скачаны в data/models), на изолированный сервер."
-echo ""
-echo "Инструкция для запуска на изолированном сервере:"
-echo "1. Перейдите в папку release/"
-echo "2. Загрузите образы: docker load -i images.tar"
-echo "3. Скопируйте .env.example в .env и настройте его"
-echo "4. Запустите: docker compose up -d"
-echo "========================================"
+docker save -o "$RELEASE_DIR/images.tar.part" "$BACKEND_IMAGE" "$FRONTEND_IMAGE" postgres:15-alpine
+mv "$RELEASE_DIR/images.tar.part" "$RELEASE_DIR/images.tar"
+cp docker-compose.prod.yml "$RELEASE_DIR/docker-compose.yml"
+cp setup_env.py .env.example "$RELEASE_DIR/"
+cp scripts/generate_certs.sh "$RELEASE_DIR/scripts/"
+cp DOCKER.md "$RELEASE_DIR/README.md"
+echo 'Release images saved. Configure a fresh .env/certificate and supply external model files before startup.'

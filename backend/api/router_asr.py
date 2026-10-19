@@ -1,3 +1,4 @@
+from backend.core.limits import read_upload, MAX_AUDIO_BYTES
 """ASR Router for GigaAM-v3 speech recognition (HTTP & WebSocket streaming)."""
 
 import os
@@ -14,7 +15,14 @@ import logging
 from typing import Optional
 
 import numpy as np
-from fastapi import APIRouter, UploadFile, File, HTTPException, WebSocket, WebSocketDisconnect
+from fastapi import Depends, APIRouter, UploadFile, File, HTTPException, WebSocket, WebSocketDisconnect
+
+from backend.core.deps import require_role
+from backend.core.access import require_session
+from backend.core.socket_auth import authenticate_socket, validate_socket
+from backend.database import get_db
+from backend.models.domain_01 import User
+from sqlalchemy.ext.asyncio import AsyncSession
 
 import ctypes
 logger = logging.getLogger("asr_service")
@@ -52,6 +60,8 @@ def convert_to_pcm16k(input_data: bytes) -> np.ndarray:
         "quiet",
         "-i",
         "pipe:0",
+        "-t",
+        "300",
         "-f",
         "f32le",
         "-ar",
@@ -67,6 +77,7 @@ def convert_to_pcm16k(input_data: bytes) -> np.ndarray:
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             check=True,
+            timeout=30,
         )
         if proc.stdout:
             return np.frombuffer(proc.stdout, dtype=np.float32)
@@ -141,12 +152,16 @@ class ASRService:
             tmp_path = tmp.name
 
         try:
-            import soundfile as sf
-            sf.write(tmp_path, pcm, 16000, format="WAV", subtype="PCM_16")
+            import wave
+            with wave.open(tmp_path, "wb") as audio:
+                audio.setnchannels(1)
+                audio.setsampwidth(2)
+                audio.setframerate(16000)
+                audio.writeframes((np.clip(pcm, -1, 1) * 32767).astype("<i2").tobytes())
 
             cmd = [cli_path, "-q", "-m", self.model_path, tmp_path]
             proc = await asyncio.to_thread(
-                subprocess.run, cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True
+                subprocess.run, cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, timeout=60, check=True
             )
             text = ""
             for line in proc.stdout.splitlines():
@@ -168,7 +183,7 @@ router_asr = APIRouter(prefix="/api/v2/asr", tags=["ASR (Speech Recognition)"])
 
 
 @router_asr.get("/status")
-async def get_asr_status():
+async def get_asr_status(user: User = Depends(require_role("ADMIN", "TEACHER", "CADET"))):
     """Returns ASR service readiness and loaded model info."""
     return {
         "status": "ready" if asr_service.is_ready() else "not_ready",
@@ -184,18 +199,23 @@ from fastapi import Form
 @router_asr.post("/transcribe")
 async def transcribe_audio_file(
     file: UploadFile = File(...),
-    session_id: Optional[str] = Form(None)
+    session_id: str = Form(...),
+    user: User = Depends(require_role("TEACHER", "CADET")),
+    db: AsyncSession = Depends(get_db),
 ):
     """
     Receives an audio file (WebM, WAV, MP3, MP4, etc.),
     converts it to 16000 Hz Mono Float32 WAV/PCM and runs GigaAM-v3 inference.
     Returns: {"text": "распознанный текст"}
     """
-    with tempfile.NamedTemporaryFile(delete=False, suffix=f"_{file.filename}") as tmp_file:
+    await require_session(db, user, session_id)
+    if not __import__("re").fullmatch(r"[A-Za-z0-9_-]{1,128}", session_id):
+        raise HTTPException(422, "Invalid recording identifier")
+    with tempfile.NamedTemporaryFile(delete=False, suffix=".audio") as tmp_file:
         tmp_path = tmp_file.name
 
     try:
-        content = await file.read()
+        content = await read_upload(file, MAX_AUDIO_BYTES)
         if not content:
             raise HTTPException(status_code=400, detail="Empty audio file provided.")
 
@@ -235,7 +255,17 @@ async def websocket_asr_stream(websocket: WebSocket, session_id: str, ticket_id:
     updates transcription incrementally without re-loading the model,
     and returns live recognized text on the fly.
     """
-    await websocket.accept()
+    authorized = await authenticate_socket(websocket, session_id)
+    if not authorized:
+        return
+    socket_token, saved_session = authorized
+    if ticket_id and ticket_id != saved_session.ticket_id:
+        await websocket.close(code=1008)
+        return
+    ticket_id = saved_session.ticket_id
+    if not __import__("re").fullmatch(r"[A-Za-z0-9_-]{1,128}", session_id):
+        await websocket.close(code=1008)
+        return
     conn_id = str(uuid.uuid4())
     logger.info(f"ASR WebSocket client connected: {conn_id} for session {session_id}, ticket {ticket_id}")
 
@@ -311,9 +341,11 @@ async def websocket_asr_stream(websocket: WebSocket, session_id: str, ticket_id:
             "audio_id": initial_phrase.get("audio_id", "brk_greeting_resp_01"),
         })
 
+    recorded_bytes = 0
     try:
         while True:
             message = await websocket.receive()
+            await validate_socket(socket_token, session_id)
             msg_type = message.get("type")
 
             # Handle disconnect gracefully
@@ -324,6 +356,10 @@ async def websocket_asr_stream(websocket: WebSocket, session_id: str, ticket_id:
             text_data = message.get("text")
 
             if raw_bytes:
+                recorded_bytes += len(raw_bytes)
+                if len(raw_bytes) > 2 * 1024 * 1024 or recorded_bytes > MAX_AUDIO_BYTES:
+                    await websocket.close(code=1009)
+                    return
                 # Append raw bytes to audio log
                 with open(audio_file_path, "ab") as af:
                     af.write(raw_bytes)
@@ -372,7 +408,7 @@ async def websocket_asr_stream(websocket: WebSocket, session_id: str, ticket_id:
                             is_hallucination = any(h in cleaned_text for h in hallucinations)
                             
                             if len(cleaned_text) >= 3 and not is_hallucination:
-                                dialogue_result = router.process_message(operator_message=committed_text)
+                                dialogue_result = await asyncio.to_thread(router.process_message, operator_message=committed_text)
                                 await websocket.send_json({
                                     "type": "dialogue_response",
                                     "operator_text": committed_text,
@@ -405,6 +441,9 @@ async def websocket_asr_stream(websocket: WebSocket, session_id: str, ticket_id:
                         })
 
             elif text_data:
+                if len(text_data) > 8192:
+                    await websocket.close(code=1009)
+                    return
                 try:
                     payload = json.loads(text_data)
                     msg_type_payload = payload.get("type")
@@ -431,7 +470,7 @@ async def websocket_asr_stream(websocket: WebSocket, session_id: str, ticket_id:
                         })
                         
                         if full_text:
-                            dialogue_result = router.process_message(operator_message=full_text)
+                            dialogue_result = await asyncio.to_thread(router.process_message, operator_message=full_text)
                             await websocket.send_json({
                                 "type": "dialogue_response",
                                 "operator_text": full_text,
@@ -449,7 +488,7 @@ async def websocket_asr_stream(websocket: WebSocket, session_id: str, ticket_id:
                             with open(text_file_path, "a", encoding="utf-8") as tf:
                                 tf.write(f"[{datetime.datetime.now().isoformat()}] [TEXT_INPUT] {input_text}\n")
                                 
-                            dialogue_result = router.process_message(operator_message=input_text)
+                            dialogue_result = await asyncio.to_thread(router.process_message, operator_message=input_text)
                             await websocket.send_json({
                                 "type": "dialogue_response",
                                 "operator_text": input_text,
@@ -460,11 +499,13 @@ async def websocket_asr_stream(websocket: WebSocket, session_id: str, ticket_id:
                 except json.JSONDecodeError:
                     pass
 
+    except HTTPException:
+        await websocket.close(code=1008)
     except WebSocketDisconnect:
         logger.info(f"ASR WebSocket client disconnected: {conn_id}")
     except Exception as e:
         logger.error(f"ASR WebSocket exception: {e}", exc_info=True)
         try:
-            await websocket.send_json({"type": "error", "message": str(e)})
+            await websocket.send_json({"type": "error", "message": "Speech processing failed"})
         except Exception:
             pass

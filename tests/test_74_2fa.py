@@ -109,6 +109,7 @@ async def test_2fa_full_lifecycle():
         # 7. Submitting wrong 2FA code at login
         bad_login_2fa = await ac.post("/api/auth/login/2fa", json={
             "user_id": user_id,
+            "challenge_token": login_data["challenge_token"],
             "code": "999999",
         })
         assert bad_login_2fa.status_code == 401
@@ -117,6 +118,7 @@ async def test_2fa_full_lifecycle():
         current_totp_code = totp.now()
         good_login_2fa = await ac.post("/api/auth/login/2fa", json={
             "user_id": user_id,
+            "challenge_token": login_data["challenge_token"],
             "code": current_totp_code,
         })
         assert good_login_2fa.status_code == 200

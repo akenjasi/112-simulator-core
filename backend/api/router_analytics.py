@@ -1,3 +1,4 @@
+from backend.core.analytics_scope import get_scoped_analytics_db
 """Router for Aggregated Analytics API.
 
 Provides endpoints for heatmaps, progress trends, and group leaderboards.
@@ -115,7 +116,7 @@ def _extract_metric_value(
 @analytics_router.get("/heatmap/", response_model=HeatmapResponse, include_in_schema=False)
 async def get_heatmap(
     group_id: Optional[str] = Query(default=None, description="Фильтр по учебной группе"),
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_scoped_analytics_db),
 ):
     """Generate 2D error heatmap by scenario category and error types."""
     stmt = (
@@ -205,7 +206,7 @@ async def get_heatmap(
 async def get_trends(
     user_id: str,
     group_id: Optional[str] = Query(default=None, description="Фильтр по учебной группе"),
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_scoped_analytics_db),
 ):
     """Retrieve progress trends for target cadet compared with group average over time."""
     # Resolve target user's group if not supplied
@@ -316,7 +317,7 @@ async def get_leaderboard(
         description="Порядок сортировки (asc / desc). Если не указан, выбирается автоматически.",
     ),
     limit: int = Query(default=10, ge=1, le=100, description="Количество курсантов в топе"),
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_scoped_analytics_db),
 ):
     """Aggregate average metric per cadet in group and return TOP-10 leaderboard."""
     stmt = (
@@ -413,7 +414,7 @@ async def get_leaderboard(
 @analytics_v1_router.get("/sessions/{session_id}", response_model=SessionAnalyticsResponse, dependencies=[Depends(require_role("TEACHER"))])
 async def get_session_analytics(
     session_id: str,
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_scoped_analytics_db),
 ):
     """Retrieve session statistics with cadets breakdown."""
     session_res = await db.execute(select(ExamSession).where(ExamSession.session_id == session_id))
@@ -422,7 +423,9 @@ async def get_session_analytics(
     tr_res = await db.execute(select(TicketResult).where(TicketResult.session_id == session_id))
     ticket_results = tr_res.scalars().all()
 
-    cadet_id = exam_session.cadet_id if exam_session else "cadet-1"
+    if not exam_session:
+        raise HTTPException(404, "Session not found")
+    cadet_id = exam_session.cadet_id or ""
     cadet_name = f"Курсант {cadet_id[:6]}"
     if exam_session and exam_session.cadet_id:
         u_res = await db.execute(select(User).where(User.user_id == exam_session.cadet_id))
@@ -438,34 +441,12 @@ async def get_session_analytics(
                 ticket_id=tr.ticket_id,
                 title=f"Билет #{tr.ticket_id or tr.result_id[:6]}",
                 status="passed" if tr.is_passed else "failed",
-                score=100.0 if tr.is_passed else max(0.0, 100.0 - tr.errors_count * 25.0),
+                score=tr.score_total,
                 is_appealed=tr.is_appealed,
                 errors_count=tr.errors_count,
                 teacher_comment=tr.teacher_comment,
             )
         )
-
-    if not records:
-        records = [
-            RecordSummary(
-                record_id=f"rec-{session_id}-1",
-                ticket_id="ticket-42",
-                title="Билет №42: ДТП с пострадавшими на Ленина",
-                status="failed",
-                score=50.0,
-                is_appealed=False,
-                errors_count=2,
-            ),
-            RecordSummary(
-                record_id=f"rec-{session_id}-2",
-                ticket_id="ticket-10",
-                title="Билет №10: Запах газа в подъезде",
-                status="passed",
-                score=100.0,
-                is_appealed=False,
-                errors_count=0,
-            ),
-        ]
 
     passed_count = sum(1 for r in records if r.status == "passed")
     success_rate = round((passed_count / len(records)) * 100.0, 1) if records else 0.0
@@ -489,7 +470,7 @@ async def get_session_analytics(
 @analytics_v1_router.get("/records/{record_id}", response_model=RecordDetailResponse, dependencies=[Depends(require_role("TEACHER"))])
 async def get_record_detail(
     record_id: str,
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_scoped_analytics_db),
 ):
     """Retrieve details of a specific cadet answer including etalon and error details."""
     tr_res = await db.execute(select(TicketResult).where(TicketResult.result_id == record_id))
@@ -507,66 +488,24 @@ async def get_record_detail(
         scenario = sc_res.scalar_one_or_none()
 
     if tr:
-        etalon = scenario.ground_truth if (scenario and scenario.ground_truth) else {
-            "street": "Ленина",
-            "house": "10",
-            "services": ["01", "02", "03"],
-        }
-        student_answer = {
-            "street": "ул. ленина",
-            "house": "дом 10",
-            "services": ["01"],
-        }
+        etalon = scenario.ground_truth if scenario else {}
+        answer_card = (await db.scalars(select(IncidentCard).where(IncidentCard.session_id == tr.session_id).order_by(IncidentCard.created_at.desc()))).first()
+        student_answer = (answer_card.filled_data or {}) if answer_card else {}
         status_str = "passed" if tr.is_passed else "failed"
         return RecordDetailResponse(
             record_id=record_id,
             ticket_id=tr.ticket_id,
             title=f"Билет #{tr.ticket_id or record_id[:6]}",
             status=status_str,
-            score=100.0 if tr.is_passed else 50.0,
+            score=tr.score_total,
             is_appealed=tr.is_appealed,
             teacher_comment=tr.teacher_comment,
             etalon=etalon,
             student_answer=student_answer,
-            error_details=tr.error_details or [],
+            error_details=tr.error_details or {},
         )
 
-    return RecordDetailResponse(
-        record_id=record_id,
-        title=f"Ответ #{record_id}",
-        status="failed",
-        score=50.0,
-        is_appealed=False,
-        teacher_comment=None,
-        etalon={
-            "caller_name": "Сергей Петрович",
-            "phone": "+7 (999) 111-22-33",
-            "address": "ул. Ленина, д. 15",
-            "incident_type": "ДТП с пострадавшими",
-            "services": ["01 (Пожарные)", "02 (Полиция)", "03 (Скорая)"],
-            "description": "Столкновение легкового авто и грузовика, заблокирован водитель",
-        },
-        student_answer={
-            "caller_name": "Сергей Петрович",
-            "phone": "+7 (999) 111-22-33",
-            "address": "ул. Лермонтова, д. 15",
-            "incident_type": "ДТП с пострадавшими",
-            "services": ["02 (Полиция)"],
-            "description": "Авария на дороге",
-        },
-        error_details=[
-            {
-                "field": "address",
-                "severity": "error",
-                "message": "Неверный адрес: указана 'ул. Лермонтова' вместо эталонной 'ул. Ленина'",
-            },
-            {
-                "field": "services",
-                "severity": "warning",
-                "message": "Не вызваны необходимые службы: '01', '03'",
-            },
-        ],
-    )
+    raise HTTPException(404, "Record not found")
 
 
 @analytics_router.patch(
@@ -582,7 +521,7 @@ async def get_record_detail(
 async def appeal_analytics_record(
     record_id: str,
     req: RecordAppealRequest,
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_scoped_analytics_db),
     current_user: Optional[User] = Depends(get_current_user),
 ):
     """Teacher appeal endpoint to adjust evaluation status and store comment."""
@@ -631,23 +570,7 @@ async def appeal_analytics_record(
         await db.refresh(tr)
         return await get_record_detail(record_id=record_id, db=db)
 
-    return RecordDetailResponse(
-        record_id=record_id,
-        title=f"Ответ #{record_id}",
-        status=req.status,
-        score=100.0 if is_passed else 0.0,
-        is_appealed=True,
-        teacher_comment=req.comment,
-        etalon={
-            "address": "ул. Ленина, д. 15",
-            "services": ["01", "02", "03"],
-        },
-        student_answer={
-            "address": "ул. Лермонтова, д. 15",
-            "services": ["02"],
-        },
-        error_details=[],
-    )
+    raise HTTPException(404, "Record not found")
 
 
 # ─── New Analytics Endpoints for Dashboards & Dummy Data (Task 75) ─────────────
@@ -676,7 +599,7 @@ async def get_daily_dynamics(
     group_id: Optional[str] = Query(default=None, description="Фильтр по учебной группе"),
     cadet_id: Optional[str] = Query(default=None, description="Фильтр по курсанту"),
     days: int = Query(default=30, ge=1, le=180, description="Глубина в днях"),
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_scoped_analytics_db),
 ):
     """Retrieve daily average scores, session volumes, and pass rate over time."""
     group_cadets: List[str] = []
@@ -760,7 +683,7 @@ async def get_daily_dynamics(
             else _extract_metric_value("final_score", eval_scores, {})
         )
         if score is None:
-            score = 100.0 if is_passed else 50.0
+            continue
 
         passed_val = is_passed if is_passed is not None else (score >= 75.0)
 
@@ -802,7 +725,7 @@ async def get_daily_dynamics(
 @analytics_v1_router.get("/groups-comparison", response_model=List[GroupComparisonItem])
 @analytics_v1_router.get("/groups-comparison/", response_model=List[GroupComparisonItem], include_in_schema=False)
 async def get_groups_comparison(
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_scoped_analytics_db),
 ):
     """Compare average scores, pass rate, and session volume across all student groups."""
     groups_res = await db.execute(select(StudentGroup).order_by(StudentGroup.group_name))
@@ -888,7 +811,7 @@ async def get_errors_heatmap(
     group_id: Optional[str] = Query(default=None, description="Фильтр по группе"),
     entity_type: str = Query(default="students", description="'students' или 'groups'"),
     category: Optional[str] = Query(default=None, description="Категория ошибки: communication, card, sla"),
-    db: AsyncSession = Depends(get_db),
+    db: AsyncSession = Depends(get_scoped_analytics_db),
 ):
     """Retrieve 2D frequency matrix of error types per student or group."""
     group_cadets: List[str] = []

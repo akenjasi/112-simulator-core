@@ -1,3 +1,5 @@
+> Обновление 19.10.2026: runtime включается через профиль `llm`; совместный запуск и адрес контейнерного backend описаны в [DOCKER.md](../DOCKER.md).
+
 # Среда локального инференса Qwen и сервис генерации отчётов ДДС (Этап А-03)
 
 Документ описывает запуск локального инференс-сервера `llama.cpp` для модели **Qwen3.5-9B-Q4_K_M.gguf** на GPU (NVIDIA RTX 3060 12 GiB) и использование сервиса генерации отчётов преподавателю ДДС.
@@ -28,7 +30,7 @@
 - **Сетевые обращения**: В сервисе инференса и клиенте генерации не настроено внешних вызовов, серверов fallback или загрузки моделей из сети. Сервер запускается с флагом `--offline`.
 - **Ограничение изоляции**: Сетевая изоляция на уровне контейнера в Compose-файле принудительно не блокируется; отсутствие внешних запросов обеспечивается конфигурацией приложения и локальным монтированием модели.
 - **Веса модели**: Файлы GGUF запрещено коммитить в git.
-- **Первичная подготовка**: получение CUDA-образа требует интернета. После загрузки образа и размещения GGUF локально модель не нуждается во внешних загрузках. Перед первым запуском: `docker compose -p imba-llm -f docker-compose.llm.yml --env-file /path/to/external/.env.llm pull`. Порядок запуска llama.cpp основан на [официальной документации](https://github.com/ggml-org/llama.cpp/blob/master/docs/docker.md).
+- **Первичная подготовка**: получение CUDA-образа требует интернета. После загрузки образа и размещения GGUF локально модель не нуждается во внешних загрузках. Перед первым запуском: `docker compose -p imba-llm -f docker-compose.llm.yml --env-file /path/to/external/.env.llm --profile llm pull`. Порядок запуска llama.cpp основан на [официальной документации](https://github.com/ggml-org/llama.cpp/blob/master/docs/docker.md).
 
 ---
 
@@ -57,21 +59,21 @@ cp .env.llm.example /path/to/external/.env.llm
 
 ```bash
 # Запуск инференс-сервера
-docker compose -p imba-llm -f docker-compose.llm.yml --env-file /path/to/external/.env.llm up -d
+docker compose -p imba-llm -f docker-compose.llm.yml --env-file /path/to/external/.env.llm --profile llm up -d
 
 # Проверка логов (CUDA-инициализация, VRAM ~5.4 GiB, выгрузка слоев)
-docker compose -p imba-llm -f docker-compose.llm.yml --env-file /path/to/external/.env.llm logs -f
+docker compose -p imba-llm -f docker-compose.llm.yml --env-file /path/to/external/.env.llm --profile llm logs -f
 
 # Проверка здоровья с хоста
 curl -f http://127.0.0.1:8081/health
 
 # Остановка контейнера
-docker compose -p imba-llm -f docker-compose.llm.yml --env-file /path/to/external/.env.llm down
+docker compose -p imba-llm -f docker-compose.llm.yml --env-file /path/to/external/.env.llm --profile llm down
 ```
 
 Сетевые адреса:
 - `http://127.0.0.1:8081/v1` — обращение к сервису с хоста.
-- `http://llm:8080/v1` — только при объединении сервисов в единую Docker-сеть (интеграция в основной compose проекта не производится).
+- `http://llm:8080/v1` — только при объединении сервисов в единую Docker-сеть (для общего запуска используйте оба Compose файла, как описано в DOCKER.md).
 
 ---
 

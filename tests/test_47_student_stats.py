@@ -192,8 +192,11 @@ async def test_demo_session_creation_defaults_to_dds(cadet_auth_client: AsyncCli
     """
     Демо-сессия курсанта по умолчанию создаётся для ДДС.
     """
-    gt = GeneratedTicket(category="ДТП", subcategory="Авария", complexity=2, plot="Demo plot", status="active")
-    db_session.add(gt)
+    from tests.test_dds_cycle_acceptance import INCOMING
+    from copy import deepcopy
+    from backend.models.domain_02 import ScenarioTicket
+    ticket = ScenarioTicket(content={"incoming_card":deepcopy(INCOMING)}, workflow_state={"status":"published"})
+    db_session.add(ticket)
     await db_session.commit()
 
     response = await cadet_auth_client.post("/api/v1/sessions/demo", json={})
@@ -312,7 +315,7 @@ async def test_student_id_and_no_avatar_url(auth_client: AsyncClient, cadet_auth
     me_data = me_res.json()
     assert "avatar_url" not in me_data
     assert "student_id" in me_data
-    assert me_data["student_id"] == "СМ1-12"
+    assert me_data["student_id"] is None  # Missing identity is not replaced with a fictional student number.
 
 
 @pytest.mark.asyncio

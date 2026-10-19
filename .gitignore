@@ -14,3 +14,14 @@ data/tts_cache/
 backend/core/qwen_tts/models/
 data/records/
 *.raw
+
+# Generated outputs and installation credentials
+frontend_react/out/
+certs/*.key
+certs/*.crt
+.env.*
+!.env.example
+!.env.llm.example
+release/
+data/uploads/
+data/reports/

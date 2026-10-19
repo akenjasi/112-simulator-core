@@ -193,7 +193,7 @@ class DDSCompletePayload(BaseModel):
 class DDSTrainingStartPayload(BaseModel):
     model_config = ConfigDict(extra="forbid")
     request_id: str = Field(..., min_length=1, max_length=128)
-    ticket_ids: List[str] = Field(..., min_length=1)
+    ticket_ids: List[str] = Field(..., min_length=1, max_length=100)
 
     @field_validator("ticket_ids")
     @classmethod

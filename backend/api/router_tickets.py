@@ -1,3 +1,4 @@
+from backend.core.limits import read_upload, MAX_IMPORT_BYTES
 """API router for Ticket generation and management."""
 
 import asyncio
@@ -18,7 +19,8 @@ from openpyxl.utils import get_column_letter
 
 from backend.core.bricks_compiler import compile_ticket
 from backend.core.dds_cycle import extract_dds_ticket_metadata, matches_dds_ticket_filters
-from backend.core.deps import require_role
+from backend.core.deps import require_role, get_current_user
+from backend.models.domain_01 import User
 from backend.core.faker import FakeDataGenerator
 from backend.core.text_normalization import expand_address_for_tts, format_phone_for_tts, expand_address
 from backend.core.ticket_generator import generate_tickets
@@ -419,11 +421,12 @@ async def get_tickets_counts(
 @tickets_router.get("/{ticket_id}/", response_model=TicketResponse, include_in_schema=False)
 async def get_ticket(
     ticket_id: str,
+    _catalog_user: User = Depends(require_role("ADMIN", "TEACHER")),
     db: AsyncSession = Depends(get_db),
 ) -> TicketResponse:
     # Try GeneratedTicket
     ticket = await db.get(GeneratedTicket, ticket_id)
-    if ticket:
+    if ticket and not ticket.is_deleted:
         seq = ticket.sequence_number if ticket.sequence_number is not None else 0
         display_id = f"{make_abbr(ticket.category)}_{make_abbr(ticket.subcategory)}_{seq}"
         return TicketResponse(
@@ -444,7 +447,7 @@ async def get_ticket(
     
     # Try ScenarioTicket
     scenario = await db.get(ScenarioTicket, ticket_id)
-    if scenario:
+    if scenario and not scenario.is_deleted:
         settings = scenario.settings or {}
         ai = scenario.ai_content or {}
         gt = scenario.ground_truth or {}
@@ -481,6 +484,7 @@ async def list_tickets(
     complexity: Optional[int] = Query(None, ge=1, le=3, description="Сложность (1-3)"),
     limit: Optional[int] = Query(100, ge=1, le=500),
     include_deleted: Optional[bool] = Query(False, description="Включая удаленные"),
+    _catalog_user: User = Depends(require_role("ADMIN", "TEACHER")),
     db: AsyncSession = Depends(get_db),
 ) -> List[TicketResponse]:
     """Получение списка сохраненных билетов с поддержкой фильтрации."""
@@ -700,7 +704,7 @@ async def upload_tickets_import(
             detail="Неподдерживаемый формат файла. Требуется файл .xlsx или .xls",
         )
 
-    file_bytes = await file.read()
+    file_bytes = await read_upload(file, MAX_IMPORT_BYTES)
     if not file_bytes:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -995,7 +999,7 @@ async def get_ticket_audio(
             gt = scenario_ticket.ground_truth or {}
             bricks = gt.get("bricks", [])
             texts = [b.get("text", "") for b in bricks if b.get("text")]
-            logger.error(f"DEBUG: bricks={bricks}, texts={texts}")
+            logger.debug("Loaded %d dialogue bricks", len(bricks))
             if not texts:
                 texts = [scenario_ticket.title or "Билет без текста"]
             
@@ -1014,13 +1018,13 @@ async def get_ticket_audio(
         raise
     except Exception as e:
         logger.error("Error generating ticket audio for ticket %s: %s", ticket_id, e, exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Ticket processing failed; check server configuration")
 
 
 @api_tickets_router.get("/tts/speak")
 @tickets_router.get("/tts/speak")
 async def tts_speak(
-    text: str = Query(..., description="Текст для озвучки"),
+    text: str = Query(..., max_length=4000, description="Текст для озвучки"),
     speaker: str = Query("aidar", description="Голос TTS (aidar, baya, kseniya, eugene)"),
 ) -> Response:
     """Генерирует WAV-аудио для произвольного текста через TTS-движок.
@@ -1038,7 +1042,7 @@ async def tts_speak(
         raise
     except Exception as e:
         logger.error("Error in tts_speak: %s", e, exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Ticket processing failed; check server configuration")
 
 
 @api_tickets_router.get("/tts/service-reply")
@@ -1068,7 +1072,7 @@ async def get_service_reply(
         return Response(content=audio_bytes, media_type="audio/wav")
     except Exception as e:
         logger.error("Error generating service reply audio: %s", e)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Ticket processing failed; check server configuration")
 
 @api_tickets_router.get("/tts/service-accepted")
 @tickets_router.get("/tts/service-accepted")
@@ -1096,7 +1100,7 @@ async def get_service_accepted(
         return Response(content=audio_bytes, media_type="audio/wav")
     except Exception as e:
         logger.error("Error generating service accepted audio: %s", e)
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail="Ticket processing failed; check server configuration")
 
 
 @api_tickets_router.patch("/{ticket_id}", response_model=TicketResponse)
@@ -1214,73 +1218,8 @@ async def refine_ticket(
     db: AsyncSession = Depends(get_db),
     _teacher=Depends(require_role("TEACHER")),
 ) -> TicketResponse:
-    """Перегенерация сюжета билета на основе комментария (заглушка)."""
-    gen_ticket = await db.get(GeneratedTicket, ticket_id)
-    scenario_ticket = await db.get(ScenarioTicket, ticket_id)
-
-    if not gen_ticket and not scenario_ticket:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Билет не найден")
-    
-    # Имитация вызова LLM
-    await asyncio.sleep(2)
-    
-    plot_addition = f"\n[ИИ-коррекция с учетом: {req.correction_comment}]"
-    
-    if gen_ticket:
-        gen_ticket.plot = (gen_ticket.plot or "") + plot_addition
-        seq = gen_ticket.sequence_number or 0
-        display_id = f"{make_abbr(gen_ticket.category)}_{make_abbr(gen_ticket.subcategory)}_{seq}"
-        res_cat = gen_ticket.category
-        res_sub = gen_ticket.subcategory
-        res_comp = gen_ticket.complexity
-        res_plot = gen_ticket.plot
-        res_facts = gen_ticket.factoids or {}
-        res_gt = gen_ticket.ground_truth or {}
-        res_serv = gen_ticket.etalon_services or []
-        res_created = gen_ticket.created_at
-
-    if scenario_ticket:
-        settings = dict(scenario_ticket.settings or {})
-        ai_content = dict(scenario_ticket.ai_content or {})
-        
-        current_plot = settings.get("plot") or ai_content.get("plot", "")
-        new_plot = current_plot + plot_addition
-        
-        settings["plot"] = new_plot
-        ai_content["plot"] = new_plot
-        
-        scenario_ticket.settings = settings
-        scenario_ticket.ai_content = ai_content
-
-        if not gen_ticket:
-            seq = settings.get("sequence_number", 0)
-            res_cat = settings.get("category", "Общее")
-            res_sub = settings.get("subcategory")
-            display_id = f"{make_abbr(res_cat)}_{make_abbr(res_sub)}_{seq}"
-            res_comp = settings.get("complexity", 1)
-            res_plot = new_plot
-            res_facts = ai_content.get("factoids", {})
-            res_gt = scenario_ticket.ground_truth or {}
-            res_serv = settings.get("etalon_services", [])
-            res_created = scenario_ticket.created_at
-
-    await db.commit()
-    
-    return TicketResponse(
-        id=ticket_id,
-        ticket_id=ticket_id,
-        display_id=display_id,
-        sequence_number=seq,
-        category=res_cat,
-        subcategory=res_sub,
-        complexity=res_comp,
-        plot=res_plot,
-        factoids=res_facts,
-        ground_truth=res_gt,
-        etalon_services=res_serv,
-        status="active",
-        created_at=res_created,
-    )
+    """This legacy endpoint has no LLM implementation; preserve the source ticket."""
+    raise HTTPException(501, "AI ticket refinement is not configured")
 
 
 @api_tickets_router.get("/addresses")

@@ -64,19 +64,21 @@ it('ignores old response when its JSON body resolves after a newer filter respon
  expect(screen.getByText('Новый результат')).toBeInTheDocument()
 })
 
-it('clears an excluded ticket and blocks submit while new results are loading',async()=>{
+it('keeps the ordered pool across catalog filters and blocks submission while loading',async()=>{
  let resolveBody: ((body:any)=>void) | undefined
  catalog=[{ticket_id:'old',title:'Первый билет'}]
  await open()
- fireEvent.change(screen.getByLabelText('Подготовленный билет ДДС'),{target:{value:'old'}})
+ fireEvent.click(screen.getByRole('checkbox',{name:/Первый билет/}))
  expect(screen.getByRole('button',{name:/Создать и запустить/})).not.toBeDisabled()
  responder=()=>({ok:true,status:200,json:()=>new Promise(resolve=>{resolveBody=resolve})}) as Response
  fireEvent.change(screen.getByLabelText('Фильтр категории ДДС'),{target:{value:'ЖКХ'}})
  await waitFor(()=>expect(resolveBody).toBeDefined())
  expect(screen.getByRole('button',{name:/Создать и запустить/})).toBeDisabled()
  await act(async()=>resolveBody!([{ticket_id:'new',title:'Второй билет'}]))
- await waitFor(()=>expect(screen.getByLabelText('Подготовленный билет ДДС')).toHaveValue(''))
- expect(screen.getByRole('button',{name:/Создать и запустить/})).toBeDisabled()
- fireEvent.change(screen.getByLabelText('Подготовленный билет ДДС'),{target:{value:'new'}})
- expect(screen.getByRole('button',{name:/Создать и запустить/})).not.toBeDisabled()
+ await waitFor(()=>expect(screen.getByRole('checkbox',{name:/Второй билет/})).toBeInTheDocument())
+ expect(screen.getByRole('button',{name:'Убрать: Первый билет'})).toBeInTheDocument()
+ fireEvent.click(screen.getByRole('checkbox',{name:/Второй билет/}))
+ expect(screen.getAllByText(/Выбрано: 2/).length).toBeGreaterThan(0)
+ fireEvent.click(screen.getByRole('button',{name:'Убрать: Первый билет'}))
+ expect(screen.getAllByText(/Выбрано: 1/).length).toBeGreaterThan(0)
 })

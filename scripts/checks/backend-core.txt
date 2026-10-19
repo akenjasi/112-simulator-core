@@ -26,3 +26,9 @@ tests/test_dds_queue.py
 tests/test_student_dds_demo_flow.py
 tests/test_integrity.py
 tests/test_integrity_review.py
+
+# Audit security, schema and current phone contract
+tests/test_audit_security.py
+tests/test_audit_infrastructure.py
+tests/test_dds_phone_training.py
+tests/test_74_2fa.py

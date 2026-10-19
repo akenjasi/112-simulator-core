@@ -1,6 +1,7 @@
 import io
 import os
 from pathlib import Path
+from datetime import datetime, timezone
 import pytest
 from httpx import AsyncClient, ASGITransport
 import openpyxl
@@ -118,6 +119,8 @@ async def test_download_excel_authenticated_end_to_end():
     Path(excel_file).write_bytes(generate_excel_from_data(sample_cadets))
 
     TASKS[task_id] = {
+        "owner_id": "u-1",
+        "created_at": datetime.now(timezone.utc).isoformat(),
         "status": "ready",
         "file_path": f"/tmp/report_{task_id}.pdf",
         "csv_path": f"/tmp/report_{task_id}.csv",
@@ -159,6 +162,8 @@ async def test_background_generate_report_creates_excel():
     """Verify that _background_generate_report creates the xlsx file asynchronously."""
     task_id = "test-bg-gen-excel"
     TASKS[task_id] = {
+        "owner_id": "u-1",
+        "created_at": datetime.now(timezone.utc).isoformat(),
         "status": "processing",
         "file_path": None,
         "csv_path": None,

@@ -3,7 +3,7 @@
 import os
 from datetime import datetime, timezone
 
-from fastapi import Depends, HTTPException, status
+from fastapi import Depends, HTTPException, Request, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from typing import Optional
 from sqlalchemy import select
@@ -19,6 +19,7 @@ bearer_scheme = HTTPBearer(auto_error=False)
 async def get_current_user(
     credentials: HTTPAuthorizationCredentials = Depends(bearer_scheme),
     db: AsyncSession = Depends(get_db),
+    request: Request = None,
 ) -> User:
     """Decode JWT, validate user exists and is active.
 
@@ -82,6 +83,9 @@ async def get_current_user(
                 headers={"WWW-Authenticate": "Bearer"},
             )
 
+    if request is not None:
+        request.state.auth_user_id = user.user_id
+        request.state.auth_user_role = user.role
     return user
 
 async def get_current_user_optional(

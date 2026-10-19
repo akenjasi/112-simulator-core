@@ -398,4 +398,6 @@ async def seed_classifier(session):
 
 
 if __name__ == "__main__":
+    from scripts.demo_seed_guard import require_new_demo_sqlite
+    require_new_demo_sqlite(os.environ.get("DATABASE_URL", ""))
     asyncio.run(seed())

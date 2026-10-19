@@ -1,9 +1,13 @@
 from datetime import datetime, timedelta, timezone
+import asyncio
+import hashlib
+import secrets
 from typing import Any, Optional, Union
 import pyotp
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from fastapi.security import HTTPAuthorizationCredentials
-from sqlalchemy import select
+from sqlalchemy import select, update, delete
+from pydantic import ValidationError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.core.auth_sessions import (
@@ -14,7 +18,7 @@ from backend.core.auth_sessions import (
 from backend.core.deps import bearer_scheme, get_current_user
 from backend.core.security import create_access_token, decode_access_token, verify_password
 from backend.database import get_db
-from backend.models.domain_01 import SecurityPolicy, User, UserActionLog
+from backend.models.domain_01 import AuthChallenge, SecurityPolicy, User, UserActionLog
 from backend.core.ldap_adapter import authenticate_ldap
 from backend.core.security import hash_password
 import os
@@ -50,9 +54,7 @@ def _as_utc(value: datetime) -> datetime:
 
 
 def _client_ip(request: Request) -> Optional[str]:
-    forwarded_for = request.headers.get("x-forwarded-for")
-    if forwarded_for:
-        return forwarded_for.split(",", 1)[0].strip()
+    # Uvicorn resolves forwarding only from configured trusted proxy addresses.
     return request.client.host if request.client else None
 
 
@@ -81,7 +83,8 @@ async def _session_timeout_minutes(db: AsyncSession) -> int:
     policy = await db.scalar(
         select(SecurityPolicy).where(SecurityPolicy.key == "SESSION_TIMEOUT_MINUTES")
     )
-    return int(policy.value) if policy and policy.value.isdigit() else 60
+    from backend.core.security import ACCESS_TOKEN_EXPIRE_MINUTES
+    return int(policy.value) if policy and policy.value.isdigit() and int(policy.value) > 0 else ACCESS_TOKEN_EXPIRE_MINUTES
 
 
 async def _issue_access_token(db: AsyncSession, request: Request, user: User) -> str:
@@ -173,6 +176,10 @@ async def login(
     If 2FA is enabled for the account, returns `{ "requires_2fa": true, "user_id": "..." }`.
     """
     body = await _extract_body(request)
+    try:
+        body = LoginRequest.model_validate(body).model_dump()
+    except ValidationError:
+        raise HTTPException(422, "Invalid login parameters") from None
     username = body.get("username")
     password = body.get("password")
     role = body.get("role")
@@ -190,7 +197,7 @@ async def login(
     ldap_success = False
     ldap_enabled = os.getenv("LDAP_ENABLED", "False").lower() in ("true", "1", "yes")
     if ldap_enabled:
-        ldap_success = authenticate_ldap(username, password)
+        ldap_success = await asyncio.to_thread(authenticate_ldap, username, password)
 
     if ldap_success:
         stmt = select(User).where(User.username == username)
@@ -200,16 +207,16 @@ async def login(
         if not user:
             # JIT Provisioning
             default_role = "CADET"
-            if normalized_role:
-                default_role = normalized_role
             user = User(
                 username=username,
-                password_hash=hash_password("ldap_provisioned_no_password"),
+                password_hash=hash_password(secrets.token_urlsafe(32)),
                 role=default_role,
                 is_active=True
             )
             db.add(user)
             await db.flush()
+        if normalized_role and normalized_role != user.role:
+            raise HTTPException(401, "Invalid credentials")
     else:
         user = await db.scalar(select(User).where(User.username == username))
 
@@ -259,8 +266,7 @@ async def login(
             detail="Invalid credentials",
             headers={"WWW-Authenticate": "Bearer"},
         )
-    user.failed_login_attempts = 0
-    user.locked_until = None
+    # Preserve failed second-factor attempts across fresh password challenges.
 
     # If 2FA is enabled globally or per-user, require TOTP verification
     stmt_2fa = select(SecurityPolicy).where(SecurityPolicy.key == 'REQUIRE_2FA_ALL')
@@ -269,12 +275,23 @@ async def login(
     require_2fa_all = policy_2fa and policy_2fa.value.lower() == 'true'
 
     if user.is_2fa_enabled or require_2fa_all:
+        if not user.is_2fa_enabled or not user.totp_secret:
+            raise HTTPException(409, "2FA enrollment is required before enforcing the policy")
+        challenge = secrets.token_urlsafe(32)
+        await db.execute(delete(AuthChallenge).where(AuthChallenge.expires_at <= now))
+        db.add(AuthChallenge(
+            challenge_hash=hashlib.sha256(challenge.encode()).hexdigest(),
+            user_id=user.user_id, created_at=now, expires_at=now + timedelta(minutes=5),
+        ))
         await db.commit()
         return TwoFactorRequiredResponse(
             requires_2fa=True,
             user_id=user.user_id,
+            challenge_token=challenge,
         )
 
+    user.failed_login_attempts = 0
+    user.locked_until = None
     user.last_login = now
     _add_auth_log(db, request=request, action="LOGIN", user=user)
     access_token = await _issue_access_token(db, request, user)
@@ -303,6 +320,24 @@ async def login_2fa(
     user_id = body.get("user_id")
     username = body.get("username")
 
+    try:
+        parameters = Login2FARequest.model_validate({**body, "code": str(code or "").strip()})
+    except ValidationError:
+        raise HTTPException(401, "Invalid or expired authentication challenge") from None
+    challenge_hash = hashlib.sha256(parameters.challenge_token.encode()).hexdigest()
+    challenge = await db.get(AuthChallenge, challenge_hash)
+    now = datetime.now(timezone.utc)
+    if not challenge or challenge.consumed_at or _as_utc(challenge.expires_at) <= now or challenge.attempts >= LOCKOUT_FAILURES:
+        raise HTTPException(401, "Invalid or expired authentication challenge")
+    # The user row serializes all challenges for this account on SQLite and PostgreSQL.
+    await db.execute(update(User).where(User.user_id == challenge.user_id).values(is_active=User.is_active))
+    await db.refresh(challenge)
+    if challenge.consumed_at or _as_utc(challenge.expires_at) <= now or challenge.attempts >= LOCKOUT_FAILURES:
+        raise HTTPException(401, "Invalid or expired authentication challenge")
+    if user_id and str(user_id) != challenge.user_id:
+        raise HTTPException(401, "Invalid authentication challenge")
+    user_id = challenge.user_id
+
     if not code:
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
@@ -329,6 +364,11 @@ async def login_2fa(
             detail="User not found or inactive",
         )
 
+    if (username and str(username) != user.username) or (user.locked_until and _as_utc(user.locked_until) > now):
+        raise HTTPException(401, "Invalid or locked authentication challenge")
+    if user.password_changed_at and _as_utc(user.password_changed_at) > _as_utc(challenge.created_at):
+        raise HTTPException(401, "Invalid or expired authentication challenge")
+
     if not user.is_2fa_enabled or not user.totp_secret:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -337,11 +377,18 @@ async def login_2fa(
 
     totp = pyotp.TOTP(user.totp_secret)
     if not totp.verify(str(code).strip(), valid_window=1):
+        challenge.attempts += 1
+        user.failed_login_attempts += 1
+        if user.failed_login_attempts >= LOCKOUT_FAILURES:
+            user.locked_until = now + timedelta(minutes=LOCKOUT_MINUTES)
+        _add_auth_log(db, request=request, action="LOGIN_FAILED", user=user, details="Invalid second factor")
+        await db.commit()
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid 2FA code",
         )
 
+    challenge.consumed_at = now
     user.failed_login_attempts = 0
     user.locked_until = None
     user.last_login = datetime.now(timezone.utc)
@@ -398,6 +445,9 @@ async def setup_2fa(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="2FA is only available for administrators and teachers",
         )
+
+    if current_user.is_2fa_enabled:
+        raise HTTPException(409, "Disable active 2FA before setting up a new secret")
 
     secret = pyotp.random_base32()
     totp = pyotp.TOTP(secret)
@@ -478,6 +528,9 @@ async def disable_2fa(
     db: AsyncSession = Depends(get_db),
 ):
     """Disable 2FA for the current user."""
+    policy = await db.scalar(select(SecurityPolicy).where(SecurityPolicy.key == "REQUIRE_2FA_ALL"))
+    if policy and policy.value.lower() == "true":
+        raise HTTPException(409, "Global policy requires 2FA; disable that policy before removing a factor")
     current_user.is_2fa_enabled = False
     current_user.totp_secret = None
     await db.commit()

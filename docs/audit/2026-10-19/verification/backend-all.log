@@ -1,0 +1,443 @@
+.............F....FFFFF.F....FF...F..........FFFF....F.................. [ 11%]
+........F.......................FF.....FF..F....FF.FF...FF...FF...F..... [ 22%]
+.........FFFFFFF....FF..........FF.FFFF......FFFF....................... [ 33%]
+...................................................FF.FF................ [ 44%]
+.........................F.............................................. [ 55%]
+........................................................................ [ 66%]
+........................................................................ [ 77%]
+........................................................................ [ 88%]
+....................................................................F... [ 99%]
+....F                                                                    [100%]
+=================================== FAILURES ===================================
+_______________________________ test_users_crud ________________________________
+tests/11_test_api_users.py:24: in test_users_crud
+    assert res.status_code == 200
+E   assert 422 == 200
+E    +  where 422 = <Response [422 Unprocessable Entity]>.status_code
+______________________________ test_start_session ______________________________
+tests/15_test_api_sessions.py:49: in test_start_session
+    assert res.status_code == 200
+E   assert 403 == 200
+E    +  where 403 = <Response [403 Forbidden]>.status_code
+____________________________ test_get_session_state ____________________________
+tests/16_test_api_session_state.py:51: in test_get_session_state
+    assert res.status_code == 200
+E   assert 403 == 200
+E    +  where 403 = <Response [403 Forbidden]>.status_code
+_____________________________ test_session_message _____________________________
+tests/17_test_api_session_message.py:52: in test_session_message
+    assert res.status_code == 200
+E   assert 403 == 200
+E    +  where 403 = <Response [403 Forbidden]>.status_code
+___________________________ test_session_submit_card ___________________________
+tests/18_test_api_session_submit_card.py:54: in test_session_submit_card
+    assert res.status_code == 200
+E   assert 403 == 200
+E    +  where 403 = <Response [403 Forbidden]>.status_code
+______________________ test_scenario_generate_and_compile ______________________
+tests/19_test_api_scenarios_generate.py:30: in test_scenario_generate_and_compile
+    assert res.status_code == 200
+E   assert 403 == 200
+E    +  where 403 = <Response [403 Forbidden]>.status_code
+___________________________ test_session_message_ai ____________________________
+tests/21_test_api_session_message_ai.py:65: in test_session_message_ai
+    assert res.status_code == 200
+E   assert 403 == 200
+E    +  where 403 = <Response [403 Forbidden]>.status_code
+___________________ test_rbac_teacher_creates_cadet_success ____________________
+tests/24_test_api_rbac.py:65: in test_rbac_teacher_creates_cadet_success
+    assert response.status_code == 200
+E   assert 422 == 200
+E    +  where 422 = <Response [422 Unprocessable Entity]>.status_code
+__________________ test_rbac_teacher_creates_admin_forbidden ___________________
+tests/24_test_api_rbac.py:80: in test_rbac_teacher_creates_admin_forbidden
+    assert response.status_code == 403
+E   assert 422 == 403
+E    +  where 422 = <Response [422 Unprocessable Entity]>.status_code
+_________________________ test_rbac_delete_by_teacher __________________________
+tests/24_test_api_rbac.py:180: in test_rbac_delete_by_teacher
+    assert res_cadet.status_code == 200
+E   assert 403 == 200
+E    +  where 403 = <Response [403 Forbidden]>.status_code
+________________________ test_lesson_state_transitions _________________________
+tests/api/test_lessons_flow.py:60: in test_lesson_state_transitions
+    assert res_create.status_code == 201, f"Failed to create lesson: {res_create.text}"
+E   AssertionError: Failed to create lesson: {"detail":"Создание уроков для оператора 112 отключено администратором"}
+E   assert 403 == 201
+E    +  where 403 = <Response [403 Forbidden]>.status_code
+__________________ test_create_lesson_success_default_waiting __________________
+tests/api/test_lessons_setup.py:52: in test_create_lesson_success_default_waiting
+    assert res.status_code == 201, res.text
+E   AssertionError: {"detail":"Создание уроков для оператора 112 отключено администратором"}
+E   assert 403 == 201
+E    +  where 403 = <Response [403 Forbidden]>.status_code
+______________________ test_create_lesson_dispatcher_role ______________________
+tests/api/test_lessons_setup.py:91: in test_create_lesson_dispatcher_role
+    assert res.status_code == 201, res.text
+E   AssertionError: {"detail":"Создание занятий ДДС разрешено только преподавателю этой группы"}
+E   assert 403 == 201
+E    +  where 403 = <Response [403 Forbidden]>.status_code
+_________________ test_create_lesson_empty_categories_allowed __________________
+tests/api/test_lessons_setup.py:118: in test_create_lesson_empty_categories_allowed
+    assert res.status_code == 201, res.text
+E   AssertionError: {"detail":"Создание уроков для оператора 112 отключено администратором"}
+E   assert 403 == 201
+E    +  where 403 = <Response [403 Forbidden]>.status_code
+__________________________ test_get_lesson_and_stats ___________________________
+tests/api/test_lessons_setup.py:192: in test_get_lesson_and_stats
+    assert res.status_code == 201
+E   assert 403 == 201
+E    +  where 403 = <Response [403 Forbidden]>.status_code
+____________________ test_appeal_endpoint_and_audit_logging ____________________
+tests/test_27_evaluator.py:173: in test_appeal_endpoint_and_audit_logging
+    assert response.status_code == 200
+E   assert 404 == 200
+E    +  where 404 = <Response [404 Not Found]>.status_code
+______________________ test_reset_user_password_endpoint _______________________
+tests/test_29_refactor.py:113: in test_reset_user_password_endpoint
+    assert len(new_pwd) == 5
+E   AssertionError: assert 12 == 5
+E    +  where 12 = len('LorER9VbPKfg')
+_____________________ test_reset_group_passwords_endpoint ______________________
+tests/test_29_refactor.py:163: in test_reset_group_passwords_endpoint
+    assert len(item["new_password"]) == 5
+E   AssertionError: assert 12 == 5
+E    +  where 12 = len('dVXyIS8hhcOO')
+______________________ test_api_tickets_generate_and_get _______________________
+tests/test_30_tickets.py:129: in test_api_tickets_generate_and_get
+    assert res_post.status_code == 202
+E   assert 403 == 202
+E    +  where 403 = <Response [403 Forbidden]>.status_code
+______________ test_api_tickets_unauthenticated_and_v1_endpoints _______________
+tests/test_30_tickets.py:174: in test_api_tickets_unauthenticated_and_v1_endpoints
+    assert res_v1_gen.status_code == 202
+E   assert 401 == 202
+E    +  where 401 = <Response [401 Unauthorized]>.status_code
+_______________________ test_api_tickets_audio_endpoint ________________________
+tests/test_30_tickets.py:248: in test_api_tickets_audio_endpoint
+    assert "номер 7 9 9 9 8 8 8 7 7 6 6" in captured_texts
+E   AssertionError: assert 'номер 7 9 9 9 8 8 8 7 7 6 6' in ['Алло, слушайте... Горит склад на улице Ленина', 'Петров Петр', 'номер плюс семь, девятьсот девяносто девять, восемьсот восемьдесят восемь, семьдесят семь, шестьдесят шесть', 'улица Ленина, дом пятнадцать']
+_______________________ test_tts_phone_number_formatting _______________________
+tests/test_31_ticket_polish.py:45: in test_tts_phone_number_formatting
+    assert clean == "7 9 4 4 3 7 5 9 2 5 5"
+E   AssertionError: assert 'плюс семь, д...ятьдесят пять' == '7 9 4 4 3 7 5 9 2 5 5'
+E     
+E     - 7 9 4 4 3 7 5 9 2 5 5
+E     + плюс семь, девятьсот сорок четыре, триста семьдесят пять, девяносто два, пятьдесят пять
+_________________________ test_ticket_delete_endpoint __________________________
+tests/test_31_ticket_polish.py:79: in test_ticket_delete_endpoint
+    assert res.status_code == 200
+E   assert 403 == 200
+E    +  where 403 = <Response [403 Forbidden]>.status_code
+____________________________ test_address_expansion ____________________________
+tests/test_32_ticket_fixes.py:46: in test_address_expansion
+    assert expand_address_for_tts("ул. Ленина, д. 5") == "улица Ленина, дом 5"
+E   AssertionError: assert 'улица Ленина, дом пять' == 'улица Ленина, дом 5'
+E     
+E     - улица Ленина, дом 5
+E     ?                   ^
+E     + улица Ленина, дом пять
+E     ?                   ^^^^
+____________________________ test_tts_phone_spacing ____________________________
+tests/test_32_ticket_fixes.py:65: in test_tts_phone_spacing
+    assert format_phone_for_tts("+79443759255") == "7 9 4 4 3 7 5 9 2 5 5"
+E   AssertionError: assert 'плюс семь, д...ятьдесят пять' == '7 9 4 4 3 7 5 9 2 5 5'
+E     
+E     - 7 9 4 4 3 7 5 9 2 5 5
+E     + плюс семь, девятьсот сорок четыре, триста семьдесят пять, девяносто два, пятьдесят пять
+__________________________ test_tts_only_digits_crash __________________________
+tests/test_33_tts_crash.py:15: in test_tts_only_digits_crash
+    audio = tts_engine_v2.synthesize("номер 7 9 1 7 4 5 4 1 9 9 7")
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+backend/core/tts_v2.py:142: in synthesize
+    subprocess.run(cmd_tts, input=text_clean, text=True, check=True, timeout=120, env=env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+/usr/lib64/python3.11/subprocess.py:571: in run
+    raise CalledProcessError(retcode, process.args,
+E   subprocess.CalledProcessError: Command '['/home/orborus/Desktop/hakaton/112-simulator-core/backend/core/qwen_tts/qwen-tts', '--model', '/home/orborus/Desktop/hakaton/112-simulator-core/backend/core/qwen_tts/models/qwen-talker-0.6b-base-Q4_K_M.gguf', '--codec', '/home/orborus/Desktop/hakaton/112-simulator-core/backend/core/qwen_tts/models/qwen-tokenizer-12hz-Q4_K_M.gguf', '--lang', 'Russian', '--ref-wav', '/home/orborus/Desktop/hakaton/112-simulator-core/backend/core/qwen_tts/voices/references/male_1_dmitri.wav', '-o', '/tmp/tmp6q9t2tw6/raw.wav']' returned non-zero exit status 1.
+
+During handling of the above exception, another exception occurred:
+tests/test_33_tts_crash.py:18: in test_tts_only_digits_crash
+    pytest.fail(f"Слово 'номер' должно было предотвратить краш: {e}")
+E   Failed: Слово 'номер' должно было предотвратить краш: Command '['/home/orborus/Desktop/hakaton/112-simulator-core/backend/core/qwen_tts/qwen-tts', '--model', '/home/orborus/Desktop/hakaton/112-simulator-core/backend/core/qwen_tts/models/qwen-talker-0.6b-base-Q4_K_M.gguf', '--codec', '/home/orborus/Desktop/hakaton/112-simulator-core/backend/core/qwen_tts/models/qwen-tokenizer-12hz-Q4_K_M.gguf', '--lang', 'Russian', '--ref-wav', '/home/orborus/Desktop/hakaton/112-simulator-core/backend/core/qwen_tts/voices/references/male_1_dmitri.wav', '-o', '/tmp/tmp6q9t2tw6/raw.wav']' returned non-zero exit status 1.
+__________________ test_ticket_audio_phone_prefix_in_endpoint __________________
+tests/test_33_tts_crash.py:54: in test_ticket_audio_phone_prefix_in_endpoint
+    assert any(t.startswith("номер 7 9 1 7 4 5 4 1 9 9 7") for t in texts)
+E   assert False
+E    +  where False = any(<generator object test_ticket_audio_phone_prefix_in_endpoint.<locals>.<genexpr> at 0x7f1230fd8040>)
+__________________________ test_patch_ticket_endpoint __________________________
+tests/test_35_ticket_ui.py:115: in test_patch_ticket_endpoint
+    assert res.status_code == 200, res.text
+E   AssertionError: {"detail":"Access denied. Required roles: ['TEACHER']"}
+E   assert 403 == 200
+E    +  where 403 = <Response [403 Forbidden]>.status_code
+____________________ test_create_dds_lesson_waiting_status _____________________
+tests/test_41_lessons_setup.py:49: in test_create_dds_lesson_waiting_status
+    assert res.status_code == 201, res.text
+E   AssertionError: {"detail":"Создание занятий ДДС разрешено только преподавателю этой группы"}
+E   assert 403 == 201
+E    +  where 403 = <Response [403 Forbidden]>.status_code
+________________________ test_lesson_state_transitions _________________________
+tests/test_42_lessons_flow.py:60: in test_lesson_state_transitions
+    assert res_create.status_code == 201, f"Failed to create lesson: {res_create.text}"
+E   AssertionError: Failed to create lesson: {"detail":"Создание занятий ДДС разрешено только преподавателю этой группы"}
+E   assert 403 == 201
+E    +  where 403 = <Response [403 Forbidden]>.status_code
+_________________________ test_evaluate_perfect_score __________________________
+tests/test_50_operator_evaluation.py:61: in test_evaluate_perfect_score
+    assert res.status_code == 200
+E   assert 403 == 200
+E    +  where 403 = <Response [403 Forbidden]>.status_code
+__________________________ test_evaluate_time_penalty __________________________
+tests/test_50_operator_evaluation.py:84: in test_evaluate_time_penalty
+    assert res.status_code == 200
+E   assert 403 == 200
+E    +  where 403 = <Response [403 Forbidden]>.status_code
+________________________ test_evaluate_missing_service _________________________
+tests/test_50_operator_evaluation.py:105: in test_evaluate_missing_service
+    assert res.status_code == 200
+E   assert 403 == 200
+E    +  where 403 = <Response [403 Forbidden]>.status_code
+_______________________ test_start_call_and_status_flow ________________________
+tests/test_62_telephony.py:22: in test_start_call_and_status_flow
+    assert resp.status_code == 200, resp.text
+E   AssertionError: {"detail":"Not authenticated"}
+E   assert 401 == 200
+E    +  where 401 = <Response [401 Unauthorized]>.status_code
+___________________________ test_play_audio_endpoint ___________________________
+tests/test_62_telephony.py:47: in test_play_audio_endpoint
+    assert resp.status_code == 200
+E   assert 401 == 200
+E    +  where 401 = <Response [401 Unauthorized]>.status_code
+_____________________________ test_hangup_endpoint _____________________________
+tests/test_62_telephony.py:62: in test_hangup_endpoint
+    assert resp.status_code == 200
+E   assert 401 == 200
+E    +  where 401 = <Response [401 Unauthorized]>.status_code
+___________________________ test_telephony_websocket ___________________________
+tests/test_62_telephony.py:84: in test_telephony_websocket
+    init_data = ws.receive_json()
+                ^^^^^^^^^^^^^^^^^
+/tmp/112-audit-20261019/verify311/lib64/python3.11/site-packages/starlette/testclient.py:190: in receive_json
+    self._raise_on_close(message)
+/tmp/112-audit-20261019/verify311/lib64/python3.11/site-packages/starlette/testclient.py:143: in _raise_on_close
+    raise WebSocketDisconnect(code=message.get("code", 1000), reason=message.get("reason", ""))
+E   starlette.websockets.WebSocketDisconnect
+_____________________ test_teacher_grade_change_is_audited _____________________
+tests/test_72_audit_grades.py:71: in test_teacher_grade_change_is_audited
+    assert response.status_code == 200
+E   assert 404 == 200
+E    +  where 404 = <Response [404 Not Found]>.status_code
+________________ test_teacher_grade_change_v1_router_is_audited ________________
+tests/test_72_audit_grades.py:154: in test_teacher_grade_change_v1_router_is_audited
+    assert response.status_code == 200
+E   assert 404 == 200
+E    +  where 404 = <Response [404 Not Found]>.status_code
+_____________________ test_api_group_advice_and_model_info _____________________
+tests/test_76_ai_analyzer.py:320: in test_api_group_advice_and_model_info
+    assert resp_trigger.status_code == 200
+E   assert 403 == 200
+E    +  where 403 = <Response [403 Forbidden]>.status_code
+__________________________ test_batch_import_tickets ___________________________
+tests/test_77_import_tickets.py:63: in test_batch_import_tickets
+    assert res_upload.status_code == 200
+E   assert 403 == 200
+E    +  where 403 = <Response [403 Forbidden]>.status_code
+____________________ test_upload_tickets_validation_errors _____________________
+tests/test_77_import_tickets.py:130: in test_upload_tickets_validation_errors
+    assert res.status_code == 200
+E   assert 403 == 200
+E    +  where 403 = <Response [403 Forbidden]>.status_code
+__________________ test_upload_invalid_file_format_and_empty ___________________
+tests/test_77_import_tickets.py:146: in test_upload_invalid_file_format_and_empty
+    assert res.status_code == 400
+E   assert 403 == 400
+E    +  where 403 = <Response [403 Forbidden]>.status_code
+__________________________ test_spo112_gateway_export __________________________
+tests/test_79_integration.py:22: in test_spo112_gateway_export
+    assert response.status_code == 200
+E   assert 401 == 200
+E    +  where 401 = <Response [401 Unauthorized]>.status_code
+__________________________ test_asterisk_ari_adapter ___________________________
+tests/test_79_integration.py:45: in test_asterisk_ari_adapter
+    assert response.status_code == 200
+E   assert 401 == 200
+E    +  where 401 = <Response [401 Unauthorized]>.status_code
+__________________________ test_scenario_soft_delete ___________________________
+tests/test_84_scenarios_soft_delete.py:29: in test_scenario_soft_delete
+    assert response.status_code == 200
+E   assert 401 == 200
+E    +  where 401 = <Response [401 Unauthorized]>.status_code
+_________________________ test_ticket_refine_endpoint __________________________
+tests/test_85_refine_scenario.py:38: in test_ticket_refine_endpoint
+    assert response.status_code == 200
+E   assert 401 == 200
+E    +  where 401 = <Response [401 Unauthorized]>.status_code
+____________________________ test_refine_ai_advice _____________________________
+tests/test_86_refine_ai_advice.py:44: in test_refine_ai_advice
+    assert response.status_code == 200
+E   assert 403 == 200
+E    +  where 403 = <Response [403 Forbidden]>.status_code
+______________________ test_telephony_real_event_handling ______________________
+tests/test_87_telephony_events.py:25: in test_telephony_real_event_handling
+    response = await start_call(req, db=db_mock)
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+backend/api/router_telephony.py:197: in start_call
+    raise HTTPException(422, "A saved session is required")
+E   fastapi.exceptions.HTTPException: 422: A saved session is required
+_____________________________ test_classify_intent _____________________________
+backend/core/intent_classifier.py:23: in get_classifier
+    import torch
+E   ModuleNotFoundError: No module named 'torch'
+
+The above exception was the direct cause of the following exception:
+backend/core/intent_classifier.py:53: in classify_intent
+    result = await asyncio.to_thread(get_classifier().predict, operator_text)
+                                     ^^^^^^^^^^^^^^^^
+backend/core/intent_classifier.py:31: in get_classifier
+    raise RuntimeError("Speech classifier requires requirements-ml.txt and local classifier files") from exc
+E   RuntimeError: Speech classifier requires requirements-ml.txt and local classifier files
+
+The above exception was the direct cause of the following exception:
+tests/test_ai_clients.py:26: in test_classify_intent
+    result = await classify_intent("какой адрес?")
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+backend/core/intent_classifier.py:64: in classify_intent
+    raise RuntimeError("Intent classifier is unavailable") from e
+E   RuntimeError: Intent classifier is unavailable
+------------------------------ Captured log call -------------------------------
+ERROR    backend.core.intent_classifier:intent_classifier.py:63 Error during classification: Speech classifier requires requirements-ml.txt and local classifier files
+___________________________ test_analytics_endpoints ___________________________
+tests/test_analytics_api.py:198: in test_analytics_endpoints
+    assert res_hm.status_code == 200
+E   assert 403 == 200
+E    +  where 403 = <Response [403 Forbidden]>.status_code
+__________________________ test_api_generate_factoids __________________________
+tests/test_api.py:40: in test_api_generate_factoids
+    assert response.status_code == 200, "Эндпоинт должен вернуть 200 OK"
+E   AssertionError: Эндпоинт должен вернуть 200 OK
+E   assert 403 == 200
+E    +  where 403 = <Response [403 Forbidden]>.status_code
+___________________________ test_api_compile_ticket ____________________________
+tests/test_api.py:55: in test_api_compile_ticket
+    assert response.status_code == 200, "Эндпоинт должен вернуть 200 OK"
+E   AssertionError: Эндпоинт должен вернуть 200 OK
+E   assert 403 == 200
+E    +  where 403 = <Response [403 Forbidden]>.status_code
+__________________________ test_classify_intent_mock ___________________________
+backend/core/intent_classifier.py:23: in get_classifier
+    import torch
+E   ModuleNotFoundError: No module named 'torch'
+
+The above exception was the direct cause of the following exception:
+backend/core/intent_classifier.py:53: in classify_intent
+    result = await asyncio.to_thread(get_classifier().predict, operator_text)
+                                     ^^^^^^^^^^^^^^^^
+backend/core/intent_classifier.py:31: in get_classifier
+    raise RuntimeError("Speech classifier requires requirements-ml.txt and local classifier files") from exc
+E   RuntimeError: Speech classifier requires requirements-ml.txt and local classifier files
+
+The above exception was the direct cause of the following exception:
+tests/test_classifier.py:7: in test_classify_intent_mock
+    assert await classify_intent("какой у вас адрес?") == Intent.address
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+backend/core/intent_classifier.py:64: in classify_intent
+    raise RuntimeError("Intent classifier is unavailable") from e
+E   RuntimeError: Intent classifier is unavailable
+------------------------------ Captured log call -------------------------------
+ERROR    backend.core.intent_classifier:intent_classifier.py:63 Error during classification: Speech classifier requires requirements-ml.txt and local classifier files
+____________________________ test_api_process_turn _____________________________
+tests/test_runtime_api.py:39: in test_api_process_turn
+    assert response.status_code == 200
+E   assert 404 == 200
+E    +  where 404 = <Response [404 Not Found]>.status_code
+___________________________ test_generate_audio_mock ___________________________
+tests/test_tts.py:7: in test_generate_audio_mock
+    audio_bytes = await generate_audio(text)
+                  ^^^^^^^^^^^^^^^^^^^^^^^^^^
+backend/core/tts_engine.py:11: in generate_audio
+    raise RuntimeError("Legacy TTS service is not configured")
+E   RuntimeError: Legacy TTS service is not configured
+=============================== warnings summary ===============================
+../../../../../tmp/112-audit-20261019/verify311/lib64/python3.11/site-packages/ldap3/utils/asn1.py:50
+  /tmp/112-audit-20261019/verify311/lib64/python3.11/site-packages/ldap3/utils/asn1.py:50: DeprecationWarning: tagMap is deprecated. Please use TAG_MAP instead.
+    from pyasn1.codec.ber.encoder import tagMap, typeMap, AbstractItemEncoder
+
+../../../../../tmp/112-audit-20261019/verify311/lib64/python3.11/site-packages/ldap3/utils/asn1.py:50
+  /tmp/112-audit-20261019/verify311/lib64/python3.11/site-packages/ldap3/utils/asn1.py:50: DeprecationWarning: typeMap is deprecated. Please use TYPE_MAP instead.
+    from pyasn1.codec.ber.encoder import tagMap, typeMap, AbstractItemEncoder
+
+../../../../../tmp/112-audit-20261019/verify311/lib64/python3.11/site-packages/fastapi/testclient.py:1
+  /tmp/112-audit-20261019/verify311/lib64/python3.11/site-packages/fastapi/testclient.py:1: StarletteDeprecationWarning: Using `httpx` with `starlette.testclient` is deprecated; install `httpx2` instead.
+    from starlette.testclient import TestClient as TestClient  # noqa
+
+tests/test_admin_journal.py::test_validation_errors_return_422
+  /home/orborus/Desktop/hakaton/112-simulator-core/backend/api/router_audit.py:75: StarletteDeprecationWarning: 'HTTP_422_UNPROCESSABLE_ENTITY' is deprecated. Use 'HTTP_422_UNPROCESSABLE_CONTENT' instead.
+    from_dt = parse_iso_datetime(from_at)
+
+tests/test_admin_journal.py::test_validation_errors_return_422
+  /tmp/112-audit-20261019/verify311/lib64/python3.11/site-packages/fastapi/routing.py:372: StarletteDeprecationWarning: 'HTTP_422_UNPROCESSABLE_ENTITY' is deprecated. Use 'HTTP_422_UNPROCESSABLE_CONTENT' instead.
+    return await dependant.call(**values)
+
+tests/test_admin_journal.py::test_validation_errors_return_422
+  /home/orborus/Desktop/hakaton/112-simulator-core/backend/main.py:273: StarletteDeprecationWarning: 'HTTP_422_UNPROCESSABLE_ENTITY' is deprecated. Use 'HTTP_422_UNPROCESSABLE_CONTENT' instead.
+    logs = await get_audit_logs(
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========================== short test summary info ============================
+FAILED tests/11_test_api_users.py::test_users_crud - assert 422 == 200
+FAILED tests/15_test_api_sessions.py::test_start_session - assert 403 == 200
+FAILED tests/16_test_api_session_state.py::test_get_session_state - assert 40...
+FAILED tests/17_test_api_session_message.py::test_session_message - assert 40...
+FAILED tests/18_test_api_session_submit_card.py::test_session_submit_card - a...
+FAILED tests/19_test_api_scenarios_generate.py::test_scenario_generate_and_compile
+FAILED tests/21_test_api_session_message_ai.py::test_session_message_ai - ass...
+FAILED tests/24_test_api_rbac.py::test_rbac_teacher_creates_cadet_success - a...
+FAILED tests/24_test_api_rbac.py::test_rbac_teacher_creates_admin_forbidden
+FAILED tests/24_test_api_rbac.py::test_rbac_delete_by_teacher - assert 403 ==...
+FAILED tests/api/test_lessons_flow.py::test_lesson_state_transitions - Assert...
+FAILED tests/api/test_lessons_setup.py::test_create_lesson_success_default_waiting
+FAILED tests/api/test_lessons_setup.py::test_create_lesson_dispatcher_role - ...
+FAILED tests/api/test_lessons_setup.py::test_create_lesson_empty_categories_allowed
+FAILED tests/api/test_lessons_setup.py::test_get_lesson_and_stats - assert 40...
+FAILED tests/test_27_evaluator.py::test_appeal_endpoint_and_audit_logging - a...
+FAILED tests/test_29_refactor.py::test_reset_user_password_endpoint - Asserti...
+FAILED tests/test_29_refactor.py::test_reset_group_passwords_endpoint - Asser...
+FAILED tests/test_30_tickets.py::test_api_tickets_generate_and_get - assert 4...
+FAILED tests/test_30_tickets.py::test_api_tickets_unauthenticated_and_v1_endpoints
+FAILED tests/test_30_tickets.py::test_api_tickets_audio_endpoint - AssertionE...
+FAILED tests/test_31_ticket_polish.py::test_tts_phone_number_formatting - Ass...
+FAILED tests/test_31_ticket_polish.py::test_ticket_delete_endpoint - assert 4...
+FAILED tests/test_32_ticket_fixes.py::test_address_expansion - AssertionError...
+FAILED tests/test_32_ticket_fixes.py::test_tts_phone_spacing - AssertionError...
+FAILED tests/test_33_tts_crash.py::test_tts_only_digits_crash - Failed: Слово...
+FAILED tests/test_33_tts_crash.py::test_ticket_audio_phone_prefix_in_endpoint
+FAILED tests/test_35_ticket_ui.py::test_patch_ticket_endpoint - AssertionErro...
+FAILED tests/test_41_lessons_setup.py::test_create_dds_lesson_waiting_status
+FAILED tests/test_42_lessons_flow.py::test_lesson_state_transitions - Asserti...
+FAILED tests/test_50_operator_evaluation.py::test_evaluate_perfect_score - as...
+FAILED tests/test_50_operator_evaluation.py::test_evaluate_time_penalty - ass...
+FAILED tests/test_50_operator_evaluation.py::test_evaluate_missing_service - ...
+FAILED tests/test_62_telephony.py::test_start_call_and_status_flow - Assertio...
+FAILED tests/test_62_telephony.py::test_play_audio_endpoint - assert 401 == 200
+FAILED tests/test_62_telephony.py::test_hangup_endpoint - assert 401 == 200
+FAILED tests/test_62_telephony.py::test_telephony_websocket - starlette.webso...
+FAILED tests/test_72_audit_grades.py::test_teacher_grade_change_is_audited - ...
+FAILED tests/test_72_audit_grades.py::test_teacher_grade_change_v1_router_is_audited
+FAILED tests/test_76_ai_analyzer.py::test_api_group_advice_and_model_info - a...
+FAILED tests/test_77_import_tickets.py::test_batch_import_tickets - assert 40...
+FAILED tests/test_77_import_tickets.py::test_upload_tickets_validation_errors
+FAILED tests/test_77_import_tickets.py::test_upload_invalid_file_format_and_empty
+FAILED tests/test_79_integration.py::test_spo112_gateway_export - assert 401 ...
+FAILED tests/test_79_integration.py::test_asterisk_ari_adapter - assert 401 =...
+FAILED tests/test_84_scenarios_soft_delete.py::test_scenario_soft_delete - as...
+FAILED tests/test_85_refine_scenario.py::test_ticket_refine_endpoint - assert...
+FAILED tests/test_86_refine_ai_advice.py::test_refine_ai_advice - assert 403 ...
+FAILED tests/test_87_telephony_events.py::test_telephony_real_event_handling
+FAILED tests/test_ai_clients.py::test_classify_intent - RuntimeError: Intent ...
+FAILED tests/test_analytics_api.py::test_analytics_endpoints - assert 403 == 200
+FAILED tests/test_api.py::test_api_generate_factoids - AssertionError: Эндпои...
+FAILED tests/test_api.py::test_api_compile_ticket - AssertionError: Эндпоинт ...
+FAILED tests/test_classifier.py::test_classify_intent_mock - RuntimeError: In...
+FAILED tests/test_runtime_api.py::test_api_process_turn - assert 404 == 200
+FAILED tests/test_tts.py::test_generate_audio_mock - RuntimeError: Legacy TTS...
+56 failed, 597 passed, 6 warnings in 105.81s (0:01:45)

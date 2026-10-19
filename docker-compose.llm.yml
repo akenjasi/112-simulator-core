@@ -1,47 +1,41 @@
-# Standalone Docker Compose for Local LLM Inference (Task A-03)
-# Dedicated to Qwen3.5-9B-Q4_K_M.gguf CUDA inference via llama.cpp server.
-#
-# Hardware & Runtime configuration:
-# - NVIDIA Container Device Interface (CDI) is used via devices: ["nvidia.com/gpu=all"].
-#   Does not require global Docker daemon reconfiguration or custom default runtime.
-# - SELinux-enforcing host requires shared relabel 'selinux: z' on read-only model mount.
-# - create_host_path: false ensures missing file on host never creates an empty directory.
-#
-# Usage:
-#   docker compose -p imba-llm -f docker-compose.llm.yml --env-file /path/to/external/.env.llm up -d
-#   docker compose -p imba-llm -f docker-compose.llm.yml --env-file /path/to/external/.env.llm down
-
 services:
   llm:
     image: ghcr.io/ggml-org/llama.cpp@sha256:53bec65a6120e8ab8cb76af725c3b05a7f098b5308c96e5d9f8dad98f1f1f639
     restart: unless-stopped
     ports:
-      - "127.0.0.1:8081:8080"
+    - 127.0.0.1:8081:8080
     volumes:
-      - type: bind
-        source: ${DDS_LLM_MODEL_PATH}
-        target: /models/report.gguf
-        read_only: true
-        bind:
-          create_host_path: false
-          selinux: z
+    - type: bind
+      source: ${DDS_LLM_MODEL_PATH}
+      target: /models/report.gguf
+      read_only: true
+      bind:
+        create_host_path: false
+        selinux: z
     devices:
-      - "nvidia.com/gpu=all"
+    - nvidia.com/gpu=all
     command:
-      - "--model"
-      - "/models/report.gguf"
-      - "--alias"
-      - "dds-qwen"
-      - "--offline"
-      - "--host"
-      - "0.0.0.0"
-      - "--port"
-      - "8080"
-      - "--n-gpu-layers"
-      - "99"
-      - "--ctx-size"
-      - "8192"
-      - "--parallel"
-      - "1"
-      - "--n-predict"
-      - "1200"
+    - --model
+    - /models/report.gguf
+    - --alias
+    - dds-qwen
+    - --offline
+    - --host
+    - 0.0.0.0
+    - --port
+    - '8080'
+    - --n-gpu-layers
+    - '99'
+    - --ctx-size
+    - '8192'
+    - --parallel
+    - '1'
+    - --n-predict
+    - '1200'
+    profiles:
+    - llm
+    networks:
+    - simulator_net
+networks:
+  simulator_net:
+    driver: bridge

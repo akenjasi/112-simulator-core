@@ -58,7 +58,14 @@ async def test_lobby_demo_card_actions_finish_and_reload(path, cadet_auth_client
     })
     assert dispatched.status_code == 200, dispatched.text
     assert len(dispatched.json()["actions"]) == 2
-    finished = await cadet_auth_client.post(state_url + "/finish", json={})
+    for service in card.services:
+        if service.name != card.services[0].name:
+            refused = await cadet_auth_client.post(state_url + "/actions", json={"request_id":str(uuid.uuid4()), "kind":"status", "service_name":service.name, "status":"Не принята", "comment":"Учебный отказ: другой участок"})
+            assert refused.status_code == 200, refused.text
+    for stage in ["Начало реагирования", "Прибытие", "Проведение работ", "Работы завершены"]:
+        progress = await cadet_auth_client.post(state_url + "/actions", json={"request_id":str(uuid.uuid4()), "kind":"status", "service_name":card.services[0].name, "status":stage, "comment":"Учебный этап выполнен"})
+        assert progress.status_code == 200, progress.text
+    finished = await cadet_auth_client.post(state_url + f"/cards/{initial['card_id']}/complete", json={"request_id":str(uuid.uuid4())})
     assert finished.status_code == 200, finished.text
     assert finished.json()["session_status"] == "COMPLETED"
     assert finished.json()["submitted_at"]

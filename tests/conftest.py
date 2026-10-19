@@ -96,6 +96,16 @@ def _init_test_env():
 
 _init_test_env()
 
+import httpx
+
+# Compatibility is confined to tests retained from httpx < 0.28.
+_orig_async_client_init = httpx.AsyncClient.__init__
+def _test_async_client_init(self, *args, **kwargs):
+    if "app" in kwargs:
+        kwargs["transport"] = httpx.ASGITransport(app=kwargs.pop("app"))
+    _orig_async_client_init(self, *args, **kwargs)
+httpx.AsyncClient.__init__ = _test_async_client_init
+
 from backend.main import app
 from backend.database import engine, AsyncSessionLocal
 from backend.models.base import Base

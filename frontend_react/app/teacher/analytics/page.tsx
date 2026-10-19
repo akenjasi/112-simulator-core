@@ -834,71 +834,7 @@ export default function AnalyticsPage({ initialTab = "all" }: AnalyticsPageProps
     try {
       setIsExportingExcel(true)
 
-      // 1. Gather records from active session or lessons history
-      const customRecords: any[] = []
-
-      // Add cadets from current session
-      if (sessionData && sessionData.cadets && sessionData.cadets.length > 0) {
-        for (const cadet of sessionData.cadets) {
-          if (cadet.records && cadet.records.length > 0) {
-            for (const r of cadet.records) {
-              customRecords.push({
-                cadet_name: cadet.cadet_name,
-                ticket_id: r.title || r.ticket_id || "Билет",
-                comm_metrics: {
-                  greeting_success: true,
-                  filler_words: 0,
-                  script_followed_pct: 100,
-                },
-                card_metrics: {
-                  address_correct: true,
-                  services_matched: true,
-                  over_dispatched_services: [],
-                  missed_critical_factoids: [],
-                },
-                sla_metrics: {
-                  sla_breached_count: 0,
-                  time_to_first_dispatch_sec: 40,
-                },
-              })
-            }
-          } else {
-            customRecords.push({
-              cadet_name: cadet.cadet_name,
-              ticket_id: "Билет",
-              comm_metrics: { greeting_success: true, filler_words: 0, script_followed_pct: 100 },
-              card_metrics: {
-                address_correct: true,
-                services_matched: true,
-                over_dispatched_services: [],
-                missed_critical_factoids: [],
-              },
-              sla_metrics: { sla_breached_count: 0, time_to_first_dispatch_sec: 35 },
-            })
-          }
-        }
-      }
-
-      // Add students from lessons if sessionData had no records
-      if (customRecords.length === 0 && lessonsList && lessonsList.length > 0) {
-        for (const lesson of lessonsList) {
-          for (const student of lesson.students || []) {
-            customRecords.push({
-              cadet_name: student.cadet_name,
-              ticket_id: lesson.group_name || `Урок #${lesson.id.slice(0, 6)}`,
-              comm_metrics: { greeting_success: true, filler_words: 0, script_followed_pct: 100 },
-              card_metrics: {
-                address_correct: true,
-                services_matched: true,
-                over_dispatched_services: [],
-                missed_critical_factoids: [],
-              },
-              sla_metrics: { sla_breached_count: 0, time_to_first_dispatch_sec: 30 },
-            })
-          }
-        }
-      }
-
+      // The server selects recorded results within the authenticated teacher scope.
       // 2. Start generation request
       const genRes = await fetch("/api/reports/generate", {
         method: "POST",
@@ -906,7 +842,6 @@ export default function AnalyticsPage({ initialTab = "all" }: AnalyticsPageProps
         body: JSON.stringify({
           group_id: selectedGroupId !== "ALL" ? selectedGroupId : undefined,
           session_ids: sessionId ? [sessionId] : undefined,
-          custom_records: customRecords.length > 0 ? customRecords : undefined,
         }),
       })
 

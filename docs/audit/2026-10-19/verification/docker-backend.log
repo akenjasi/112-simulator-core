@@ -1,0 +1,67 @@
+#0 building with "default" instance using docker driver
+
+#1 [internal] load build definition from Dockerfile.backend
+#1 transferring dockerfile: 6.23kB done
+#1 DONE 0.0s
+
+#2 [internal] load metadata for docker.io/library/python:3.11-slim
+#2 DONE 0.8s
+
+#3 [internal] load .dockerignore
+#3 transferring context: 3.17kB done
+#3 DONE 0.0s
+
+#4 [ 1/12] FROM docker.io/library/python:3.11-slim@sha256:e88e9763f943ec1834f992a4b51e0f24500486803e8bc534e5767af9ea65f6ce
+#4 resolve docker.io/library/python:3.11-slim@sha256:e88e9763f943ec1834f992a4b51e0f24500486803e8bc534e5767af9ea65f6ce 0.0s done
+#4 DONE 0.0s
+
+#5 [internal] load build context
+#5 transferring context: 152.52kB 0.0s done
+#5 DONE 0.1s
+
+#6 [ 2/12] WORKDIR /app
+#6 CACHED
+
+#7 [ 3/12] RUN apt-get update && apt-get install -y --no-install-recommends         ffmpeg         curl         wget         libgomp1         libstdc++6         gcc         python3-dev         libpango-1.0-0         libpangoft2-1.0-0         fonts-dejavu-core     && rm -rf /var/lib/apt/lists/*
+#7 CACHED
+
+#8 [ 4/12] COPY requirements.lock requirements-ml.txt ./
+#8 CACHED
+
+#9 [ 5/12] RUN pip install --no-cache-dir --require-hashes -r requirements.lock
+#9 CACHED
+
+#10 [ 6/12] RUN if [ "false" = "true" ]; then pip install torch==2.14.1 --index-url https://download.pytorch.org/whl/cpu && pip install -r requirements-ml.txt; fi
+#10 CACHED
+
+#11 [ 7/12] RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates     && install -d /usr/share/postgresql-common/pgdg     && curl --fail --show-error --silent         https://www.postgresql.org/media/keys/ACCC4CF8.asc         -o /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc     && . /etc/os-release     && printf 'Types: deb\nURIs: https://apt.postgresql.org/pub/repos/apt\nSuites: %s-pgdg\nComponents: main\nSigned-By: /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc\n'         "$VERSION_CODENAME" > /etc/apt/sources.list.d/pgdg.sources     && apt-get update && apt-get install -y --no-install-recommends postgresql-client-15     && rm -rf /var/lib/apt/lists/*
+#11 CACHED
+
+#12 [ 8/12] COPY . .
+#12 DONE 0.6s
+
+#13 [ 9/12] RUN chmod +x     /app/backend/bin/transcribe-cli     /app/backend/core/qwen_tts/qwen-tts     /app/scripts/init.sh
+#13 DONE 0.3s
+
+#14 [10/12] RUN find . -type f -name "*.sh" -exec sed -i -e 's/\r$//' {} +
+#14 DONE 0.2s
+
+#15 [11/12] RUN python -m backend.core.integrity generate --root /app --output /app/backend_manifest.json     && chmod 0644 /app/backend_manifest.json
+#15 0.351 Generating manifest for root='/app' -> output='/app/backend_manifest.json'...
+#15 0.381 Manifest successfully generated with 131 files.
+#15 DONE 0.4s
+
+#16 [12/12] RUN useradd --uid 10001 --create-home simulator     && mkdir -p /app/data /app/backend/core/qwen_tts/models     && chown -R simulator:simulator /app/data
+#16 DONE 0.3s
+
+#17 exporting to image
+#17 exporting layers
+#17 exporting layers 5.3s done
+#17 exporting manifest sha256:3b618f5f56f29e446c64db3a9954cb132530181cc1a87e8188b4ddd267dda687 0.0s done
+#17 exporting config sha256:e8119b5117897ff20ded30a78f9cebf07377b201a2ccf562e232e40a97c51cf7 0.0s done
+#17 exporting attestation manifest sha256:ad1e9261f14314e7741177c70661cf64b121779f6844a13a87a40fbf67393620 0.0s done
+#17 exporting manifest list sha256:d1c74dd06c4500d6e217977b6a59e0b23044771745d236b193a6eb504d14f27e 0.0s done
+#17 naming to docker.io/library/simulator_backend:audit-20261019 done
+#17 unpacking to docker.io/library/simulator_backend:audit-20261019
+#17 unpacking to docker.io/library/simulator_backend:audit-20261019 0.4s done
+#17 DONE 5.8s

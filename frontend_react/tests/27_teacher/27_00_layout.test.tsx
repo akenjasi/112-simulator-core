@@ -1,8 +1,11 @@
 import React from 'react';
 import { render, screen } from '@testing-library/react';
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import TeacherLayout from '@/app/teacher/layout';
 import TeacherMainPage from '@/app/teacher/page';
+
+vi.mock('next/navigation',()=>({usePathname:()=>'/teacher',useRouter:()=>({push:vi.fn(),replace:vi.fn()})}));
+vi.mock('@/components/auth/RequireAuth',()=>({default:({children}:{children:React.ReactNode})=>children}));
 
 describe('27.0: Layout и Главная страница (UX 60+)', () => {
   it('should render persistent sidebar with simple terminology', () => {

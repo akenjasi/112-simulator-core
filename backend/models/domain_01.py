@@ -49,8 +49,9 @@ class User(Base):
     password_hash: Mapped[str] = mapped_column(String, nullable=False)
     role: Mapped[str] = mapped_column(String, nullable=False)
     full_name: Mapped[Optional[str]] = mapped_column(String, nullable=True)
-    student_id: Mapped[Optional[str]] = mapped_column(String, nullable=True, default="СМ1-12")
+    student_id: Mapped[Optional[str]] = mapped_column(String, nullable=True)
     specialization: Mapped[Optional[str]] = mapped_column(String, nullable=True)
+    created_by_id: Mapped[Optional[str]] = mapped_column(String, nullable=True, index=True)
     group_ids: Mapped[list] = mapped_column(JSON, default=list)
     last_login: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
     failed_login_attempts: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
@@ -90,10 +91,19 @@ class User(Base):
         kwargs.setdefault("is_active", True)
         kwargs.setdefault("totp_secret", None)
         kwargs.setdefault("is_2fa_enabled", False)
-        if kwargs.get("role") == "CADET":
-            kwargs.setdefault("full_name", "Иванов Иван Иванович")
-            kwargs.setdefault("student_id", "СМ1-12")
         super().__init__(**kwargs)
+
+
+class AuthChallenge(Base):
+    """Single-use proof that the password factor has already been verified."""
+    __tablename__ = "auth_challenges"
+
+    challenge_hash: Mapped[str] = mapped_column(String(64), primary_key=True)
+    user_id: Mapped[str] = mapped_column(ForeignKey("users.user_id", ondelete="CASCADE"), index=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    attempts: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    consumed_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
 
 
 class AuthSession(Base):

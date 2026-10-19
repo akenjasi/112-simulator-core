@@ -82,8 +82,8 @@ class QwenTTSV2:
         # Paths for Qwen TTS
         self.qwen_dir = Path(__file__).parent / "qwen_tts"
         self.bin_path = self.qwen_dir / "qwen-tts"
-        self.tokenizer_path = self.qwen_dir / "models" / "qwen-tokenizer-12hz-Q4_K_M.gguf"
-        self.model_path = self.qwen_dir / "models" / "qwen-talker-0.6b-base-Q4_K_M.gguf"
+        self.tokenizer_path = Path(os.getenv("TTS_MODELS_DIR", str(self.qwen_dir / "models"))) / "qwen-tokenizer-12hz-Q4_K_M.gguf"
+        self.model_path = Path(os.getenv("TTS_MODELS_DIR", str(self.qwen_dir / "models"))) / "qwen-talker-0.6b-base-Q4_K_M.gguf"
         self.voices_dir = self.qwen_dir / "voices" / "references"
         
         # Speaker mapping (silero names to our references)
@@ -97,6 +97,8 @@ class QwenTTSV2:
         self.default_speaker = "female_1_irina.wav"
 
     def synthesize(self, text: str, speaker: str = 'aidar') -> bytes:
+        if len(text) > 4000:
+            raise ValueError("TTS text exceeds 4000 characters")
         if not text.strip():
             return bytes()
             
@@ -137,7 +139,7 @@ class QwenTTSV2:
                 "-o", str(raw_wav)
             ]
             
-            subprocess.run(cmd_tts, input=text_clean, text=True, check=True, env=env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            subprocess.run(cmd_tts, input=text_clean, text=True, check=True, timeout=120, env=env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
             
             # Apply phone fx
             noise_level = 0.0035
@@ -164,7 +166,7 @@ class QwenTTSV2:
                 str(processed_wav)
             ]
             
-            subprocess.run(cmd_ffmpeg, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            subprocess.run(cmd_ffmpeg, check=True, timeout=30, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
             
             audio_bytes = processed_wav.read_bytes()
             

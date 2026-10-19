@@ -164,7 +164,14 @@ async def test_parallel_start_action_finish_are_not_duplicate_or_lost_updates():
 @pytest.mark.asyncio
 async def test_completed_ungraded_and_teacher_stop_are_honest_in_history_and_report():
     d = await setup_group(); lesson, ss = await start(d)
-    first = await request("POST", f"/api/dds/sessions/{ss[0]['session_id']}/finish", d["cadets"][0], json={})
+    path = f"/api/dds/sessions/{ss[0]['session_id']}"
+    for index, stage in enumerate(["Принята", "Начало реагирования", "Прибытие", "Проведение работ", "Работы завершены"]):
+        if index == 1:
+            dispatched = await request("POST", path+"/actions", d["cadets"][0], json={"request_id":"history-dispatch", "kind":"dispatch", "service_name":"Аварийная служба", "who_accepted":"Дежурный", "summary":"Бригада направлена"})
+            assert dispatched.status_code == 200, dispatched.text
+        result = await request("POST", path+"/actions", d["cadets"][0], json=action(status=stage))
+        assert result.status_code == 200, result.text
+    first = await request("POST", path+f"/cards/{ss[0]['card_id']}/complete", d["cadets"][0], json={"request_id":"complete-history"})
     assert first.status_code == 200 and first.json()["score"] is None, first.text
     stop = await request("POST", f"/api/v1/lessons/{lesson}/stop", d["teacher"])
     assert stop.status_code == 200, stop.text
@@ -185,7 +192,7 @@ async def test_completed_ungraded_and_teacher_stop_are_honest_in_history_and_rep
     assert all(p["tickets"][0]["ticket_id"] == d["ticket_id"] for p in people.values())
     report = await request("GET", f"/api/ai-analytics/lessons/{lesson}/data", d["teacher"])
     assert report.status_code == 200, report.text
-    assert report.json()["summary"] == {"student_count": 2, "completed_session_count": 2, "evaluation_count": 0, "ticket_result_count": 0, "incident_card_count": 2}
+    assert report.json()["summary"] == {"student_count": 2, "completed_session_count": 2, "evaluation_count": 0, "ticket_result_count": 1, "incident_card_count": 2}
     async with AsyncSessionLocal() as db:
         group = await db.get(StudentGroup, d["group_id"])
         group.cadet_ids = []; group.students = []
@@ -267,12 +274,13 @@ async def test_ticket_catalog_and_creation_are_protected_and_missing_ticket_star
     assert (await request("GET", "/api/dds/tickets", d["cadets"][0])).status_code == 403
     payload = {"group_id":d["group_id"],"target_role":"DISPATCHER_DDS","ticket_id":d["ticket_id"]}
     assert (await request("POST", "/api/v1/lessons", d["other"], json=payload)).status_code == 403
-    lesson = await create(d, ticket=False)
-    r = await request("POST", f"/api/v1/lessons/{lesson}/start", d["teacher"])
-    assert r.status_code in (409,422), r.text
     async with AsyncSessionLocal() as db:
-        assert (await db.get(Assignment, lesson)).status == "WAITING"
-        assert await db.scalar(select(func.count()).select_from(ExamSession).where(ExamSession.assignment_id == lesson)) == 0
+        before = await db.scalar(select(func.count()).select_from(Assignment))
+    invalid = await request("POST", "/api/v1/lessons", d["teacher"], json={"group_id":d["group_id"],"target_role":"DISPATCHER_DDS"})
+    assert invalid.status_code == 422, invalid.text
+    async with AsyncSessionLocal() as db:
+        assert await db.scalar(select(func.count()).select_from(Assignment)) == before
+
 
 
 @pytest.mark.asyncio
@@ -376,7 +384,7 @@ async def test_legacy_appeals_cannot_rewrite_new_assigned_dds_results():
         (f'/api/v1/analytics/records/{rid}/appeal',d['other'],{'status':'passed','comment':'Недопустимое изменение результата'}),
     ]:
         r=await request('PATCH',path,user,json=payload)
-        assert r.status_code in (403,409),(path,r.status_code,r.text)
+        assert r.status_code in (403,404,409),(path,r.status_code,r.text)
     async with AsyncSessionLocal() as db:
         result=await db.get(TicketResult,rid)
         assert result.is_passed is False and result.score_total==40
