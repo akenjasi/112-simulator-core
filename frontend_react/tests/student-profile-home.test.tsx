@@ -66,7 +66,8 @@ it("does not call missing evaluation a success and preserves the archived card i
   history = [lesson()]
   render(<StudentProfilePage />)
   fireEvent.click(await screen.findByRole("heading", {name: "Авария водопровода", level: 3}))
-  expect(screen.getByText("Результаты проверки по критериям смотрите в карточке.")).toBeInTheDocument()
+  expect(screen.getByText("Результаты проверки и сохранённые действия доступны в разборе.")).toBeInTheDocument()
+  expect(screen.getByRole("link", {name: "Разбор"})).toHaveAttribute("href", "/student/review?session_id=s1&card_id=c1")
   expect(screen.getByRole("link", {name: "Открыть карточку"})).toHaveAttribute("href", "/dds?session_id=s1&ticket_id=t1&card_id=c1")
   expect(document.body.textContent).not.toMatch(/Ошибок не|100|Сдан/)
 })
@@ -76,7 +77,7 @@ it("retains error counts even when detailed messages are missing", async () => {
   render(<StudentProfilePage />)
   fireEvent.click(await screen.findByRole("heading", {name: "Авария водопровода", level: 3}))
   expect(screen.getByText("Ошибок в сохранённой проверке: 2")).toBeInTheDocument()
-  expect(screen.queryByText(/Результаты проверки по критериям смотрите/)).not.toBeInTheDocument()
+  expect(screen.queryByText(/Результаты проверки и сохранённые действия доступны/)).not.toBeInTheDocument()
 })
 
 it("keeps incomplete cards and unavailable results neutral", async () => {

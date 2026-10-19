@@ -41,3 +41,4 @@ tests/operator_and_tutorial.test.tsx
 tests/telephony_lifecycle.test.tsx
 tests/student-profile-home.test.tsx
 tests/48_student/profile_tester_knowledge.test.tsx
+tests/student-review.test.tsx
