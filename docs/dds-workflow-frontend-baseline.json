@@ -194,9 +194,9 @@
       "reason": "Explicit user feedback 2026-10-19: distinguish saved inaccurate records from rejected actions in instructor protocol."
     },
     "components/dispatcher/dds-training-phone.tsx": {
-      "sha256": "d039792353924ef6b2a5da300c6e051fd200f2155d014211488681bccbd6b63b",
-      "source_revision": "codex/dds-phone-audio-cycle (base afa0dbb)",
-      "reason": "Explicit user-approved sequential DDS v2 plan 2026-10-19: outgoing departure report, independent services, one active call, service profiles and explicit legacy-plan upgrade."
+      "sha256": "6a4a46db27456d230592fb327d311770794337f97e08a9f9132f1ab63fc29d49",
+      "source_revision": "codex/dds-phone-audio-cycle (base f025e22)",
+      "reason": "Explicit user request 2026-10-19: movable non-modal phone window, incoming ringtone, readable directory and consistent separate caller/brigade/content fields at all report stages."
     },
     "components/dispatcher/dispatch-panel.tsx": {
       "sha256": "9ed4c3fd8e5d0ce4c06e079819e633aef38f458c27e56bbb023f19d322b8244e",

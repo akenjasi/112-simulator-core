@@ -48,6 +48,7 @@ tests/58_frontend_ux_improvements.test.tsx
 tests/59_route_guard_and_validation.test.tsx
 tests/75_charts.test.tsx
 tests/dds-cycle/dds-phone-training.test.tsx
+tests/dds-cycle/dds-phone-window.test.tsx
 tests/group-ticket-review.test.tsx
 tests/incident-classifier.test.tsx
 tests/student-profile-home.test.tsx

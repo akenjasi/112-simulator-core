@@ -260,7 +260,7 @@ export function DDSAssignedConsole({sessionId, ticketId, cardId}: Props) {
             selectedService={selectedService} onServiceChange={setSelectedService} disabled={mutationDisabled}
             command={payload => sendMutation({type: "phone", payload: {...payload, request_id: crypto.randomUUID(), card_id: sessionState.card_id}})}
             record={{accepted: acceptedServices.includes(selectedService), whoAccepted, setWhoAccepted, summary, setSummary,
-              saved: dispatches[selectedService], onSave: () => handleSaveDispatch(selectedService, whoAccepted, summary)}}/>
+              saved: dispatches[selectedService], onSave: message => handleSaveDispatch(selectedService, whoAccepted, message)}}/>
             : <DispatchPanel
               key={`${sessionId}-${sessionState.card_id}`}
               isCardAccepted={acceptedServices.length > 0}
