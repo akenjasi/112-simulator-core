@@ -1,7 +1,7 @@
 import React, { useState } from 'react'
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
-import AnalyticsPage from '@/app/teacher/analytics/page'
+import AnalyticsPage from '@/components/teacher/analytics-page'
 import { SplitScreen, type RecordDetail } from '@/components/teacher/split-screen'
 import { GradeDialog } from '@/components/teacher/grade-dialog'
 import { GradeScoreInput } from '@/components/teacher/grade-score-input'

@@ -1,7 +1,7 @@
 import React from "react"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react"
-import AnalyticsPage from "@/app/teacher/analytics/page"
+import AnalyticsPage from "@/components/teacher/analytics-page"
 
 describe("Journal Excel export", () => {
   beforeEach(() => {

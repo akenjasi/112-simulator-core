@@ -1,7 +1,7 @@
 import React from 'react';
 import { render, screen, waitFor, fireEvent } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import AnalyticsPage from '@/app/teacher/analytics/page';
+import AnalyticsPage from '@/components/teacher/analytics-page';
 
 describe('Task 75: Advanced Analytics & Charts Dashboard', () => {
   const mockDynamics = [

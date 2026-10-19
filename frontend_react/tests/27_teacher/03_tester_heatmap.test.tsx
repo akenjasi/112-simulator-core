@@ -1,7 +1,7 @@
 import React from 'react'
 import { render, screen, waitFor } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import AnalyticsPage from '@/app/teacher/analytics/page'
+import AnalyticsPage from '@/components/teacher/analytics-page'
 
 const overview = {
   total_sessions: 0, total_attempts: 0, graded_attempts: 0, pending_attempts: 0,

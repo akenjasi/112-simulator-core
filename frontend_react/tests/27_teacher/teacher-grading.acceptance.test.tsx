@@ -2,7 +2,7 @@
 import React from 'react'
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
-import AnalyticsPage from '@/app/teacher/analytics/page'
+import AnalyticsPage from '@/components/teacher/analytics-page'
 
 // Group AI reports are outside the grading flow under test.
 vi.mock('@/components/teacher/dds-lesson-report', () => ({ DDSLessonReport: () => null }))

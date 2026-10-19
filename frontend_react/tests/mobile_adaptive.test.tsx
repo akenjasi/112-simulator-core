@@ -343,7 +343,7 @@ describe('Mobile Adaptivity (task_78)', () => {
         }
         return originalFetch(input, init);
       });
-      const AnalyticsPage = (await import('../app/teacher/analytics/page')).default;
+      const AnalyticsPage = (await import('../components/teacher/analytics-page')).default;
       const { container } = render(<AnalyticsPage initialTab="history" />);
 
       fireEvent.click(await screen.findByText('Мобильная группа'));
@@ -355,7 +355,7 @@ describe('Mobile Adaptivity (task_78)', () => {
     });
 
     it('should render Teacher Live Session table with overflow-x-auto container', async () => {
-      const LiveDashboard = (await import('../app/teacher/sessions/live/page')).default;
+      const LiveDashboard = (await import('../components/teacher/live-dashboard')).default;
       const { container } = render(<LiveDashboard sessionId="sess-101" />);
 
       await waitFor(() => {
