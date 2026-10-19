@@ -118,6 +118,19 @@ def workflow():
     return data
 
 
+
+@pytest.mark.parametrize("job_id", ["quality", "postgres"])
+def test_python_cache_uses_existing_locked_dependency_files(job_id):
+    steps = workflow()["jobs"][job_id]["steps"]
+    setups = [step for step in steps if step.get("uses", "").startswith("actions/setup-python@")]
+    assert len(setups) == 1
+    config = setups[0]["with"]
+    assert config["cache"] == "pip"
+    paths = config.get("cache-dependency-path", "").splitlines()
+    assert set(paths) == {"backend/requirements/runtime.lock", "backend/requirements/test.txt"}
+    assert all((ROOT / path).is_file() for path in paths)
+
+
 def runner_steps(data):
     result = []
     for job_id, job in data["jobs"].items():
