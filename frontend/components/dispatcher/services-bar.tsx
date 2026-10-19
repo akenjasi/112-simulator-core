@@ -1,5 +1,6 @@
 "use client"
 
+import {DDSHelp} from "@/components/dds-help"
 import { useEffect, useRef, useState } from "react"
 import NextLink from "next/link"
 import { Link, Timer, Bell, MessageSquareWarning, X, Check, Pencil } from "lucide-react"
@@ -13,12 +14,13 @@ type Props = {
   disabled?: boolean
   allowedStatuses?: Record<string, string[]>
   closeHref?: string
+  closeLabel?: string
   disabledReason?: string
   completionDisabled?: boolean
   completionReason?: string
 }
 
-export function ServicesBar({ data, onStatusChange, onAccept, onNextCard, disabled = false, allowedStatuses, closeHref, disabledReason, completionDisabled = false, completionReason }: Props) {
+export function ServicesBar({ data, onStatusChange, onAccept, onNextCard, disabled = false, allowedStatuses, closeHref, closeLabel, disabledReason, completionDisabled = false, completionReason }: Props) {
   const barRef = useRef<HTMLDivElement>(null)
   const submittingRef = useRef(false)
   const editingStatusRef = useRef<string | null>(null)
@@ -195,9 +197,11 @@ export function ServicesBar({ data, onStatusChange, onAccept, onNextCard, disabl
               disabled={disabled || isSubmitting}
               value={orderNumber}
               onChange={(e) => setOrderNumber(e.target.value)}
+              aria-label="Номер наряда"
               placeholder="Номер наряда"
               className="w-full text-sm 2xl:text-sm text-[#111827] placeholder:text-[#6b7280] outline-none border-b border-transparent focus:border-[#0078d4]"
             />
+            <DDSHelp topic="order" />
           </div>
 
           {/* Поле комментария / "Комментарий..." */}
@@ -210,6 +214,7 @@ export function ServicesBar({ data, onStatusChange, onAccept, onNextCard, disabl
               placeholder={isRejection ? "Причина отказа (обязательно)" : isSupplement ? "Комментарий (обязательно)" : requiresResult ? "Результат работ (обязательно)" : "Комментарий..."}
               className="w-full text-sm 2xl:text-sm text-[#111827] placeholder:text-[#6b7280] outline-none border-b border-transparent focus:border-[#0078d4]"
             />
+            <DDSHelp topic="comment" />
           </div>
 
           {/* Кнопка подтверждения ✓ с оранжевой рамкой фокуса */}
@@ -307,7 +312,7 @@ export function ServicesBar({ data, onStatusChange, onAccept, onNextCard, disabl
       {/* 3. Нижняя панель служб (Футер) */}
       <div className="flex h-[52px] 2xl:h-[73px] items-stretch bg-[#303335] border-t border-[#b4b9bc]">
         <div className="flex w-[80px] 2xl:w-[112px] items-center px-3 2xl:px-4 text-sm 2xl:text-sm font-semibold text-white/90">
-          Службы:
+          <span data-dds-help="services-label">Службы:</span>
         </div>
 
         {/* Список вкладок служб */}
@@ -371,9 +376,11 @@ export function ServicesBar({ data, onStatusChange, onAccept, onNextCard, disabl
 
         {/* Правые системные кнопки */}
         <div className="flex items-stretch shrink-0 border-l border-[#49555d]">
+          <div className="flex items-center text-white"><DDSHelp topic="services" /><DDSHelp topic="cycle" /><DDSHelp topic="status" /></div>
           <button
             type="button"
             aria-label="Отработана"
+            data-dds-help="complete"
             onClick={onNextCard}
             disabled={disabled || isSubmitting || completionDisabled}
             className="flex items-center justify-center px-4 2xl:px-5 border-r border-[#49555d] text-sm 2xl:text-sm font-bold text-white bg-[#157dbd] hover:bg-[#136ba3] transition-colors"
@@ -381,6 +388,7 @@ export function ServicesBar({ data, onStatusChange, onAccept, onNextCard, disabl
           >
             отработана
           </button>
+          <div className="flex items-center text-white"><DDSHelp topic="complete" /></div>
           <button
             type="button"
             aria-label="Связи"
@@ -414,10 +422,10 @@ export function ServicesBar({ data, onStatusChange, onAccept, onNextCard, disabl
             <MessageSquareWarning className="h-5 2xl:h-5 w-5 2xl:w-5" />
           </button>
           {closeHref ? <NextLink href={closeHref}
-            aria-label="Закрыть карточку и открыть список происшествий"
+            aria-label={closeLabel || "Закрыть карточку и открыть список происшествий"}
             onClick={event => {if (isSubmitting) event.preventDefault()}}
             className="flex w-[46px] 2xl:w-[64px] items-center justify-center text-white/80 hover:text-white hover:bg-red-600/80 transition-colors"
-            title="К списку происшествий">
+            title={closeLabel || "К списку происшествий"}>
             <X className="h-5 2xl:h-5 w-5 2xl:w-5" />
           </NextLink> : <button
             type="button"

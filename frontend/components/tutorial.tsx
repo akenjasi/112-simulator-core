@@ -1,80 +1,72 @@
 "use client"
 
-import { Joyride, Step, EventData, STATUS } from "react-joyride"
+import {useEffect, useRef, useState} from "react"
+import {Joyride, type Step, type EventData, STATUS} from "react-joyride"
+import {DDS_HELP, DDS_TOUR_TARGETS, type DDSHelpTopic} from "@/lib/dds-interface-help"
 
 type Props = {
   run: boolean
   onFinish: () => void
+  context?: "demo" | "guide" | "lesson"
+  onTopicChange?: (topic: DDSHelpTopic | null) => void
 }
 
-export function Tutorial({ run, onFinish }: Props) {
-  const steps: Step[] = [
-    {
-      target: "body",
-      content: "Добро пожаловать в тренажер ДДС! Это краткое обучение познакомит вас с рабочим местом диспетчера.",
-      placement: "center",
-      skipBeacon: true,
-    },
-    {
-      target: "#tour-topbar",
-      content: "Здесь находится основная информация о звонке, контактах заявителя, номерах телефонов и таймере SLA.",
-      placement: "bottom",
-    },
-    {
-      target: "#tour-caller",
-      content: "Панель заявителя. Здесь отображается ФИО, роль (например, очевидец) и адрес происшествия.",
-      placement: "right",
-    },
-    {
-      target: "#tour-incident",
-      content: "Панель происшествия. Здесь можно увидеть наличие пострадавших, заблокированных людей и признаки ЧС/ЧП.",
-      placement: "left",
-    },
-    {
-      target: "#tour-services",
-      content: "Самая важная часть! Здесь отображаются все службы, привлеченные к карточке. Ваша задача — следить за своей службой.",
-      placement: "top",
-    },
-    {
-      target: "#tour-pencil",
-      content: "Нажмите на карандаш, чтобы изменить статус вашей службы (Принята, Начало реагирования и т.д.) и оставить обязательный комментарий.",
-      placement: "top",
-    }
-  ]
+export function Tutorial({run, onFinish, context = "demo", onTopicChange}: Props) {
+  const [steps, setSteps] = useState<Step[]>([])
+  const finishRef = useRef(onFinish)
+  finishRef.current = onFinish
+  const topicRef = useRef(onTopicChange)
+  topicRef.current = onTopicChange
+  const completed = useRef(false)
+  const previousFocus = useRef<HTMLElement | null>(null)
 
-  const handleJoyrideCallback = (data: EventData) => {
-    const { status } = data
-    if (status === STATUS.FINISHED || status === STATUS.SKIPPED) {
-      onFinish()
-    }
+  const finish = () => {
+    if (completed.current) return
+    completed.current = true
+    finishRef.current()
+    requestAnimationFrame(() => {if (previousFocus.current?.isConnected) previousFocus.current.focus()})
   }
 
-  return (
-    <Joyride
-      steps={steps}
-      run={run}
-      continuous
-      onEvent={handleJoyrideCallback}
-      options={{
-        primaryColor: "#157dbd",
-        textColor: "#303335",
-        zIndex: 1000,
-        showProgress: true,
-        buttons: ["back", "primary", "skip"],
-        overlayClickAction: false,
-      }}
-      styles={{
-        buttonClose: {
-          display: "none",
-        }
-      }}
-      locale={{
-        back: "Назад",
-        close: "Закрыть",
-        last: "Завершить",
-        next: "Далее",
-        skip: "Пропустить",
-      }}
-    />
-  )
+  useEffect(() => {
+    if (!run) return
+    completed.current = false
+    previousFocus.current = document.activeElement instanceof HTMLElement ? document.activeElement : null
+    const introduction = context === "lesson"
+      ? "Справка объясняет окна и кнопки и не выполняет действия за вас. Время занятия продолжает идти. Можно закрыть справку по Escape или кнопкой «Пропустить»."
+      : "Познакомьтесь с рабочим местом диспетчера ДДС на учебном примере. Звонки и действия не отправляются, оценки не выставляются. Подсказки со знаком вопроса можно открывать мышью, с клавиатуры или касанием."
+    const prepare = async (topic: DDSHelpTopic | null) => {
+      if (completed.current) return
+      topicRef.current?.(topic)
+      // Wait for the phone portal and its selected view before Joyride measures the target.
+      await new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve())))
+    }
+    const available = DDS_TOUR_TARGETS.filter(({target, when}) => {
+      const element = document.querySelector(when && topicRef.current ? when : target)
+      return element && !element.closest('[hidden], [aria-hidden="true"]') && getComputedStyle(element).display !== "none"
+    })
+    setSteps([
+      {target: "body", title: "Знакомство с интерфейсом ДДС", content: introduction, placement: "center", skipBeacon: true, before: () => prepare(null)},
+      ...available.map(({topic, target}): Step => ({
+        target, title: DDS_HELP[topic].title, content: DDS_HELP[topic].text,
+        placement: "auto", skipBeacon: true, before: () => prepare(topic),
+      })),
+    ])
+    const escape = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") return
+      event.preventDefault(); event.stopPropagation(); finish()
+    }
+    document.addEventListener("keydown", escape, true)
+    return () => document.removeEventListener("keydown", escape, true)
+  }, [run, context])
+
+  const handleEvent = ({status}: EventData) => {
+    if (status === STATUS.FINISHED || status === STATUS.SKIPPED) finish()
+  }
+
+  return <Joyride steps={steps} run={run && steps.length > 0} continuous onEvent={handleEvent}
+    options={{primaryColor: "#157dbd", textColor: "var(--popover-foreground)", backgroundColor: "var(--popover)",
+      zIndex: 1500, width: "min(360px, calc(100vw - 32px))", showProgress: true,
+      buttons: ["back", "primary", "skip"], overlayClickAction: false, blockTargetInteraction: true}}
+    styles={{buttonPrimary: {color: "#fff", backgroundColor: "#126da4", fontWeight: 600}, buttonBack: {color: "var(--popover-foreground)"}}}
+    locale={{back: "Назад", close: "Закрыть", last: "Завершить", next: "Далее", nextWithProgress: "Далее ({current} из {total})", open: "Открыть подсказку", skip: "Пропустить"}} />
 }

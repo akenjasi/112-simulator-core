@@ -8,6 +8,7 @@ import {
   MapPin,
   Globe,
 } from "lucide-react"
+import {DDSHelp} from "@/components/dds-help"
 import type { DispatcherData } from "@/lib/dispatcher-data"
 
 type Props = {
@@ -42,7 +43,7 @@ export function TopBar({ data, slaTimer, slaViolated }: Props) {
 
       {/* Connection + buttons */}
       <div className="flex flex-1 flex-col justify-center gap-2 2xl:gap-2 rounded-sm border border-[#c9ced1] bg-[#fbfdfe] px-5 2xl:px-5 py-3 2xl:py-2">
-        <span className="text-base 2xl:text-sm text-[#49555d]">{data.connection}</span>
+        <span className="flex items-center gap-1 text-base 2xl:text-sm text-[#49555d]">{data.connection}<DDSHelp topic="overview" /></span>
         <div className="flex items-center gap-2 2xl:gap-2">
           <button
             type="button"

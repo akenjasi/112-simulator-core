@@ -6,14 +6,15 @@ import {reviewUrl} from "@/lib/student-review"
 import {fetchDDSSessionState, fetchDDSCard, postDDSAction, finishDDSSession, completeDDSCard, postDDSPhone,
   DDSRequestError, ddsBlockerMessage, getStoredToken,
   type DDSPhonePayload, type DDSSessionState, type DDSActionPayload, type DDSFinishPayload} from "@/lib/dds-cycle"
-import { TopBar } from "@/components/dispatcher/top-bar"
-import { CallerPanel } from "@/components/dispatcher/caller-panel"
-import { IncidentPanel } from "@/components/dispatcher/incident-panel"
 import { ServicesBar } from "@/components/dispatcher/services-bar"
 import { getDDSServiceResponse } from "@/lib/dds-service-response"
 import { DispatchPanel } from "@/components/dispatcher/dispatch-panel"
 import { getDDSWorkingCard } from "@/lib/dds-working-card"
 
+import type {DDSHelpTopic} from "@/lib/dds-interface-help"
+import {Tutorial} from "@/components/tutorial"
+import {DDSHelp} from "@/components/dds-help"
+import {DDSWorkspaceContent} from "./dds-workspace-content"
 import {DDSTrainingPhone} from "./dds-training-phone"
 
 interface Props { sessionId: string; ticketId?: string; cardId?: string }
@@ -24,6 +25,8 @@ type PendingMutation =
   | { type: "complete"; cardId: string; payload: {request_id: string} }
 
 export function DDSAssignedConsole({sessionId, ticketId, cardId}: Props) {
+  const [helpOpen, setHelpOpen] = useState(false)
+  const [helpTopic, setHelpTopic] = useState<DDSHelpTopic | null>(null)
   const [sessionState, setSessionState] = useState<DDSSessionState | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [loadError, setLoadError] = useState<string | null>(null)
@@ -111,8 +114,10 @@ export function DDSAssignedConsole({sessionId, ticketId, cardId}: Props) {
     return () => {alive = false; clearInterval(timer)}
   }, [sessionId, cardId, !!sessionState?.exercise, isReadOnly, acceptState])
 
+  useEffect(() => {setHelpOpen(false)}, [sessionId, sessionState?.card_id])
+
   const sendMutation = async (mutation: PendingMutation): Promise<boolean> => {
-    if (isSavingRef.current || !sessionState) return false
+    if (helpOpen || isSavingRef.current || !sessionState) return false
     isSavingRef.current = true; setIsSaving(true); setActionError(null)
     const epoch = ++epochRef.current
     getControllerRef.current?.abort()
@@ -142,7 +147,7 @@ export function DDSAssignedConsole({sessionId, ticketId, cardId}: Props) {
     } finally {if (epochRef.current === epoch) {isSavingRef.current = false; setIsSaving(false)}}
   }
 
-  const blocked = () => isSavingRef.current || pendingRef.current || isReadOnly || !sessionState
+  const blocked = () => helpOpen || isSavingRef.current || pendingRef.current || isReadOnly || !sessionState
   const handleSaveStatus = async (draft: {serviceName: string; status: string; comment: string; orderNumber: string}) => {
     if (blocked() || !sessionState) return false
     return sendMutation({type: "action", payload: {request_id: crypto.randomUUID(), card_id: sessionState.card_id,
@@ -211,7 +216,7 @@ export function DDSAssignedConsole({sessionId, ticketId, cardId}: Props) {
   const responseService = selectedService || workingCard.services[0]?.name || ""
   const response = getDDSServiceResponse(sessionState, responseService, now)
   const remaining = response.remaining
-  const mutationDisabled = isSaving || isReadOnly || hasPending
+  const mutationDisabled = isSaving || isReadOnly || hasPending || helpOpen
   const historyIndex = sessionState.cards?.findIndex(item => item.card_id === sessionState.card_id) ?? -1
   const displayedIndex = historyIndex >= 0 ? historyIndex : sessionState.current_index ?? 0
   const completionNotice = sessionState.readonly && !isCompleted ? "Карточка завершена: просмотр истории" : isCompleted
@@ -230,16 +235,19 @@ export function DDSAssignedConsole({sessionId, ticketId, cardId}: Props) {
             <span className="h-2.5 w-2.5 rounded-full bg-[#4ade80]" />
             {sessionState.exercise ? (isCompleted ? "Занятие завершено · ДДС" : "Учебное занятие · ДДС") : (isCompleted ? "Смена завершена (ДДС-112)" : "Смена активна (ДДС-112)")}
           </span>
-          <div aria-label={`Норматив принятия: ${responseService}`} className={`flex items-center gap-1.5 px-2 py-0.5 rounded font-mono font-bold text-xs border ml-2 ${response.overdue ? "bg-red-600 text-white border-red-500" : "bg-emerald-900/40 text-emerald-400 border-emerald-500/50"}`}
+          <div data-dds-help="timing" aria-label={`Норматив принятия: ${responseService}`} className={`flex items-center gap-1.5 px-2 py-0.5 rounded font-mono font-bold text-xs border ml-2 ${response.overdue ? "bg-red-600 text-white border-red-500" : "bg-emerald-900/40 text-emerald-400 border-emerald-500/50"}`}
             title={`${responseService}: ${response.responded ? "Первичное решение сохранено; время дальнейших работ не относится к нормативу принятия" : remaining === null ? "Время начала не получено от сервера" : "30 секунд от получения карточки до решения этой службы"}`}>
             <span className="uppercase tracking-wider opacity-90 text-[10px]">SLA 30С:</span>
             <span className="text-sm">{response.responded ? "Решение принято" : remaining === null ? "—" : remaining === 0 ? "Просрочено" : `${remaining} сек`}</span>
           </div>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          <button type="button" disabled={isSaving || hasPending || helpOpen} onClick={event => {event.currentTarget.focus(); setHelpTopic(null); setHelpOpen(true)}} className="min-h-8 rounded border border-white/40 px-2 text-xs font-semibold disabled:opacity-50">Помощь по интерфейсу</button>
+          <DDSHelp topic="timing" />
           <span className="text-xs">Карточка {displayedIndex + 1} из {sessionState.total_cards ?? 1} · Закрыто: {sessionState.completed_cards ?? 0}</span>
           <Link href="/student/profile" className="px-3 py-1.5 text-xs bg-slate-700 hover:bg-slate-600 text-white rounded font-medium">← В личный кабинет</Link>
-          <button type="button" onClick={handleFinish} disabled={mutationDisabled}
+          <DDSHelp topic="finish" />
+          <button data-dds-help="finish" type="button" onClick={handleFinish} disabled={mutationDisabled}
             className="px-4 py-1.5 text-xs 2xl:text-sm bg-red-600 hover:bg-red-700 text-white rounded font-bold transition shadow disabled:opacity-50">
             {sessionState.exercise ? "Завершить занятие досрочно" : "Завершить смену"}
           </button>
@@ -251,12 +259,9 @@ export function DDSAssignedConsole({sessionId, ticketId, cardId}: Props) {
         <button type="button" onClick={handleRefresh} disabled={isSaving} className="underline disabled:opacity-50">Обновить</button>
       </div>}
       {completionNotice && <div className="flex shrink-0 flex-wrap items-center justify-between gap-3 px-4 py-2 text-sm bg-blue-100 text-blue-900"><span>{completionNotice}</span><Link href={reviewUrl(sessionId, sessionState.card_id)} className="inline-flex min-h-10 items-center rounded border border-blue-300 bg-white px-4 py-2 font-semibold hover:bg-blue-50 focus-visible:outline-2 focus-visible:outline-ring">Разбор карточки</Link></div>}
-      <TopBar data={card} />
-      <div className="flex flex-1 min-h-0 gap-3 px-2 py-1 overflow-hidden" data-testid="dds-reference-columns">
-        <CallerPanel data={card} />
-        <div className="flex flex-1 min-w-0 min-h-0 flex-col gap-2 overflow-hidden pr-2 pb-2">
-          <IncidentPanel data={card} />
-          {sessionState.exercise ? <DDSTrainingPhone key={`phone-${sessionState.card_id}`} exercise={sessionState.exercise}
+      <Tutorial run={helpOpen} onFinish={() => setHelpOpen(false)} context="lesson" onTopicChange={setHelpTopic} />
+      <DDSWorkspaceContent card={card} phone={
+          sessionState.exercise ? <DDSTrainingPhone key={`phone-${sessionState.card_id}`} exercise={sessionState.exercise} tourTopic={helpOpen ? helpTopic : undefined}
             selectedService={selectedService} onServiceChange={setSelectedService} disabled={mutationDisabled}
             command={payload => sendMutation({type: "phone", payload: {...payload, request_id: crypto.randomUUID(), card_id: sessionState.card_id}})}
             record={{accepted: acceptedServices.includes(selectedService), whoAccepted, setWhoAccepted, summary, setSummary,
@@ -272,10 +277,7 @@ export function DDSAssignedConsole({sessionId, ticketId, cardId}: Props) {
               selectedServiceName={selectedService} onServiceChange={setSelectedService}
               calledServices={Object.keys(dispatches)} savedDispatches={dispatches}
               onServiceSaved={handleSaveDispatch}
-            />}
-        </div>
-      </div>
-      <div className="shrink-0 z-50 w-full">
+            />} services={
         <ServicesBar key={`${sessionId}-${sessionState.card_id}`} data={workingCard} disabled={mutationDisabled}
           allowedStatuses={sessionState.allowed_service_statuses}
           closeHref="/dds/journal"
@@ -283,8 +285,7 @@ export function DDSAssignedConsole({sessionId, ticketId, cardId}: Props) {
           onStatusChange={(serviceName, status, comment, orderNumber) => handleSaveStatus({serviceName, status, comment, orderNumber})}
           completionDisabled={!sessionState.exercise && !sessionState.can_complete}
           completionReason={(sessionState.completion_blockers || []).map(ddsBlockerMessage).join("; ") || undefined}
-          onNextCard={handleComplete}/>
-      </div>
+          onNextCard={handleComplete}/>} />
     </div>
   )
 }

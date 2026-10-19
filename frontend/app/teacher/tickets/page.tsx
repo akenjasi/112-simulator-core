@@ -1028,7 +1028,7 @@ export default function TicketsPage() {
               База билетов
             </h1>
             <p className="text-sm text-muted-foreground mt-0.5">
-              Глобальный склад учебных сценариев для занятий и экзаменов
+              Глобальный склад учебных сценариев для занятий
             </p>
           </div>
         </div>

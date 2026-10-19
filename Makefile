@@ -13,10 +13,11 @@ LLM_FILES = $(if $(filter 1,$(WITH_LLM)),-f "$(ROOT)/docker/compose/llm.yml" -f 
 BASE = -f "$(ROOT)/docker/compose/base.yml"
 DEV = $(COMPOSE) $(LLM_ARGS) $(BASE) -f "$(ROOT)/docker/compose/dev.yml" $(LLM_FILES)
 PROD = $(COMPOSE) $(LLM_ARGS) $(BASE) -f "$(ROOT)/docker/compose/prod.yml" $(LLM_FILES)
+SETTINGS_COMPOSE = $(DEV)
 
-.PHONY: help install init backend frontend test test-all build up up-prod down logs llm-up backup replace-dds-tickets package-offline deploy-offline check-python check-llm
+.PHONY: help install init backend frontend test test-all build up up-prod down logs llm-up backup replace-dds-tickets package-offline deploy-offline check-python check-llm check-env
 help:
-	@printf '%s\n' 'Setup:   make install | init' 'Develop: make backend [PORT=8000] | frontend' 'Verify:  make test | test-all' 'Docker:  make build | up | up-prod | down | logs' 'LLM:     make llm-up LLM_ENV_FILE=/private/file.env' '         make up WITH_LLM=1 LLM_ENV_FILE=/private/file.env' 'Data:    make backup | replace-dds-tickets [ARGS=--apply]' 'Offline: make package-offline ARGS="--help"' '         make deploy-offline ARCHIVE=/path/bundle.tar.gz [ARGS="..."]' 'Options: ENV_FILE=/private/file.env PROJECT=existing_project VENV=/path/venv'
+	@printf '%s\n' 'Setup:   make install | init | check-env' 'Develop: make backend [PORT=8000] | frontend' 'Verify:  make test | test-all' 'Docker:  make build | up | up-prod | down | logs' 'LLM:     make llm-up LLM_ENV_FILE=/private/file.env' '         make up WITH_LLM=1 LLM_ENV_FILE=/private/file.env' 'Data:    make backup | replace-dds-tickets [ARGS=--apply]' 'Offline: make package-offline ARGS="--help"' '         make deploy-offline ARCHIVE=/path/bundle.tar.gz [ARGS="..."]' 'Options: ENV_FILE=/private/file.env PROJECT=existing_project VENV=/path/venv'
 
 install:
 	@cd "$(ROOT)" && "$(PYTHON)" -c 'import sys; assert sys.version_info[:2] == (3,11), "Use Python 3.11"'
@@ -58,10 +59,14 @@ build:
 check-llm:
 	@if [ "$(WITH_LLM)" = 1 ]; then test -n "$(LLM_ENV_FILE)" && test -f "$(LLM_ENV_FILE)" || { echo 'Set LLM_ENV_FILE to an existing private env file.' >&2; exit 1; }; fi
 
-up: check-llm
+check-env: check-llm
+	@$(SETTINGS_COMPOSE) config --format json | python3 "$(ROOT)/tools/setup_env.py" --check-compose
+
+up: check-env
 	@$(DEV) up -d --build
 
-up-prod: check-llm
+up-prod: SETTINGS_COMPOSE = $(PROD)
+up-prod: check-env
 	@$(PROD) up -d --no-build
 
 down: check-llm

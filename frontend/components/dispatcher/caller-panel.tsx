@@ -2,6 +2,7 @@
 
 import { useState } from "react"
 import { MapPinned, X } from "lucide-react"
+import {DDSHelp} from "@/components/dds-help"
 import type { DispatcherData } from "@/lib/dispatcher-data"
 
 type Props = {
@@ -53,7 +54,7 @@ export function CallerPanel({ data }: Props) {
       {/* Name row */}
       <div className="self-start rounded-[1px] border border-[#b4b9bc] bg-[#fbfdfe] px-5 2xl:px-5 py-2 2xl:py-2 text-base 2xl:text-sm">
         <span className="font-bold text-[#111827]">{data.caller.name}</span>
-        <span className="ml-3 2xl:ml-4 text-[#49555d]">{data.caller.role}</span>
+        <span className="ml-3 2xl:ml-4 text-[#49555d]">{data.caller.role}</span><DDSHelp topic="caller" className="ml-1" />
       </div>
 
       {/* Address row */}

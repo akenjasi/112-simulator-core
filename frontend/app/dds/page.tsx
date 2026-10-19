@@ -14,6 +14,7 @@ import { ServicesBar } from "@/components/dispatcher/services-bar"
 import { Tutorial } from "@/components/tutorial"
 import { DispatchPanel } from "@/components/dispatcher/dispatch-panel"
 import { Award, AlertTriangle, CheckCircle, XCircle, Clock } from "lucide-react"
+import {DDSInterfaceGuide} from "@/components/dispatcher/dds-interface-guide"
 import { DDSAssignedConsole } from "@/components/dispatcher/dds-assigned-console"
 
 function DdsDemoSimulator() {
@@ -382,7 +383,7 @@ function DdsDemoSimulator() {
             </div>
           </>
         ) : networkStatus === "waiting" ? (
-          <span className="font-bold text-sm 2xl:text-sm text-orange-400 animate-pulse">Инициализация экзаменационных билетов...</span>
+          <span className="font-bold text-sm 2xl:text-sm text-orange-400 animate-pulse">Подготовка учебных билетов...</span>
         ) : (
           <div className="flex w-full items-center justify-between">
             <div className="flex items-center gap-3">
@@ -661,8 +662,11 @@ function DdsRoute() {
   const ticketId = searchParams ? searchParams.get("ticket_id") : null
 
   const cardId = searchParams?.get("card_id")
+  const interfaceGuide = searchParams?.get("guide") === "true" && !sessionId && !ticketId
   const localDemo = searchParams?.get("demo") === "true"
-  useEffect(() => { if (!localDemo && !sessionId && !ticketId) router.replace("/dds/journal") }, [sessionId, ticketId, router, localDemo])
+  useEffect(() => { if (!interfaceGuide && !localDemo && !sessionId && !ticketId) router.replace("/dds/journal") }, [sessionId, ticketId, router, localDemo, interfaceGuide])
+
+  if (interfaceGuide) return <DDSInterfaceGuide />
 
   if (localDemo && !sessionId && !ticketId) {
     return <><div className="bg-amber-100 px-3 py-1 text-xs">Локальная демонстрация: результаты не сохраняются</div><DdsDemoSimulator /></>

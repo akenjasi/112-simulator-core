@@ -6,7 +6,7 @@ import { ArrowRight, BookOpen, ClipboardList, FileText, PlayCircle, Users } from
 const destinations = [
   { href: "/teacher/groups", title: "Ученики", description: "Просмотр и создание учебных групп, добавление существующих курсантов и импорт состава группы из CSV.", action: "Открыть список", Icon: Users },
   { href: "/teacher/analytics", title: "Журнал оценок", description: "Сводная ведомость результатов, разбор ошибок курсантов, история действий и пересмотр баллов при апелляции.", action: "Смотреть журнал", Icon: ClipboardList },
-  { href: "/teacher/tickets", title: "База билетов", description: "Каталог экзаменационных заданий, автоматическая генерация новых билетов и настройка эталонных решений.", action: "Перейти к билетам", Icon: FileText },
+  { href: "/teacher/tickets", title: "База билетов", description: "Каталог учебных заданий, автоматическая генерация новых билетов и настройка эталонных решений.", action: "Перейти к билетам", Icon: FileText },
   { href: "/teacher/knowledge", title: "Справочник", description: "Методические материалы, регламенты реагирования экстренных служб и база знаний для подготовки.", action: "Открыть материалы", Icon: BookOpen },
 ]
 
@@ -31,7 +31,7 @@ export default function TeacherMainPage() {
               <p className="text-xs font-semibold uppercase tracking-wide text-primary">Основное действие</p>
               <h2 id="lesson-heading" className="text-xl font-semibold tracking-tight text-foreground sm:text-2xl">Начать урок</h2>
               <p className="max-w-3xl text-sm leading-relaxed text-muted-foreground sm:text-base">
-                Запустить учебную смену для группы: настроить профиль подготовки, выбрать экзаменационные билеты и наблюдать за работой курсантов в реальном времени.
+                Запустить учебную смену для группы: настроить профиль подготовки, выбрать учебные билеты и наблюдать за работой курсантов в реальном времени.
               </p>
             </div>
           </div>

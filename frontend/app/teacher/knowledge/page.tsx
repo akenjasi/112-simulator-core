@@ -306,7 +306,7 @@ export default function KnowledgePage() {
             <div>
               <CardTitle className="text-xl">Файловый менеджер регламентов</CardTitle>
               <CardDescription>
-                Список учебных документов, доступных курсантам во время тренажера и экзамена
+                Список учебных документов, доступных курсантам для подготовки и работы на занятиях
               </CardDescription>
             </div>
 

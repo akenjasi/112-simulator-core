@@ -1,6 +1,7 @@
 "use client"
 
 import { Zap, TriangleAlert, Pencil } from "lucide-react"
+import {DDSHelp} from "@/components/dds-help"
 import type { DispatcherData } from "@/lib/dispatcher-data"
 
 type Props = {
@@ -51,7 +52,7 @@ export function IncidentPanel({ data, onToggleEmergency }: Props) {
       <div className="mt-2 2xl:mt-3 flex items-center bg-[#303335] px-4 2xl:px-5 py-2.5 2xl:py-2.5">
         <span className="text-sm 2xl:text-sm font-bold text-white border-b border-dotted border-white">
           {data?.classification?.section}
-        </span>
+        </span><DDSHelp topic="incident" className="ml-auto text-white" />
       </div>
 
       {/* Classification rows */}

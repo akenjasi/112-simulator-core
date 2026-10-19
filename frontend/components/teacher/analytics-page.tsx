@@ -2038,7 +2038,7 @@ export default function AnalyticsPage({ initialTab = "split" }: AnalyticsPagePro
                   <option value="">-- Выберите занятие для разбора ответов --</option>
                   {filteredLessons.map((l) => (
                     <option key={l.id} value={l.id}>
-                      {l.group_name || `Урок #${l.id.slice(0, 8)}`} — {l.mode === "EXAM" ? "Экзамен" : "Тренировка"} ({l.status === "COMPLETED" ? "Завершён" : l.status === "ACTIVE" ? "В процессе" : "Ожидание"})
+                      {l.group_name || `Урок #${l.id.slice(0, 8)}`} — Занятие ({l.status === "COMPLETED" ? "Завершён" : l.status === "ACTIVE" ? "В процессе" : "Ожидание"})
                     </option>
                   ))}
                 </select>
