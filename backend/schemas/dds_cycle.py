@@ -234,6 +234,8 @@ class DDSSessionStateResponse(BaseModel):
     readonly: bool = False
     exercise: Optional[Dict[str, Any]] = None
     criteria: List[Dict[str, Any]] = Field(default_factory=list)
+    assessment: Optional[Dict[str, Any]] = None
+    report_mode: str = "queued"
     last_attempt: Optional[Dict[str, Any]] = None
     stopped_at: Optional[str] = None
     stop_reason: Optional[str] = None

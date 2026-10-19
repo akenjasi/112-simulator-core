@@ -132,6 +132,99 @@ async def test_full_v2_cycle_closes_and_requires_final_comment(monkeypatch):
 
 
 @pytest.mark.asyncio
+async def test_self_training_gets_immediate_assessment_without_a_teacher_grade():
+    from backend.models.domain_04 import TicketResult
+    users, ids = await exercise(n=1, count=1)
+    user = users['cadets'][0]
+    launched = await request('POST', '/api/dds/training', user,
+                             json={'ticket_ids': ids, 'request_id': str(uuid.uuid4())})
+    assert launched.status_code == 200, launched.text
+    state = launched.json()
+    assert state['assessment']['status'] == 'in_progress'
+    await ready(state, user)
+    done = (await complete(state, user)).json()
+    assert done['assessment'] == {
+        'source': 'rules', 'version': 1, 'status': 'passed', 'completed_criteria': 5,
+        'corrected_criteria': 0, 'total_criteria': 5, 'mistakes_count': 0, 'recommendations': [],
+    }
+    assert done['is_self_training'] and done['lesson_status'] == 'COMPLETED'
+    assert done['score'] is None
+    async with AsyncSessionLocal() as db:
+        result = await db.scalar(select(TicketResult).where(TicketResult.session_id == state['session_id']))
+        assert result.score_total is None
+        before = deepcopy((await db.get(ExamSession, state['session_id'])).dynamic_state)
+    for _ in range(2):
+        loaded = (await request('GET', base(state), user)).json()
+        assert loaded['assessment'] == done['assessment']
+    async with AsyncSessionLocal() as db:
+        assert (await db.get(ExamSession, state['session_id'])).dynamic_state == before
+    assert (await request('GET', base(state), users['outsider'])).status_code == 403
+
+
+@pytest.mark.asyncio
+async def test_late_confirmation_feedback_is_available_without_an_error_event(monkeypatch):
+    _, _, state, user = await start(('Аварийная служба', '04 Газ'))
+    await act(state, user, service_name='04 Газ')
+    monkeypatch.setattr(t, 'now_utc', lambda: t.parse_time(state['received_at']) + timedelta(seconds=45))
+    await ready(state, user)
+    result = (await complete(state, user)).json()['assessment']
+    assert result['status'] == 'needs_review' and result['completed_criteria'] == 4
+    assert result['mistakes_count'] == 0
+    assert result['recommendations'][0]['criterion'] == 'confirmation'
+    assert '30 секунд' in result['recommendations'][0]['text']
+    assert 'Аварийная служба' in result['recommendations'][0]['text']
+    assert '04 Газ' not in result['recommendations'][0]['text']
+
+
+@pytest.mark.asyncio
+async def test_assessment_keeps_corrected_mistakes_and_card_queue_isolation():
+    users, ids = await exercise(n=1, count=2)
+    _, states = await launch(users, ids)
+    state, user = states[0], users['cadets'][0]
+    await act(state, user, status='Прибытие')
+    await ready(state, user)
+    next_card = (await complete(state, user)).json()
+    assert next_card['card_id'] != state['card_id']
+    assert next_card['assessment']['status'] == 'in_progress'
+    assert next_card['assessment']['mistakes_count'] == 0
+    archived = (await request('GET', base(state) + f"/cards/{state['card_id']}", user)).json()
+    assessment = archived['assessment']
+    assert assessment['status'] == 'needs_review'
+    assert assessment['corrected_criteria'] == 1 and assessment['completed_criteria'] == 4
+    assert assessment['mistakes_count'] == 1
+    assert assessment['recommendations'][0]['criterion'] == 'stage'
+    assert 'после исправления' in assessment['recommendations'][0]['text']
+
+
+@pytest.mark.asyncio
+async def test_stopping_a_training_does_not_claim_success_or_invent_a_grade():
+    _, _, state, user = await start(('Аварийная служба',))
+    result = await request('POST', base(state) + '/finish', user, json={})
+    assert result.status_code == 200, result.text
+    assessment = result.json()['assessment']
+    assert assessment['status'] == 'incomplete' and assessment['completed_criteria'] == 0
+    assert any('недостаточно данных' in item['text'] for item in assessment['recommendations'])
+    assert result.json()['score'] is None
+
+
+@pytest.mark.asyncio
+async def test_completed_card_with_an_inaccurate_accepted_record_needs_review():
+    _, _, state, user = await start(('Аварийная служба',))
+    await act(state, user)
+    await phone(state, user, number='7000', service_name='Аварийная служба')
+    saved = await act(state, user, kind='dispatch', who_accepted='Пупкин', summary='Бригада 99 выехала')
+    assert saved.json()['last_attempt']['accepted']
+    await act(state, user, status='Начало реагирования', order_number='1')
+    await ready(state, user)
+    done = (await complete(state, user)).json()
+    assert done['card_submitted_at']
+    assert done['assessment']['status'] == 'needs_review'
+    assert done['assessment']['mistakes_count'] > 0
+    assert next(c for c in done['criteria'] if c['key'] == 'accuracy')['status'] == 'not_completed'
+    assert any(r['criterion'] == 'accuracy' for r in done['assessment']['recommendations'])
+
+
+@pytest.mark.asyncio
 async def test_catalog_replacement_preserves_v1_session_and_retargets_waiting_lesson():
     from backend.core.dds_ticket_replacement import replace_catalog
     users, ids = await exercise(n=1, count=2)

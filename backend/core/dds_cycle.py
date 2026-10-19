@@ -428,8 +428,10 @@ def build_session_state_dict(
 
     from backend.core.dds_exercise import projection
     training = projection(dds_data, editable)
+    from backend.core.report_demo import demo_enabled
     return {
         **training,
+        "report_mode": "demo" if demo_enabled() else "queued",
         "session_id": session.session_id,
         "lesson_id": lesson.assignment_id,
         "ticket_id": session.ticket_id or lesson.scenario_id,

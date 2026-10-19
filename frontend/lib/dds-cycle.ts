@@ -112,6 +112,7 @@ export interface DDSSessionState {
   stop_reason?: string | null
   exercise?: DDSExercise | null
   criteria?: DDSCriterion[]
+  report_mode?: "demo" | "queued"
   last_attempt?: {request_id: string; accepted: boolean; reason?: string; message: string} | null
 }
 
@@ -372,6 +373,7 @@ export function validateDDSSessionState(
   }
   return {
     exercise: obj.exercise ?? null, criteria: obj.criteria ?? [], last_attempt: obj.last_attempt ?? null,
+    report_mode: obj.report_mode === "demo" ? "demo" : "queued",
     session_id: obj.session_id,
     lesson_id: obj.lesson_id,
     ticket_id: obj.ticket_id,

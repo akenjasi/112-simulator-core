@@ -18,7 +18,13 @@ export interface ReviewEvidence {
   action?: Record<string, unknown>
 }
 export interface ReviewCriterion {key: string; status: ReviewStatus; evidence: ReviewEvidence[]}
-export interface ReviewEvent extends ReviewEvidence {id: string; kind: string; text?: string; blocking?: boolean}
+export interface ReviewEvent extends ReviewEvidence {id: string; kind: string; text?: string; note?: string; blocking?: boolean}
+export interface AutomaticAssessment {
+  source: "rules"; version: 1
+  status: "in_progress" | "incomplete" | "insufficient_data" | "passed" | "needs_review"
+  completed_criteria: number; corrected_criteria: number; total_criteria: number; mistakes_count: number
+  recommendations: {criterion: string; text: string}[]
+}
 export interface TeacherAssessment {
   score: number | null
   is_passed: boolean | null
@@ -28,6 +34,7 @@ export interface TeacherAssessment {
 export type TeacherAssessmentStatus = "available" | "not_graded" | "unavailable"
 export interface StudentReview {
   state: DDSSessionState; criteria: ReviewCriterion[]; events: ReviewEvent[];
+  assessment?: AutomaticAssessment | null
   savedErrors?: {count: number; messages: string[]}; historyUnavailable?: boolean
   teacherAssessment?: TeacherAssessment | null
   teacherAssessmentStatus?: TeacherAssessmentStatus
@@ -60,10 +67,20 @@ export function validateStudentReview(raw: unknown, sessionId: string, cardId?: 
   const events = object(data.exercise) ? data.exercise.events ?? [] : []
   if (!Array.isArray(events) || events.some(item => !evidence(item) || !object(item) ||
     typeof item.id !== "string" || typeof item.kind !== "string" || item.card_id !== state.card_id ||
-    (item.text != null && typeof item.text !== "string"))) {
+    (item.text != null && typeof item.text !== "string") || (item.note != null && typeof item.note !== "string"))) {
     throw new Error("Не удалось прочитать события карточки. Повторите загрузку.")
   }
-  return {state, criteria: (criteria as ReviewCriterion[]).filter(item => REVIEW_CRITERIA.some(definition => definition.key === item.key)), events: events as ReviewEvent[]}
+  const assessment = data.assessment
+  if (assessment != null && (!object(assessment) || assessment.source !== "rules" || assessment.version !== 1 ||
+    !["in_progress", "incomplete", "insufficient_data", "passed", "needs_review"].includes(String(assessment.status)) ||
+    ["completed_criteria", "corrected_criteria", "total_criteria", "mistakes_count"].some(key => !Number.isSafeInteger(assessment[key]) || Number(assessment[key]) < 0) ||
+    assessment.total_criteria !== REVIEW_CRITERIA.length || Number(assessment.completed_criteria) + Number(assessment.corrected_criteria) > REVIEW_CRITERIA.length ||
+    (assessment.status === "passed" && (assessment.completed_criteria !== 5 || assessment.corrected_criteria !== 0 || assessment.mistakes_count !== 0)) ||
+    !Array.isArray(assessment.recommendations) || assessment.recommendations.some(item => !object(item) ||
+      !REVIEW_CRITERIA.some(definition => definition.key === item.criterion) || typeof item.text !== "string" || !item.text.trim()))) {
+    throw new Error("Не удалось прочитать автоматический разбор. Повторите загрузку.")
+  }
+  return {state, criteria: (criteria as ReviewCriterion[]).filter(item => REVIEW_CRITERIA.some(definition => definition.key === item.key)), events: events as ReviewEvent[], assessment: assessment as AutomaticAssessment | null | undefined}
 }
 
 export async function fetchStudentReview(sessionId: string, cardId?: string, signal?: AbortSignal) {

@@ -137,6 +137,7 @@ class CadetLessonStats(BaseModel):
 
 
 class LessonDetailResponse(BaseModel):
+    report_mode: str = "queued"
     id: str
     ticket_ids: List[str] = Field(default_factory=list)
     assignment_id: Optional[str] = None

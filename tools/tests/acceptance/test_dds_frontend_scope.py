@@ -55,6 +55,9 @@ def product_files():
 # The old hash map remains immutable; supplemental entries pin these exact files
 # rather than allowing future arbitrary changes under a permanent allowlist.
 REVIEWED_UPDATES = {
+    # Explicit request 2026-10-20: show immediate GPU demo reports on lesson completion.
+    # The exact implementation remains pinned; negative mutation probes still apply.
+    'components/teacher/live-dashboard.tsx',
     # Explicit user-approved background reports; pinned by exact hash, not an allowlist.
     'components/teacher/dds-lesson-report.tsx',
     # User-approved DDS interface guide; exact hashes are pinned in approved_updates.

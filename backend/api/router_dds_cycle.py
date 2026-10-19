@@ -248,7 +248,10 @@ async def post_complete_card(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    return await complete_card(db, session_id, card_id, payload.request_id, current_user)
+    state = await complete_card(db, session_id, card_id, payload.request_id, current_user)
+    from backend.core.report_demo import start_session
+    await start_session(db, session_id)
+    return state
 
 
 @router_dds_cycle.post(
@@ -297,6 +300,8 @@ async def finish_session_endpoint(
         current_user=current_user,
         db=db,
     )
+    from backend.core.report_demo import start_session
+    await start_session(db, session_id)
     return DDSSessionStateResponse.model_validate(state)
 
 

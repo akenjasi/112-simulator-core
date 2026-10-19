@@ -12,6 +12,7 @@ import { fetchStudentWorkspace, type StudentWorkspace } from "@/lib/student-work
 import styles from "./student-profile.module.css"
 import {reviewUrl} from "@/lib/student-review"
 import {reviewTime, type TeacherAssessment} from "@/lib/student-review"
+import {PersonalRecommendations} from "@/components/student/student-review"
 import { getStoredToken } from "@/lib/auth-session"
 
 export interface HistoryTicket {
@@ -28,6 +29,7 @@ export interface HistoryTicket {
 }
 
 export interface HistoryLesson {
+  report_mode?: string
   session_id: string
   lesson_id?: string
   title: string
@@ -65,7 +67,7 @@ const REPORT_WAIT_DETAILS: Record<string, string> = {
   cpu_busy: "Сервер занят вычислениями. Отчёт продолжит ожидание в очереди.",
 }
 
-function StudentReports() {
+function StudentReports({demo = false}: {demo?: boolean}) {
   const [reports, setReports] = useState<StudentReport[]>([])
   const [error, setError] = useState<string | null>(null)
   const [notice, setNotice] = useState<string | null>(null)
@@ -120,8 +122,8 @@ function StudentReports() {
   const date = (value: string) => new Date(value).toLocaleDateString("ru-RU", {timeZone: "Europe/Moscow"})
   return <section className="space-y-3" aria-label="Накопительные отчёты ДДС">
     <h3 className="font-semibold">Отчёт за семь дней</h3>
-    <p className="text-muted-foreground">Обновляется не чаще раза в сутки по завершённым дням. Генерация ждёт окончания занятий и свободных ресурсов.</p>
-    <button type="button" onClick={() => void requestReport()} disabled={posting} className="min-h-10 rounded-lg border px-3 disabled:opacity-50">{posting ? "Отправляем запрос…" : "Сформировать отчёт"}</button>
+    <p className="text-muted-foreground">{demo ? "Сохранённая история накопительных отчётов. В деморежиме новые рекомендации формируются отдельно после каждого занятия." : "Обновляется не чаще раза в сутки по завершённым дням. Генерация ждёт окончания занятий и свободных ресурсов."}</p>
+    {!demo && <button type="button" onClick={() => void requestReport()} disabled={posting} className="min-h-10 rounded-lg border px-3 disabled:opacity-50">{posting ? "Отправляем запрос…" : "Сформировать отчёт"}</button>}
     {notice && <p role="status">{notice}</p>}
     {error && <div role="alert">{error} <button type="button" onClick={() => setRevision(value => value + 1)} className="underline">Повторить загрузку отчётов</button></div>}
     {loading && <p role="status">Загружаем отчёты…</p>}
@@ -321,6 +323,7 @@ export default function StudentProfilePage() {
                         {ticket.card_id && <div className="mt-3 flex flex-wrap items-center gap-x-5 gap-y-2"><Link className="inline-flex min-h-10 items-center gap-2 rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 focus-visible:outline-2 focus-visible:outline-ring" href={reviewUrl(lesson.session_id, ticket.card_id)}>Разбор<ArrowRight className="h-4 w-4" aria-hidden="true" /></Link><Link className="inline-flex min-h-10 items-center gap-2 text-sm font-medium text-primary underline-offset-4 hover:underline focus-visible:outline-2 focus-visible:outline-ring" href={`/dds?${new URLSearchParams({session_id: lesson.session_id, ticket_id: ticket.ticket_id, card_id: ticket.card_id})}`}>Открыть карточку<ArrowRight className="h-4 w-4" aria-hidden="true" /></Link></div>}
                       </article>) : <p className="text-sm text-muted-foreground">Подробности по карточкам пока недоступны.</p>}
                       <p className="break-all text-xs text-muted-foreground">Номер занятия: {lesson.session_id}</p>
+                      {lesson.report_mode === "demo" && lesson.status !== "IN_PROGRESS" && lesson.status !== "ARCHIVED" && <PersonalRecommendations sessionId={lesson.session_id}/>}
                     </div>
                   </details>)}</div>
                   {lessons.length > 3 && <button type="button" onClick={() => setShowAll(value => !value)} className="mt-4 min-h-10 text-sm font-medium text-primary hover:underline">{showAll ? "Показать последние" : `Вся история занятий (${lessons.length})`}</button>}
@@ -328,7 +331,8 @@ export default function StudentProfilePage() {
               </div>}
               {activeTab === "materials" && <ProfileMaterials />}
               {activeTab === "advice" && <div className="space-y-4 text-sm">
-                <StudentReports />
+                {lessons.filter(lesson => lesson.report_mode === "demo" && lesson.status !== "IN_PROGRESS" && lesson.status !== "ARCHIVED").map(lesson => <section key={lesson.session_id} className="space-y-2"><h3 className="font-semibold">{lessonTitle(lesson)}</h3><PersonalRecommendations sessionId={lesson.session_id}/></section>)}
+                <StudentReports demo={lessons.some(lesson => lesson.report_mode === "demo")} />
                 <p className="leading-relaxed text-muted-foreground">Сохранённые рекомендации ИИ могут содержать неточности. Обсуждайте спорные выводы с преподавателем.</p>
                 <h3 className="font-semibold">Прежние рекомендации · история</h3>
                 {adviceStatus === "loading" ? <p role="status">Загружаем рекомендации…</p> : adviceStatus === "error" || !profile?.user_id ? <div role="alert">Не удалось загрузить рекомендации. <button type="button" onClick={() => setAdviceReload(value => value + 1)} className="text-primary underline">Повторить загрузку</button></div> : adviceStatus === "ready" && advices.length === 0 ? <p>Сохранённых рекомендаций пока нет.</p> : advices.map(advice => <article key={advice.advice_id} className="rounded-xl border border-border p-4"><p className="mb-2 text-xs text-muted-foreground">{advice.date}</p><p className="whitespace-pre-wrap leading-relaxed">{advice.analysis_text}</p></article>)}

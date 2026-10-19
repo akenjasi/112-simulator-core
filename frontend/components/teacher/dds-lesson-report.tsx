@@ -16,6 +16,7 @@ import {
   RotateCcw,
 } from "lucide-react"
 import { getStoredToken } from "@/lib/auth-session"
+import {LessonPersonalRecommendations} from "@/components/student/student-review"
 
 export interface DDSLessonReportJob {
   job_id?: string
@@ -31,6 +32,7 @@ export interface DDSLessonReportJob {
   period_start?: string | null
   period_end?: string | null
   snapshot_at?: string | null
+  execution_mode?: string
 }
 
 const WAIT_LABELS: Record<string, string> = {
@@ -64,7 +66,7 @@ function validateReportPayload(
   }
 
   // Validate status against known statuses
-  const rawStatus = typeof data.status === "string" ? data.status.toLowerCase() : ""
+  const rawStatus = data.status === "generating" ? "running" : typeof data.status === "string" ? data.status.toLowerCase() : ""
   if (!KNOWN_STATUSES.has(rawStatus)) {
     return { valid: false, error: "Сервер вернул неизвестный статус отчёта." }
   }
@@ -452,6 +454,7 @@ export function DDSLessonReport({ lessonId }: DDSLessonReportProps) {
       className="bg-card rounded-2xl border p-5 shadow-xs space-y-4"
       data-testid="dds-lesson-report"
     >
+      {report?.execution_mode === "demo" && <LessonPersonalRecommendations key={lessonId} lessonId={lessonId}/>}
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b pb-3">
         <div className="flex items-center gap-2.5">

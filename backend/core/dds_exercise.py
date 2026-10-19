@@ -251,6 +251,8 @@ def criteria(data, closed=False):
 def projection(data, editable):
     ex = data.get("exercise")
     result = {"exercise": None, "criteria": data.get("criteria") or criteria(data, closed=not editable), "last_attempt": None}
+    from backend.core.dds_assessment import assess
+    result["assessment"] = assess(data, result["criteria"], editable)
     if not ex:
         return result
     report = current(ex)

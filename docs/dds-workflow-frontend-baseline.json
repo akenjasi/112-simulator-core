@@ -234,19 +234,19 @@
       "reason": "Audited supported runtime and dependency security corrections"
     },
     "components/student/student-review.tsx": {
-      "sha256": "0d0b6d97908edf1adcd233c441bc50d195dc9d5fa4a5e6de6a63508c202b7118",
-      "source_revision": "codex/dds-phone-audio-cycle (base e1ef59b)",
-      "reason": "Explicit user feedback 2026-10-19: accept inaccurate trainee content, show specific content errors in card review, and record the service response rather than an outgoing instruction."
+      "sha256": "3abacb7bf3a57b3fbe1dbfc7b11ba2227cbb78a8098e6b8d86847e4744f34a8c",
+      "source_revision": "510c092 + user-requested immediate GPU demo recommendations, 2026-10-20",
+      "reason": "Explicit user request: immediate personal LLM recommendations after self-training and teacher-led lessons, progress, persisted results and retry; preserve ordinary queued reports. Exact authorized component changes; original baseline remains unchanged."
     },
     "lib/student-review.ts": {
-      "sha256": "881754c0241596179e2bf5e736bfece2eaab732834bcd9fd8c01ec722115e404",
-      "source_revision": "codex/dds-phone-audio-cycle (base e1ef59b)",
-      "reason": "Explicit user feedback 2026-10-19: accept inaccurate trainee content, show specific content errors in card review, and record the service response rather than an outgoing instruction."
+      "sha256": "d0aa3e444d90fb1234e97c9d3807fd9bf6579ed93c43867c6e7bf8b70870da97",
+      "source_revision": "510c092 + user-requested autonomous DDS assessment stage 1",
+      "reason": "Explicit user request 2026-10-19: implement and verify autonomous DDS assessment and recommendations, keeping scripted tickets. Add immediate rule-based attempt feedback and saved incoming notes; preserve teacher grading and original baseline."
     },
     "components/teacher/dds-lesson-report.tsx": {
-      "sha256": "e8d617fb3d6408fe472268165beb7423aace80d308461b2d37dbfac16b0bad77",
-      "source_revision": "74793c15a6196264713cd7f9f10fc13ac3071cbe",
-      "reason": "Explicit user request 2026-10-19: implement background DDS reports with resource waiting reasons and snapshot/period metadata in the existing teacher report screen. Manual role verification requested by the user: explicitly explain RAM/CPU waiting reasons."
+      "sha256": "fd3d134e508b1d0b868bce7f9b1fffe9f4b44f7417a861fb5fc77b62566c92a9",
+      "source_revision": "510c092 + user-requested immediate GPU demo recommendations, 2026-10-20",
+      "reason": "Explicit user request: immediate personal LLM recommendations after self-training and teacher-led lessons, progress, persisted results and retry; preserve ordinary queued reports. Exact authorized component changes; original baseline remains unchanged."
     },
     "components/dispatcher/caller-panel.tsx": {
       "sha256": "eac133283f3ab39dcb8ae4981b2968db7869a09415eee883162b3d6713c65470",
@@ -282,6 +282,11 @@
       "sha256": "3a4448d80b67d3c86c653924468e07de46686ec6b35fa8e393a26284af311917",
       "source_revision": "74793c1+user-approved-dds-interface-guide",
       "reason": "User requested up-to-date DDS help after pulling the new UI: movable phone window, number-based dialing, audio-only v2 reports, three report fields and manual service stages. Exact implementation pin; original baseline unchanged."
+    },
+    "components/teacher/live-dashboard.tsx": {
+      "sha256": "32620679ff63a133ca361f94c2e39e1b5c6af1b07807a62a532da1d23bb63fa0",
+      "source_revision": "510c092 + explicit immediate demo request 2026-10-20",
+      "reason": "User explicitly requested an immediate visible report after teacher-led lessons. Mount the existing DDS report component on the completed demo monitoring screen only; preserve all other monitoring logic and the original baseline."
     }
   },
   "update_policy": "2026-10-19: explicitly reconciled under the user request to repair obsolete tests. Original sha256 values are unchanged. Exact supplemental hashes preserve the integrated changes; these paths are not open-ended exceptions. 2026-10-19: the user explicitly requested the DDS audio-only cycle and teacher review; only the three existing supplemental entries were updated, preserving the original map and guarded path set. 2026-10-19: background report implementation explicitly authorizes the teacher report screen; one exact supplemental hash added, original hash map preserved."

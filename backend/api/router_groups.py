@@ -1296,6 +1296,8 @@ async def get_student_lessons(
     archived = {session.session_id for session in sessions
                 if ((session.dynamic_state or {}).get("dds") or {}).get("archived_at")}
     for record in results:
+        from backend.core.report_demo import demo_enabled
+        record.report_mode = "demo" if demo_enabled() else "queued"
         if record.session_id in archived:
             record.status = "ARCHIVED"
     return results

@@ -1,6 +1,6 @@
 "use client"
 
-import {useEffect, useState} from "react"
+import {useEffect, useRef, useState} from "react"
 import Link from "next/link"
 import {useSearchParams} from "next/navigation"
 import {ArrowLeft, ArrowRight, ChevronDown, RefreshCw} from "lucide-react"
@@ -8,6 +8,103 @@ import {TrainingDialog} from "@/components/student/training-dialog"
 import {REVIEW_CRITERIA, REVIEW_STATUS, actionDescription, fetchStudentReview, reviewTime, reviewUrl,
   type ReviewEvidence, type StudentReview} from "@/lib/student-review"
 import styles from "./student-review.module.css"
+import {getStoredToken} from "@/lib/auth-session"
+
+interface PersonalReport {
+  session_id: string; status: "not_started" | "awaiting_lesson" | "disabled" | "generating" | "failed" | "completed"
+  report_text?: string | null; snapshot_at?: string | null; model_used?: string | null
+}
+
+export function PersonalRecommendations({sessionId}: {sessionId: string}) {
+  const [result, setResult] = useState<{id: string; data?: PersonalReport; error?: string} | null>(null)
+  const [revision, setRevision] = useState(0)
+  const [posting, setPosting] = useState(false)
+  const postLock = useRef(false)
+  const controllerRef = useRef<AbortController | null>(null)
+  useEffect(() => {
+    const controller = new AbortController()
+    controllerRef.current = controller
+    let timer: ReturnType<typeof setTimeout> | undefined
+    setResult(null)
+    const load = async () => {
+      try {
+        const token = getStoredToken()
+        if (!token) throw new Error()
+        const response = await fetch(`/api/ai-analytics/sessions/${encodeURIComponent(sessionId)}/recommendation`, {
+          headers: {Authorization: `Bearer ${token}`}, cache: "no-store", signal: controller.signal,
+        })
+        if (!response.ok) throw new Error()
+        const data = await response.json()
+        if (data.session_id !== sessionId || !["not_started", "awaiting_lesson", "disabled", "generating", "failed", "completed"].includes(data.status) ||
+          data.status === "completed" && (typeof data.report_text !== "string" || !data.report_text.trim())) throw new Error()
+        if (!controller.signal.aborted) {
+          setResult({id: sessionId, data})
+          if (["generating", "awaiting_lesson"].includes(data.status)) timer = setTimeout(load, 2000)
+        }
+      } catch {
+        if (!controller.signal.aborted) setResult({id: sessionId, error: "Не удалось загрузить рекомендации ИИ."})
+      }
+    }
+    void load()
+    return () => {controller.abort(); if (timer) clearTimeout(timer)}
+  }, [sessionId, revision])
+  const current = result?.id === sessionId ? result : null
+  const data = current?.data
+  const request = async () => {
+    if (postLock.current) return
+    postLock.current = true; setPosting(true)
+    const controller = controllerRef.current
+    try {
+      const token = getStoredToken()
+      const response = await fetch(`/api/ai-analytics/sessions/${encodeURIComponent(sessionId)}/recommendation`, {
+        method: "POST", headers: {Authorization: `Bearer ${token}`, "Content-Type": "application/json"},
+        body: JSON.stringify({retry: true}), signal: controller?.signal,
+      })
+      if (!response.ok) throw new Error()
+      if (!controller?.signal.aborted) setRevision(value => value + 1)
+    } catch {if (!controller?.signal.aborted) setResult({id: sessionId, error: "Не удалось запустить рекомендации ИИ. Результаты занятия сохранены."})}
+    finally {postLock.current = false; if (!controller?.signal.aborted) setPosting(false)}
+  }
+  return <section aria-label="Персональные рекомендации ИИ" className="rounded-xl border border-primary/20 bg-card p-4 text-sm space-y-3">
+    <h3 className="font-semibold">Рекомендации ИИ по занятию</h3>
+    {!current && <p role="status">Загружаем рекомендации ИИ…</p>}
+    {current?.error && <div role="alert">{current.error} <button type="button" onClick={() => setRevision(value => value + 1)} className="underline">Обновить рекомендации</button></div>}
+    {data?.status === "generating" && <p role="status">ИИ анализирует занятие. Рекомендации появятся здесь автоматически.</p>}
+    {data?.status === "awaiting_lesson" && <p role="status">Рекомендации появятся после завершения всего занятия преподавателем.</p>}
+    {data?.status === "disabled" && <p>Для этого режима доступны накопительные отчёты в кабинете.</p>}
+    {data?.status === "failed" && <p role="alert">Не удалось сформировать рекомендации ИИ. Результаты занятия сохранены.</p>}
+    {data?.status === "not_started" && <p>Анализ этого занятия ещё не запущен.</p>}
+    {(data?.status === "failed" || data?.status === "not_started") && <button type="button" disabled={posting} onClick={() => void request()} className="min-h-10 rounded border px-3 disabled:opacity-50">{posting ? "Запускаем анализ…" : "Повторить анализ ИИ"}</button>}
+    {data?.status === "completed" && <><p className="whitespace-pre-wrap leading-relaxed select-text">{data.report_text}</p>
+      <p className="text-xs text-muted-foreground">По всем вашим карточкам этого занятия.{data.snapshot_at ? ` Данные на ${new Date(data.snapshot_at).toLocaleString("ru-RU", {timeZone: "Europe/Moscow"})}.` : ""}{data.model_used ? ` Модель: ${data.model_used}.` : ""}</p></>}
+  </section>
+}
+
+export function LessonPersonalRecommendations({lessonId}: {lessonId: string}) {
+  const [result, setResult] = useState<{id: string; reports?: {session_id: string; cadet_name: string}[]; error?: boolean} | null>(null)
+  const [revision, setRevision] = useState(0)
+  useEffect(() => {
+    const controller = new AbortController()
+    setResult(null)
+    void (async () => {
+      try {
+        const response = await fetch(`/api/ai-analytics/lessons/${encodeURIComponent(lessonId)}/personal-reports`, {
+          headers: {Authorization: `Bearer ${getStoredToken()}`}, cache: "no-store", signal: controller.signal,
+        })
+        const data = await response.json()
+        if (!response.ok || data.lesson_id !== lessonId || !Array.isArray(data.reports) ||
+          data.reports.some((item: any) => typeof item.session_id !== "string" || typeof item.cadet_name !== "string")) throw new Error()
+        if (!controller.signal.aborted) setResult({id: lessonId, reports: data.reports})
+      } catch {if (!controller.signal.aborted) setResult({id: lessonId, error: true})}
+    })()
+    return () => controller.abort()
+  }, [lessonId, revision])
+  const current = result?.id === lessonId ? result : null
+  return <section aria-label="Рекомендации участникам" className="space-y-3"><h3 className="font-semibold">Персональные рекомендации участникам</h3>
+    {current?.error && <p role="alert">Не удалось загрузить рекомендации участников. <button type="button" onClick={() => setRevision(value => value + 1)} className="underline">Повторить загрузку</button></p>}
+    {current?.reports?.map(item => <div key={item.session_id}><h4 className="mb-2 font-medium">{item.cadet_name}</h4><PersonalRecommendations sessionId={item.session_id}/></div>)}
+  </section>
+}
 
 function Evidence({item}: {item: ReviewEvidence}) {
   const action = actionDescription(item.action)
@@ -47,7 +144,7 @@ export function StudentAttemptReview() {
   const evaluated = review?.criteria.some(item => item.status !== "not_evaluated")
   const journal = review ? [
     ...review.state.actions.map((action, i) => ({id: `action-${i}`, at: action.at, service: action.service_name, text: actionDescription(action as unknown as Record<string, unknown>), mistake: false, blocking: false})),
-    ...review.events.filter(event => ["mistake", "answered", "dialed"].includes(event.kind)).map(event => ({id: event.id, at: event.at, service: event.service_name, text: event.kind === "mistake" ? [actionDescription(event.action), event.message].filter(Boolean).join(". ") : event.text || "Текст сообщения не сохранён.", mistake: event.kind === "mistake", blocking: event.blocking !== false})),
+    ...review.events.filter(event => ["mistake", "answered", "dialed", "note"].includes(event.kind)).map(event => ({id: event.id, at: event.at, service: event.service_name, text: event.kind === "mistake" ? [actionDescription(event.action), event.message].filter(Boolean).join(". ") : event.kind === "note" ? `Запись доклада: ${event.note || "Текст записи не сохранён."}` : event.text || (event.kind === "dialed" ? "Исходящий вызов исполнителю." : "Входящий доклад принят."), mistake: event.kind === "mistake", blocking: event.blocking !== false})),
   ].sort((a, b) => (a.at || "").localeCompare(b.at || "")) : []
 
   return <div className={`${styles.root} min-h-screen bg-slate-50 text-foreground dark:bg-slate-950`}>
@@ -73,6 +170,14 @@ export function StudentAttemptReview() {
           <section aria-labelledby="review-criteria" className={`${styles.panel} rounded-2xl border border-border bg-card`}>
             <h2 id="review-criteria" className="shrink-0 border-b border-border px-5 py-4 text-lg font-semibold">Проверка по критериям</h2>
             <div className={`${styles.scroll} space-y-3 p-4`}>
+              {state.report_mode === "demo" && closed && <PersonalRecommendations sessionId={sessionId}/>}
+              {review.assessment && <section aria-label="Автоматический разбор" className="rounded-xl border border-primary/15 bg-primary/5 p-4 text-sm leading-relaxed">
+                <h3 className="font-semibold">Автоматический разбор</h3>
+                <p className="mt-2">{{passed: "Все пять критериев выполнены без зафиксированных ошибок. Можно переходить к следующей тренировке.", needs_review: "Есть замечания к выполнению. Разберите их перед следующей тренировкой.", incomplete: "Карточка не завершена. Итоговая проверка полного цикла недоступна.", insufficient_data: "Не все критерии оценены. Данных недостаточно для полного итога.", in_progress: "Предварительный разбор: работа с карточкой продолжается."}[review.assessment.status]}</p>
+                <p className="mt-2">Выполнено критериев: {review.assessment.completed_criteria + review.assessment.corrected_criteria} из {review.assessment.total_criteria}; после исправления: {review.assessment.corrected_criteria}. Ошибок в протоколе: {review.assessment.mistakes_count}.</p>
+                {!!review.assessment.recommendations.length && <ul aria-label="Рекомендации по попытке" className="mt-3 list-disc space-y-2 pl-5">{review.assessment.recommendations.map((item, i) => <li key={i}><strong>{REVIEW_CRITERIA.find(c => c.key === item.criterion)?.title}: </strong>{item.text}</li>)}</ul>}
+                <p className="mt-3 text-xs text-muted-foreground">Разбор сформирован автоматически по сохранённым действиям и правилам пяти критериев. Оценка преподавателя учитывается отдельно.</p>
+              </section>}
               {review.savedErrors && review.savedErrors.count > 0 && <div className="rounded-xl border border-border p-4 text-sm leading-relaxed"><h3 className="font-semibold">Ранее сохранённая проверка</h3><p className="mt-2">Сохранённых ошибок: {review.savedErrors.count}. Проверка по пяти критериям для них не передана.</p>{review.savedErrors.messages.length > 0 ? <ul className="mt-2 list-disc space-y-1 pl-5">{review.savedErrors.messages.map((message, i) => <li key={i}>{message}</li>)}</ul> : <p className="mt-2 text-muted-foreground">Подробные замечания не сохранены.</p>}</div>}
               {review.historyUnavailable && <p role="status" className="text-sm text-muted-foreground">Сохранённые замечания из истории не удалось загрузить. Обновите разбор, чтобы повторить загрузку.</p>}
               <div className="rounded-xl border border-primary/15 bg-primary/5 p-4 text-sm leading-relaxed">

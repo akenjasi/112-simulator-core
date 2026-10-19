@@ -1,5 +1,6 @@
 from backend.core.report_runtime import learning_priority
 from copy import deepcopy
+from backend.core.report_demo import demo_enabled
 from datetime import datetime, timezone
 from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -330,6 +331,7 @@ async def get_lesson_detail(
         group_name=group.group_name if group else None,
         teacher_id=lesson.assigned_by,
         target_role=lesson.target_role or "OPERATOR_112",
+        report_mode="demo" if demo_enabled() else "queued",
         mode=lesson.mode,
         ticket_ids=lesson.card_pool_ids or ([lesson.scenario_id] if lesson.scenario_id else []),
         status=lesson.status,
@@ -662,6 +664,8 @@ async def stop_lesson(
 
     await db.commit()
     await db.refresh(lesson)
+    from backend.core.report_demo import start_lesson
+    await start_lesson(db, lesson)
 
     cadets_list, total_cadets, total_in_progress, total_passed, total_failed = await _build_cadet_stats(lesson, group, db)
     overall_progress = round(sum(c.progress for c in cadets_list) / max(total_cadets, 1))

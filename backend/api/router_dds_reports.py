@@ -38,10 +38,13 @@ class DDSReportJobResponse(BaseModel):
     report_text: Optional[str] = None
     error_code: Optional[str] = None
     model_used: Optional[str] = None
+    execution_mode: str = "queued"
 
 
 def format_job_response(job):
     result = DDSReportJobResponse.model_validate(job)
+    from backend.core.report_demo import demo_enabled
+    result.execution_mode = "demo" if job.kind == "session_demo" or job.status == "generating" or demo_enabled() else "queued"
     for name in ("created_at", "updated_at", "period_start", "period_end", "snapshot_at", "next_run_at"):
         setattr(result, name, aware(getattr(result, name)))
     if job.status != "completed":
@@ -118,6 +121,11 @@ async def create_or_get_lesson_report_job(lesson_id: str, response: Response,
     req: Optional[DDSReportJobCreateRequest] = Body(default=None), db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user)):
     lesson = await verify_lesson_access(lesson_id, db, current_user)
+    from backend.core.report_demo import demo_enabled, start_lesson
+    if demo_enabled():
+        job = await start_lesson(db, lesson, retry=bool(req and req.retry))
+        response.status_code = 200 if job.status == "completed" else 202
+        return format_job_response(job)
     await import_legacy(db)
     job = await enqueue_lesson(db, lesson)
     if job is None:
@@ -141,6 +149,59 @@ async def get_lesson_report_job(lesson_id: str, db: AsyncSession = Depends(get_d
                 error_code=old.error_code if old.status == "failed" else None, model_used=old.model_used)
         raise HTTPException(404, "Report has not been requested")
     return format_job_response(job)
+
+
+async def session_recommendation(db, session, lesson):
+    from backend.core.report_demo import demo_enabled, eligible
+    job = await db.scalar(select(ReportJob).where(ReportJob.scope_key == "session:" + session.session_id))
+    result = {"mode": "demo" if demo_enabled() else "queued", "session_id": session.session_id,
+              "status": "not_started" if eligible(session, lesson) else "awaiting_lesson"}
+    if not job:
+        if not demo_enabled():
+            result["status"] = "disabled"
+        return result
+    result.update(format_job_response(job).model_dump(mode="json"))
+    return result
+
+
+@router.get("/sessions/{session_id}/recommendation")
+async def get_session_recommendation(session_id: str, db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)):
+    from backend.core.report_demo import session_access
+    session, lesson = await session_access(db, session_id, current_user)
+    return await session_recommendation(db, session, lesson)
+
+
+@router.post("/sessions/{session_id}/recommendation")
+async def request_session_recommendation(session_id: str, response: Response,
+    req: Optional[DDSReportJobCreateRequest] = Body(default=None), db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)):
+    from backend.core.report_demo import demo_enabled, eligible, session_access, start_session
+    session, lesson = await session_access(db, session_id, current_user)
+    if not demo_enabled():
+        raise HTTPException(409, "Immediate recommendations require DDS_REPORT_MODE=demo")
+    if not eligible(session, lesson):
+        raise HTTPException(409, "Recommendations are available after the lesson has ended")
+    await start_session(db, session_id, retry=bool(req and req.retry))
+    result = await session_recommendation(db, session, lesson)
+    response.status_code = 200 if result["status"] == "completed" else 202
+    return result
+
+
+@router.get("/lessons/{lesson_id}/personal-reports")
+async def get_personal_lesson_reports(lesson_id: str, db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)):
+    from backend.core.report_demo import demo_enabled
+    from backend.models.domain_03 import ExamSession
+    lesson = await verify_lesson_access(lesson_id, db, current_user)
+    rows = (await db.execute(select(ExamSession, User).join(User, User.user_id == ExamSession.cadet_id).where(
+        ExamSession.assignment_id == lesson_id, ExamSession.session_type == "CARD_ACTIONS").order_by(ExamSession.session_id))).all()
+    items = []
+    for session, user in rows:
+        item = await session_recommendation(db, session, lesson)
+        item["cadet_name"] = user.full_name or user.username
+        items.append(item)
+    return {"mode": "demo" if demo_enabled() else "queued", "lesson_id": lesson_id, "reports": items}
 
 
 def require_student(user):

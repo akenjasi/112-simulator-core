@@ -3,6 +3,7 @@ import { afterEach, beforeEach, expect, it, vi } from "vitest"
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react"
 import StudentProfilePage from "@/app/student/profile/page"
 import { DDSLessonReport } from "@/components/teacher/dds-lesson-report"
+import LiveDashboard from "@/components/teacher/live-dashboard"
 
 vi.mock("next/navigation", () => ({useRouter: () => ({push: vi.fn(), replace: vi.fn()})}))
 vi.mock("next/link", () => ({default: ({children, ...props}: any) => <a {...props}>{children}</a>}))
@@ -78,4 +79,53 @@ it("explains the specific student memory wait while preserving the queued report
   expect(await screen.findByText("Недостаточно ресурсов")).toBeInTheDocument()
   expect(screen.getByText("Недостаточно свободной оперативной памяти для модели и резерва сервера.")).toBeInTheDocument()
   expect(network.mock.calls.some(([, init]) => init?.method === "POST")).toBe(false)
+})
+
+it("shows per-lesson demo recommendations in the advice tab without offering daily generation", async () => {
+  const original = network.getMockImplementation()!
+  network.mockImplementation((url, init) => url.includes("students/me/lessons")
+    ? Promise.resolve(response([{session_id: "s1", title: "Учебное занятие", target_role: "DISPATCHER_DDS",
+        session_type: "CARD_ACTIONS", status: "COMPLETED", report_mode: "demo", tickets: []}]))
+    : url.endsWith("/recommendation")
+      ? Promise.resolve(response({session_id: "s1", status: "completed", report_text: "Повторите регистрацию этапа после доклада."}))
+      : original(url, init))
+  render(<StudentProfilePage />)
+  fireEvent.click(await screen.findByRole("button", {name: "Рекомендации ИИ"}))
+  expect(await screen.findByText("Повторите регистрацию этапа после доклада.")).toBeInTheDocument()
+  expect(screen.queryByRole("button", {name: "Сформировать отчёт"})).not.toBeInTheDocument()
+  expect(network.mock.calls.some(([, init]) => init?.method === "POST")).toBe(false)
+})
+
+it("treats immediate teacher generation as active inference and shows participant reports", async () => {
+  const original = network.getMockImplementation()!
+  network.mockImplementation((url, init) => url.endsWith("/personal-reports")
+    ? Promise.resolve(response({lesson_id: "lesson", reports: [{session_id: "s1", cadet_name: "Курсант Петров"}]}))
+    : url.endsWith("/recommendation")
+      ? Promise.resolve(response({session_id: "s1", status: "completed", report_text: "Совет для Петрова."}))
+      : url.endsWith("/report")
+        ? Promise.resolve(response({lesson_id: "lesson", status: "generating", execution_mode: "demo"}))
+        : original(url, init))
+  render(<DDSLessonReport lessonId="lesson" />)
+  expect(await screen.findByText("Нейросеть формирует аналитический отчёт...")).toBeInTheDocument()
+  expect(await screen.findByText("Совет для Петрова.")).toBeInTheDocument()
+  expect(screen.queryByText("Задание поставлено в очередь на обработку...")).not.toBeInTheDocument()
+})
+
+it("automatically exposes the demo report on the monitoring screen after the teacher ends a lesson", async () => {
+  vi.spyOn(window, "confirm").mockReturnValue(true)
+  let ended = false
+  network.mockImplementation(async url => {
+    if (url.endsWith('/stop')) {ended = true; return response({})}
+    if (url.endsWith('/report')) return response({lesson_id: "lesson", status: "generating", execution_mode: "demo"})
+    if (url.endsWith('/personal-reports')) return response({lesson_id: "lesson", reports: []})
+    return response({id: "lesson", target_role: "DISPATCHER_DDS", report_mode: "demo", status: ended ? "COMPLETED" : "ACTIVE",
+      overall_progress: 100, total_cadets: 0, total_in_progress: 0, total_passed: 0, total_failed: 0, cadets: []})
+  })
+  try {
+    render(<LiveDashboard sessionId="lesson" source="lesson"/>)
+    fireEvent.click(await screen.findByRole("button", {name: "Завершить урок"}))
+    expect(await screen.findByText("Нейросеть формирует аналитический отчёт...")).toBeInTheDocument()
+    expect(network.mock.calls.filter(([, init]) => init?.method === "POST")).toHaveLength(1)
+    expect(network.mock.calls.find(([, init]) => init?.method === "POST")?.[0]).toBe('/api/v1/lessons/lesson/stop')
+  } finally {vi.restoreAllMocks()}
 })

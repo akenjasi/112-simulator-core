@@ -29,11 +29,15 @@ def digest(value):
     return hashlib.sha256(json.dumps(value, ensure_ascii=False, sort_keys=True, default=str).encode()).hexdigest()
 
 
-async def collect_report_snapshot(db, *, lesson_id=None, owner_id=None, period_start=None, period_end=None):
+async def collect_report_snapshot(db, *, lesson_id=None, owner_id=None, session_id=None, period_start=None, period_end=None):
     query = select(ExamSession).join(Assignment).where(
         Assignment.target_role == "DISPATCHER_DDS",
         func.upper(ExamSession.status) == "COMPLETED")
-    if lesson_id:
+    if session_id:
+        query = query.where(ExamSession.session_id == session_id)
+        if owner_id:
+            query = query.where(ExamSession.cadet_id == owner_id)
+    elif lesson_id:
         query = query.where(Assignment.assignment_id == lesson_id)
     else:
         query = query.where(ExamSession.cadet_id == owner_id,

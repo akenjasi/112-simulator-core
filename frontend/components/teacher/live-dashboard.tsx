@@ -4,6 +4,7 @@ import { apiFetch as fetch } from "@/lib/api-fetch"
 
 import React, { useState, useEffect, useCallback, useRef } from "react"
 import Link from "next/link"
+import {DDSLessonReport} from "@/components/teacher/dds-lesson-report"
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from "@/components/ui/card"
 import {
   Table,
@@ -73,6 +74,7 @@ export interface CadetStats {
 }
 
 export interface SessionStats {
+  report_mode?: string
   id?: string
   session_id?: string
   session_name?: string
@@ -568,6 +570,7 @@ export default function LiveDashboardPage(props: LiveDashboardProps = {}) {
       </div>
 
       {/* Error alert */}
+      {source === "lesson" && isCompleted && stats?.target_role === "DISPATCHER_DDS" && stats.report_mode === "demo" && sessionId && <DDSLessonReport key={sessionId} lessonId={sessionId}/>}
       {error && (
         <div
           role="alert"

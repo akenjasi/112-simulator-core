@@ -1,7 +1,7 @@
 import React from "react"
 import {act, cleanup, fireEvent, render, screen, within} from "@testing-library/react"
 import {afterEach, beforeEach, expect, it, vi} from "vitest"
-import {StudentAttemptReview} from "@/components/student/student-review"
+import {StudentAttemptReview, PersonalRecommendations, LessonPersonalRecommendations} from "@/components/student/student-review"
 import {validateStudentReview} from "@/lib/student-review"
 import {DDSAssignedConsole} from "@/components/dispatcher/dds-assigned-console"
 
@@ -194,4 +194,126 @@ it("shows accepted inaccurate notes as content errors, with the trainee's origin
   expect(screen.getAllByText(/Запись доклада: Пупкин, бригада 99/)).toHaveLength(2)
   expect(screen.getAllByText(/неверно записано ФИО докладчика/)).toHaveLength(2)
   expect(screen.queryByText("Ошибочная попытка")).not.toBeInTheDocument()
+})
+
+const assessment = (extra: Record<string, unknown> = {}) => ({source: "rules", version: 1, status: "needs_review",
+  completed_criteria: 3, corrected_criteria: 1, total_criteria: 5, mistakes_count: 2,
+  recommendations: [{criterion: "accuracy", text: "Сверяйте номер бригады с услышанным сообщением."}], ...extra})
+
+it("shows immediate recommendations even when teacher metadata is unavailable", async () => {
+  network.mockImplementation(async url => url.includes("students/me/lessons") ? response({}, 503) : response(state({assessment: assessment()})))
+  render(<StudentAttemptReview/>)
+  const block = await screen.findByRole("region", {name: "Автоматический разбор"})
+  expect(block).toHaveTextContent("Выполнено критериев: 4 из 5; после исправления: 1. Ошибок в протоколе: 2.")
+  expect(block).toHaveTextContent("Сверяйте номер бригады с услышанным сообщением.")
+  expect(block).not.toHaveTextContent("ИИ")
+  expect(screen.queryByText(/Все пять критериев выполнены/)).not.toBeInTheDocument()
+  expect(network.mock.calls.every(([, init]) => !init?.method || init.method === "GET")).toBe(true)
+})
+
+it.each([
+  ["passed", "Все пять критериев выполнены без зафиксированных ошибок"],
+  ["incomplete", "Карточка не завершена"],
+  ["insufficient_data", "Не все критерии оценены"],
+  ["in_progress", "Предварительный разбор"],
+])("renders the %s assessment with its real limitation", async (status, text) => {
+  network.mockResolvedValue(response(state({assessment: assessment({status, ...(status === "passed" ? {completed_criteria: 5, corrected_criteria: 0, mistakes_count: 0, recommendations: []} : {})})})))
+  render(<StudentAttemptReview/>)
+  expect(await screen.findByRole("region", {name: "Автоматический разбор"})).toHaveTextContent(text)
+})
+
+it("displays the trainee's saved incoming note in audio mode", async () => {
+  network.mockResolvedValue(response(state({exercise: {source: "prepared", contacts: [], outgoing: {}, events: [
+    {id: "call", kind: "answered", card_id: "c1", text: null},
+    {id: "note", kind: "note", card_id: "c1", note: "Петров Пётр Петрович, бригада 2 прибыла"},
+  ]}})))
+  render(<StudentAttemptReview/>)
+  expect(await screen.findByText("Входящий доклад принят.")).toBeInTheDocument()
+  expect(screen.getByText("Запись доклада: Петров Пётр Петрович, бригада 2 прибыла")).toBeInTheDocument()
+  expect(screen.queryByText("Текст сообщения не сохранён.")).not.toBeInTheDocument()
+})
+
+it("rejects malformed automatic assessments without fabricating feedback", () => {
+  for (const extra of [{source: "llm"}, {status: "unknown"}, {mistakes_count: -1}, {total_criteria: 0},
+    {completed_criteria: 5, corrected_criteria: 1}, {status: "passed"}, {recommendations: [{criterion: "unknown", text: "Совет"}]}]) {
+    expect(() => validateStudentReview(state({assessment: assessment(extra)}), "s1", "c1")).toThrow(/автоматический разбор/)
+  }
+})
+
+const personalReport = (extra: Record<string, unknown> = {}) => ({session_id: "s1", status: "completed",
+  report_text: "Потренируйтесь сверять этап с принятым докладом.", model_used: "dds-qwen",
+  snapshot_at: "2026-10-19T21:15:00Z", ...extra})
+
+it("reads saved personal AI recommendations without starting inference", async () => {
+  network.mockResolvedValue(response(personalReport()))
+  render(<PersonalRecommendations sessionId="s1"/>)
+  expect(await screen.findByText("Потренируйтесь сверять этап с принятым докладом.")).toBeInTheDocument()
+  expect(screen.getByText(/По всем вашим карточкам/)).toHaveTextContent("00:15")
+  expect(network).toHaveBeenCalledTimes(1)
+  expect(network.mock.calls[0][0]).toBe("/api/ai-analytics/sessions/s1/recommendation")
+  expect(network.mock.calls[0][1]?.method).toBeUndefined()
+})
+
+it("polls an immediate generation and displays its completed result", async () => {
+  vi.useFakeTimers()
+  try {
+    network.mockResolvedValueOnce(response(personalReport({status: "generating", report_text: null})))
+      .mockResolvedValue(response(personalReport()))
+    render(<PersonalRecommendations sessionId="s1"/>)
+    await act(async () => {await Promise.resolve()})
+    expect(screen.getByRole("status")).toHaveTextContent("ИИ анализирует занятие")
+    await act(async () => {await vi.advanceTimersByTimeAsync(2000)})
+    expect(screen.getByText("Потренируйтесь сверять этап с принятым докладом.")).toBeInTheDocument()
+    expect(network).toHaveBeenCalledTimes(2)
+    await act(async () => {await vi.advanceTimersByTimeAsync(10000)})
+    expect(network).toHaveBeenCalledTimes(2)
+  } finally {vi.useRealTimers()}
+})
+
+it("waits for the teacher to finish the group lesson without a generation POST", async () => {
+  network.mockResolvedValue(response(personalReport({status: "awaiting_lesson", report_text: null})))
+  render(<PersonalRecommendations sessionId="s1"/>)
+  expect(await screen.findByText(/после завершения всего занятия преподавателем/)).toBeInTheDocument()
+  expect(network.mock.calls.some(([, init]) => init?.method === "POST")).toBe(false)
+})
+
+it("retries a failed personal report once while keeping saved lesson results explicit", async () => {
+  let resolve!: (response: Response) => void
+  network.mockImplementation(async (_url, init) => init?.method === "POST" ? new Promise(r => {resolve = r}) :
+    response(personalReport({status: "failed", report_text: null})))
+  render(<PersonalRecommendations sessionId="s1"/>)
+  expect(await screen.findByRole("alert")).toHaveTextContent("Результаты занятия сохранены")
+  const button = screen.getByRole("button", {name: "Повторить анализ ИИ"})
+  fireEvent.click(button); fireEvent.click(button)
+  expect(network.mock.calls.filter(([, init]) => init?.method === "POST")).toHaveLength(1)
+  expect(network.mock.calls.find(([, init]) => init?.method === "POST")?.[1]?.body).toBe(JSON.stringify({retry: true}))
+  await act(async () => {resolve(response(personalReport({status: "generating"}), 202))})
+})
+
+it("discards a delayed personal report after changing session", async () => {
+  let resolve!: (response: Response) => void
+  network.mockImplementationOnce(() => new Promise(r => {resolve = r}))
+    .mockResolvedValue(response(personalReport({session_id: "s2", report_text: "Советы для второго курсанта."})))
+  const view = render(<PersonalRecommendations sessionId="s1"/>)
+  view.rerender(<PersonalRecommendations sessionId="s2"/>)
+  expect(await screen.findByText("Советы для второго курсанта.")).toBeInTheDocument()
+  await act(async () => {resolve(response(personalReport()))})
+  expect(screen.queryByText("Потренируйтесь сверять этап с принятым докладом.")).not.toBeInTheDocument()
+})
+
+it("rejects another session's result instead of displaying it", async () => {
+  network.mockResolvedValue(response(personalReport({session_id: "other"})))
+  render(<PersonalRecommendations sessionId="s1"/>)
+  expect(await screen.findByRole("alert")).toHaveTextContent("Не удалось загрузить рекомендации")
+  expect(screen.queryByText("Потренируйтесь сверять этап с принятым докладом.")).not.toBeInTheDocument()
+})
+
+it("shows individual reports to the teacher in the completed lesson", async () => {
+  network.mockImplementation(async url => response(url.endsWith('/personal-reports') ? {lesson_id: "l1", reports: [
+    {session_id: "s1", cadet_name: "Курсант Петров"}, {session_id: "s2", cadet_name: "Курсант Сидоров"},
+  ]} : personalReport({session_id: url.includes("/s2/") ? "s2" : "s1"})))
+  render(<LessonPersonalRecommendations lessonId="l1"/>)
+  expect(await screen.findByText("Курсант Петров")).toBeInTheDocument()
+  expect(screen.getByText("Курсант Сидоров")).toBeInTheDocument()
+  expect(await screen.findAllByText("Потренируйтесь сверять этап с принятым докладом.")).toHaveLength(2)
 })

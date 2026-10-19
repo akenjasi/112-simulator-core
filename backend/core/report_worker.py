@@ -46,6 +46,8 @@ class ReportWorker:
         self.task = asyncio.create_task(self.run(), name="dds_report_scheduler")
 
     async def stop(self):
+        from backend.core.report_demo import stop_demo_reports
+        await stop_demo_reports()
         if self.task:
             self.task.cancel()
             try:
@@ -96,6 +98,9 @@ class ReportWorker:
         return None
 
     async def tick(self):
+        from backend.core.report_demo import demo_enabled
+        if demo_enabled():
+            return
         if time.monotonic() - self.last_reconcile >= 60:
             async with self.sessions() as db:
                 await reconcile_reports(db)

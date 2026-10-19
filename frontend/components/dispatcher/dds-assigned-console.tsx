@@ -3,6 +3,7 @@
 import React, { useState, useEffect, useCallback, useRef } from "react"
 import Link from "next/link"
 import {reviewUrl} from "@/lib/student-review"
+import {PersonalRecommendations} from "@/components/student/student-review"
 import {fetchDDSSessionState, fetchDDSCard, postDDSAction, finishDDSSession, completeDDSCard, postDDSPhone,
   DDSRequestError, ddsBlockerMessage, getStoredToken,
   type DDSPhonePayload, type DDSSessionState, type DDSActionPayload, type DDSFinishPayload} from "@/lib/dds-cycle"
@@ -259,6 +260,7 @@ export function DDSAssignedConsole({sessionId, ticketId, cardId}: Props) {
         <button type="button" onClick={handleRefresh} disabled={isSaving} className="underline disabled:opacity-50">Обновить</button>
       </div>}
       {completionNotice && <div className="flex shrink-0 flex-wrap items-center justify-between gap-3 px-4 py-2 text-sm bg-blue-100 text-blue-900"><span>{completionNotice}</span><Link href={reviewUrl(sessionId, sessionState.card_id)} className="inline-flex min-h-10 items-center rounded border border-blue-300 bg-white px-4 py-2 font-semibold hover:bg-blue-50 focus-visible:outline-2 focus-visible:outline-ring">Разбор карточки</Link></div>}
+      {isCompleted && sessionState.report_mode === "demo" && <div className="shrink-0 max-h-[40vh] overflow-y-auto bg-background text-foreground p-3"><PersonalRecommendations sessionId={sessionId}/></div>}
       <Tutorial run={helpOpen} onFinish={() => setHelpOpen(false)} context="lesson" onTopicChange={setHelpTopic} />
       <DDSWorkspaceContent card={card} phone={
           sessionState.exercise ? <DDSTrainingPhone key={`phone-${sessionState.card_id}`} exercise={sessionState.exercise} tourTopic={helpOpen ? helpTopic : undefined}

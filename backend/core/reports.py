@@ -28,6 +28,9 @@ async def insert_once(db, job):
 
 
 async def enqueue_lesson(db, lesson, now=None):
+    from backend.core.report_demo import demo_enabled
+    if demo_enabled():
+        return None
     if lesson.target_role != "DISPATCHER_DDS" or lesson.card_pool_source == "self_training" or not lesson.assigned_by:
         return None
     key = "lesson:" + lesson.assignment_id
@@ -92,6 +95,8 @@ async def initialize_reports(db, now=None):
         db.add(ReportSchedulerState(key="dds_reports", enabled_at=now))
     await db.execute(update(ReportJob).where(ReportJob.status == "running").values(
         status="pending", attempt=ReportJob.attempt + 1, waiting_reason="queued", updated_at=now))
+    await db.execute(update(ReportJob).where(ReportJob.status == "generating").values(
+        status="failed", error_code="generation_interrupted", error_message="Генерация прервана. Повторите запрос.", updated_at=now))
     await db.commit()
 
 
