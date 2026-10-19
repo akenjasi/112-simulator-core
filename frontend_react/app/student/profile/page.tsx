@@ -2,12 +2,14 @@
 
 import React, { useEffect, useState } from "react"
 import Link from "next/link"
-import { ArrowDown, ArrowRight, BookOpen, ChevronDown, ClipboardCheck, Clock3, FileText, RefreshCw, UserRound } from "lucide-react"
+import { ArrowRight, BookOpen, ChevronDown, ClipboardCheck, Clock3, FileText, RefreshCw, UserRound } from "lucide-react"
 import { ThemeSelect } from "@/components/theme-select"
 import { ProfileMaterials } from "@/components/student/profile-materials"
 import { LogoutButton } from "@/components/auth/LogoutButton"
 import { ProfileAssignments } from "@/components/student/profile-assignments"
-import { DDSSelfTraining } from "@/components/dispatcher/dds-self-training"
+import { TrainingDialog } from "@/components/student/training-dialog"
+import { fetchStudentWorkspace, type StudentWorkspace } from "@/lib/student-workspace"
+import styles from "./student-profile.module.css"
 import { getStoredToken } from "@/lib/auth-session"
 
 export interface HistoryTicket {
@@ -63,7 +65,7 @@ function ticketStatus(ticket: HistoryTicket) {
 }
 
 function lessonStatus(status: string) {
-  return ({COMPLETED: "Завершено", ACTIVE: "В процессе", IN_PROGRESS: "В процессе", INCOMPLETE: "Завершено досрочно", CANCELLED: "Отменено", PENDING: "Ожидает начала"} as Record<string, string>)[status] || "Статус не указан"
+  return ({ARCHIVED: "В архиве · тестовое занятие", COMPLETED: "Завершено", ACTIVE: "В процессе", IN_PROGRESS: "В процессе", INCOMPLETE: "Завершено досрочно", CANCELLED: "Отменено", PENDING: "Ожидает начала"} as Record<string, string>)[status] || "Статус не указан"
 }
 
 export default function StudentProfilePage() {
@@ -75,6 +77,10 @@ export default function StudentProfilePage() {
   const [reload, setReload] = useState(0)
   const [showAll, setShowAll] = useState(false)
   const [showTraining, setShowTraining] = useState(false)
+  const [workspace, setWorkspace] = useState<StudentWorkspace | null>(null)
+  const [workspaceError, setWorkspaceError] = useState<string | null>(null)
+  const [workspaceLoading, setWorkspaceLoading] = useState(true)
+  const [workspaceReload, setWorkspaceReload] = useState(0)
   const [activeTab, setActiveTab] = useState<"history" | "materials" | "advice">("history")
   const [advices, setAdvices] = useState<SavedAdvice[]>([])
   const [adviceStatus, setAdviceStatus] = useState<"idle" | "loading" | "ready" | "error">("idle")
@@ -125,14 +131,30 @@ export default function StudentProfilePage() {
   }, [activeTab, profile?.user_id, adviceReload])
 
   useEffect(() => {
-    if (showTraining) {
-      const catalog = document.getElementById("training-catalog")
-      catalog?.scrollIntoView?.({behavior: "smooth", block: "start"})
-      catalog?.focus({preventScroll: true})
+    let disposed = false
+    let pending = false
+    let controller: AbortController | null = null
+    const load = async () => {
+      if (pending) return
+      pending = true
+      controller = new AbortController()
+      try {
+        const data = await fetchStudentWorkspace(controller.signal)
+        if (!disposed) {setWorkspace(data); setWorkspaceError(null)}
+      } catch (error) {
+        if (!disposed) setWorkspaceError(error instanceof Error ? error.message : "Не удалось проверить текущее занятие.")
+      } finally {
+        pending = false
+        if (!disposed) setWorkspaceLoading(false)
+      }
     }
-  }, [showTraining])
+    setWorkspaceLoading(true)
+    void load()
+    const timer = window.setInterval(() => {if (document.visibilityState === "visible") void load()}, 5000)
+    return () => {disposed = true; controller?.abort(); window.clearInterval(timer)}
+  }, [workspaceReload])
 
-  return <div className="min-h-screen bg-slate-50 text-foreground dark:bg-slate-950">
+  return <div className={`${styles.root} min-h-screen bg-slate-50 text-foreground dark:bg-slate-950`}>
     <a href="#main-content" className="sr-only focus:not-sr-only focus:absolute focus:z-50 focus:rounded focus:bg-card focus:p-3">Перейти к содержимому</a>
     <header className="border-b border-border bg-card">
       <div className="mx-auto flex min-h-20 max-w-[1440px] items-center justify-between gap-4 px-5 py-4 sm:px-8">
@@ -153,17 +175,17 @@ export default function StudentProfilePage() {
       </div>
     </header>
 
-    <main id="main-content" className="mx-auto max-w-[1440px] px-5 py-7 sm:px-8 sm:py-8">
-      <div className="mb-7 flex flex-col justify-between gap-4 sm:flex-row sm:items-end">
-        <div><h1 className="text-3xl font-semibold tracking-tight">Личный кабинет курсанта</h1><p className="mt-2 text-sm leading-relaxed text-muted-foreground sm:text-base">Продолжайте занятия с преподавателем или тренируйтесь самостоятельно.</p></div>
+    <main id="main-content" className={`${styles.main} mx-auto w-full max-w-[1440px] px-5 py-5 sm:px-8`}>
+      <div className="mb-4 flex shrink-0 flex-col justify-between gap-3 sm:flex-row sm:items-end">
+        <div><h1 className="text-2xl font-semibold tracking-tight">Личный кабинет курсанта</h1><p className="mt-2 text-sm leading-relaxed text-muted-foreground sm:text-base">Продолжайте занятия с преподавателем или тренируйтесь самостоятельно.</p></div>
         {profile?.student_id && <p className="shrink-0 text-sm text-muted-foreground">Код курсанта: <span className="ml-1 rounded-md border border-border bg-card px-2.5 py-1.5 font-mono font-semibold text-foreground">{profile.student_id}</span></p>}
       </div>
       {profileError && <p role="alert" className="mb-5 rounded-xl border border-destructive/25 bg-card p-4 text-sm">Не удалось загрузить профиль. <button type="button" onClick={() => setReload(value => value + 1)} className="text-primary underline">Повторить</button></p>}
 
-      <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_340px] xl:grid-cols-[minmax(0,1fr)_360px]">
-        <div className="contents lg:block lg:min-w-0 lg:space-y-6">
-          <ProfileAssignments />
-          <section id="learning-history" aria-labelledby="history-heading" className="order-3 scroll-mt-6 overflow-hidden lg:order-none rounded-2xl border border-border bg-card shadow-xs">
+      <div className={`${styles.layout} grid items-start gap-4 lg:grid-cols-[minmax(0,1fr)_340px] xl:grid-cols-[minmax(0,1fr)_360px]`}>
+        <div className={`${styles.left} contents lg:block lg:min-w-0 lg:space-y-4`}>
+          <ProfileAssignments workspace={workspace} loading={workspaceLoading} error={workspaceError} onReload={() => setWorkspaceReload(value => value + 1)} />
+          <section id="learning-history" aria-labelledby="history-heading" className={`${styles.results} order-3 scroll-mt-6 overflow-hidden lg:order-none rounded-2xl border border-border bg-card shadow-xs`}>
             <div className="flex items-center justify-between gap-3 px-5 pt-5 sm:px-6 sm:pt-6">
               <h2 id="history-heading" className="text-xl font-semibold tracking-tight">Последние результаты</h2>
               <button type="button" aria-label="Обновить историю занятий" disabled={loading} onClick={() => setReload(value => value + 1)} className="rounded-lg p-2 text-muted-foreground hover:bg-muted focus-visible:outline-2 focus-visible:outline-ring disabled:opacity-50"><RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} aria-hidden="true" /></button>
@@ -171,7 +193,7 @@ export default function StudentProfilePage() {
             <nav aria-label="Результаты и материалы" className="mt-4 flex flex-wrap gap-1 border-b border-border px-4 sm:px-5">
               {([{id: "history", label: "История занятий", Icon: Clock3}, {id: "materials", label: "Материалы", Icon: BookOpen}, {id: "advice", label: "Рекомендации ИИ", Icon: FileText}] as const).map(({id, label, Icon}) => <button type="button" key={id} aria-label={id === "materials" ? "Справочные материалы" : id === "history" ? "История обучения и билеты" : undefined} aria-current={activeTab === id ? "page" : undefined} onClick={() => setActiveTab(id)} className={`inline-flex min-h-11 items-center gap-2 border-b-2 px-3 py-3 text-sm font-medium focus-visible:outline-2 focus-visible:outline-ring ${activeTab === id ? "border-primary text-primary" : "border-transparent text-muted-foreground hover:text-foreground"}`}><Icon className="h-4 w-4" aria-hidden="true" />{label}</button>)}
             </nav>
-            <div className="p-5 sm:p-6">
+            <div className={`${styles.resultContent} p-4`}>
               {activeTab === "history" && <div aria-busy={loading}>
                 {historyError ? <div role="alert" className="space-y-2 text-sm"><p>{historyError}</p><button type="button" onClick={() => setReload(value => value + 1)} className="font-medium text-primary underline">Повторить загрузку истории</button></div> : loading ? <p role="status" className="py-5 text-sm text-muted-foreground">Загружаем историю занятий…</p> : lessons.length === 0 ? <div className="py-3"><p className="font-medium">История занятий пока пуста</p><p className="mt-2 text-sm leading-relaxed text-muted-foreground">После первого занятия здесь появятся карточки и сохранённые результаты. Начните с назначенного занятия или самостоятельной тренировки.</p></div> : <>
                   <p className="mb-4 text-sm text-muted-foreground">Откройте занятие, чтобы посмотреть карточки и замечания.</p>
@@ -180,8 +202,10 @@ export default function StudentProfilePage() {
                       <div className="min-w-0"><h3 className="text-sm font-semibold leading-relaxed">{lessonTitle(lesson)}</h3><p className="mt-1.5 flex flex-wrap gap-x-3 gap-y-1 text-xs text-muted-foreground">{lesson.date && <span>{lesson.date}</span>}<span>Карточек: {lesson.tickets?.length ?? 0}</span><span>{lessonStatus(lesson.status)}</span></p></div><ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground transition-transform group-open:rotate-180" aria-hidden="true" />
                     </summary>
                     <div className="space-y-3 border-t border-border p-4">
+                      {lesson.status === "ARCHIVED" && <p className="text-sm text-muted-foreground">Тестовое занятие перенесено в архив. Карточки и сохранённые результаты оставлены для просмотра.</p>}
+                      {lesson.status === "INCOMPLETE" && <p className="text-sm text-muted-foreground">Занятие закончено, но не все карточки обработаны до конца. Это статус выполнения, а не оценка.</p>}
                       {lesson.tickets?.length ? lesson.tickets.map((ticket, index) => <article key={ticket.card_id || `${ticket.ticket_id}-${index}`} className="rounded-lg border border-border p-4">
-                        <div className="flex flex-wrap items-start justify-between gap-2"><h4 className="text-sm font-medium">{ticket.title || `Карточка ${index + 1}`}</h4><span className="rounded-md bg-muted px-2 py-1 text-xs text-muted-foreground">{ticketStatus(ticket)}</span></div>
+                        <div className="flex flex-wrap items-start justify-between gap-2"><h4 className="text-sm font-medium">{ticket.title || `Карточка ${index + 1}`}</h4><span className="rounded-md bg-muted px-2 py-1 text-xs text-muted-foreground">{lesson.status === "ARCHIVED" ? "Архивная карточка" : ticketStatus(ticket)}</span></div>
                         {(ticket.errors?.length > 0 || ticket.errors_count > 0) ? <div className="mt-3 text-sm"><p className="font-medium text-destructive">Ошибок в сохранённой проверке: {Math.max(ticket.errors_count || 0, ticket.errors?.length || 0)}</p>{ticket.errors?.length > 0 && <ul className="mt-2 list-disc space-y-1 pl-5 text-muted-foreground">{ticket.errors.map((error, i) => <li key={i}>{error}</li>)}</ul>}</div> : <p className="mt-3 text-sm leading-relaxed text-muted-foreground">{ticket.card_id ? "Результаты проверки по критериям смотрите в карточке." : "Результаты проверки по критериям пока недоступны."}</p>}
                         {ticket.card_id && <Link className="mt-3 inline-flex min-h-10 items-center gap-2 text-sm font-medium text-primary underline-offset-4 hover:underline focus-visible:outline-2 focus-visible:outline-ring" href={`/dds?${new URLSearchParams({session_id: lesson.session_id, ticket_id: ticket.ticket_id, card_id: ticket.card_id})}`}>Открыть карточку<ArrowRight className="h-4 w-4" aria-hidden="true" /></Link>}
                       </article>) : <p className="text-sm text-muted-foreground">Подробности по карточкам пока недоступны.</p>}
@@ -200,19 +224,19 @@ export default function StudentProfilePage() {
           </section>
         </div>
 
-        <aside className="contents lg:block lg:space-y-6">
+        <aside className={`${styles.aside} contents lg:block lg:space-y-4`}>
           <section aria-labelledby="practice-heading" className="order-2 rounded-2xl border border-primary/20 lg:order-none bg-primary/5 p-5 sm:p-6">
             <BookOpen className="mb-4 h-6 w-6 text-primary" aria-hidden="true" /><h2 id="practice-heading" className="text-xl font-semibold tracking-tight">Самостоятельная тренировка</h2><p className="mt-3 text-sm leading-relaxed text-muted-foreground">Выберите учебные задания и отработайте действия диспетчера в своём темпе.</p>
-            <button type="button" aria-expanded={showTraining} aria-controls="training-catalog" onClick={() => setShowTraining(value => !value)} className="mt-5 inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-lg border border-primary/30 bg-card px-4 py-2.5 text-sm font-semibold text-primary hover:bg-primary/5 focus-visible:outline-2 focus-visible:outline-ring">{showTraining ? "Скрыть выбор заданий" : "Выбрать задания"}<ArrowDown className="h-4 w-4" aria-hidden="true" /></button>
+            <button type="button" aria-haspopup="dialog" onClick={() => setShowTraining(true)} className="mt-4 inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-lg border border-primary/30 bg-card px-4 py-2.5 text-sm font-semibold text-primary hover:bg-primary/5 focus-visible:outline-2 focus-visible:outline-ring">Выбрать задания<ArrowRight className="h-4 w-4" aria-hidden="true" /></button>
           </section>
-          <section aria-labelledby="criteria-heading" className="order-4 rounded-2xl border border-border bg-card p-5 shadow-xs sm:p-6 lg:order-none">
+          <section aria-labelledby="criteria-heading" className={`${styles.criteria} order-4 rounded-2xl border border-border bg-card p-4 shadow-xs lg:order-none`}>
             <ClipboardCheck className="mb-3 h-5 w-5 text-muted-foreground" aria-hidden="true" /><h2 id="criteria-heading" className="text-lg font-semibold">Что проверяется в карточке</h2><p className="mt-2 text-sm leading-relaxed text-muted-foreground">Пять критериев без общего балла. Раскройте критерий, чтобы узнать правило.</p>
-            <ol className="mt-5 space-y-4">{CRITERIA.map((criterion, i) => <li key={criterion.title} className="flex gap-3"><span aria-hidden="true" className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-muted text-xs font-medium text-muted-foreground">{i + 1}</span><details className="min-w-0 flex-1"><summary className="flex cursor-pointer list-none items-start justify-between gap-2 rounded text-sm font-medium focus-visible:outline-2 focus-visible:outline-ring [&::-webkit-details-marker]:hidden"><h3>{criterion.title}</h3><ChevronDown className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" /></summary><p className="mt-2 text-sm leading-relaxed text-muted-foreground">{criterion.description}</p></details></li>)}</ol>
+            <ol className={`${styles.criteriaList} mt-4 space-y-3`}>{CRITERIA.map((criterion, i) => <li key={criterion.title} className="flex gap-3"><span aria-hidden="true" className="flex h-6 w-6 shrink-0 items-center justify-center rounded-md bg-muted text-xs font-medium text-muted-foreground">{i + 1}</span><details className="min-w-0 flex-1"><summary className="flex cursor-pointer list-none items-start justify-between gap-2 rounded text-sm font-medium focus-visible:outline-2 focus-visible:outline-ring [&::-webkit-details-marker]:hidden"><h3>{criterion.title}</h3><ChevronDown className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" aria-hidden="true" /></summary><p className="mt-2 text-sm leading-relaxed text-muted-foreground">{criterion.description}</p></details></li>)}</ol>
           </section>
         </aside>
       </div>
-      {showTraining && <section id="training-catalog" aria-label="Выбор заданий для тренировки" tabIndex={-1} className="mt-6 scroll-mt-6 rounded-xl focus-visible:outline-2 focus-visible:outline-ring"><DDSSelfTraining /></section>}
+      <TrainingDialog open={showTraining} onOpenChange={setShowTraining} />
     </main>
-    <footer className="mx-auto max-w-[1440px] px-5 pb-6 text-xs text-muted-foreground sm:px-8">Тренажёр Системы-112 · Учебный режим ДДС</footer>
+    <footer className="mx-auto w-full max-w-[1440px] shrink-0 px-5 pb-3 text-xs text-muted-foreground sm:px-8">Тренажёр Системы-112 · Учебный режим ДДС</footer>
   </div>
 }

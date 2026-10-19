@@ -28,3 +28,4 @@ tests/test_dds_queue.py
 tests/test_student_dds_demo_flow.py
 tests/test_integrity.py
 tests/test_integrity_review.py
+tests/test_student_workspace.py

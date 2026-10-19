@@ -633,6 +633,7 @@ async function ddsResponseError(res: Response): Promise<DDSRequestError> {
     DDS_CARD_ID_REQUIRED: "Обновите рабочее место для работы с набором карточек",
     DDS_CARD_NOT_READY: "Завершите работу всех служб и сохраните реквизиты",
     DDS_SESSION_NOT_ACTIVE: "Занятие уже остановлено. Обновите данные",
+    DDS_LEARNING_IN_PROGRESS: "У вас уже есть текущее занятие или незавершённая тренировка. Вернитесь в кабинет и продолжите её.",
     DDS_TICKET_UNAVAILABLE: "Один из выбранных билетов недоступен. Обновите каталог",
     DDS_REQUEST_CONFLICT: "Этот запрос уже использован для другого действия. Обновите данные",
     DDS_EXAM_TIME_EXPIRED: "Время выполнения экзамена истекло",

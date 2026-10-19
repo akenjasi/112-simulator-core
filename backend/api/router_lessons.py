@@ -11,6 +11,7 @@ from backend.core.dds_cycle import (
     lock_assignment,
 )
 from backend.core.dds_queue import initialize_queue, load_pool
+from backend.core.student_workspace import lock_cadets, require_available
 from backend.core.deps import require_role, get_current_user
 from backend.database import get_db
 from backend.models.domain_01 import SecurityPolicy, User, StudentGroup
@@ -435,6 +436,9 @@ async def start_lesson(
             active_cadets = list(res_cadets.scalars().all())
             if not active_cadets:
                 raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Group has no active cadets")
+
+        await lock_cadets(db, [student.user_id for student in active_cadets])
+        await require_available(db, [student.user_id for student in active_cadets])
 
         now_dt = datetime.now(timezone.utc)
         lesson.status = "ACTIVE"

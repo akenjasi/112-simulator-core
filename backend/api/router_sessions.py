@@ -367,6 +367,9 @@ async def create_demo_session(
         )
 
     if target_role == "DISPATCHER_DDS":
+        if current_user.role == "CADET":
+            from backend.core.student_workspace import lock_cadets
+            await lock_cadets(db, [current_user.user_id])
         from backend.core.dds_cycle import incoming_card_from_ticket, is_suitable_dds_ticket, extract_dds_ticket_metadata
 
         from backend.core.dds_queue import available_for_training, initialize_queue
