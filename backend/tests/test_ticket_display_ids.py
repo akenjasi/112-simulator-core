@@ -9,7 +9,7 @@ async def test_unnumbered_ticket_labels_are_unique_and_stable_across_mutations()
     users = await setup_group()
     async with AsyncSessionLocal() as db:
         generated = [GeneratedTicket(category='ЖКХ', subcategory='Телефон ДДС', complexity=1, plot='Учебная авария', sequence_number=seq) for seq in (None, 0, 7)]
-        legacy = ScenarioTicket(title='Телефон ДДС', category='ЖКХ', settings={'category':'ЖКХ', 'subcategory':'Телефон ДДС'}, content={})
+        legacy = ScenarioTicket(title='Телефон ДДС', category='ЖКХ', settings={'category':'ЖКХ', 'subcategory':'Телефон ДДС', 'plot':'Учебная авария'}, content={})
         db.add_all([*generated, legacy]); await db.commit()
         ids = [t.id for t in generated] + [legacy.scenario_id]
     listing = (await request('GET','/api/v1/tickets',users['teacher'])).json()
@@ -25,3 +25,7 @@ async def test_unnumbered_ticket_labels_are_unique_and_stable_across_mutations()
     edited = await request('PATCH',f'/api/v1/tickets/{ids[0]}',users['teacher'],json={'plot':'Изменённая учебная авария'})
     assert edited.status_code == 200, edited.text
     assert edited.json()['display_id'] == ids[0]
+    for ticket_id in (ids[0], ids[3]):
+        approved = await request('POST', f'/api/v1/tickets/{ticket_id}/approve', users['teacher'])
+        assert approved.status_code == 200, approved.text
+        assert approved.json()['display_id'] == ticket_id
