@@ -36,6 +36,16 @@ describe('analytics overview contract', () => {
     expect(fetchMock.mock.calls.some(([url]) => String(url).includes('/analytics/dynamics'))).toBe(false)
   })
 
+  it('does not label all ungraded attempts as active work', async () => {
+    vi.stubGlobal('fetch', vi.fn((input: RequestInfo | URL) => {
+      const url = String(input)
+      return url.includes('/overview') ? Promise.resolve(response({...emptyOverview, pending_attempts: 2, total_attempts: 2})) : ancillaryFetch(url)
+    }))
+    render(<AnalyticsPage initialTab="charts" />)
+    expect(await screen.findByText(/2 без итоговой оценки/)).toBeInTheDocument()
+    expect(screen.queryByText(/2 в процессе/)).not.toBeInTheDocument()
+  })
+
   it('keeps an empty successful overview empty', async () => {
     vi.stubGlobal('fetch', vi.fn((input: RequestInfo | URL) => {
       const url = String(input)

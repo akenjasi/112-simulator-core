@@ -321,4 +321,17 @@ describe('Admin Panel Pages and Components', () => {
     expect(screen.queryByText('Доступ к роли «Оператор 112» обновлён')).not.toBeInTheDocument();
     expect(document.querySelector('.ant-notification')).toBeNull();
   });
+  it('keeps the server explanation visible when a security policy is rejected', async () => {
+    const originalFetch = global.fetch;
+    global.fetch = vi.fn((url, options) => {
+      if (options?.method === 'PUT') return Promise.resolve(new Response(JSON.stringify({detail: 'Сначала настройте 2FA для всех активных пользователей.'}), {status: 409}));
+      return originalFetch(url, options);
+    });
+    render(<SecurityPoliciesPage />);
+    await waitFor(() => expect(screen.getByLabelText(/Таймаут сессии/)).toHaveValue(60));
+    fireEvent.click(screen.getByRole('switch', {name: 'Принудительная 2FA для всех'}));
+    fireEvent.click(screen.getByRole('button', {name: /Сохранить настройки/}));
+    await waitFor(() => expect(screen.getByRole('alert')).toHaveTextContent('Сначала настройте 2FA для всех активных пользователей.'));
+  });
+
 });

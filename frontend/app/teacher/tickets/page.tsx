@@ -90,6 +90,7 @@ export default function TicketsPage() {
   // Classifier options (ТЗ 37.1, ТЗ 37.4, ТЗ 39.1)
   const [classifierCategories, setClassifierCategories] = useState<string[]>([])
   const [classifierSubcategories, setClassifierSubcategories] = useState<string[]>([])
+  const [catalogFacets, setCatalogFacets] = useState<{category: string; subcategories: Record<string, number>}[]>([])
   const [filterSubcategories, setFilterSubcategories] = useState<string[]>([])
   const [modalSubcategories, setModalSubcategories] = useState<string[]>([])
   const [classifierServices, setClassifierServices] = useState<string[]>([])
@@ -202,6 +203,12 @@ export default function TicketsPage() {
         setFilterSubcategories([])
       })
   }, [filterCategory])
+
+  const filterCategories = Array.from(new Set([...classifierCategories, ...catalogFacets.map(item => item.category)])).sort((a, b) => a.localeCompare(b, "ru"))
+  const availableFilterSubcategories = Array.from(new Set([
+    ...filterSubcategories,
+    ...Object.keys(catalogFacets.find(item => item.category === filterCategory)?.subcategories || {}),
+  ])).sort((a, b) => a.localeCompare(b, "ru"))
 
   // Load subcategories dynamically whenever modalCategory changes (ТЗ 39.1)
   useEffect(() => {
@@ -350,6 +357,15 @@ export default function TicketsPage() {
         }
         setError(null)
 
+        // Catalog metadata includes prepared DDS categories absent from the classifier.
+        void fetch("/api/v1/tickets/counts")
+          .then(res => res.ok ? res.json() : [])
+          .then(data => {
+            if (Array.isArray(data)) setCatalogFacets(data.filter(item =>
+              typeof item.category === "string" && typeof item.subcategories === "object" && item.subcategories !== null
+            ))
+          })
+          .catch(() => {})
         const params = new URLSearchParams()
         if (cat) params.append("category", cat)
         if (subcat) params.append("subcategory", subcat)
@@ -1209,12 +1225,12 @@ export default function TicketsPage() {
                   }}
                 >
                   <SelectItem value="">Все категории</SelectItem>
-                  {classifierCategories.map((cat) => (
+                  {filterCategories.map((cat) => (
                     <SelectItem key={cat} value={cat}>
                       {cat}
                     </SelectItem>
                   ))}
-                  {filterCategory && !classifierCategories.includes(filterCategory) && (
+                  {filterCategory && !filterCategories.includes(filterCategory) && (
                     <SelectItem value={filterCategory}>{filterCategory}</SelectItem>
                   )}
                 </Select>
@@ -1233,7 +1249,7 @@ export default function TicketsPage() {
                   onChange={(e) => setFilterSubcategory(e.target.value)}
                 >
                   <SelectItem value="">Все подкатегории</SelectItem>
-                  {filterSubcategories.map((sub) => (
+                  {availableFilterSubcategories.map((sub) => (
                     <SelectItem key={sub} value={sub}>
                       {sub}
                     </SelectItem>

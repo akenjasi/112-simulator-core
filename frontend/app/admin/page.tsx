@@ -315,12 +315,12 @@ export default function AdminDashboardPage() {
               ) : health.db_status === "ok" ? (
                 <>
                   <ShieldCheck className="w-3.5 h-3.5 text-emerald-500 dark:text-emerald-400" />
-                  <span>PostgreSQL Connection OK</span>
+                  <span>Соединение с базой данных установлено</span>
                 </>
               ) : (
                 <>
                   <AlertTriangle className="w-3.5 h-3.5 text-destructive" />
-                  <span>PostgreSQL Connection Error</span>
+                  <span>Ошибка соединения с базой данных</span>
                 </>
               )}
             </div>
@@ -524,7 +524,7 @@ export default function AdminDashboardPage() {
                   Резервное копирование и статус системы
                 </h3>
                 <p className="text-xs text-muted-foreground mt-0.5">
-                  Создание дампов PostgreSQL, диагностика соединений и журналы бэкапов
+                  Создание резервных копий базы данных, диагностика соединений и журналы бэкапов
                 </p>
               </div>
             </div>

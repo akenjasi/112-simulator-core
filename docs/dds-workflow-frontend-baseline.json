@@ -159,9 +159,9 @@
   },
   "approved_updates": {
     "app/admin/security/page.tsx": {
-      "sha256": "7d6f72b9ba3f4334fd547e12ef209b11b3abe961b17782577305ecd4528e1f1d",
-      "source_revision": "codex/test-contract-repair",
-      "reason": "Current requested fix: own the notification holder and unmount it with its page"
+      "sha256": "f4a9eaa26ac78bd64bbc897024545148450491f7b1e78f7b098d4c47b91af9d8",
+      "source_revision": "user-approved admin/teacher browser audit 2026-10-20",
+      "reason": "Явное поручение пользователя: показывать причину отказа сохранения политики безопасности, предотвращать повторное сохранение, использовать общий заголовок авторизации скачивания PDF."
     },
     "app/dds/page.tsx": {
       "sha256": "8a741de097f77ea4d4806f7239b6c70ab62edf31db79a836f6ee0bda89fdee26",
@@ -292,6 +292,16 @@
       "sha256": "6ded4f0570835489e5e4165b865b397dffd8df147447a2789ea9c49935ca5744",
       "source_revision": "user-request-report-repair-2026-10-20",
       "reason": "Пользователь запросил исправить недоступные ИИ-отчёты занятия, группы и автоматический разбор DDS; сохранены проверки изоляции и исходная карта хешей."
+    },
+    "app/admin/page.tsx": {
+      "sha256": "6cb7fafd968603bfb46503c7fc3cf69fd606a5a42db110a75351c7a3484222c2",
+      "source_revision": "e4aaf89 + user-approved admin/teacher browser audit 2026-10-20",
+      "reason": "Пользователь явно утвердил полный проход и исправления кабинетов: нейтральные подписи БД, фильтры сохранённых билетов ДДС и точный статус попыток без оценки. Исходная карта sha256 и независимые утверждения сохранены."
+    },
+    "app/admin/system/page.tsx": {
+      "sha256": "51102e381b607b852946c80a76ffbe477c581260c8e623f02b8f41515402f7c2",
+      "source_revision": "e4aaf89 + user-approved admin/teacher browser audit 2026-10-20",
+      "reason": "Пользователь явно утвердил полный проход и исправления кабинетов: нейтральные подписи БД, фильтры сохранённых билетов ДДС и точный статус попыток без оценки. Исходная карта sha256 и независимые утверждения сохранены."
     }
   },
   "update_policy": "2026-10-19: explicitly reconciled under the user request to repair obsolete tests. Original sha256 values are unchanged. Exact supplemental hashes preserve the integrated changes; these paths are not open-ended exceptions. 2026-10-19: the user explicitly requested the DDS audio-only cycle and teacher review; only the three existing supplemental entries were updated, preserving the original map and guarded path set. 2026-10-19: background report implementation explicitly authorizes the teacher report screen; one exact supplemental hash added, original hash map preserved."

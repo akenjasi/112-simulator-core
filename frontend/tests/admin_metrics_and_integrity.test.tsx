@@ -80,7 +80,7 @@ describe('Admin Dashboard Metrics and System Diagnostics (Stage 2 & 3 UI)', () =
     await waitFor(() => {
       expect(screen.getByText('55.4%')).toBeInTheDocument();
       expect(screen.getByText('68.9%')).toBeInTheDocument();
-      expect(screen.getByText('PostgreSQL Connection OK')).toBeInTheDocument();
+      expect(screen.getByText('Соединение с базой данных установлено')).toBeInTheDocument();
     });
   });
 

@@ -55,6 +55,9 @@ def product_files():
 # The old hash map remains immutable; supplemental entries pin these exact files
 # rather than allowing future arbitrary changes under a permanent allowlist.
 REVIEWED_UPDATES = {
+    # User-approved browser audit 2026-10-20: exact neutral database copy only.
+    "app/admin/page.tsx",
+    "app/admin/system/page.tsx",
     # Explicit user request 2026-10-20: repair teacher demo grading/protocol; pin the exact fix.
     'components/teacher/split-screen.tsx',
     # Explicit request 2026-10-20: show immediate GPU demo reports on lesson completion.

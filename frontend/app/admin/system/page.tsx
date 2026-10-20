@@ -313,7 +313,7 @@ export default function AdminSystemPage() {
               </div>
               <div>
                 <span className="text-xs text-muted-foreground font-semibold uppercase block">
-                  База данных (PostgreSQL)
+                  База данных
                 </span>
                 <span className="text-xl font-black text-foreground">
                   {health === null ? "—" : health.db_status === "ok" ? "Подключена" : "Недоступна"}

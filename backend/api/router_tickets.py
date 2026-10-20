@@ -63,6 +63,13 @@ def make_abbr(text: str) -> str:
     return "".join([w[0].upper() for w in text.split()[:2] if w])
 
 
+def ticket_display_id(ticket_id: str, category: str, subcategory: Optional[str], sequence_number: Optional[int]) -> str:
+    """Keep numbered labels; unnumbered tickets use their stable unique ID."""
+    if sequence_number is None or sequence_number <= 0:
+        return ticket_id
+    return f"{make_abbr(category)}_{make_abbr(subcategory)}_{sequence_number}"
+
+
 def _standalone_scenario_tickets():
     """Select legacy tickets without a canonical GeneratedTicket representation.
 
@@ -526,7 +533,7 @@ async def get_ticket(
     ticket = await db.get(GeneratedTicket, ticket_id)
     if ticket and not ticket.is_deleted:
         seq = ticket.sequence_number if ticket.sequence_number is not None else 0
-        display_id = f"{make_abbr(ticket.category)}_{make_abbr(ticket.subcategory)}_{seq}"
+        display_id = ticket_display_id(ticket.id, ticket.category, ticket.subcategory, seq)
         dds_et = (ticket.ground_truth or {}).get("dds_etalon") if isinstance(ticket.ground_truth, dict) else None
         return TicketResponse(
             id=ticket.id,
@@ -553,7 +560,7 @@ async def get_ticket(
         gt = scenario.ground_truth or {}
         cat, sub, level, _ = extract_dds_ticket_metadata(scenario)
         seq = settings.get("sequence_number", 0)
-        display_id = f"{make_abbr(cat)}_{make_abbr(sub)}_{seq}"
+        display_id = ticket_display_id(scenario.scenario_id, cat, sub, seq)
         dds_et = settings.get("dds_etalon") or (gt.get("dds_etalon") if isinstance(gt, dict) else None)
         return TicketResponse(
             id=scenario.scenario_id,
@@ -613,7 +620,7 @@ async def list_tickets(
     output: List[TicketResponse] = []
     for r in records:
         seq = r.sequence_number if r.sequence_number is not None else 0
-        display_id = f"{make_abbr(r.category)}_{make_abbr(r.subcategory)}_{seq}"
+        display_id = ticket_display_id(r.id, r.category, r.subcategory, seq)
         dds_et = (r.ground_truth or {}).get("dds_etalon") if isinstance(r.ground_truth, dict) else None
         output.append(
             TicketResponse(
@@ -655,7 +662,7 @@ async def list_tickets(
         scenario_count += 1
 
         seq = settings.get("sequence_number", 0)
-        display_id = f"{make_abbr(cat)}_{make_abbr(sub)}_{seq}"
+        display_id = ticket_display_id(r.scenario_id, cat, sub, seq)
         dds_et = settings.get("dds_etalon") or (gt.get("dds_etalon") if isinstance(gt, dict) else None)
         output.append(
             TicketResponse(
@@ -1264,7 +1271,7 @@ async def update_ticket(
         if is_substantial:
             ticket.status = "UNDER_REVIEW"
         seq = ticket.sequence_number or 0
-        display_id = f"{make_abbr(ticket.category)}_{make_abbr(ticket.subcategory)}_{seq}"
+        display_id = ticket_display_id(ticket.id, ticket.category, ticket.subcategory, seq)
         res_cat = ticket.category
         res_sub = ticket.subcategory
         res_comp = ticket.complexity
@@ -1279,7 +1286,7 @@ async def update_ticket(
         seq = (scenario_ticket.settings or {}).get("sequence_number", 0)
         res_cat = update_data.get("category", (scenario_ticket.settings or {}).get("category", "Общее"))
         res_sub = update_data.get("subcategory", (scenario_ticket.settings or {}).get("subcategory"))
-        display_id = f"{make_abbr(res_cat)}_{make_abbr(res_sub)}_{seq}"
+        display_id = ticket_display_id(scenario_ticket.scenario_id, res_cat, res_sub, seq)
         res_comp = update_data.get("complexity", (scenario_ticket.settings or {}).get("complexity", 1))
         res_plot = update_data.get("plot", (scenario_ticket.settings or {}).get("plot", ""))
         res_facts = update_data.get("factoids", (scenario_ticket.ai_content or {}).get("factoids", {}))
@@ -1491,7 +1498,7 @@ async def approve_ticket(
 
     if ticket:
         seq = ticket.sequence_number or 0
-        display_id = f"{make_abbr(ticket.category)}_{make_abbr(ticket.subcategory)}_{seq}"
+        display_id = ticket_display_id(ticket.id, ticket.category, ticket.subcategory, seq)
         dds_et = (ticket.ground_truth or {}).get("dds_etalon") if isinstance(ticket.ground_truth, dict) else None
         return TicketResponse(
             id=ticket.id,
@@ -1514,7 +1521,7 @@ async def approve_ticket(
         settings = scenario_ticket.settings or {}
         ai = scenario_ticket.ai_content or {}
         seq = settings.get("sequence_number", 0)
-        display_id = f"{make_abbr(cat)}_{make_abbr(sub)}_{seq}"
+        display_id = ticket_display_id(scenario_ticket.scenario_id, cat, sub, seq)
         dds_et = settings.get("dds_etalon") or ((scenario_ticket.ground_truth or {}).get("dds_etalon") if isinstance(scenario_ticket.ground_truth, dict) else None)
         return TicketResponse(
             id=scenario_ticket.scenario_id,

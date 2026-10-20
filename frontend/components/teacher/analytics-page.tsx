@@ -1149,7 +1149,7 @@ export default function AnalyticsPage({ initialTab = "split" }: AnalyticsPagePro
               </div>
               <p className="text-[11px] text-muted-foreground mt-1">
                 {overviewData.graded_attempts} оценённых попыток
-                {overviewData.pending_attempts > 0 ? ` (${overviewData.pending_attempts} в процессе)` : ""}
+                {overviewData.pending_attempts > 0 ? ` (${overviewData.pending_attempts} без итоговой оценки)` : ""}
               </p>
             </Card>
 

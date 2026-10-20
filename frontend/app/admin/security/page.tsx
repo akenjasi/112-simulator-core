@@ -30,6 +30,8 @@ export default function SecurityPoliciesPage() {
   const [form] = Form.useForm();
   const [notificationApi, notificationHolder] = notification.useNotification();
   const [loading, setLoading] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
   const [operator112Enabled, setOperator112Enabled] = useState(false);
   const [isSavingOperator112Access, setIsSavingOperator112Access] = useState(false);
 
@@ -103,6 +105,9 @@ export default function SecurityPoliciesPage() {
       value: typeof values[key] === "boolean" ? values[key].toString() : values[key],
     }));
 
+    if (saving) return;
+    setSaving(true);
+    setSaveError(null);
     try {
       const res = await fetch("/api/admin/security-policies", {
         method: "PUT",
@@ -112,20 +117,24 @@ export default function SecurityPoliciesPage() {
       if (res.ok) {
         notificationApi.success({ message: "Настройки безопасности сохранены" });
       } else {
-        notificationApi.error({ message: "Ошибка сохранения" });
+        const data = await res.json().catch(() => ({}));
+        const detail = typeof data.detail === "string" ? data.detail : "Не удалось сохранить настройки безопасности";
+        setSaveError(detail);
+        notificationApi.error({ message: "Ошибка сохранения", description: detail });
       }
     } catch (error) {
       console.error(error);
+      setSaveError("Нет соединения с сервером. Повторите сохранение.");
       notificationApi.error({ message: "Ошибка сохранения" });
+    } finally {
+      setSaving(false);
     }
   };
 
   const handleDownloadReport = async () => {
     try {
       const res = await fetch("/api/admin/error-report/pdf", {
-        headers: {
-          Authorization: `Bearer ${localStorage.getItem("token") || ""}`,
-        },
+        headers: getAuthHeaders(),
       });
       if (res.ok) {
         const blob = await res.blob();
@@ -216,7 +225,8 @@ export default function SecurityPoliciesPage() {
               />
             </Form.Item>
 
-            <Button type="primary" htmlType="submit" icon={<SaveOutlined />}>
+            {saveError && <p role="alert" className="mb-3 text-destructive">{saveError}</p>}
+            <Button type="primary" htmlType="submit" loading={saving} icon={<SaveOutlined />}>
               Сохранить настройки
             </Button>
           </Form>
