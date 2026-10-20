@@ -32,6 +32,11 @@ Reports/summary.json сохраняются в data/checks/verification либо
 
 ## Независимые и целевые проверки
 
+Начальное наполнение каталога: `.venv/bin/python -m pytest -c backend/pytest.ini
+backend/tests/test_initial_tickets.py -q`. Проверяются сохранённые факты четырёх
+утверждённых билетов, пустая БД с существующими пользователями, одновременные старты,
+откат ошибки, сохранение правок и отказ от наполнения непустого/архивного каталога.
+
 `tools/tests/acceptance` имеет отдельную pytest.ini, чтобы проверка runner не импортировала его изолирующий tests/conftest. Независимые tests/acceptance manifests не меняют ради зелёного результата. [Правила приёмки](../tools/tests/acceptance/README.md).
 
 - DDS queue/saved tickets/cycle/service policy: backend/tests/test_dds_queue.py и связанные наборы из backend manifest. PG-скрипт создаёт собственный PostgreSQL15 container и проверяет реальные конкурирующие транзакции.

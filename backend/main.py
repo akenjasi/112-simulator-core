@@ -67,6 +67,10 @@ async def lifespan(app: FastAPI):
     async with engine.begin() as conn:
         await conn.run_sync(migrate_schema)
 
+    from backend.core.initial_tickets import ensure_initial_tickets
+    async with AsyncSessionLocal() as db:
+        await ensure_initial_tickets(db)
+
     from backend.core.bootstrap import ensure_initial_admin
     async with AsyncSessionLocal() as db:
         await ensure_initial_admin(

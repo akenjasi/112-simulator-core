@@ -69,7 +69,7 @@ def build_incoming_card(
     - description = plot (non-empty!)
     - statuses = {"injured": "нет", "ambulanceRefusal": "нет", "blocked": "нет"}
     - emergency = {"cs": False, "cp": False}
-    - classification = {"section": category, "title": subcategory, "class": subcategory, "visClass": ""}
+    - classification uses explicit source class/visClass from ground_truth when supplied.
     - services = non-empty list of services from etalon_services / ground_truth / default.
     """
     gt = ground_truth if isinstance(ground_truth, dict) else {}
@@ -172,15 +172,15 @@ def build_incoming_card(
         "connection": "Установлено",
         "phones": {"aon": phone, "provided": phone, "onSite": ""},
         "incident": {"number": incident_number, "savedAt": now_str, "operator": TEACHING_SOURCE_OPERATOR},
-        "caller": {"name": fio, "role": caller_role or "очевидец", "address": address},
+        "caller": {"name": fio, "role": gt.get("caller_status") or caller_role or "очевидец", "address": address},
         "description": desc,
         "statuses": {"injured": injured, "ambulanceRefusal": ambulance_refusal, "blocked": blocked},
         "emergency": {"cs": False, "cp": False},
         "classification": {
             "section": cat_name,
             "title": subcat_name,
-            "class": subcat_name,
-            "visClass": "",
+            "class": str(gt.get("class") or subcat_name),
+            "visClass": str(gt.get("visClass") or ""),
         },
         "services": services_list,
     }

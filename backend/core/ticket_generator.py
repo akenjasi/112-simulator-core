@@ -12,7 +12,7 @@ class _SafeFormatDict(dict):
         return "{" + key + "}"
 
 
-def generate_tickets(classifier_row: ClassifierRow, count: int, faker: Any) -> List[TicketData]:
+def generate_tickets(classifier_row: ClassifierRow, count: int, faker: Any, *, caller_role: str | None = None) -> List[TicketData]:
     """
     Генерирует список билетов (TicketData) на основе строки классификатора и генератора фейковых данных.
 
@@ -39,7 +39,7 @@ def generate_tickets(classifier_row: ClassifierRow, count: int, faker: Any) -> L
         person = faker.generate_person()
         address = faker.generate_address()
         phone = faker.generate_phone()
-        role = faker.generate_role()
+        role = caller_role or faker.generate_role()
 
         if templates:
             if rng is not None and hasattr(rng, "choice"):
@@ -55,6 +55,9 @@ def generate_tickets(classifier_row: ClassifierRow, count: int, faker: Any) -> L
         middle_name = getattr(person, "middle_name", "")
 
         fio = " ".join(part for part in [last_name, first_name, middle_name] if part)
+        full_address = getattr(address, "full_address", "") or ", ".join(
+            str(part) for part in [getattr(address, "city", ""), getattr(address, "street", ""),
+                                   getattr(address, "house", "")] if part)
 
         street_raw = getattr(address, "street", "")
         # Strip leading type keyword that duplicates template abbreviations
@@ -75,6 +78,9 @@ def generate_tickets(classifier_row: ClassifierRow, count: int, faker: Any) -> L
             "street": street,
             "house": house,
             "phone": phone,
+            "fio": fio,
+            "address": full_address,
+            "entrance": getattr(address, "entrance", "") or "1",
         }
 
         template_text = template.format_map(_SafeFormatDict(format_data)) if template else ""
@@ -100,6 +106,7 @@ def generate_tickets(classifier_row: ClassifierRow, count: int, faker: Any) -> L
                 "intercom": getattr(address, "intercom", ""),
                 "gender": gender,
                 "speaker": speaker,
+                **({"address": full_address, "caller_status": caller_role} if caller_role else {}),
             },
             dds_etalon=None,
         )

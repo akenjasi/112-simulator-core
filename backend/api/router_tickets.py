@@ -28,6 +28,7 @@ from backend.core.faker import FakeDataGenerator
 from backend.core.text_normalization import expand_address_for_tts, format_phone_for_tts, expand_address
 from backend.core.ticket_lifecycle import is_approved_dds_ticket
 from backend.core.ticket_generator import generate_tickets
+from backend.core.ticket_storage import save_generated_ticket
 from backend.core.tts_v2 import tts_engine_v2
 from backend.database import AsyncSessionLocal, get_db
 from backend.models.domain_01 import User
@@ -308,7 +309,6 @@ async def generate_tickets_background_task(
     try:
         faker = FakeDataGenerator()
         import random
-        from sqlalchemy import text
 
         while processed < count:
             cur_cat = category
@@ -344,84 +344,7 @@ async def generate_tickets_background_task(
             t = candidate
             # SAVE TO DB directly without heavy sound model or TTS synthesis
             async with AsyncSessionLocal() as session:
-                await session.execute(
-                    text("CREATE TABLE IF NOT EXISTS sys_sequences (name VARCHAR PRIMARY KEY, last_val INTEGER NOT NULL DEFAULT 0)")
-                )
-                try:
-                    await session.execute(
-                        text("INSERT INTO sys_sequences (name, last_val) VALUES ('generated_tickets', 0) ON CONFLICT (name) DO NOTHING")
-                    )
-                except Exception:
-                    await session.execute(
-                        text("INSERT OR IGNORE INTO sys_sequences (name, last_val) VALUES ('generated_tickets', 0)")
-                    )
-                await session.commit()
-
-                seq_res = await session.execute(text("SELECT last_val FROM sys_sequences WHERE name='generated_tickets'"))
-                current_seq = seq_res.scalar() or 0
-                current_seq += 1
-
-                gen_gt = dict(t.ground_truth or {})
-                dds_et = getattr(t, "dds_etalon", None)
-                if dds_et:
-                    gen_gt["dds_etalon"] = dds_et
-
-                gen_ticket = GeneratedTicket(
-                    id=t.ticket_id,
-                    category=cur_cat,
-                    subcategory=ticket_sub,
-                    complexity=t.complexity,
-                    plot=t.plot,
-                    factoids=t.factoids,
-                    ground_truth=gen_gt,
-                    etalon_services=t.etalon_services,
-                    sequence_number=current_seq,
-                    status="UNDER_REVIEW",
-                )
-                session.add(gen_ticket)
-
-                card = build_incoming_card(
-                    category=cur_cat,
-                    subcategory=ticket_sub,
-                    plot=t.plot or "",
-                    ground_truth=t.ground_truth or {},
-                    etalon_services=t.etalon_services or [],
-                    seq=current_seq,
-                )
-
-                scenario_settings = {
-                    "complexity": t.complexity,
-                    "etalon_services": t.etalon_services,
-                    "plot": t.plot,
-                    "category": cur_cat,
-                    "subcategory": ticket_sub,
-                    "sequence_number": current_seq,
-                }
-                if dds_et:
-                    scenario_settings["dds_etalon"] = dds_et
-
-                scenario_ticket = ScenarioTicket(
-                    scenario_id=t.ticket_id,
-                    title=ticket_sub or cur_cat,
-                    category=cur_cat,
-                    complexity=t.complexity,
-                    content={"incoming_card": card},
-                    settings=scenario_settings,
-                    ground_truth=gen_gt,
-                    ai_content={
-                        "factoids": t.factoids,
-                        "plot": t.plot,
-                    },
-                    workflow_state={
-                        "status": "UNDER_REVIEW",
-                    },
-                )
-                session.add(scenario_ticket)
-
-                await session.execute(
-                    text("UPDATE sys_sequences SET last_val = :val WHERE name = 'generated_tickets'"),
-                    {"val": current_seq}
-                )
+                await save_generated_ticket(session, t, category=cur_cat, subcategory=ticket_sub)
                 await session.commit()
 
             processed += 1
@@ -1256,6 +1179,15 @@ async def update_ticket(
     dds_etalon_explicit = "dds_etalon" in ticket_in.model_fields_set
     dds_et_val = ticket_in.dds_etalon.model_dump(exclude_unset=False) if ticket_in.dds_etalon is not None else None
     update_data.pop("dds_etalon", None)
+
+    if "ground_truth" in update_data and scenario_ticket:
+        source_classification = (scenario_ticket.settings or {}).get("classifier_source")
+        if source_classification:
+            updated_gt = dict(scenario_ticket.ground_truth or {})
+            updated_gt.update(update_data["ground_truth"] or {})
+            updated_gt.update(classifier_id=source_classification["id"],
+                              **{"class": source_classification["final_type"], "visClass": ""})
+            update_data["ground_truth"] = updated_gt
 
     if ticket:
         for field, value in update_data.items():
