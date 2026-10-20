@@ -198,7 +198,7 @@ it("dials a manually entered number, switches only on connection and plays the m
   expect(command).toHaveBeenCalledExactlyOnceWith({operation:"dial",number:"7001",service_name:"04 Газ"})
   expect(screen.getByText("04 Газ · 7001")).toBeTruthy()
   expect(screen.getByLabelText("Номер учебного телефона")).toHaveValue("7001")
-  expect(paths).toEqual(["/api/dds/audio/dds_petrov_cycle2_0.wav"])
+  expect(paths).toEqual(["/api/dds/audio/dds_petrov_cycle2_0.wav?v=qwen-aidar-phone-v1"])
   expect(played).toHaveBeenCalledOnce()
 })
 

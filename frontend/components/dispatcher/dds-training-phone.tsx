@@ -262,7 +262,10 @@ export function DDSTrainingPhone({exercise, selectedService, onServiceChange, di
     playbackEpoch.current++; const epoch = playbackEpoch.current
     audio.current?.pause(); setPlaying(false)
     if (!path || !callId) {setAudioNotice(audioOnly ? "Запись недоступна. Сообщите преподавателю." : "Для сообщения доступен текст."); return}
-    const player = new Audio(path); audio.current = player
+    // Existing lesson snapshots keep their URLs; bypass pre-Qwen browser caches.
+    const playbackPath = /^\/api\/dds\/audio\/dds_(ivanov|petrov|sidorov|smirnov)_cycle2_[0-3]\.wav$/.test(path)
+      ? `${path}?v=qwen-aidar-phone-v1` : path
+    const player = new Audio(playbackPath); audio.current = player
     let settled = false
     const done = (result: "played" | "unavailable") => {
       if (settled || playbackEpoch.current !== epoch) return

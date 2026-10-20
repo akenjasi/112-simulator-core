@@ -12,6 +12,32 @@ const flush = async () => act(async () => {for(let i=0;i<10;i++) await Promise.r
 beforeEach(() => {localStorage.setItem("token","isolated-ui-token")})
 afterEach(() => {cleanup(); localStorage.clear(); vi.unstubAllGlobals()})
 
+it.each([
+  ["/api/dds/audio/dds_ivanov_cycle2_0.wav", "/api/dds/audio/dds_ivanov_cycle2_0.wav?v=qwen-aidar-phone-v1"],
+  ["/api/dds/audio/dds_petrov_cycle2_2.wav", "/api/dds/audio/dds_petrov_cycle2_2.wav?v=qwen-aidar-phone-v1"],
+  ["/api/dds/audio/dds_ivanov_0.wav", "/api/dds/audio/dds_ivanov_0.wav"],
+  ["/audio/tts/generic_reply.wav", "/audio/tts/generic_reply.wav"],
+])("replays %s with versioned Qwen audio only for the replaced current recordings", async (path, expected) => {
+  const sources: string[] = [], played = vi.fn().mockResolvedValue(undefined)
+  vi.stubGlobal("Audio", class {
+    constructor(source: string) {sources.push(source)}
+    onended:any; onerror:any; pause() {} play = played
+  })
+  const command = vi.fn().mockResolvedValue(true), ex = exercise()
+  ex.outgoing = {"Аварийная служба":{contact_id:"a",call_id:"call1",text:null,audio:path}}
+  const props = {exercise:ex,selectedService:"Аварийная служба",onServiceChange:vi.fn(),disabled:false,command}
+  const view = render(<DDSTrainingPhone {...props}/>)
+  expect(sources).toEqual([])
+  fireEvent.click(screen.getByRole("button",{name:"☎ Телефон"}))
+  fireEvent.click(screen.getByRole("button",{name:"Прослушать ответ"})); await flush()
+  fireEvent.click(screen.getByRole("button",{name:"Прослушать ответ"})); await flush()
+  expect(sources).toEqual([expected, expected])
+  expect(played).toHaveBeenCalledTimes(2)
+  view.rerender(<DDSTrainingPhone {...props} exercise={{...ex}}/>); await flush()
+  expect(played).toHaveBeenCalledTimes(2)
+  expect(command).not.toHaveBeenCalled()
+})
+
 it("determines the service from the dialed directory number without a service selector", async () => {
   const command = vi.fn().mockResolvedValue(true), change = vi.fn()
   render(<DDSTrainingPhone exercise={exercise()} selectedService="Аварийная служба" onServiceChange={change} disabled={false} command={command}/>)

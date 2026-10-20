@@ -194,9 +194,9 @@
       "reason": "Explicit user feedback 2026-10-19: distinguish saved inaccurate records from rejected actions in instructor protocol."
     },
     "components/dispatcher/dds-training-phone.tsx": {
-      "sha256": "f73a036ebc59672e677794ed074107abc36b365b2e6e3e029119d1c144cdddbb",
-      "source_revision": "User request 2026-10-20 (base 70d2a84)",
-      "reason": "User explicitly requested removal of inline question icons and reference-manual phone/incident presentation, including operator 14, ARM 7, Rozhkova O. I. Preserve original baseline and pin this exact implementation."
+      "sha256": "2d2bb38fa519d64a7a352ede10c4da7226bbc311a4ba9183d2e00e2cc3203426",
+      "source_revision": "User-approved Qwen DDS recordings plan 2026-10-20 (base 199a885)",
+      "reason": "Retain the reviewed phone UI and version only the 16 replaced cycle2 recording requests to bypass pre-Qwen browser audio caches; stored lesson URLs remain unchanged."
     },
     "components/dispatcher/dispatch-panel.tsx": {
       "sha256": "9ed4c3fd8e5d0ce4c06e079819e633aef38f458c27e56bbb023f19d322b8244e",

@@ -82,6 +82,7 @@ done
 ((missing == 0)) || die 'Prepare the classifier files first; nothing has been downloaded or built.'
 for file in backend/core/qwen_tts/qwen-tts backend/bin/libggml.so.0 \
   backend/bin/libggml-base.so.0 backend/bin/libggml-cpu.so.0 \
+  backend/static/dds_phone/qwen-cycle2-manifest.json \
   backend/core/qwen_tts/voices/references/{male_1_dmitri,female_1_irina,female_3_jenny,male_2_denis}.wav; do
   [[ -s "$ROOT/$file" ]] || die "Missing TTS runtime resource: $file"
 done
@@ -110,12 +111,15 @@ log 'Preparing a source context without local secrets or live data'
 # Read tracked source from the working tree, including uncommitted tracked fixes.
 # Explicit paths prevent accidentally baking arbitrary local files into the image.
 git -C "$ROOT" ls-files -z -- .dockerignore backend backend/requirements/runtime.lock docker/images/backend.Dockerfile \
-  docker/images/frontend.Dockerfile docker frontend models/classifier \
+  docker/images/frontend.Dockerfile docker frontend models/classifier tools/models.json \
   assets/reference/classifier_ekp.json assets/reference/moscow_112_addresses.json assets/reference/template_students.csv \
   assets/tts-cache > "$STAGE/source-files"
 tar -C "$ROOT" --null --exclude='frontend/out' --exclude='*.gguf' \
   --exclude='.env*' --exclude='*.key' --exclude='*.pem' --exclude='*.db' \
   -T "$STAGE/source-files" -cf - | tar -C "$CONTEXT" -xf -
+# This known generated artifact may not have been added to Git yet.
+mkdir -p "$CONTEXT/backend/static/dds_phone"
+cp -- "$ROOT/backend/static/dds_phone/qwen-cycle2-manifest.json" "$CONTEXT/backend/static/dds_phone/"
 # Classifier weights may be locally provisioned rather than tracked by Git.
 mkdir -p "$CONTEXT/models/classifier"
 for name in config.json inference.py model.safetensors tokenizer.json tokenizer_config.json \

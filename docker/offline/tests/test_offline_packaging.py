@@ -29,6 +29,7 @@ elif a[:1]==['build']:
     assert not (context/'data/certs').exists()
     assert not (context/'data/uploads/private.txt').exists()
     assert (context/'models/classifier/model.safetensors').is_file()
+    assert (context/'backend/static/dds_phone/qwen-cycle2-manifest.json').is_file()
     for path in (context/'backend', context/'backend/core', context/'models/classifier'):
         assert path.stat().st_mode & 0o005 == 0o005, 'Container UID cannot traverse source directories'
     assert (context/'backend/main.py').stat().st_mode & 0o004, 'Container UID cannot read source'
@@ -99,7 +100,7 @@ class OfflinePackagingTests(unittest.TestCase):
             dest = self.repo / "data/tts_models" / manifest[key]["name"]
             dest.parent.mkdir(parents=True, exist_ok=True)
             dest.write_bytes(self.download_bytes)
-        for name in ("backend/core/qwen_tts/qwen-tts", "backend/bin/libggml.so.0",
+        for name in ("backend/core/qwen_tts/qwen-tts", "backend/static/dds_phone/qwen-cycle2-manifest.json", "backend/bin/libggml.so.0",
                      "backend/bin/libggml-base.so.0", "backend/bin/libggml-cpu.so.0",
                      *["backend/core/qwen_tts/voices/references/" + name + ".wav" for name in
                        ("male_1_dmitri", "female_1_irina", "female_3_jenny", "male_2_denis")]):
