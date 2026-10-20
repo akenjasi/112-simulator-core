@@ -161,6 +161,7 @@ async def test_four_tickets_catalog_edit_approval_self_training_and_phone_cycle(
     manifest = prepare_demo()
     async with AsyncSessionLocal() as db:
         for t in manifest.tickets:
+            t.data.ticket_id = str(uuid.uuid4())
             await save_generated_ticket(db, t.data, category=t.category, subcategory=t.short_title,
                 status="APPROVED", now=manifest.prepared_at,
                 exercise=default_phone_plan(t.data.etalon_services),
