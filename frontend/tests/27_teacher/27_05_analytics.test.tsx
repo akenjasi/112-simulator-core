@@ -101,6 +101,14 @@ describe('27.5: Пост-аналитика и Апелляция', () => {
       vi.fn((url: string, init?: RequestInit) => {
         const urlStr = url.toString();
 
+        if (urlStr === '/api/v1/lessons') return Promise.resolve({
+          ok: true, status: 200, json: async () => [{
+            id: 'export-lesson', group_id: 'export-group', group_name: 'Экспорт',
+            students: [{ cadet_id: 'cadet-01', cadet_name: 'Иванов Иван Алексеевич', score: 50 }],
+          }],
+        });
+        if (urlStr === '/api/reports/generate') return Promise.resolve({ ok: false, status: 503 });
+
         // GET session analytics
         if (urlStr.includes('/api/v1/analytics/sessions') && (!init || init.method === 'GET' || !init.method)) {
           return Promise.resolve({
@@ -306,10 +314,12 @@ describe('27.5: Пост-аналитика и Апелляция', () => {
   });
 
   it('should render Export to Excel button and trigger generation', async () => {
+    localStorage.setItem('token', 'teacher-token');
     render(<AnalyticsPage />);
     const exportBtn = screen.getByRole('button', { name: /Экспорт в Excel/i });
     expect(exportBtn).toBeInTheDocument();
 
+    await waitFor(() => expect(exportBtn).not.toBeDisabled());
     fireEvent.click(exportBtn);
 
     await waitFor(() => {

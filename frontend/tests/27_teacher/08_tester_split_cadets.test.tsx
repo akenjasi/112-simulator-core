@@ -1,5 +1,5 @@
 import React from 'react'
-import { act, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import AnalyticsPage from '@/components/teacher/analytics-page'
 
@@ -166,7 +166,7 @@ describe('FIX-08: Split screen lesson selection and cadets roster', () => {
     // Verify lesson selector exists
     const lessonSelect = await screen.findByRole('combobox', { name: /выбор урока/i })
     expect(lessonSelect).toBeInTheDocument()
-    await screen.findByRole('option', { name: /Группа 101-П/i })
+    await within(lessonSelect).findByRole('option', { name: /Группа 101-П/i })
 
     // Select lesson-alpha from dropdown
     fireEvent.change(lessonSelect, { target: { value: 'lesson-alpha' } })
@@ -215,7 +215,7 @@ describe('FIX-08: Split screen lesson selection and cadets roster', () => {
     render(<AnalyticsPage initialTab="split" />)
 
     const lessonSelect = await screen.findByRole('combobox', { name: /выбор урока/i })
-    await screen.findByRole('option', { name: /Группа 101-П/i })
+    await within(lessonSelect).findByRole('option', { name: /Группа 101-П/i })
     fireEvent.change(lessonSelect, { target: { value: 'lesson-alpha' } })
 
     expect(await screen.findByTestId('split-screen-card')).toBeInTheDocument()
@@ -253,7 +253,7 @@ describe('FIX-08: Split screen lesson selection and cadets roster', () => {
     render(<AnalyticsPage initialTab="split" />)
 
     const lessonSelect = await screen.findByRole('combobox', { name: /выбор урока/i })
-    await screen.findByRole('option', { name: /Группа 101-П/i })
+    await within(lessonSelect).findByRole('option', { name: /Группа 101-П/i })
     // Start loading lesson-alpha (slow)
     fireEvent.change(lessonSelect, { target: { value: 'lesson-alpha' } })
     // Quickly switch to lesson-empty
@@ -286,7 +286,7 @@ describe('FIX-08: Split screen lesson selection and cadets roster', () => {
     render(<AnalyticsPage initialTab="split" />)
 
     const lessonSelect = await screen.findByRole('combobox', { name: /выбор урока/i })
-    await screen.findByRole('option', { name: /Группа 101-П/i })
+    await within(lessonSelect).findByRole('option', { name: /Группа 101-П/i })
     fireEvent.change(lessonSelect, { target: { value: 'lesson-alpha' } })
 
     expect(await screen.findByRole('alert')).toHaveTextContent(/Доступ к этому занятию ограничен/i)

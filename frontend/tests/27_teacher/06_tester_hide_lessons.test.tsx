@@ -38,7 +38,7 @@ it("reversibly hides only completed lessons and restores the preference on remou
   expect(request.mock.calls.every(([, init]) => (init?.method || "GET") === "GET")).toBe(true)
 })
 
-it("applies group and completion filters to the Excel export without deleting history", async () => {
+it("keeps report scope independent of the history filters without deleting history", async () => {
   const request = setup()
   vi.spyOn(window, "alert").mockImplementation(() => {})
   vi.spyOn(console, "error").mockImplementation(() => {})
@@ -51,7 +51,8 @@ it("applies group and completion filters to the Excel export without deleting hi
   await waitFor(() => expect(request.mock.calls.some(([url]) => url === "/api/reports/generate")).toBe(true))
   const [, init] = request.mock.calls.find(([url]) => url === "/api/reports/generate")!
   expect(JSON.parse(String(init?.body)).custom_records).toEqual([
-    {cadet_name: "Текущий", ticket_id: "Группа А", final_score: null},
+    expect.objectContaining({cadet_name: "Прошедший", final_score: 55}),
+    expect.objectContaining({cadet_name: "Текущий", final_score: null}),
   ])
   fireEvent.click(screen.getByRole("checkbox", {name: "Скрыть завершённые уроки"}))
   expect(screen.getByText("Урок #past-001")).toBeInTheDocument()

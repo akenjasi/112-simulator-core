@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <title>Журнал оценок — Система 112</title>
+  <style>
+    @page { size: A4 landscape; margin: 12mm 10mm 16mm;
+      @bottom-right { content: "Страница " counter(page) " из " counter(pages); font-size: 8pt; }
+    }
+    body { font-family: "DejaVu Sans", sans-serif; color: #172033; font-size: 9pt; }
+    h1 { color: #1e3a8a; font-size: 19pt; margin: 0 0 8pt; }
+    .meta { color: #475569; margin: 4pt 0; }
+    table { width: 100%; border-collapse: collapse; table-layout: fixed; margin-top: 12pt; }
+    thead { display: table-header-group; }
+    th { background: #1e3a8a; color: white; text-align: left; }
+    th, td { padding: 6pt; border: 0.5pt solid #cbd5e1; overflow-wrap: anywhere; vertical-align: top; }
+    tr { break-inside: avoid; }
+    tbody tr:nth-child(even) { background: #f1f5f9; }
+    .score { text-align: center; }
+    .note { margin-top: 9pt; font-size: 8pt; color: #475569; }
+  </style>
+</head>
+<body>
+  <h1>Система 112 — Журнал оценок</h1>
+  <p class="meta">Сформировано: {{ generated_at_text }}. Всего записей: {{ rows|length }}.</p>
+  <p class="meta">Оценено: {{ graded_count }}. Без оценки: {{ pending_count }}.
+    Средний балл: {% if avg_score is not none %}{{ avg_score }} / 100{% else %}Нет оценок{% endif %}.</p>
+  <table>
+    <colgroup>
+      <col style="width:20%"><col style="width:11%"><col style="width:16%">
+      <col style="width:10%"><col style="width:23%"><col style="width:8%"><col style="width:12%">
+    </colgroup>
+    <thead><tr>
+      <th>ФИО курсанта</th><th>Группа</th><th>Занятие</th><th>Дата занятия</th>
+      <th>Билет / задание</th><th>Балл / 100</th><th>Статус оценивания</th>
+    </tr></thead>
+    <tbody>{% for row in rows %}<tr>
+      <td>{{ row.cadet_name }}</td><td>{{ row.group_name }}</td><td>{{ row.lesson_title }}</td>
+      <td>{{ row.lesson_date_text }}</td><td>{{ row.ticket_id }}</td>
+      <td class="score">{% if row.final_score is not none %}{{ row.final_score }}{% else %}—{% endif %}</td>
+      <td>{{ row.assessment_status }}</td>
+    </tr>{% endfor %}</tbody>
+  </table>
+  <p class="note">Средний балл рассчитан только по сохранённым числовым оценкам. Отсутствие оценки не является нулевым баллом.</p>
+</body>
+</html>

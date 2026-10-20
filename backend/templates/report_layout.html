@@ -377,7 +377,9 @@
                     <span style="font-size: 8pt; color: #64748b;">({{ c.time_to_first_dispatch_sec }}с)</span>
                 </td>
                 <td style="text-align: center;">
-                    {% if c.final_score >= 80 %}
+                    {% if c.final_score is none %}
+                        <span>Нет оценки</span>
+                    {% elif c.final_score >= 80 %}
                         <span class="badge badge-success">{{ c.final_score }} (Сдано)</span>
                     {% elif c.final_score >= 60 %}
                         <span class="badge badge-warning">{{ c.final_score }} (Удовл.)</span>

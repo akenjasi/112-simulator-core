@@ -1,5 +1,5 @@
 import React from 'react';
-import { render, screen, waitFor, fireEvent } from '@testing-library/react';
+import { render, screen, waitFor, fireEvent, within } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import AnalyticsPage from '@/components/teacher/analytics-page';
 
@@ -120,7 +120,7 @@ describe('Task 75: Advanced Analytics & Charts Dashboard', () => {
   it('filters the current recorded overview by group', async () => {
     render(<AnalyticsPage initialTab="charts" />);
     expect(await screen.findByText(/50 оценённых попыток/)).toBeInTheDocument();
-    await screen.findByRole('option', {name: 'Группа 101-П'});
+    await within(screen.getByTestId('filter-charts-group')).findByRole('option', {name: 'Группа 101-П'});
     fireEvent.change(screen.getByTestId('filter-charts-group'), {target: {value: 'grp-1'}});
     await waitFor(() => expect(global.fetch).toHaveBeenCalledWith(
       expect.stringMatching(/\/api\/analytics\/overview\?.*group_id=grp-1/), expect.anything()));

@@ -56,6 +56,24 @@ describe('analytics overview contract', () => {
     expect(screen.getByText('Нет оценённых попыток')).toBeInTheDocument()
   })
 
+  it('explains the graded denominator and shows pending work instead of error incidents', async () => {
+    vi.stubGlobal('fetch', vi.fn((input: RequestInfo | URL) => {
+      const url = String(input)
+      return url.includes('/overview') ? Promise.resolve(response({
+        ...emptyOverview, avg_score: 50, graded_attempts: 1, pending_attempts: 6,
+        total_attempts: 7, total_errors: 36, pass_rate: 100,
+      })) : ancillaryFetch(url)
+    }))
+    render(<AnalyticsPage initialTab="charts" />)
+    expect(await screen.findByText('Среди оценённых: 1')).toBeInTheDocument()
+    expect(screen.getByText('100.0%')).toBeInTheDocument()
+    expect(screen.getByText('50.0')).toBeInTheDocument()
+    expect(screen.getByText('Ожидают оценки')).toBeInTheDocument()
+    expect(screen.getByText('6')).toBeInTheDocument()
+    expect(screen.queryByText('36')).not.toBeInTheDocument()
+    expect(screen.queryByText('инцидентов')).not.toBeInTheDocument()
+  })
+
   it('ignores an older overview response after the filter starts a newer request', async () => {
     let resolveOld!: (value: ReturnType<typeof response>) => void
     const fetchMock = vi.fn((input: RequestInfo | URL) => {

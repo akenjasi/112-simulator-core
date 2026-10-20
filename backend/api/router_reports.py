@@ -3,6 +3,7 @@
 import asyncio
 import logging
 import os
+import shutil
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
@@ -23,6 +24,9 @@ from backend.core.reports_engine import (
     generate_excel_from_data,
     generate_pdf_from_html,
     render_report_html,
+)
+from backend.core.gradebook_export import (
+    MOSCOW, build_gradebook_context, generate_gradebook_csv, generate_gradebook_excel,
 )
 from backend.database import AsyncSessionLocal
 from backend.models.domain_01 import User
@@ -75,6 +79,7 @@ async def _background_generate_report(
     session_ids: Optional[List[str]] = None,
     custom_records: Optional[List[Dict[str, Any]]] = None,
     output_format: str = "pdf",
+    report_kind: str = "evaluation",
 ) -> None:
     """Export recorded measurements; missing metrics remain absent."""
     from backend.core.dds_cycle import get_session_score
@@ -85,6 +90,7 @@ async def _background_generate_report(
     def finite(value):
         return value if isinstance(value, (int, float)) and not isinstance(value, bool) and math.isfinite(value) else None
 
+    directory = None
     try:
         cadets_data = []
         if custom_records is not None:
@@ -141,27 +147,36 @@ async def _background_generate_report(
             values = [record[key] for record in cadets_data if finite(record.get(key)) is not None]
             return round(sum(values) / len(values)) if values else None
 
-        context = {"generated_at": datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S UTC"),
+        generated_at = datetime.now(MOSCOW)
+        context = {"generated_at": generated_at.strftime("%d.%m.%Y %H:%M МСК"),
             "group_id": group_id, "cadets": cadets_data, "avg_final_score": average("final_score"),
             "avg_comm_score": average("comm_score"), "avg_card_score": average("card_score"),
             "critical_errors_count": 0, "over_dispatch_items": [], "missed_factoid_items": []}
+        if report_kind == "gradebook":
+            context = build_gradebook_context(cadets_data, generated_at)
         report_root = Path(os.getenv("REPORT_DIR", "data/reports"))
         report_root.mkdir(parents=True, exist_ok=True)
         directory = Path(tempfile.mkdtemp(prefix="report-", dir=report_root))
         output_csv, output_xlsx, output_pdf = (directory / name for name in ("report.csv", "report.xlsx", "report.pdf"))
-        await asyncio.to_thread(output_csv.write_text, generate_csv_from_data(cadets_data), encoding="utf-8")
-        output_xlsx.write_bytes(await asyncio.to_thread(generate_excel_from_data, cadets_data))
+        csv_data = generate_gradebook_csv(context) if report_kind == "gradebook" else generate_csv_from_data(cadets_data)
+        await asyncio.to_thread(output_csv.write_text, csv_data, encoding="utf-8")
+        excel_data = await asyncio.to_thread(
+            generate_gradebook_excel if report_kind == "gradebook" else generate_excel_from_data,
+            context if report_kind == "gradebook" else cadets_data,
+        )
+        await asyncio.to_thread(output_xlsx.write_bytes, excel_data)
         pdf_path = None
-        try:
-            if output_format == "pdf":
-                await asyncio.to_thread(generate_pdf_from_html, render_report_html(context), str(output_pdf))
-                pdf_path = str(output_pdf)
-        except Exception:
-            logger.warning("PDF renderer unavailable; CSV and Excel are ready for task %s", task_id)
-        TASKS[task_id].update(status="ready", file_path=pdf_path, csv_path=str(output_csv), excel_path=str(output_xlsx))
+        if output_format == "pdf":
+            template = "gradebook_layout.html" if report_kind == "gradebook" else "report_layout.html"
+            await asyncio.to_thread(generate_pdf_from_html, render_report_html(context, template), str(output_pdf))
+            pdf_path = str(output_pdf)
+        TASKS[task_id].update(status="ready", file_path=pdf_path, csv_path=str(output_csv),
+                             excel_path=str(output_xlsx), generated_at=generated_at.isoformat())
     except Exception:
         logger.exception("Report generation failed for task %s", task_id)
-        TASKS[task_id].update(status="failed", error="No measured report data or export renderer is available")
+        if directory is not None:
+            await asyncio.to_thread(shutil.rmtree, directory, True)
+        TASKS[task_id].update(status="failed", error="Не удалось сформировать отчёт. Проверьте данные и повторите попытку.")
 
 
 @reports_router.post("/generate", response_model=ReportGenerateResponse)
@@ -173,6 +188,8 @@ async def generate_report(
 ):
     """Start asynchronous generation of an evaluation report."""
     prune_completed_reports()
+    if req.report_kind == "gradebook" and not req.custom_records:
+        raise HTTPException(422, "В выбранной области нет записей для отчёта")
     if len(TASKS) >= 1000:
         raise HTTPException(429, "Report storage capacity reached; retry after expiration")
     if req.group_id:
@@ -212,6 +229,7 @@ async def generate_report(
         session_ids=req.session_ids,
         custom_records=req.custom_records,
         output_format=req.format,
+        report_kind=req.report_kind,
     )
 
     return {"task_id": task_id}
@@ -235,6 +253,7 @@ async def get_report_status(task_id: str, current_user: User = Depends(get_curre
         "status": task["status"],
         "file_path": task.get("file_path"),
         "error": task.get("error"),
+        "generated_at": task.get("generated_at"),
     }
 
 

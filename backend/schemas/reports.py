@@ -63,6 +63,7 @@ class CadetEvaluationItem(BaseModel):
 
 class ReportGenerateRequest(BaseModel):
     format: Literal["pdf", "excel", "csv"] = "pdf"
+    report_kind: Literal["evaluation", "gradebook"] = "evaluation"
     group_id: Optional[str] = None
     session_ids: Optional[List[str]] = Field(None, max_length=1000)
     custom_records: Optional[List[Dict[str, Any]]] = Field(None, max_length=1000)
@@ -95,3 +96,4 @@ class ReportStatusResponse(BaseModel):
     status: str
     file_path: Optional[str] = None
     error: Optional[str] = None
+    generated_at: Optional[str] = None

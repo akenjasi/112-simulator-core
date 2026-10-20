@@ -781,113 +781,88 @@ export default function AnalyticsPage({ initialTab = "all" }: AnalyticsPageProps
     await fetchChartsData()
   }
 
-  const [isExportingExcel, setIsExportingExcel] = useState<boolean>(false)
+  const [reportGroupId, setReportGroupId] = useState("ALL")
+  const [reportLessonId, setReportLessonId] = useState("ALL")
+  const [exportingFormat, setExportingFormat] = useState<"excel" | "pdf" | null>(null)
+  const [exportError, setExportError] = useState<string | null>(null)
 
-  const handleExportExcel = async () => {
+  const handleExport = async (format: "excel" | "pdf") => {
+    setExportError(null)
+    const reportLessons = lessonsList.filter(lesson =>
+      (reportGroupId === "ALL" || lesson.group_id === reportGroupId) &&
+      (reportLessonId === "ALL" || lesson.id === reportLessonId)
+    )
+    // Report scope is explicit and independent of history search, hidden lessons,
+    // chart filters and the answer currently opened in the review tab.
+    const customRecords = reportLessons.flatMap(lesson =>
+      (lesson.students || []).flatMap(student => {
+        const common = {
+          cadet_name: student.cadet_name,
+          group_name: lesson.group_name || "Не указана",
+          lesson_title: `Урок #${lesson.id.slice(0, 8)}`,
+          lesson_date: lesson.completed_at || lesson.started_at || lesson.created_at || null,
+        }
+        return student.tickets?.length
+          ? student.tickets.map(ticket => ({
+              ...common,
+              ticket_id: ticket.title || ticket.ticket_id,
+              final_score: ticket.score ?? null,
+            }))
+          : [{ ...common, ticket_id: student.score != null ? "Занятие целиком" : "Нет попытки",
+               final_score: student.score ?? null }]
+      })
+    )
+    if (!customRecords.length) {
+      setExportError("В выбранной области нет записей для отчёта.")
+      return
+    }
+    if (customRecords.length > 1000) {
+      setExportError("В отчёте больше 1000 записей. Выберите группу или отдельное занятие.")
+      return
+    }
     try {
-      setIsExportingExcel(true)
-
-      // Export recorded journal grades, including teacher overrides. Unmarked
-      // work remains blank rather than receiving a fabricated perfect score.
-      const customRecords: Record<string, unknown>[] = []
-      if (activeTab === "split") {
-        for (const cadet of sessionData.cadets) {
-          for (const record of cadet.records || []) {
-            customRecords.push({
-              cadet_name: cadet.cadet_name,
-              ticket_id: record.title || record.ticket_id || "Билет",
-              final_score: record.score ?? null,
-            })
-          }
-        }
-        if (sessionData.cadets.length === 0 && selectedRecord) {
-          customRecords.push({
-            cadet_name: selectedRecord.cadet_name || "Курсант",
-            ticket_id: selectedRecord.title || selectedRecord.ticket_id || "Билет",
-            final_score: selectedRecord.score ?? null,
-          })
-        }
-      } else {
-        for (const lesson of filteredLessons) {
-          for (const student of lesson.students || []) {
-            if (student.tickets?.length) {
-              for (const ticket of student.tickets) {
-                customRecords.push({
-                  cadet_name: student.cadet_name,
-                  ticket_id: ticket.title || ticket.ticket_id,
-                  final_score: ticket.score ?? null,
-                  penalties_list: ticket.errors || [],
-                })
-              }
-            } else {
-              customRecords.push({
-                cadet_name: student.cadet_name,
-                ticket_id: lesson.group_name || `Урок #${lesson.id.slice(0, 6)}`,
-                final_score: student.score ?? null,
-              })
-            }
-          }
-        }
-      }
-
-      // 2. Start generation request
+      setExportingFormat(format)
       const genRes = await fetch("/api/reports/generate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          group_id: selectedGroupId !== "ALL" ? selectedGroupId : undefined,
-          session_ids: sessionId ? [sessionId] : undefined,
+          report_kind: "gradebook",
+          group_id: reportGroupId !== "ALL" ? reportGroupId : undefined,
           custom_records: customRecords,
-          format: "excel",
+          format,
         }),
       })
-
-      if (!genRes.ok) {
-        throw new Error(`Ошибка запуска генерации (${genRes.status})`)
-      }
-
+      if (!genRes.ok) throw new Error(`Ошибка запуска генерации (${genRes.status})`)
       const { task_id } = await genRes.json()
-
-      // 3. Poll for readiness
-      let isReady = false
+      let generatedDate = ""
       for (let attempt = 0; attempt < 25; attempt++) {
-        await new Promise((resolve) => setTimeout(resolve, 600))
-        const statusRes = await fetch(`/api/reports/status/${task_id}`)
-        if (!statusRes.ok) continue
+        await new Promise(resolve => setTimeout(resolve, 600))
+        const statusRes = await fetch(`/api/reports/status/${encodeURIComponent(task_id)}`)
+        if (!statusRes.ok) throw new Error(`Ошибка проверки отчёта (${statusRes.status})`)
         const statusData = await statusRes.json()
+        if (statusData.status === "failed") throw new Error(statusData.error || "Ошибка генерации отчёта")
         if (statusData.status === "ready") {
-          isReady = true
+          generatedDate = statusData.generated_at?.slice(0, 10) ||
+            new Intl.DateTimeFormat("en-CA", { timeZone: "Europe/Moscow" }).format(new Date())
           break
         }
-        if (statusData.status === "failed") {
-          throw new Error(statusData.error || "Ошибка фоновой генерации")
-        }
       }
-
-      if (!isReady) {
-        throw new Error("Таймаут генерации файла отчета")
-      }
-
-      // 4. Download file
-      const downloadRes = await fetch(`/api/reports/download?task_id=${encodeURIComponent(task_id)}&format=excel`)
-      if (!downloadRes.ok) {
-        throw new Error(`Не удалось скачать файл (${downloadRes.status})`)
-      }
-
+      if (!generatedDate) throw new Error("Время ожидания отчёта истекло. Повторите попытку.")
+      const downloadRes = await fetch(`/api/reports/download?task_id=${encodeURIComponent(task_id)}&format=${format}`)
+      if (!downloadRes.ok) throw new Error(`Не удалось скачать файл (${downloadRes.status})`)
       const blob = await downloadRes.blob()
       const url = window.URL.createObjectURL(blob)
       const link = document.createElement("a")
       link.href = url
-      link.download = `analytics_report_${new Date().toISOString().slice(0, 10)}.xlsx`
+      link.download = `gradebook_${generatedDate}.${format === "excel" ? "xlsx" : "pdf"}`
       document.body.appendChild(link)
       link.click()
       link.remove()
       window.URL.revokeObjectURL(url)
-    } catch (err: any) {
-      console.error("Failed to export Excel report:", err)
-      alert(err?.message || "Ошибка при формировании Excel отчета")
+    } catch (err: unknown) {
+      setExportError(err instanceof Error ? err.message : "Ошибка формирования отчёта")
     } finally {
-      setIsExportingExcel(false)
+      setExportingFormat(null)
     }
   }
 
@@ -936,21 +911,41 @@ export default function AnalyticsPage({ initialTab = "all" }: AnalyticsPageProps
 
         {/* Action Buttons & Tab Switcher */}
         <div className="flex flex-wrap items-center gap-2.5">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={handleExportExcel}
-            disabled={isExportingExcel}
-            className="flex items-center gap-2 border-emerald-600/40 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-50 dark:hover:bg-emerald-950/40 font-semibold shadow-xs"
-            data-testid="export-excel-btn"
-          >
-            {isExportingExcel ? (
-              <Loader2 className="h-4 w-4 animate-spin text-emerald-600" />
-            ) : (
-              <FileSpreadsheet className="h-4 w-4 text-emerald-600" />
-            )}
-            <span>{isExportingExcel ? "Генерация Excel..." : "Экспорт в Excel"}</span>
-          </Button>
+          <div className="flex flex-wrap items-end gap-2 rounded-xl border border-border/70 p-2">
+            <label className="text-xs text-muted-foreground">
+              Группа отчёта
+              <select aria-label="Группа отчёта" className="block mt-1 rounded-md border bg-background p-2 text-sm text-foreground"
+                value={reportGroupId} disabled={exportingFormat !== null || isLoadingLessons}
+                onChange={event => { setReportGroupId(event.target.value); setReportLessonId("ALL"); setExportError(null) }}>
+                <option value="ALL">Все группы</option>
+                {allGroupOptions.map(group => <option key={group.id} value={group.id}>{group.name}</option>)}
+              </select>
+            </label>
+            <label className="text-xs text-muted-foreground">
+              Занятие отчёта
+              <select aria-label="Занятие отчёта" className="block mt-1 max-w-64 rounded-md border bg-background p-2 text-sm text-foreground"
+                value={reportLessonId} disabled={exportingFormat !== null || isLoadingLessons}
+                onChange={event => { setReportLessonId(event.target.value); setExportError(null) }}>
+                <option value="ALL">Все занятия</option>
+                {lessonsList.filter(lesson => reportGroupId === "ALL" || lesson.group_id === reportGroupId).map(lesson => (
+                  <option key={lesson.id} value={lesson.id}>{lesson.group_name || "Без группы"} · Урок #{lesson.id.slice(0, 8)}</option>
+                ))}
+              </select>
+            </label>
+            <Button variant="outline" size="sm" onClick={() => handleExport("excel")}
+              disabled={exportingFormat !== null || isLoadingLessons || lessonsAuthError !== null}
+              className="gap-2 text-emerald-700 dark:text-emerald-300" data-testid="export-excel-btn">
+              {exportingFormat === "excel" ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileSpreadsheet className="h-4 w-4" />}
+              {exportingFormat === "excel" ? "Генерация Excel..." : "Экспорт в Excel"}
+            </Button>
+            <Button variant="outline" size="sm" onClick={() => handleExport("pdf")}
+              disabled={exportingFormat !== null || isLoadingLessons || lessonsAuthError !== null} className="gap-2">
+              {exportingFormat === "pdf" ? <Loader2 className="h-4 w-4 animate-spin" /> : <FileText className="h-4 w-4" />}
+              {exportingFormat === "pdf" ? "Генерация PDF..." : "Экспорт в PDF"}
+            </Button>
+            <p className="w-full text-xs text-muted-foreground">Экспорт включает все записи выбранных занятий, включая скрытые в истории.</p>
+            {exportError && <p role="alert" className="w-full text-sm text-destructive">{exportError}</p>}
+          </div>
 
           {/* Tab Switcher */}
           <div className="flex flex-wrap items-center gap-1 bg-muted/50 p-1 rounded-xl border border-border/70">
@@ -1167,7 +1162,7 @@ export default function AnalyticsPage({ initialTab = "all" }: AnalyticsPageProps
                 <span className="text-2xl font-black text-foreground">
                   {overviewData.pass_rate != null ? `${overviewData.pass_rate.toFixed(1)}%` : "—"}
                 </span>
-                <span className="text-xs text-muted-foreground">от оценённых</span>
+                <span className="text-xs text-muted-foreground">Среди оценённых: {overviewData.graded_attempts}</span>
               </div>
               <p className={`text-[11px] mt-1 font-medium ${
                 overviewData.pass_rate == null
@@ -1186,17 +1181,17 @@ export default function AnalyticsPage({ initialTab = "all" }: AnalyticsPageProps
 
             <Card className="p-4 bg-card/60 backdrop-blur-xs">
               <div className="flex items-center justify-between">
-                <span className="text-xs font-medium text-muted-foreground">Зафиксировано ошибок</span>
+                <span className="text-xs font-medium text-muted-foreground">Ожидают оценки</span>
                 <AlertTriangle className="h-4 w-4 text-amber-600" />
               </div>
               <div className="mt-2 flex items-baseline gap-2">
                 <span className="text-2xl font-black text-foreground">
-                  {overviewData.total_errors}
+                  {overviewData.pending_attempts}
                 </span>
-                <span className="text-xs text-muted-foreground">инцидентов</span>
+                <span className="text-xs text-muted-foreground">попыток</span>
               </div>
               <p className="text-[11px] text-amber-600 dark:text-amber-400 mt-1 font-medium">
-                {overviewData.total_errors > 0 ? "Требуют разбора" : "Ошибок не зафиксировано"}
+                {overviewData.pending_attempts > 0 ? "Без итоговой оценки" : "Все попытки оценены"}
               </p>
             </Card>
           </div>
@@ -1342,7 +1337,7 @@ export default function AnalyticsPage({ initialTab = "all" }: AnalyticsPageProps
                           labelStyle={{ color: "var(--muted-foreground)" }}
                           formatter={(value: any, name: any) => [
                             `${value}${name === "pass_rate" ? "%" : " б."}`,
-                            name === "avg_score" ? "Средний балл" : "Успешность (с 1 попытки)",
+                            name === "avg_score" ? "Средний балл" : "Успешность среди оценённых",
                           ]}
                         />
                         <RechartsLegend
