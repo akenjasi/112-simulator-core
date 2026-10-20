@@ -82,8 +82,11 @@ class QwenTTSV2:
         # Paths for Qwen TTS
         self.qwen_dir = Path(__file__).parent / "qwen_tts"
         self.bin_path = self.qwen_dir / "qwen-tts"
-        self.tokenizer_path = Path(os.getenv("TTS_MODELS_DIR", str(self.qwen_dir / "models"))) / "qwen-tokenizer-12hz-Q4_K_M.gguf"
-        self.model_path = Path(os.getenv("TTS_MODELS_DIR", str(self.qwen_dir / "models"))) / "qwen-talker-0.6b-base-Q4_K_M.gguf"
+        models_dir = Path(os.getenv("TTS_MODELS_DIR") or str(base_dir / "data" / "tts_models")).expanduser()
+        if not models_dir.is_absolute():
+            models_dir = base_dir / models_dir
+        self.tokenizer_path = models_dir / "qwen-tokenizer-12hz-Q4_K_M.gguf"
+        self.model_path = models_dir / "qwen-talker-0.6b-base-Q4_K_M.gguf"
         self.voices_dir = self.qwen_dir / "voices" / "references"
         
         # Speaker mapping (silero names to our references)
@@ -102,7 +105,7 @@ class QwenTTSV2:
         if not text.strip():
             return bytes()
             
-        if os.getenv("TTS_ENABLED", "false").strip().lower() not in {"true", "1", "yes", "on"}:
+        if os.getenv("TTS_ENABLED", "true").strip().lower() not in {"true", "1", "yes", "on"}:
             raise RuntimeError("Speech synthesis is disabled; enable TTS_ENABLED only with provisioned local models")
 
         text_clean = normalize_text_v2(text)
@@ -130,7 +133,11 @@ class QwenTTSV2:
             raw_wav = temp_dir_path / "raw.wav"
             processed_wav = temp_dir_path / "processed.wav"
             
+            for required in (self.bin_path, self.model_path, self.tokenizer_path, ref_path):
+                if not required.is_file():
+                    raise RuntimeError(f"Missing TTS resource: {required}; run make models before startup")
             env = os.environ.copy()
+            env["LD_LIBRARY_PATH"] = str(Path(__file__).resolve().parents[1] / "bin") + os.pathsep + env.get("LD_LIBRARY_PATH", "")
             env["OMP_NUM_THREADS"] = str(os.environ.get("TTS_THREADS", os.cpu_count()))
             
             cmd_tts = [

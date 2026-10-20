@@ -20,7 +20,7 @@ export: PostgreSQL is transactionally dumped, but files are copied separately.
 The installer verifies SHA256SUMS, loads all four images without a registry,
 generates local credentials and a self-signed certificate, starts the stack,
 checks backend + frontend + LLM health, then sends a synthetic CPU inference
-request. Readiness may take up to 30 minutes; inference has a separate timeout.
+request and real Qwen TTS synthesis (PCM16, mono, 8000 Hz). Readiness may take up to 30 minutes; inference has a separate timeout.
 If a check fails, inspect logs; do not treat the deployment as ready.
 
 Open http://SERVER_IP:3000 . For HTTPS use a trusted certificate for the actual
@@ -53,13 +53,12 @@ HTTP/HTTPS ports are reachable from the host/LAN. Hugging Face is
 forced offline. Report/advice and factoid generation use the shared CPU LLM;
 no Ollama process or external API is required.
 
-CURRENT APPLICATION LIMITATION
-Speech synthesis is disabled in the current tts_v2.py; legacy /tts also expects
-a separate service and may return a placeholder. Packaging does not implement
-or enable missing TTS functionality. Existing cached audio is included only
-with application data. Available Qwen TTS weights are carried in models/tts,
-but their presence does not enable synthesis. ASR speech recognition is disabled
-in this distribution; no GigaAM weights are needed or shipped.
+SPEECH
+Qwen TTS synthesis is enabled by default. Both pinned GGUF weights are included
+in models/tts; the binary, libraries and reference voices are in the backend image.
+No pre-existing audio cache is required. TTS_ENABLED=false explicitly disables
+synthesis. ASR is disabled; no GigaAM weights are included. Legacy HTTP TTS
+requires a separately configured service and is outside this distribution.
 
 The source repository and its development .env are not needed on the server.
 BUILD-INFO.txt records the release, source commit, image IDs/digests and whether

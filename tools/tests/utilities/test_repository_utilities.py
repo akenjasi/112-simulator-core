@@ -79,45 +79,23 @@ class RelocatedUtilityTests(unittest.TestCase):
         self.assertEqual(created.read_bytes(), original)
         self.assertFalse((self.other / ".env").exists())
 
-    def test_legacy_release_copies_helper_with_its_project_relative_layout(self):
-        self.copy_helper("setup_env.py")
-        (self.project / "docker/scripts").mkdir(parents=True)
-        shutil.copyfile(ROOT / "docker/scripts/pack_release.sh", self.project / "docker/scripts/pack_release.sh")
-        for filename in ("docker/compose/base.yml", "docker/compose/prod.yml", ".env.example"):
-            if filename == ".env.example":
-                (self.project / filename).write_bytes((ROOT / filename).read_bytes())
-            else:
-                (self.project / filename).parent.mkdir(parents=True, exist_ok=True)
-                (self.project / filename).write_text("synthetic fixture\n")
-        (self.project / "docs/operations").mkdir(parents=True)
-        (self.project / "docs/operations/deployment.md").write_text("Release instructions\n")
-        (self.project / "docker/scripts/generate_certs.sh").write_text("#!/bin/sh\n")
-        binaries = self.base / "bin"
-        binaries.mkdir()
-        docker = binaries / "docker"
-        compose_fixture = {"name": "source_checkout", "services": {"frontend": {"volumes": [
-            {"type": "bind", "source": "./data/certs", "target": "/etc/nginx/ssl"}]}},
-            "volumes": {"postgres_data": {"name": "source_checkout_postgres_data"}},
-            "networks": {"simulator_net": {"name": "source_checkout_simulator_net"}}}
-        docker.write_text("#!/bin/sh\nif [ \"$1\" = save ]; then : > \"$3\"; fi\n"
-                          "if [ \"$1\" = compose ]; then cat <<'JSON'\n" + json.dumps(compose_fixture) + "\nJSON\nfi\n")
-        docker.chmod(0o755)
-        result = subprocess.run(["bash", "docker/scripts/pack_release.sh"], cwd=self.project,
-                                env={**os.environ, "PATH": f"{binaries}:{os.environ['PATH']}", "RELEASE_DIR": str(self.project / "release")},
+    def test_release_wrapper_preserves_destination_and_forwards_arguments(self):
+        wrapper = self.project / "docker/scripts/pack_release.sh"
+        wrapper.parent.mkdir(parents=True)
+        shutil.copyfile(ROOT / "docker/scripts/pack_release.sh", wrapper)
+        packager = self.project / "docker/offline/package.sh"
+        packager.parent.mkdir(parents=True)
+        packager.write_text("#!/bin/bash\nprintf '%s\\n' \"$@\"\n")
+        release = self.base / "release with spaces"
+        result = subprocess.run(["bash", str(wrapper), "--check", "--version", "synthetic"],
+                                cwd=self.other, env={**os.environ, "RELEASE_DIR": str(release)},
                                 capture_output=True, text=True, timeout=15)
         self.assertEqual(result.returncode, 0, result.stderr)
-        released = json.loads((self.project / "release/docker-compose.yml").read_text())
-        self.assertNotIn("name", released)
-        self.assertNotIn("name", released["volumes"]["postgres_data"])
-        self.assertNotIn("name", released["networks"]["simulator_net"])
-        self.assertEqual(released["services"]["frontend"]["volumes"][0]["source"], "./certs")
-        helper = self.project / "release/scripts/setup_env.py"
-        self.assertEqual(helper.read_bytes(), (ROOT / "tools/setup_env.py").read_bytes())
-        code = "import runpy,sys; sys.argv=[sys.argv[1], '--init']; runpy.run_path(sys.argv[0],run_name='__main__')"
-        result = self.run_probe(code, helper)
-        self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertTrue((self.project / "release/.env").is_file())
-        self.assertFalse((self.other / ".env").exists())
+        args = result.stdout.splitlines()
+        self.assertEqual(args[0], "--output")
+        self.assertEqual(Path(args[1]).parent, release)
+        self.assertTrue(args[1].endswith("-linux-amd64.tar.gz"))
+        self.assertEqual(args[2:], ["--check", "--version", "synthetic"])
 
     def test_database_policy_uses_data_without_hiding_existing_legacy_rows(self):
         import importlib.util

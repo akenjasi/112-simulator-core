@@ -1,5 +1,5 @@
 # Optional bridge between the main stack and docker/compose/llm.yml.
-# Supply DDS_LLM_MODEL_PATH for an existing local GGUF; no model is downloaded.
+# make up prepares default weights before launch; custom GGUF paths must exist.
 services:
   backend:
     depends_on:

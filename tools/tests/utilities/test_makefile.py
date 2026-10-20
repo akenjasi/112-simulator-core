@@ -32,6 +32,7 @@ class MakefileTests(unittest.TestCase):
         stub = (f"#!{sys.executable}\nimport json,os,sys\n"
                 "with open(os.environ['MAKE_TRACE'],'a') as f:\n"
                 " f.write(json.dumps({'command':os.path.basename(sys.argv[0]),'args':sys.argv[1:],'cwd':os.getcwd()})+'\\n')\n"
+                "if os.getenv('FAIL_MODELS') and any('provision_models.py' in a for a in sys.argv): sys.exit(27)\n"
                 "sys.exit(23 if os.getenv('FAIL_ACCEPTANCE') and sys.argv[1:3]==['-m','pytest'] else 0)\n")
         for path in [self.bin / "docker", self.bin / "npm", self.bin / "python3.11", self.venv / "bin/python", self.venv / "bin/python3"]:
             path.write_text(stub)
@@ -89,6 +90,23 @@ class MakefileTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertIn("llm", self.calls()[-1]["args"])
         self.assertIn(str(self.project / "docker/compose/reports.yml"), self.calls()[-1]["args"])
+
+    def test_models_are_prepared_before_up_and_failure_prevents_start(self):
+        result = self.run_make("up", f"ENV_FILE={self.envfile}")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        calls = self.calls()
+        prepare = next(i for i, c in enumerate(calls) if any("provision_models.py" in a for a in c["args"]))
+        start = next(i for i, c in enumerate(calls) if c["command"] == "docker" and "up" in c["args"])
+        self.assertLess(prepare, start)
+        self.trace.unlink()
+        result = self.run_make("up", f"ENV_FILE={self.envfile}", FAIL_MODELS="1")
+        self.assertNotEqual(result.returncode, 0)
+        self.assertFalse(any(c["command"] == "docker" and "up" in c["args"] for c in self.calls()))
+
+    def test_production_does_not_download_models(self):
+        result = self.run_make("up-prod", f"ENV_FILE={self.envfile}")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertFalse(any(any("provision_models.py" in a for a in c["args"]) for c in self.calls()))
 
     def test_frontend_backup_and_build_dispatch_from_another_directory(self):
         (self.project / "frontend").mkdir()

@@ -6,7 +6,7 @@ services:
     - 127.0.0.1:8081:8080
     volumes:
     - type: bind
-      source: ${DDS_LLM_MODEL_PATH}
+      source: ${DDS_LLM_MODEL_PATH:-./models/llm/Qwen3.5-4B-Q4_K_M.gguf}
       target: /models/report.gguf
       read_only: true
       bind:

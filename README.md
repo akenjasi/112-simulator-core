@@ -11,10 +11,11 @@
 ```bash
 make install
 make init
+make models
 make backend
 ```
 
-В другом терминале: `make frontend`. Интерфейс — http://localhost:3000, API — http://localhost:8000/docs. Установка создаёт `.venv`, использует hash lock backend и npm lock; речь и загрузка моделей не включаются автоматически. `make init` создаёт приватный `.env` с уникальными секретами и отказывается перезаписывать существующий.
+В другом терминале: `make frontend`. Интерфейс — http://localhost:3000, API — http://localhost:8000/docs. Установка создаёт `.venv`, использует hash lock backend и npm lock; ASR не включается автоматически. `make models` готовит веса Qwen TTS, синтез включён в новом `.env`; приложение само ничего не скачивает. `make init` создаёт приватный `.env` с уникальными секретами и отказывается перезаписывать существующий.
 
 БД локального backend находится в `data/112_simulator.db`; явный DATABASE_URL имеет приоритет. Уже существующая старая корневая SQLite поддерживается до её явного переноса. Начальный ADMIN создаётся при startup, пароль берётся из конфигурации.
 
@@ -24,8 +25,9 @@ make backend
 |---|---|
 | Основные проверки | `make test` |
 | Проверки плюс полный backend diagnostic | `make test-all` |
+| Подготовить TTS / TTS и LLM | `make models` / `make models WITH_LLM=1` |
 | Собрать два Docker-образа | `make build` |
-| Локальная Docker-сборка и запуск | `make up` |
+| Подготовка моделей, Docker-сборка и запуск | `make up` |
 | Запуск готовых production images | `make up-prod` |
 | Логи / остановка с сохранением томов | `make logs` / `make down` |
 | Backup локально настроенной БД | `make backup` |

@@ -1,5 +1,6 @@
 """Fail before image builds on invalid effective settings; never disclose secrets."""
 from copy import deepcopy
+import hashlib
 import json
 import os
 from pathlib import Path
@@ -69,6 +70,19 @@ class ComposeSettingsTests(unittest.TestCase):
         (root / 'tools').mkdir(exist_ok=True)
         shutil.copyfile(ROOT / 'Makefile', root / 'Makefile')
         shutil.copyfile(ROOT / 'tools/setup_env.py', root / 'tools/setup_env.py')
+        shutil.copyfile(ROOT / 'tools/provision_models.py', root / 'tools/provision_models.py')
+        manifest = json.loads((ROOT / 'tools/models.json').read_text())
+        tts = root / 'data/tts_models'
+        tts.mkdir(parents=True, exist_ok=True)
+        for key in ('talker', 'tokenizer'):
+            spec = manifest[key]
+            payload = b'GGUFsynthetic'
+            spec.update(size=len(payload), sha256=hashlib.sha256(payload).hexdigest())
+            (tts / spec['name']).write_bytes(payload)
+        (root / 'tools/models.json').write_text(json.dumps(manifest))
+        config = deepcopy(config)
+        config['services']['backend']['volumes'] = [{
+            'type': 'bind', 'source': str(tts), 'target': '/app/backend/core/qwen_tts/models'}]
         binary = root / 'bin'
         binary.mkdir(exist_ok=True)
         docker = binary / 'docker'
@@ -101,9 +115,9 @@ class ComposeSettingsTests(unittest.TestCase):
             with self.subTest(target=target), tempfile.TemporaryDirectory(prefix='env-check-') as directory:
                 result, calls = self.run_make(directory, target, self.config)
                 self.assertEqual(result.returncode, 0, result.stderr)
-                self.assertEqual(len(calls), 2)
-                self.assertIn('config', calls[0])
-                self.assertIn('up', calls[1])
+                self.assertEqual(len(calls), 3 if target == 'up' else 2)
+                self.assertTrue(all('config' in call for call in calls[:-1]))
+                self.assertIn('up', calls[-1])
                 self.assertTrue(all(any(arg.endswith('/' + overlay) for arg in call) for call in calls))
 
 
