@@ -9,6 +9,9 @@ PORT ?= 8000
 PROJECT_ARGS = $(if $(PROJECT),-p "$(PROJECT)",)
 COMPOSE = docker compose --project-directory "$(ROOT)" --env-file "$(ENV_FILE)" $(PROJECT_ARGS)
 LLM_RUNTIME ?= cpu
+LLM_ENV_FILE ?= $(ROOT)/.env.llm
+# A prepared private configuration opts this installation into local inference.
+WITH_LLM ?= $(shell test -f "$(LLM_ENV_FILE)" && printf 1 || printf 0)
 LLM_COMPOSE = $(if $(filter gpu,$(LLM_RUNTIME)),llm.yml,llm-cpu.yml)
 LLM_ARGS = $(if $(filter 1,$(WITH_LLM)),--env-file "$(LLM_ENV_FILE)" --profile llm,)
 LLM_FILES = $(if $(filter 1,$(WITH_LLM)),-f "$(ROOT)/docker/compose/$(LLM_COMPOSE)" -f "$(ROOT)/docker/compose/reports.yml",)
@@ -19,7 +22,7 @@ SETTINGS_COMPOSE = $(DEV)
 
 .PHONY: help install init backend frontend test test-all build up up-prod down logs llm-up backup replace-dds-tickets package-offline deploy-offline check-python check-llm check-env
 help:
-	@printf '%s\n' 'Setup:   make install | init | check-env' 'Develop: make backend [PORT=8000] | frontend' 'Verify:  make test | test-all' 'Docker:  make build | up | up-prod | down | logs' 'LLM:     make llm-up LLM_ENV_FILE=/private/file.env' '         make up WITH_LLM=1 LLM_ENV_FILE=/private/file.env' 'Data:    make backup | replace-dds-tickets [ARGS=--apply]' 'Offline: make package-offline ARGS="--help"' '         make deploy-offline ARCHIVE=/path/bundle.tar.gz [ARGS="..."]' 'LLM_RUNTIME=cpu (default) | gpu' 'Options: ENV_FILE=/private/file.env PROJECT=existing_project VENV=/path/venv'
+	@printf '%s\n' 'Setup:   make install | init | check-env' 'Develop: make backend [PORT=8000] | frontend' 'Verify:  make test | test-all' 'Docker:  make build | up | up-prod | down | logs' 'LLM:     .env.llm enables local CPU inference for ordinary up/down/logs' '         make up LLM_ENV_FILE=/private/file.env | WITH_LLM=0 to disable' 'Data:    make backup | replace-dds-tickets [ARGS=--apply]' 'Offline: make package-offline ARGS="--help"' '         make deploy-offline ARCHIVE=/path/bundle.tar.gz [ARGS="..."]' 'LLM_RUNTIME=cpu (default) | gpu' 'Options: ENV_FILE=/private/file.env PROJECT=existing_project VENV=/path/venv'
 
 install:
 	@cd "$(ROOT)" && "$(PYTHON)" -c 'import sys; assert sys.version_info[:2] == (3,11), "Use Python 3.11"'

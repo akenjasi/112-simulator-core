@@ -100,6 +100,37 @@ class MakefileTests(unittest.TestCase):
         self.assertTrue(any(c["args"] == ["-m", "backend.scripts.db.backup"] and c["cwd"] == str(self.project) for c in calls))
         self.assertEqual(len([c for c in calls if c["command"] == "docker" and c["args"][0] == "build"]), 2)
 
+    def test_prepared_llm_config_follows_up_down_and_logs_without_extra_flags(self):
+        local_config = self.project / ".env.llm"
+        local_config.write_text("DDS_LLM_MODEL_PATH=/prepared/model.gguf\n")
+        for target in ("up", "up-prod", "down", "logs"):
+            result = self.run_make(target)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            args = self.calls()[-1]["args"]
+            self.assertIn(str(local_config), args)
+            self.assertIn("--profile", args)
+            self.assertIn("llm", args)
+            self.assertIn(str(self.project / "docker/compose/llm-cpu.yml"), args)
+            self.assertIn(str(self.project / "docker/compose/reports.yml"), args)
+            self.assertNotIn("--volumes", args)
+
+    def test_prepared_llm_config_can_be_explicitly_disabled(self):
+        local_config = self.project / ".env.llm"
+        local_config.write_text("DDS_LLM_MODEL_PATH=/prepared/model.gguf\n")
+        result = self.run_make("up", "WITH_LLM=0")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        args = self.calls()[-1]["args"]
+        self.assertNotIn(str(local_config), args)
+        self.assertNotIn("--profile", args)
+        self.assertNotIn(str(self.project / "docker/compose/llm-cpu.yml"), args)
+
+    def test_explicit_external_llm_file_enables_inference(self):
+        result = self.run_make("up", f"LLM_ENV_FILE={self.envfile}")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        args = self.calls()[-1]["args"]
+        self.assertIn("llm", args)
+        self.assertIn(str(self.project / "docker/compose/llm-cpu.yml"), args)
+
     def test_install_uses_locks_without_optional_speech_and_init_is_explicit(self):
         (self.project / "frontend").mkdir()
         for target in ["install", "init"]:
