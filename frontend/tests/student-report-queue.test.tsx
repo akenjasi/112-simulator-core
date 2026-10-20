@@ -112,7 +112,6 @@ it("treats immediate teacher generation as active inference and shows participan
 })
 
 it("automatically exposes the demo report on the monitoring screen after the teacher ends a lesson", async () => {
-  vi.spyOn(window, "confirm").mockReturnValue(true)
   let ended = false
   network.mockImplementation(async url => {
     if (url.endsWith('/stop')) {ended = true; return response({})}
@@ -124,6 +123,11 @@ it("automatically exposes the demo report on the monitoring screen after the tea
   try {
     render(<LiveDashboard sessionId="lesson" source="lesson"/>)
     fireEvent.click(await screen.findByRole("button", {name: "Завершить урок"}))
+    expect(network.mock.calls.some(([, init]) => init?.method === "POST")).toBe(false)
+    fireEvent.click(screen.getByRole("button", {name: "Продолжить урок"}))
+    expect(screen.queryByRole("button", {name: "Подтвердить завершение урока"})).not.toBeInTheDocument()
+    fireEvent.click(screen.getByRole("button", {name: "Завершить урок"}))
+    fireEvent.click(screen.getByRole("button", {name: "Подтвердить завершение урока"}))
     expect(await screen.findByText("Нейросеть формирует аналитический отчёт...")).toBeInTheDocument()
     expect(network.mock.calls.filter(([, init]) => init?.method === "POST")).toHaveLength(1)
     expect(network.mock.calls.find(([, init]) => init?.method === "POST")?.[0]).toBe('/api/v1/lessons/lesson/stop')

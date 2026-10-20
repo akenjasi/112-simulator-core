@@ -139,7 +139,7 @@ export async function fetchStudentReview(sessionId: string, cardId?: string, sig
 export function actionDescription(action?: Record<string, unknown>) {
   if (!action) return ""
   const parts = [typeof action.status === "string" ? `Статус: ${action.status}` :
-    action.kind === "dispatch" ? "Передача задания" : action.operation === "dial" ? "Звонок исполнителю" :
+    action.kind === "dispatch" ? "Телефонограмма" : action.operation === "dial" ? "Звонок исполнителю" :
     action.operation === "complete" ? "Завершение карточки" : "",
     typeof action.number === "string" ? `Номер: ${action.number}` : "",
     typeof action.who_accepted === "string" ? `Исполнитель: ${action.who_accepted}` : "",

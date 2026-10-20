@@ -27,13 +27,18 @@ export function PersonalRecommendations({sessionId}: {sessionId: string}) {
     let timer: ReturnType<typeof setTimeout> | undefined
     setResult(null)
     const load = async () => {
+      let retryable = true
       try {
         const token = getStoredToken()
-        if (!token) throw new Error()
+        if (!token) {retryable = false; throw new Error()}
         const response = await fetch(`/api/ai-analytics/sessions/${encodeURIComponent(sessionId)}/recommendation`, {
           headers: {Authorization: `Bearer ${token}`}, cache: "no-store", signal: controller.signal,
         })
-        if (!response.ok) throw new Error()
+        if (!response.ok) {
+          retryable = response.status >= 500
+          throw new Error()
+        }
+        retryable = false
         const data = await response.json()
         if (data.session_id !== sessionId || !["not_started", "awaiting_lesson", "disabled", "generating", "failed", "completed"].includes(data.status) ||
           data.status === "completed" && (typeof data.report_text !== "string" || !data.report_text.trim())) throw new Error()
@@ -42,7 +47,10 @@ export function PersonalRecommendations({sessionId}: {sessionId: string}) {
           if (["generating", "awaiting_lesson"].includes(data.status)) timer = setTimeout(load, 2000)
         }
       } catch {
-        if (!controller.signal.aborted) setResult({id: sessionId, error: "Не удалось загрузить рекомендации ИИ."})
+        if (!controller.signal.aborted) {
+          setResult({id: sessionId, error: "Не удалось загрузить рекомендации ИИ."})
+          if (retryable) timer = setTimeout(load, 2000)
+        }
       }
     }
     void load()
@@ -129,12 +137,20 @@ export function StudentAttemptReview() {
     if (!sessionId) return
     const controller = new AbortController()
     setResult(null)
-    void fetchStudentReview(sessionId, cardId, controller.signal).then(data => {
-      if (!controller.signal.aborted) setResult({identity, data})
-    }).catch(error => {
-      if (!controller.signal.aborted) setResult({identity, error: error instanceof Error ? error.message : "Не удалось загрузить разбор."})
-    })
-    return () => controller.abort()
+    let timer: ReturnType<typeof setTimeout> | undefined
+    const load = async () => {
+      try {
+        const data = await fetchStudentReview(sessionId, cardId, controller.signal)
+        if (!controller.signal.aborted) {
+          setResult({identity, data})
+          if (["ACTIVE", "WAITING"].includes(data.state.lesson_status)) timer = setTimeout(load, 3000)
+        }
+      } catch (error) {
+        if (!controller.signal.aborted) setResult({identity, error: error instanceof Error ? error.message : "Не удалось загрузить разбор."})
+      }
+    }
+    void load()
+    return () => {controller.abort(); if (timer) clearTimeout(timer)}
   }, [sessionId, cardId, identity, reload])
   const current = result?.identity === identity ? result : null
   const review = current?.data

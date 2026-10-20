@@ -37,8 +37,12 @@ def samples():
     other_number["comparison_id"] = "synthetic/held-out-number"
     other_number["expected"]["text"] = "Начальник бригады Петров Пётр Петрович. Бригада номер два. Бригада выехала на место ДТП."
     other_number["actual"]["text"] = "Начальник бригады Петров Пётр Петрович. Бригада 3 выехала на место ДТП."
+    identity = deepcopy(faithful)
+    identity["comparison_id"] = "synthetic/held-out-identity"
+    identity["expected"]["text"] = "Докладывает Начальник бригады Иванов Иван Иванович. Бригада номер один. Проведение работ. Бригада приступила к работам."
+    identity["actual"]["text"] = "Кто доложил: Иванов\nНомер бригады: 1\nСодержание доклада: Бригада №1 приступила к работам.\nЗарегистрированный статус: Проведение работ\nНомер бригады: 1\nКомментарий: "
     return [("wrong_brigade", unit), ("faithful_paraphrase", faithful), ("dispatch_scope", dispatch),
-            ("return_to_report", faithful), ("held_out_result", result), ("held_out_number", other_number)]
+            ("return_to_report", faithful), ("held_out_result", result), ("held_out_number", other_number), ("held_out_identity", identity)]
 
 
 async def check(args):
@@ -67,6 +71,11 @@ async def check(args):
                 assert len(value["issues"]) == 1 and all("Бригада номер один" in i["expected_quote"] and "2" in i["actual_quote"] and "1" in i["explanation"] and "2" in i["explanation"] for i in value["issues"]), "Wrong brigade was not correctly identified: " + json.dumps(value, ensure_ascii=False)
             elif name == "held_out_result":
                 assert value["correct"] and len(value["issues"]) == 1 and all("деблокирован" in i["expected_quote"] for i in value["issues"]), "Omitted result was not found: " + json.dumps(value, ensure_ascii=False)
+            elif name == "held_out_identity":
+                assert value["issues"] and all(i["kind"] == "omission" for i in value["issues"]), "Missing speaker identity was not found: " + json.dumps(value, ensure_ascii=False)
+                text = " ".join(i["explanation"] for i in value["issues"]).casefold()
+                assert "имя" in text and "отчеств" in text and "должност" in text and "курсанта" not in text, "Incomplete explanation of missing identity: " + json.dumps(value, ensure_ascii=False)
+                assert all("Иванов" in i["expected_quote"] and "Иванов" in i["actual_quote"] for i in value["issues"]), "Identity issue lacks original note evidence"
             elif name == "held_out_number":
                 assert (value["correct"] or value.get("verified_matches")) and len(value["issues"]) == 1 and all("номер два" in i["expected_quote"] and "3" in i["actual_quote"] and "2" in i["explanation"] and "3" in i["explanation"] for i in value["issues"]), "Held-out number was not compared correctly: " + json.dumps(value, ensure_ascii=False)
             else:

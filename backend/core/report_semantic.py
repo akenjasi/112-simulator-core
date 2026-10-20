@@ -1,5 +1,7 @@
 """Sequential CPU review with exact source quotations and stable cached prompts."""
 import asyncio
+from collections import OrderedDict
+from copy import deepcopy
 from functools import lru_cache
 import hashlib
 import json
@@ -13,6 +15,8 @@ from backend.core.dds_report_llm import DDSReportGenerationError
 
 logger = logging.getLogger(__name__)
 _inference_lock = asyncio.Lock()
+_review_cache = OrderedDict()
+_REVIEW_CACHE_SIZE = 512
 PROMPTS = Path(__file__).resolve().parents[1] / "prompts" / "reports"
 
 
@@ -25,7 +29,7 @@ def system_prompt(task, audience):
     if task not in ("dispatch", "report") or audience not in ("teacher", "student"):
         raise ValueError("Unknown report task")
     return "\n\n".join((PROMPTS / (name + ".txt")).read_text(encoding="utf-8").strip()
-                         for name in ("common", task, audience))
+                         for name in ("common", task, "recommendations"))
 
 
 def _object(properties):
@@ -106,8 +110,8 @@ async def infer_review(http, unit, audience, settings, *, metrics=None):
     content = json.dumps(model_input, ensure_ascii=False, separators=(",", ":"))
     prompt = system_prompt(unit["task"], audience)
     # A single hybrid-model slot can lose its recurrent state when task prompts
-    # alternate. Save/restore each prompt family instead of allocating four
-    # parallel contexts and consuming their RAM on a CPU-only installation.
+    # alternate. Save/restore each prompt family instead of allocating parallel
+    # contexts and consuming their RAM on a CPU-only installation.
     fingerprint = hashlib.sha256(("system-prefix-v2\n" + settings.model + "\n" + prompt).encode()).hexdigest()
     cache_file = "dds-" + fingerprint + ".bin"
     root = settings.base_url.rstrip("/").removesuffix("/v1")
@@ -233,8 +237,22 @@ async def generate_semantic_report(snapshot, kind, settings, client=None):
         for unit in sorted(units, key=lambda u: u["task"]):
             try:
                 async with _inference_lock:
-                    value = await asyncio.wait_for(infer_review(http, unit, "student" if kind == "student" else "teacher", settings),
-                                                   settings.timeout_seconds)
+                    # Evidence has one semantic assessment, independent of who
+                    # reads it. Share only validated answers for the exact frozen
+                    # unit/model/prompt; never cache transport or validation failures.
+                    key = hashlib.sha256(json.dumps({
+                        "endpoint": settings.base_url, "model": settings.model,
+                        "prompt": system_prompt(unit["task"], "student"), "unit": unit,
+                    }, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode()).hexdigest()
+                    if key in _review_cache:
+                        value = deepcopy(_review_cache[key])
+                        _review_cache.move_to_end(key)
+                    else:
+                        value = await asyncio.wait_for(infer_review(http, unit, "student", settings),
+                                                       settings.timeout_seconds)
+                        _review_cache[key] = deepcopy(value)
+                        if len(_review_cache) > _REVIEW_CACHE_SIZE:
+                            _review_cache.popitem(last=False)
             except ReviewValidationError:
                 unverified += 1
                 logger.warning("DDS review rejected task=%s comparison=%s; no unverified output published",

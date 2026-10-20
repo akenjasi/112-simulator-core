@@ -317,3 +317,44 @@ it("shows individual reports to the teacher in the completed lesson", async () =
   expect(screen.getByText("Курсант Сидоров")).toBeInTheDocument()
   expect(await screen.findAllByText("Потренируйтесь сверять этап с принятым докладом.")).toHaveLength(2)
 })
+
+it("refreshes the active lesson review after teacher completion and then stops polling", async () => {
+  vi.useFakeTimers()
+  try {
+    network.mockResolvedValueOnce(response(state({lesson_status: "ACTIVE"})))
+      .mockResolvedValue(response(state({lesson_status: "COMPLETED"})))
+    render(<StudentAttemptReview/>)
+    await act(async () => {await Promise.resolve()})
+    expect(screen.getByText("Ваша работа завершена, общее занятие ещё идёт.")).toBeInTheDocument()
+    await act(async () => {await vi.advanceTimersByTimeAsync(3000)})
+    expect(screen.queryByText("Ваша работа завершена, общее занятие ещё идёт.")).not.toBeInTheDocument()
+    expect(network.mock.calls.filter(([url]) => url === "/api/dds/sessions/s1/cards/c1")).toHaveLength(2)
+    await act(async () => {await vi.advanceTimersByTimeAsync(10000)})
+    expect(network.mock.calls.filter(([url]) => url === "/api/dds/sessions/s1/cards/c1")).toHaveLength(2)
+  } finally {vi.useRealTimers()}
+})
+
+it("resumes report reads after a temporary gateway failure without regenerating the report", async () => {
+  vi.useFakeTimers()
+  try {
+    network.mockResolvedValueOnce(response({}, 502)).mockResolvedValue(response(personalReport()))
+    render(<PersonalRecommendations sessionId="s1"/>)
+    await act(async () => {await Promise.resolve()})
+    expect(screen.getByRole("alert")).toHaveTextContent("Не удалось загрузить рекомендации ИИ")
+    await act(async () => {await vi.advanceTimersByTimeAsync(2000)})
+    expect(screen.getByText("Потренируйтесь сверять этап с принятым докладом.")).toBeInTheDocument()
+    expect(network).toHaveBeenCalledTimes(2)
+    expect(network.mock.calls.some(([, init]) => init?.method === "POST")).toBe(false)
+  } finally {vi.useRealTimers()}
+})
+
+it("does not retry unauthorized report reads automatically", async () => {
+  vi.useFakeTimers()
+  try {
+    network.mockResolvedValue(response({}, 403))
+    render(<PersonalRecommendations sessionId="s1"/>)
+    await act(async () => {await Promise.resolve()})
+    await act(async () => {await vi.advanceTimersByTimeAsync(10000)})
+    expect(network).toHaveBeenCalledTimes(1)
+  } finally {vi.useRealTimers()}
+})

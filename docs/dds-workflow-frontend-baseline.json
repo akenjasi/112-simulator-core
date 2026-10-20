@@ -179,9 +179,9 @@
       "reason": "Integrated local-font root layout from audited main"
     },
     "app/login/page.tsx": {
-      "sha256": "ab1e2fccce9b0d11e4b5e1e90db0835cb0913563c742b38df82e41f60b43a397",
-      "source_revision": "3337c99",
-      "reason": "Integrated authenticated prototype login"
+      "sha256": "b0001dfd61b323cc269f40883d4e6fd4d718d2bb678d4ed4053920e83bb3b812",
+      "source_revision": "UI review 2026-10-20 (base 1cc29c3)",
+      "reason": "User-requested browser testing and fixes: handle reproduced HTML gateway login failure and remove nonexistent demo account credentials."
     },
     "app/operator/page.tsx": {
       "sha256": "be2ba159b3b75ecc69ba20c3f6cc3beb0a5523c877a0396cc4cfca7c47c725a1",
@@ -234,14 +234,14 @@
       "reason": "Audited supported runtime and dependency security corrections"
     },
     "components/student/student-review.tsx": {
-      "sha256": "0b3f6b062e9a723aede43dc2148c638cea9d37fffc37a5d837088fd984906f69",
-      "source_revision": "user-request-report-repair-2026-10-20",
-      "reason": "Пользователь запросил исправить недоступные ИИ-отчёты занятия, группы и автоматический разбор DDS; сохранены проверки изоляции и исходная карта хешей."
+      "sha256": "10afc8993ff7e17ffe2a2f2d68f87710246a8f5a454813ab24f8629a8d3b080a",
+      "source_revision": "UI review 2026-10-20 (base 1cc29c3)",
+      "reason": "User-requested browser testing reproduced stale active-lesson text after teacher stop and permanently halted personal report polling after temporary gateway errors; refresh active reviews and retry transient GET failures only."
     },
     "lib/student-review.ts": {
-      "sha256": "d0aa3e444d90fb1234e97c9d3807fd9bf6579ed93c43867c6e7bf8b70870da97",
-      "source_revision": "510c092 + user-requested autonomous DDS assessment stage 1",
-      "reason": "Explicit user request 2026-10-19: implement and verify autonomous DDS assessment and recommendations, keeping scripted tickets. Add immediate rule-based attempt feedback and saved incoming notes; preserve teacher grading and original baseline."
+      "sha256": "52119b200f83ed8d06468e31afd65eedcb1568506166fb04d86797c1c0b49501",
+      "source_revision": "UI review 2026-10-20 (base 1cc29c3)",
+      "reason": "User-requested browser content review: label saved dispatch text as telephone message, since the prepared cycle records the received departure report, not the cadet oral task transmission."
     },
     "components/teacher/dds-lesson-report.tsx": {
       "sha256": "33c411e921bbc8af46b48963bff1e88b4c3fc294c100c54899bef54468100857",
@@ -284,9 +284,9 @@
       "reason": "User requested up-to-date DDS help after pulling the new UI: movable phone window, number-based dialing, audio-only v2 reports, three report fields and manual service stages. Exact implementation pin; original baseline unchanged."
     },
     "components/teacher/live-dashboard.tsx": {
-      "sha256": "32620679ff63a133ca361f94c2e39e1b5c6af1b07807a62a532da1d23bb63fa0",
-      "source_revision": "510c092 + explicit immediate demo request 2026-10-20",
-      "reason": "User explicitly requested an immediate visible report after teacher-led lessons. Mount the existing DDS report component on the completed demo monitoring screen only; preserve all other monitoring logic and the original baseline."
+      "sha256": "9a6cdc0741143ea8910586f5a102341355f0ffaa8ccd30dc42b91de285f6a1b6",
+      "source_revision": "UI review 2026-10-20 (base 1cc29c3)",
+      "reason": "User-requested real browser review: replace blocking native stop confirmation with explicit in-page confirmation, preserving cancellation and single stop request."
     },
     "components/teacher/split-screen.tsx": {
       "sha256": "6ded4f0570835489e5e4165b865b397dffd8df147447a2789ea9c49935ca5744",

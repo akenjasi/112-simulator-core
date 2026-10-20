@@ -40,6 +40,30 @@ def contains(text, keywords):
     return all(norm(word) in norm(text) for word in keywords)
 
 
+
+# Closed vocabulary for the prepared phone stages. This is a rule check, not a
+# semantic grade: accepted affirmative formulations must not require the literal
+# label from the status menu to appear in the trainee's free-text note.
+STAGE_RECORD_PHRASES = {
+    "Начало реагирования": ("выехала", "выехали", "выехал"),
+    "Прибытие": ("прибыла", "прибыли", "прибыл", "на месте происшествия"),
+    "Проведение работ": ("приступила к работам", "приступили к работам", "приступил к работам"),
+    "Работы завершены": ("работы закончены", "задача выполнена"),
+}
+
+
+def records_stage(note, stage):
+    phrases = (stage, *STAGE_RECORD_PHRASES.get(stage, ()))
+    for sentence in re.split(r"[.!?;\n]+", note or ""):
+        value = norm(sentence)
+        # Do not turn an explicitly negated action into a confirmed stage.
+        if "не" in value.split():
+            continue
+        if any(f" {norm(phrase)} " in f" {value} " for phrase in phrases):
+            return True
+    return False
+
+
 def validated_plan(raw, services):
     plan = ExercisePlan.model_validate(raw).model_dump()
     if {c["service_name"] for c in plan["contacts"]} != set(services):
@@ -173,11 +197,14 @@ def accuracy_issues(data, payload):
             issues.append("В записи доклада неверно записана или пропущена должность докладчика.")
         if not any(f" {value} " in f" {norm(note)} " for value in (number, spoken_number)):
             issues.append("В записи доклада неверно указан или пропущен номер бригады.")
-        if not contains(note, [report["status"]]):
+        if not records_stage(note, report["status"]):
             issues.append("В записи доклада неверно отражён или пропущен этап работ.")
     if norm(payload.order_number) != norm(contact["brigade"]):
         issues.append("В статусе службы указан неверный номер бригады.")
-    if not contains(payload.comment, report["comment_keywords"]):
+    result_matches = contains(payload.comment, report["comment_keywords"])
+    if [norm(word) for word in report["comment_keywords"]] == ["задача выполнена"]:
+        result_matches = result_matches or records_stage(payload.comment, "Работы завершены")
+    if not result_matches:
         issues.append("В комментарии к статусу не отражён результат работ из доклада.")
     return issues
 

@@ -21,6 +21,24 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from "@/components/ui/card"
 
+async function readAuthResponse(res: Response, fallback: string) {
+  let data: any
+  try {
+    data = await res.json()
+  } catch {
+    throw new Error(res.status >= 500
+      ? "Сервис временно недоступен. Повторите вход через несколько секунд."
+      : "Сервер вернул некорректный ответ. Повторите попытку.")
+  }
+  if (!res.ok) {
+    throw new Error(typeof data?.detail === "string" ? data.detail : fallback)
+  }
+  if (!data || (!data.requires_2fa && typeof data.access_token !== "string")) {
+    throw new Error("Сервер вернул некорректный ответ. Повторите попытку.")
+  }
+  return data
+}
+
 export default function LoginPage() {
   const router = useRouter()
 
@@ -49,11 +67,7 @@ export default function LoginPage() {
         }),
       })
 
-      const data = await res.json()
-
-      if (!res.ok) {
-        throw new Error(data.detail || "Ошибка авторизации. Проверьте данные.")
-      }
+      const data = await readAuthResponse(res, "Ошибка авторизации. Проверьте данные.")
 
       if (data.requires_2fa) {
         // Switch to TOTP 2FA step
@@ -90,11 +104,7 @@ export default function LoginPage() {
         }),
       })
 
-      const data = await res.json()
-
-      if (!res.ok) {
-        throw new Error(data.detail || "Неверный код подтверждения 2FA")
-      }
+      const data = await readAuthResponse(res, "Неверный код подтверждения 2FA")
 
       onLoginSuccess(data)
     } catch (err: any) {
@@ -315,29 +325,14 @@ export default function LoginPage() {
         )}
       </Card>
 
-      <section aria-labelledby="prototype-access-title" className="border-t border-border bg-muted/30 p-6 text-card-foreground md:border-t-0 md:border-l sm:p-8">
-        <h2 id="prototype-access-title" className="text-xl font-semibold">Доступ к прототипу</h2>
+      <section aria-labelledby="account-access-title" className="border-t border-border bg-muted/30 p-6 text-card-foreground md:border-t-0 md:border-l sm:p-8">
+        <h2 id="account-access-title" className="text-xl font-semibold">Доступ к тренажёру</h2>
         <p className="mt-2 text-sm text-muted-foreground">
-          Временные учётные записи для демонстрации. Введите логин и пароль — система откроет ваш кабинет.
+          Используйте учётную запись, выданную администратором. После входа система откроет кабинет согласно вашей роли.
         </p>
-        <div className="mt-5 grid gap-3 sm:grid-cols-2">
-          {[
-            { role: "Курсант 1", login: "petrov@student.ru", password: "12345" },
-            { role: "Курсант 2", login: "sidorov@student.ru", password: "12345" },
-            { role: "Преподаватель", login: "teacher", password: "teacher123" },
-            { role: "Администратор", login: "admin", password: "admin123" },
-          ].map((account) => (
-            <div key={account.login} className="rounded-lg border border-border bg-muted/40 p-3">
-              <h3 className="text-sm font-semibold">{account.role}</h3>
-              <dl className="mt-2 grid grid-cols-1 gap-y-1 text-sm">
-                <dt className="text-muted-foreground">Логин</dt>
-                <dd className="min-w-0"><code className="select-all break-all font-mono">{account.login}</code></dd>
-                <dt className="text-muted-foreground">Пароль</dt>
-                <dd><code className="select-all font-mono">{account.password}</code></dd>
-              </dl>
-            </div>
-          ))}
-        </div>
+        <p className="mt-4 text-sm text-muted-foreground">
+          Если у вас ещё нет логина или не подходит пароль, обратитесь к администратору вашей организации.
+        </p>
       </section>
       </div>
       </div>

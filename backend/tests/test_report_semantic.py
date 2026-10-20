@@ -12,6 +12,16 @@ from backend.core.report_inference import generate_report
 from backend.core.report_semantic import system_prompt, validate_review
 
 
+@pytest.fixture(autouse=True)
+def isolated_semantic_cache(monkeypatch):
+    import asyncio
+    import backend.core.report_semantic as semantic
+    semantic._review_cache.clear()
+    monkeypatch.setattr(semantic, "_inference_lock", asyncio.Lock())
+    yield
+    semantic._review_cache.clear()
+
+
 def example_session():
     source = "Начальник бригады Иванов Иван Иванович. Бригада номер один. Прибытие. Бригада прибыла на место."
     return SimpleNamespace(session_id="session-1", cadet_id="cadet-1", ticket_id="ticket-1", dynamic_state={
@@ -236,7 +246,11 @@ async def test_unverifiable_record_is_explicit_and_other_records_are_still_check
 @pytest.mark.asyncio
 async def test_connection_loss_is_not_hidden_by_previously_verified_records():
     data = snapshot()
-    data["semantic"]["comparisons"] *= 2
+    other = deepcopy(data["semantic"]["comparisons"][0])
+    other["comparison_id"] += "/second-record"
+    other["actual"]["ref"] += "/second-record"
+    other["actual"]["text"] += " Дополнение второй записи."
+    data["semantic"]["comparisons"].append(other)
     count = 0
     def handler(request):
         nonlocal count
@@ -298,3 +312,60 @@ async def test_oversized_pair_fails_before_any_model_request():
     async with httpx.AsyncClient(transport=httpx.MockTransport(lambda _: pytest.fail("must not call"))) as client:
         with pytest.raises(DDSReportGenerationError, match="не обрезаны"):
             await generate_report(snapshot(), "lesson", client=client, settings=DDSLLMSettings(max_input_chars=10))
+
+
+def test_task_prompts_differ_but_audience_cannot_change_the_evidence_assessment():
+    assert system_prompt('report', 'teacher') == system_prompt('report', 'student')
+    assert system_prompt('dispatch', 'teacher') == system_prompt('dispatch', 'student')
+    assert system_prompt('dispatch', 'student') != system_prompt('report', 'student')
+
+
+@pytest.mark.asyncio
+async def test_teacher_and_student_share_one_validated_assessment_of_exact_frozen_evidence(monkeypatch):
+    import asyncio
+    calls = []
+    async def handler(request):
+        calls.append(json.loads(request.content))
+        await asyncio.sleep(0)
+        return sse(review())
+    async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+        personal, teacher = await asyncio.gather(
+            generate_report(snapshot(), 'student', client=client, settings=DDSLLMSettings()),
+            generate_report(snapshot(), 'lesson', client=client, settings=DDSLLMSettings()))
+        assert len(calls) == 1
+        for result in (personal, teacher):
+            assert 'Замечание ИИ' in result['analysis_text']
+            assert 'Бригада 2' in result['analysis_text']
+            assert 'event/received-1' in result['analysis_text']
+        changed = snapshot()
+        changed['semantic']['comparisons'][0]['actual']['text'] += ' Дополнение'
+        await generate_report(changed, 'lesson', client=client, settings=DDSLLMSettings())
+        assert len(calls) == 2
+        await generate_report(snapshot(), 'lesson', client=client, settings=DDSLLMSettings(model='another-model'))
+        assert len(calls) == 3
+        another = snapshot()
+        another["semantic"]["comparisons"][0]["cadet_id"] = "another-cadet"
+        await generate_report(another, 'lesson', client=client, settings=DDSLLMSettings())
+        assert len(calls) == 4
+        import backend.core.report_semantic as semantic
+        original_prompt = semantic.system_prompt
+        monkeypatch.setattr(semantic, 'system_prompt', lambda task, audience: original_prompt(task, audience) + "\nRevised prompt")
+        await generate_report(snapshot(), 'lesson', client=client, settings=DDSLLMSettings())
+        assert len(calls) == 5
+
+
+@pytest.mark.asyncio
+async def test_invalid_output_is_not_cached_and_a_retry_can_obtain_a_valid_review():
+    calls = 0
+    def handler(request):
+        nonlocal calls
+        calls += 1
+        value = review()
+        if calls == 1:
+            value["issues"][0]["actual_quote"] = "NOT_IN_THE_CADET_ANSWER"
+        return sse(value)
+    async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+        with pytest.raises(DDSReportGenerationError):
+            await generate_report(snapshot(), "student", client=client, settings=DDSLLMSettings())
+        result = await generate_report(snapshot(), "lesson", client=client, settings=DDSLLMSettings())
+    assert calls == 2 and "Замечание ИИ" in result["analysis_text"]
