@@ -183,6 +183,7 @@ export default function LiveDashboardPage(props: LiveDashboardProps = {}) {
   // Lifecycle control state
   const [isStarting, setIsStarting] = useState<boolean>(false)
   const [isStopping, setIsStopping] = useState<boolean>(false)
+  const [confirmStop, setConfirmStop] = useState(false)
   const [teacherNotes, setTeacherNotes] = useState<string>("")
   const [isSavingNotes, setIsSavingNotes] = useState<boolean>(false)
   const [notesSaveStatus, setNotesSaveStatus] = useState<string | null>(null)
@@ -325,6 +326,7 @@ export default function LiveDashboardPage(props: LiveDashboardProps = {}) {
     setIsLoading(true)
     setIsStarting(false)
     setIsStopping(false)
+    setConfirmStop(false)
     setIsSavingNotes(false)
     setNotesSaveStatus(null)
     setExpandedTableCadet(null)
@@ -394,9 +396,7 @@ export default function LiveDashboardPage(props: LiveDashboardProps = {}) {
     const targetLessonId = currentIdRef.current
     const epoch = epochRef.current
     if (!targetLessonId) return
-    if (!window.confirm("Вы уверены, что хотите завершить урок для всех курсантов?")) {
-      return
-    }
+    setConfirmStop(false)
     try {
       setIsStopping(true)
       setError(null)
@@ -536,7 +536,7 @@ export default function LiveDashboardPage(props: LiveDashboardProps = {}) {
             <Button
               variant="destructive"
               size="sm"
-              onClick={handleStopLesson}
+              onClick={() => setConfirmStop(true)}
               disabled={isStopping}
               className="gap-2 font-semibold shadow-xs"
             >
@@ -568,6 +568,17 @@ export default function LiveDashboardPage(props: LiveDashboardProps = {}) {
           </Button>
         </div>
       </div>
+
+      {confirmStop && source === "lesson" && lessonStatus === "ACTIVE" && (
+        <div role="group" aria-labelledby="stop-lesson-confirm-title" className="rounded-lg border border-destructive/40 bg-card p-4 space-y-3">
+          <p id="stop-lesson-confirm-title" className="font-semibold">Завершить урок для всех курсантов?</p>
+          <p className="text-sm text-muted-foreground">Работа участников будет остановлена. Сохранённые ответы останутся доступны для разбора.</p>
+          <div className="flex flex-wrap gap-2">
+            <Button variant="outline" onClick={() => setConfirmStop(false)}>Продолжить урок</Button>
+            <Button variant="destructive" onClick={handleStopLesson} disabled={isStopping}>Подтвердить завершение урока</Button>
+          </div>
+        </div>
+      )}
 
       {/* Error alert */}
       {source === "lesson" && isCompleted && stats?.target_role === "DISPATCHER_DDS" && stats.report_mode === "demo" && sessionId && <DDSLessonReport key={sessionId} lessonId={sessionId}/>}

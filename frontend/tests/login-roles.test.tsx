@@ -31,3 +31,28 @@ it.each([
     body: JSON.stringify({ username: 'test-user', password: 'test-password' }),
   }))
 })
+
+it('explains a temporary HTML gateway failure without exposing JSON parser errors', async () => {
+  global.fetch = vi.fn().mockResolvedValue({
+    ok: false, status: 502,
+    json: async () => { throw new SyntaxError('Unexpected token <') },
+  })
+  render(<LoginPage />)
+  fireEvent.change(screen.getByLabelText('Логин', { exact: true }), { target: { value: 'test-user' } })
+  fireEvent.change(screen.getByLabelText('Пароль', { exact: true }), { target: { value: 'test-password' } })
+  fireEvent.click(screen.getByRole('button', { name: 'Войти' }))
+  expect(await screen.findByText('Сервис временно недоступен. Повторите вход через несколько секунд.')).toBeInTheDocument()
+  expect(push).not.toHaveBeenCalled()
+})
+
+it('keeps structured authentication errors readable', async () => {
+  global.fetch = vi.fn().mockResolvedValue({
+    ok: false, status: 422, json: async () => ({ detail: [{ msg: 'invalid input' }] }),
+  })
+  render(<LoginPage />)
+  fireEvent.change(screen.getByLabelText('Логин', { exact: true }), { target: { value: 'test-user' } })
+  fireEvent.change(screen.getByLabelText('Пароль', { exact: true }), { target: { value: 'test-password' } })
+  fireEvent.click(screen.getByRole('button', { name: 'Войти' }))
+  expect(await screen.findByText('Ошибка авторизации. Проверьте данные.')).toBeInTheDocument()
+  expect(push).not.toHaveBeenCalled()
+})
