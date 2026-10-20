@@ -22,6 +22,9 @@ services:
     platform: linux/amd64
     pull_policy: never
     restart: unless-stopped
+    environment:
+      NVIDIA_VISIBLE_DEVICES: void
+      CUDA_VISIBLE_DEVICES: ""
     volumes:
       - llm_prompt_cache:/cache
       - type: bind
@@ -51,8 +54,9 @@ services:
       INITIAL_ADMIN_FULL_NAME: Администратор системы 112
       DDS_LLM_BASE_URL: http://llm:8080/v1
       DDS_LLM_MODEL: dds-qwen
+      DDS_LLM_MODEL_SHA256: ${DDS_LLM_MODEL_SHA256:-00fe7986ff5f6b463e62455821146049db6f9313603938a70800d1fb69ef11a4}
       DDS_LLM_SLOT_CACHE: ${DDS_LLM_SLOT_CACHE:-true}
-      DDS_REPORT_MODE: ${DDS_REPORT_MODE:-queued}
+      DDS_REPORT_MODE: ${DDS_REPORT_MODE:-demo}
       DDS_REPORT_CPU_MAX_PERCENT: ${DDS_REPORT_CPU_MAX_PERCENT:-40}
       DDS_REPORT_IDLE_SECONDS: ${DDS_REPORT_IDLE_SECONDS:-30}
       DDS_REPORT_RAM_RESERVE_MB: ${DDS_REPORT_RAM_RESERVE_MB:-2048}

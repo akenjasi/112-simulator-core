@@ -10,7 +10,8 @@ from sqlalchemy import func, select
 from backend.core.dds_report_data import _exercise_protocols
 from backend.core.report_evidence import collect_semantic_evidence
 from backend.models.domain_03 import Assignment, ExamSession
-from backend.models.domain_04 import EvaluationResult, TicketResult
+from backend.models.domain_04 import EvaluationResult, TicketResult, IncidentCard
+from backend.core.gradebook_records import build_attempt_records, resolve_attempt_score_and_status
 
 MOSCOW = ZoneInfo("Europe/Moscow")
 
@@ -50,6 +51,8 @@ async def collect_report_snapshot(db, *, lesson_id=None, owner_id=None, session_
     ids = [s.session_id for s in sessions]
     results = list((await db.scalars(select(TicketResult).where(TicketResult.session_id.in_(ids)))).all()) if ids else []
     evaluations = list((await db.scalars(select(EvaluationResult).where(EvaluationResult.session_id.in_(ids)))).all()) if ids else []
+    cards_in_db = list((await db.scalars(select(IncidentCard).where(IncidentCard.session_id.in_(ids)))).all()) if ids else []
+    grades = []
     checks, reasons, participants, revisions = Counter(), Counter(), {}, {}
     examples, warnings = [], []
     semantic = {"version": 1, "comparisons": [], "limitations": []}
@@ -119,6 +122,11 @@ async def collect_report_snapshot(db, *, lesson_id=None, owner_id=None, session_
                         "scores": {k: v for k, v in (e.scores or {}).items()
                                    if k in {"final_score", "total", "expert_score", "automatic_score", "is_passed"}
                                    and isinstance(v, (int, float, bool, type(None)))}} for e in evs]
+        for tr, card, ev in build_attempt_records(list(latest_results.values()),
+                [c for c in cards_in_db if c.session_id == session.session_id], evs):
+            score, *_ = resolve_attempt_score_and_status(session, tr, ev)
+            if score is not None:
+                grades.append(score)
         has_grade = any(r.score_total is not None for r in latest_results.values()) or any(
             any(isinstance(v, (int, float)) and not isinstance(v, bool) for k, v in e["scores"].items()
                 if k != "is_passed") for e in saved_evals)
@@ -139,7 +147,8 @@ async def collect_report_snapshot(db, *, lesson_id=None, owner_id=None, session_
                "sessions_with_score": assessed, "protocols": protocol_count, "mistakes": errors_count}
     return {"summary": summary, "criteria": dict(sorted(checks.items())), "mistakes": dict(sorted(reasons.items())),
             "participants": sorted(participants.values(), key=lambda p: p["cadet_id"] or ""),
-            "examples": examples, "warnings": warnings, "source_revisions": revisions, "semantic": semantic}
+            "examples": examples, "warnings": warnings, "source_revisions": revisions, "semantic": semantic,
+            "grades": grades, "report_format": "brief_v1"}
 
 
 def has_new_results(snapshot, previous):

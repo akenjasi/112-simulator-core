@@ -1,4 +1,4 @@
-"""API router for AI background analysis (Qwen 3.5 9B / Qwen 2.5 9B).
+"""API router for local AI reports (Qwen3.5-4B CPU).
 
 Endpoints:
   POST/GET /api/ai-analytics/trigger      — Trigger manual or scheduled background analysis

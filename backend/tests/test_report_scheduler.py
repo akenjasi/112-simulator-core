@@ -202,14 +202,14 @@ async def test_learning_start_cancels_generation_before_issuing_card(store, monk
     worker = report_worker.ReportWorker(store)
     task = asyncio.create_task(worker.process_single_job("job"))
     report_runtime.coordinator.task = task
-    await started.wait()
+    await asyncio.wait_for(started.wait(), 3)
     @report_runtime.learning_start
     async def start():
         assert task.done()
         confirmed.assert_awaited_once()
         async with store() as db:
             job = await db.get(ReportJob, "job")
-            assert job.status == "pending" and job.snapshot == snapshot() and job.retry_count == 0
+            assert job.status == "pending" and job.snapshot == {**snapshot(), "report_format": "brief_v1"} and job.retry_count == 0
         return "card issued"
     assert await start() == "card issued"
 

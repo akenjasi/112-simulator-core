@@ -6,7 +6,7 @@ import uuid
 
 import httpx
 import pytest
-from sqlalchemy import select
+from sqlalchemy import select, delete
 
 from backend.core import report_demo, report_worker, reports
 from backend.core.dds_report_llm import DDSLLMSettings, DDSReportGenerationError
@@ -21,6 +21,8 @@ from backend.tests.test_dds_queue import exercise, launch, base, ready, complete
 @pytest.fixture
 async def immediate(monkeypatch):
     monkeypatch.setenv('DDS_REPORT_MODE', 'demo')
+    async with AsyncSessionLocal() as db:
+        await db.execute(delete(ReportJob)); await db.commit()
     calls = []
     release = asyncio.Event()
 
@@ -29,16 +31,18 @@ async def immediate(monkeypatch):
         await release.wait()
         return {'analysis_text': 'Персональные рекомендации на основе протокола.', 'model_used': 'test-runtime'}
 
-    monkeypatch.setattr(report_demo, 'generate_report', inference)
+    monkeypatch.setattr(report_worker, 'generate_report', inference)
     yield calls, release
     release.set()
     await report_demo.stop_demo_reports()
 
 
 async def settle():
-    tasks = list(report_demo._tasks.values())
-    if tasks:
-        await asyncio.wait_for(asyncio.gather(*tasks), 5)
+    worker = report_worker.ReportWorker()
+    async with AsyncSessionLocal() as db:
+        ids = list((await db.scalars(select(ReportJob.job_id).where(ReportJob.status == "pending").order_by(ReportJob.created_at, ReportJob.job_id))).all())
+    for job_id in ids:
+        await asyncio.wait_for(worker.process_single_job(job_id), 5)
 
 
 async def get_job(session_id):
@@ -62,12 +66,12 @@ async def test_self_training_launches_immediately_persists_and_reads_never_infer
     current = await request('GET', path, user)
     assert current.json()['status'] == 'generating'
     job = await get_job(state['session_id'])
-    assert job.kind == 'session_demo' and job.status == 'generating'
+    assert job.kind == 'session_demo' and job.status == 'pending'
     await complete(state, user)
     await request('POST', path, user, json={'retry': True})
     release.set()
     await settle()
-    assert len(calls) == 1 and calls[0][2]['personal'] is True
+    assert len(calls) == 1 and calls[0][1] == 'student'
     assert calls[0][0]['summary']['sessions'] == 1
     assert calls[0][0]['summary']['sessions_with_score'] == 0
     for _ in range(2):
@@ -100,7 +104,7 @@ async def test_teacher_end_launches_individual_and_group_reports_without_grades(
     release.set()
     await settle()
     assert len(calls) == 3
-    personal = [snapshot for snapshot, _, options in calls if options['personal']]
+    personal = [snapshot for snapshot, kind, options in calls if kind == 'student']
     assert len(personal) == 2 and all(len(snapshot['participants']) == 1 for snapshot in personal)
     assert sorted(p['summary']['completed_cards'] for p in personal) == [0, 1]
     assert sorted(p['summary']['mistakes'] for p in personal) == [0, 1]
@@ -124,8 +128,8 @@ async def test_failure_preserves_training_and_explicit_retry_preserves_snapshot(
     users, ids = await exercise(n=1, count=1)
     user = users['cadets'][0]
     async def fail(*args, **kwargs):
-        raise httpx.ConnectError('PRIVATE_CONFIGURATION')
-    monkeypatch.setattr(report_demo, 'generate_report', fail)
+        raise DDSReportGenerationError('PRIVATE_CONFIGURATION')
+    monkeypatch.setattr(report_worker, 'generate_report', fail)
     state = (await request('POST', '/api/dds/training', user,
                           json={'ticket_ids': ids, 'request_id': str(uuid.uuid4())})).json()
     stopped = await request('POST', base(state) + '/finish', user, json={})
@@ -141,7 +145,7 @@ async def test_failure_preserves_training_and_explicit_retry_preserves_snapshot(
     assert unchanged.json()['attempt'] == 1
     async def succeed(*args, **kwargs):
         return {'analysis_text': 'Повторите полный цикл.', 'model_used': 'test-runtime'}
-    monkeypatch.setattr(report_demo, 'generate_report', succeed)
+    monkeypatch.setattr(report_worker, 'generate_report', succeed)
     async with AsyncSessionLocal() as db:
         row = await db.get(ExamSession, state['session_id'])
         data = deepcopy(row.dynamic_state)
@@ -156,24 +160,34 @@ async def test_failure_preserves_training_and_explicit_retry_preserves_snapshot(
 
 
 @pytest.mark.asyncio
-async def test_demo_tick_never_checks_admission_or_drains_the_background_queue(immediate, monkeypatch):
+async def test_demo_tick_uses_shared_worker_and_checks_admission(immediate, monkeypatch):
+    from unittest.mock import AsyncMock
     worker = report_worker.ReportWorker()
-    async def forbidden(*args):
-        raise AssertionError('Demo must bypass scheduler')
-    monkeypatch.setattr(worker, 'admission', forbidden)
-    monkeypatch.setattr(report_worker, 'reconcile_reports', forbidden)
+    async with AsyncSessionLocal() as db:
+        db.add(ReportJob(job_id="demo-pending", scope_key="demo-test", snapshot={"summary": {"sessions": 1}}))
+        await db.commit()
+    admission = AsyncMock(return_value=None)
+    monkeypatch.setattr(worker, "admission", admission)
+    generate = AsyncMock()
+    monkeypatch.setattr(worker, "process_single_job", generate)
+    reconcile = AsyncMock()
+    monkeypatch.setattr(report_worker, "reconcile_reports", reconcile)
     await worker.tick()
+    await worker.generation_task
+    admission.assert_awaited_once()
+    generate.assert_awaited_once_with("demo-pending")
+    reconcile.assert_not_awaited()
 
 
 @pytest.mark.asyncio
-async def test_restart_turns_interrupted_demo_into_retryable_failure(immediate):
+async def test_restart_returns_interrupted_demo_to_durable_queue(immediate):
     async with AsyncSessionLocal() as db:
         job = ReportJob(scope_key='session:' + str(uuid.uuid4()), kind='session_demo', status='generating',
                         snapshot={'frozen': True})
         db.add(job); await db.commit()
         await reports.initialize_reports(db)
         await db.refresh(job)
-        assert job.status == 'failed' and job.error_code == 'generation_interrupted'
+        assert job.status == 'pending' and job.attempt == 2
         assert job.snapshot == {'frozen': True}
 
 

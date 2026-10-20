@@ -358,3 +358,13 @@ it("does not retry unauthorized report reads automatically", async () => {
     expect(network).toHaveBeenCalledTimes(1)
   } finally {vi.useRealTimers()}
 })
+
+
+it("keeps code facts visible when a short AI summary fails", async () => {
+  const facts = "Карточек завершено: 2 из 2. Средний сохранённый балл: 80 из 100."
+  network.mockResolvedValue(response(personalReport({status: "failed", report_text: null, facts_text: facts})))
+  render(<PersonalRecommendations sessionId="s1"/>)
+  expect(await screen.findByText(facts)).toBeInTheDocument()
+  expect(screen.getByRole("alert")).toHaveTextContent("Результаты занятия сохранены")
+  expect(network).toHaveBeenCalledTimes(1)
+})

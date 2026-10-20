@@ -151,6 +151,9 @@ PRACTICE_HINTS = {
 
 async def generate_report(snapshot, kind, *, client=None, settings=None, personal=False):
     settings = settings or get_llm_settings()
+    if snapshot.get("report_format") == "brief_v1":
+        from backend.core.report_brief import generate_brief
+        return await generate_brief(snapshot, kind, settings, client=client)
     if snapshot.get("semantic", {}).get("version") == 1:
         if not snapshot.get("summary", {}).get("sessions"):
             raise DDSReportGenerationError("Недостаточно данных для отчета.")

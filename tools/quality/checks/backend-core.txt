@@ -77,3 +77,6 @@ backend/tests/test_teacher_demo_review.py
 
 # Grounded local CPU report review
 backend/tests/test_report_semantic.py
+
+# Short CPU summaries, persistent system prefixes and explicit cutover
+backend/tests/test_report_brief.py

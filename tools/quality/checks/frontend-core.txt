@@ -86,3 +86,5 @@ tests/dds-cycle/dds-interface-help.test.tsx
 # Teacher demo review regressions
 tests/27_teacher/teacher-demo-fixes.test.tsx
 tests/27_teacher/teacher-demo-report.test.tsx
+
+tests/27_teacher/brief-reports.test.tsx

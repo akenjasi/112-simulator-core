@@ -12,7 +12,7 @@ import {getStoredToken} from "@/lib/auth-session"
 
 interface PersonalReport {
   session_id: string; status: "not_started" | "awaiting_lesson" | "disabled" | "generating" | "failed" | "completed"
-  report_text?: string | null; snapshot_at?: string | null; model_used?: string | null; error_code?: string | null
+  report_text?: string | null; facts_text?: string | null; snapshot_at?: string | null; model_used?: string | null; error_code?: string | null
 }
 
 export function PersonalRecommendations({sessionId}: {sessionId: string}) {
@@ -40,7 +40,7 @@ export function PersonalRecommendations({sessionId}: {sessionId: string}) {
         }
         retryable = false
         const data = await response.json()
-        if (data.session_id !== sessionId || !["not_started", "awaiting_lesson", "disabled", "generating", "failed", "completed"].includes(data.status) ||
+        if ((data.facts_text != null && typeof data.facts_text !== "string") || data.session_id !== sessionId || !["not_started", "awaiting_lesson", "disabled", "generating", "failed", "completed"].includes(data.status) ||
           data.status === "completed" && (typeof data.report_text !== "string" || !data.report_text.trim())) throw new Error()
         if (!controller.signal.aborted) {
           setResult({id: sessionId, data})
@@ -83,6 +83,7 @@ export function PersonalRecommendations({sessionId}: {sessionId: string}) {
     {data?.status === "failed" && <p role="alert">{data.error_code === "llm_unavailable" ? "Сервис ИИ недоступен. После восстановления подключения повторите анализ." : "Не удалось сформировать рекомендации ИИ."} Результаты занятия сохранены.</p>}
     {data?.status === "not_started" && <p>Анализ этого занятия ещё не запущен.</p>}
     {(data?.status === "failed" || data?.status === "not_started") && <button type="button" disabled={posting} onClick={() => void request()} className="min-h-10 rounded border px-3 disabled:opacity-50">{posting ? "Запускаем анализ…" : "Повторить анализ ИИ"}</button>}
+    {data?.facts_text && <p className="text-xs text-muted-foreground">{data.facts_text}</p>}
     {data?.status === "completed" && <><p className="whitespace-pre-wrap leading-relaxed select-text">{data.report_text}</p>
       <p className="text-xs text-muted-foreground">По всем вашим карточкам этого занятия.{data.snapshot_at ? ` Данные на ${new Date(data.snapshot_at).toLocaleString("ru-RU", {timeZone: "Europe/Moscow"})}.` : ""}{data.model_used ? ` Модель: ${data.model_used}.` : ""}</p></>}
   </section>

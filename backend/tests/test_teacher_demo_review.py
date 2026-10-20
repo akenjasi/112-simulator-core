@@ -52,7 +52,7 @@ async def test_review_exposes_selected_card_criteria_without_inventing_an_ai_gra
 
 async def test_demo_mode_promotes_a_preexisting_memory_wait_only_after_explicit_request(monkeypatch):
     import asyncio
-    from backend.core import report_demo
+    from backend.core import report_demo, report_worker
     from backend.models.report_job import ReportJob
     data = await fixture()
     calls = []
@@ -60,7 +60,7 @@ async def test_demo_mode_promotes_a_preexisting_memory_wait_only_after_explicit_
         calls.append((snapshot, kind))
         return {'analysis_text': 'Свежие рекомендации занятия', 'model_used': 'test-model'}
     monkeypatch.setenv('DDS_REPORT_MODE', 'demo')
-    monkeypatch.setattr(report_demo, 'generate_report', inference)
+    monkeypatch.setattr(report_worker, 'generate_report', inference)
     async with AsyncSessionLocal() as db:
         db.add(ReportJob(scope_key='lesson:' + data['lesson'], lesson_id=data['lesson'], kind='lesson',
             owner_id=data['owner'], status='pending', waiting_reason='memory_low',
@@ -72,7 +72,7 @@ async def test_demo_mode_promotes_a_preexisting_memory_wait_only_after_explicit_
     assert current.json()['status'] == 'pending' and not calls
     response = await request('POST', path, data, json={})
     assert response.status_code == 202
-    await asyncio.gather(*list(report_demo._tasks.values()))
+    await report_worker.ReportWorker().process_single_job(response.json()["job_id"])
     result = (await request('GET', path, data)).json()
     assert result['status'] == 'completed' and result['report_text'] == 'Свежие рекомендации занятия'
     assert len(calls) == 1

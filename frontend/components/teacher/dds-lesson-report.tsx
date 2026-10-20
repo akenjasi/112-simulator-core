@@ -27,6 +27,7 @@ export interface DDSLessonReportJob {
   created_at?: string
   updated_at?: string
   report_text?: string | null
+  facts_text?: string | null
   error_code?: string | null
   model_used?: string | null
   waiting_reason?: string | null
@@ -34,6 +35,7 @@ export interface DDSLessonReportJob {
   period_end?: string | null
   snapshot_at?: string | null
   execution_mode?: string
+  report_format?: string
 }
 
 const WAIT_LABELS: Record<string, string> = {
@@ -68,6 +70,10 @@ function validateReportPayload(
   const id = scope === "groups" ? data.group_id : data.lesson_id
   if (typeof id !== "string" || id !== requestedLessonId) {
     return { valid: false, error: "Получены некорректные данные отчёта или данные для другого занятия." }
+  }
+
+  if (data.facts_text != null && typeof data.facts_text !== "string") {
+    return { valid: false, error: "Некорректная строка результатов отчёта." }
   }
 
   // Validate status against known statuses
@@ -454,7 +460,7 @@ export function DDSLessonReport({ lessonId, scope = "lessons" }: DDSLessonReport
     }
   }
 
-  const needsDemoStart = jobStatus === "pending" && report?.execution_mode === "demo"
+  const needsDemoStart = jobStatus === "pending" && report?.execution_mode === "demo" && report.report_format !== "brief_v1"
   const pendingLabel = needsDemoStart ? "Ожидает запуска в деморежиме" : WAIT_LABELS[report?.waiting_reason || ""] || "В очереди"
 
   return (
@@ -598,6 +604,8 @@ export function DDSLessonReport({ lessonId, scope = "lessons" }: DDSLessonReport
           </div>
         </div>
       )}
+
+      {report?.facts_text && <p className="text-sm text-muted-foreground" data-testid="dds-report-facts">{report.facts_text}</p>}
 
       {/* 4. In Progress State (pending or running) */}
       {(jobStatus === "pending" || jobStatus === "running") && (

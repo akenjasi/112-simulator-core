@@ -1021,7 +1021,7 @@ export default function AnalyticsPage({ initialTab = "split" }: AnalyticsPagePro
             <Sparkles className="h-4 w-4 text-amber-500" />
             <span>Отчет ИИ по группе</span>
             <Badge variant="secondary" className="ml-1 px-1.5 py-0 text-[10px] bg-amber-500/10 text-amber-700 dark:text-amber-400">
-              Qwen 9B
+              Qwen 4B · CPU
             </Badge>
           </button>
         </div>
@@ -2315,7 +2315,7 @@ export default function AnalyticsPage({ initialTab = "split" }: AnalyticsPagePro
                 <Bot className="h-10 w-10 mx-auto text-muted-foreground/40 mb-1" />
                 <p className="text-sm font-semibold text-foreground">Отчеты ИИ по выбранной группе отсутствуют</p>
                 <p className="text-xs text-muted-foreground max-w-md mx-auto">
-                  Выберите группу и нажмите «Сформировать отчет ИИ», чтобы запустить фоновый синтез глубокого методического разбора (Qwen 3.5 9B).
+                  Выберите группу и нажмите «Сформировать отчет ИИ», чтобы запустить формирование короткой сводки (Qwen3.5 4B на CPU).
                 </p>
               </div>
             ) : (
@@ -2332,7 +2332,7 @@ export default function AnalyticsPage({ initialTab = "split" }: AnalyticsPagePro
                           Сводный отчет по группе
                         </span>
                         <Badge variant="outline" className="text-xs py-0 font-mono">
-                          {report.model_used || "Qwen 3.5 9B"}
+                          {report.model_used || "Qwen3.5 4B · CPU"}
                         </Badge>
                       </div>
 

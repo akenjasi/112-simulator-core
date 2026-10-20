@@ -14,6 +14,8 @@ from backend.core.report_data import aware, collect_report_snapshot
 from backend.core.report_inference import generate_report
 from backend.core.report_runtime import coordinator, confirm_runtime_idle, memory_required, ResourceMonitor, runtime_sleeping
 from backend.core.reports import compact_legacy, initialize_reports, reconcile_reports, utcnow
+from backend.core.report_brief import freeze_brief
+from backend.core.report_prefix import warm_prefixes
 from backend.database import AsyncSessionLocal
 from backend.models.domain_03 import Assignment, ExamSession
 from backend.models.report_job import ReportJob
@@ -37,12 +39,20 @@ class ReportWorker:
         self.task = None
         self.generation_task = None
         self.last_reconcile = 0
+        self._wake = None
+        self.prefixes_ready = False
+        self.next_warmup = 0
+
+    def wake(self):
+        if self._wake is not None:
+            self._wake.set()
 
     async def start(self):
         if self.task and not self.task.done():
             return
         async with self.sessions() as db:
             await initialize_reports(db)
+        self._wake = asyncio.Event()
         self.task = asyncio.create_task(self.run(), name="dds_report_scheduler")
 
     async def stop(self):
@@ -59,13 +69,17 @@ class ReportWorker:
 
     async def run(self):
         while True:
+            self._wake.clear()
             try:
                 await self.tick()
             except asyncio.CancelledError:
                 raise
             except Exception as exc:
                 logger.error("Report scheduler iteration failed: %s", type(exc).__name__)
-            await asyncio.sleep(10)
+            try:
+                await asyncio.wait_for(self._wake.wait(), 10)
+            except TimeoutError:
+                pass
 
     async def admission(self, db):
         if await learning_active(db):
@@ -76,7 +90,9 @@ class ReportWorker:
             coordinator.idle_since = None
             return "metrics_unavailable"
         cpu, memory = sample
-        if cpu >= float(os.getenv("DDS_REPORT_CPU_MAX_PERCENT", "40")):
+        from backend.core.report_demo import demo_enabled
+        immediate = demo_enabled()
+        if not immediate and cpu >= float(os.getenv("DDS_REPORT_CPU_MAX_PERCENT", "40")):
             coordinator.idle_since = None
             return "cpu_busy"
         try:
@@ -89,7 +105,7 @@ class ReportWorker:
         now = time.monotonic()
         if coordinator.idle_since is None:
             coordinator.idle_since = now
-        if now - coordinator.idle_since < float(os.getenv("DDS_REPORT_IDLE_SECONDS", "30")):
+        if not immediate and now - coordinator.idle_since < float(os.getenv("DDS_REPORT_IDLE_SECONDS", "30")):
             return "idle_window"
         if coordinator.unconfirmed_cancel:
             coordinator.unconfirmed_cancel = not await confirm_runtime_idle()
@@ -99,9 +115,7 @@ class ReportWorker:
 
     async def tick(self):
         from backend.core.report_demo import demo_enabled
-        if demo_enabled():
-            return
-        if time.monotonic() - self.last_reconcile >= 60:
+        if not demo_enabled() and time.monotonic() - self.last_reconcile >= 60:
             async with self.sessions() as db:
                 await reconcile_reports(db)
             self.last_reconcile = time.monotonic()
@@ -120,7 +134,14 @@ class ReportWorker:
                     or_(ReportJob.next_run_at.is_(None), ReportJob.next_run_at <= utcnow())).order_by(
                         ReportJob.created_at, ReportJob.job_id).limit(1))
                 if job is None:
-                    coordinator.idle_since = None
+                    if self.prefixes_ready or time.monotonic() < self.next_warmup:
+                        coordinator.idle_since = None
+                        return
+                    if await self.admission(db):
+                        return
+                    self.generation_task = asyncio.create_task(self.warm(), name="dds_summary_prefixes")
+                    coordinator.task = self.generation_task
+                    self.generation_task.add_done_callback(lambda done: self.wake())
                     return
                 reason = await self.admission(db)
                 await db.execute(update(ReportJob).where(ReportJob.status == "pending").values(waiting_reason=reason or "queued"))
@@ -129,6 +150,17 @@ class ReportWorker:
                     return
                 self.generation_task = asyncio.create_task(self.process_single_job(job.job_id), name="dds_report_generation")
                 coordinator.task = self.generation_task
+                self.generation_task.add_done_callback(lambda done: self.wake())
+
+    async def warm(self):
+        try:
+            await warm_prefixes()
+            self.prefixes_ready = True
+        except asyncio.CancelledError:
+            raise
+        except Exception as exc:
+            logger.warning("Summary prefix warmup unavailable: %s", type(exc).__name__)
+            self.next_warmup = time.monotonic() + 60
 
     async def process_single_job(self, job_id):
         async with self.sessions() as db:
@@ -155,8 +187,13 @@ class ReportWorker:
                     snapshot = compact_legacy(snapshot)
                     snapshot["period"] = {"start": aware(job.period_start).isoformat() if job.period_start else None,
                                           "end": aware(job.period_end).isoformat() if job.period_end else None}
+                snapshot = freeze_brief(snapshot)
+                await db.execute(update(ReportJob).where(ReportJob.job_id == job_id,
+                    ReportJob.attempt == attempt, ReportJob.status == "running").values(snapshot=snapshot))
+                await db.commit()
                 kind = job.kind
-            result = await generate_report(snapshot, "lesson" if kind == "group" else kind)
+            role = "student" if kind in ("student", "session_demo") else "lesson"
+            result = await generate_report(snapshot, role)
             await self.finish(job_id, attempt, status="completed", report_text=result["analysis_text"],
                 model_used=result["model_used"], error_code=None, error_message=None, waiting_reason=None)
         except asyncio.CancelledError:

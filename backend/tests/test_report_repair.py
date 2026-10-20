@@ -7,7 +7,7 @@ import uuid
 import pytest
 from sqlalchemy import select
 
-from backend.core import report_demo
+from backend.core import report_demo, report_worker
 from backend.database import AsyncSessionLocal
 from backend.models.domain_03 import ExamSession
 from backend.models.report_job import ReportJob
@@ -22,19 +22,22 @@ async def completed_group(monkeypatch, mode="demo"):
     async def infer(snapshot, kind, **kwargs):
         calls.append(deepcopy(snapshot))
         return {"analysis_text": "Свежие рекомендации по сохранённым результатам.", "model_used": "test-runtime"}
-    monkeypatch.setattr(report_demo, "generate_report", infer)
+    monkeypatch.setattr(report_worker, "generate_report", infer)
     users, ids = await exercise(n=1, count=1)
     lesson, states = await launch(users, ids)
     ended = await request("POST", f"/api/v1/lessons/{lesson}/stop", users["teacher"])
     assert ended.status_code == 200, ended.text
-    await settle()
+    if mode == "demo":
+        await settle()
     return users, states[0], calls
 
 
 async def settle():
-    tasks = list(report_demo._tasks.values())
-    if tasks:
-        await asyncio.wait_for(asyncio.gather(*tasks), 5)
+    worker = report_worker.ReportWorker()
+    async with AsyncSessionLocal() as db:
+        ids = list((await db.scalars(select(ReportJob.job_id).where(ReportJob.status == "pending").order_by(ReportJob.created_at, ReportJob.job_id))).all())
+    for job_id in ids:
+        await asyncio.wait_for(worker.process_single_job(job_id), 5)
 
 
 @pytest.mark.asyncio

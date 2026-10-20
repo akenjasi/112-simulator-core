@@ -42,6 +42,7 @@ async def enqueue_lesson(db, lesson, now=None):
     # frozen lazily, and the inference adapter compacts these teacher facts.
     from backend.core.dds_report_data import collect_lesson_report_data
     snapshot = await collect_lesson_report_data(db, lesson.assignment_id, lesson=lesson)
+    snapshot["brief"] = await collect_report_snapshot(db, lesson_id=lesson.assignment_id)
     return await insert_once(db, ReportJob(scope_key=key, kind="lesson", lesson_id=lesson.assignment_id,
         owner_id=lesson.assigned_by, status="pending", waiting_reason="queued",
         snapshot=snapshot, snapshot_at=now or utcnow(),
@@ -78,7 +79,7 @@ async def request_group_report(db, group, *, retry=False):
     if demo_enabled():
         job, launch = await prepare(db, key, "group", group.teacher_id, snapshot, retry=retry)
         await db.commit()
-        if launch:
+        if launch or job.status == "pending":
             submit(job)
         return job
     job = await db.scalar(select(ReportJob).where(ReportJob.scope_key == key))
@@ -102,6 +103,8 @@ async def supersede_student_jobs(db, end, now, owner_id=None):
 
 async def import_legacy(db):
     """Copy once by stable scope/ID; never mutate the source DDS report table."""
+    if await db.get(ReportSchedulerState, "brief_v1_cutover"):
+        return
     for old in (await db.scalars(select(LegacyDDSReportJob))).all():
         key = "lesson:" + old.lesson_id
         if await db.scalar(select(ReportJob.job_id).where(ReportJob.scope_key == key)):
@@ -125,7 +128,7 @@ async def initialize_reports(db, now=None):
     await db.execute(update(ReportJob).where(ReportJob.status == "running").values(
         status="pending", attempt=ReportJob.attempt + 1, waiting_reason="queued", updated_at=now))
     await db.execute(update(ReportJob).where(ReportJob.status == "generating").values(
-        status="failed", error_code="generation_interrupted", error_message="Генерация прервана. Повторите запрос.", updated_at=now))
+        status="pending", attempt=ReportJob.attempt + 1, waiting_reason="queued", updated_at=now))
     await db.commit()
 
 
@@ -154,7 +157,9 @@ async def retry_report(db, job):
     values = {}
     if job.kind == "lesson":
         from backend.core.dds_report_data import collect_lesson_report_data
-        values = {"snapshot": await collect_lesson_report_data(db, job.lesson_id), "snapshot_at": utcnow()}
+        snapshot = await collect_lesson_report_data(db, job.lesson_id)
+        snapshot["brief"] = await collect_report_snapshot(db, lesson_id=job.lesson_id)
+        values = {"snapshot": snapshot, "snapshot_at": utcnow()}
     result = await db.execute(update(ReportJob).where(ReportJob.job_id == job.job_id, ReportJob.status == "failed",
         ReportJob.attempt == job.attempt).values(status="pending", attempt=ReportJob.attempt + 1,
             retry_count=0, next_run_at=None, waiting_reason="queued", error_code=None, error_message=None, updated_at=utcnow(), **values))
@@ -167,8 +172,11 @@ async def retry_report(db, job):
 def compact_legacy(snapshot):
     """Retain frozen facts and explicitly projected semantic evidence, if present."""
     from collections import Counter
+    if "brief" in snapshot:
+        return deepcopy(snapshot["brief"])
     checks, reasons, participants = Counter(), Counter(), {}
     examples, sessions = [], snapshot.get("sessions", [])
+    grades = []
     total_cards = completed_cards = mistakes = graded = protocols_count = 0
     for session in sessions:
         cadet_id = session.get("cadet_id")
@@ -208,6 +216,13 @@ def compact_legacy(snapshot):
             count = sum(r.get("errors_count", 0) for r in session.get("ticket_results", []))
             mistakes += count
             participant["mistakes"] += count
+        saved_scores = [r.get("score_total") for r in session.get("ticket_results", [])]
+        if not any(isinstance(v, (int, float)) and not isinstance(v, bool) for v in saved_scores):
+            saved_scores = [e.get("scores", {}).get("final_score", e.get("scores", {}).get("total"))
+                            for e in session.get("evaluations", [])]
+        import math
+        grades.extend(v for v in saved_scores if isinstance(v, (int, float)) and not isinstance(v, bool)
+                      and math.isfinite(v) and 0 <= v <= 100)
         graded += int(any(r.get("score_total") is not None for r in session.get("ticket_results", [])) or any(
             any(isinstance(v, (int, float)) and not isinstance(v, bool) for k, v in ev.get("scores", {}).items()
                 if k in {"final_score", "total", "expert_score", "automatic_score"}) for ev in session.get("evaluations", [])))
@@ -221,7 +236,7 @@ def compact_legacy(snapshot):
             "mistakes": mistakes, "protocols": protocols_count, "sessions_with_score": graded},
             "participants": sorted(participants.values(), key=lambda p: p["cadet_id"] or ""),
             "criteria": dict(sorted(checks.items())), "mistakes": dict(sorted(reasons.items())),
-            "examples": examples, "warnings": warnings, "source_revisions": {}}
+            "examples": examples, "warnings": warnings, "source_revisions": {}, "grades": grades}
     if "semantic" in snapshot:
         result["semantic"] = deepcopy(snapshot["semantic"])
     return result

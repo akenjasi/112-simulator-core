@@ -37,13 +37,18 @@ class DDSReportJobResponse(BaseModel):
     waiting_reason: Optional[str] = None
     next_run_at: Optional[datetime] = None
     report_text: Optional[str] = None
+    facts_text: Optional[str] = None
+    report_format: Optional[str] = None
     error_code: Optional[str] = None
     model_used: Optional[str] = None
     execution_mode: str = "queued"
 
 
 def format_job_response(job):
+    from backend.core.report_brief import facts_text
     result = DDSReportJobResponse.model_validate(job)
+    result.facts_text = facts_text(job.snapshot)
+    result.report_format = (job.snapshot or {}).get("report_format")
     if job.kind == "group":
         result.group_id = (job.snapshot or {}).get("group_id")
     from backend.core.report_demo import demo_enabled
@@ -150,6 +155,8 @@ async def respond_to_request(db, job, response, retry=False):
     await db.refresh(job)
     if getattr(job, "_newly_created", False):
         dds_report_job_worker.submit(job.job_id)
+        from backend.core.report_worker import report_worker
+        report_worker.wake()
     response.status_code = 200 if job.status == "completed" else 202
     return format_job_response(job)
 
@@ -199,6 +206,8 @@ async def session_recommendation(db, session, lesson):
             result["status"] = "disabled"
         return result
     result.update(format_job_response(job).model_dump(mode="json"))
+    if result["status"] in ("pending", "running"):
+        result["status"] = "generating"
     return result
 
 

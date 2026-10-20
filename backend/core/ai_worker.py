@@ -1,12 +1,7 @@
-"""AI Background Analyzer Worker (Qwen 3.5 9B / Qwen 2.5 9B).
+"""Legacy advice helpers and compatibility metadata for Qwen3.5-4B CPU.
 
-Handles asynchronous queue processing, session logs collection,
-prompt formulation, deep analysis generation (LLM stub / inference),
-and database persistence for AIStudentAdvice and AIGroupAdvice.
-
-Target Model:
-  Qwen3.5-9B-Q6_K.gguf
-  URL: https://huggingface.co/unsloth/Qwen3.5-9B-GGUF/resolve/main/Qwen3.5-9B-Q6_K.gguf?download=true
+The application runs DDS brief_v1 through ReportWorker; it does not start this
+legacy in-memory worker. Historic advice and direct helper imports remain readable.
 """
 
 import asyncio
@@ -34,9 +29,9 @@ from backend.models.domain_04 import EvaluationResult, TicketResult
 
 logger = logging.getLogger("ai_worker")
 
-DEFAULT_MODEL_NAME = "Qwen 2.5 9B"
-MODEL_GGUF_URL = "https://huggingface.co/unsloth/Qwen3.5-9B-GGUF/resolve/main/Qwen3.5-9B-Q6_K.gguf?download=true"
-MODEL_FILENAME = "Qwen3.5-9B-Q6_K.gguf"
+DEFAULT_MODEL_NAME = "Qwen3.5 4B (CPU)"
+MODEL_GGUF_URL = "https://huggingface.co/unsloth/Qwen3.5-4B-GGUF/resolve/e87f176479d0855a907a41277aca2f8ee7a09523/Qwen3.5-4B-Q4_K_M.gguf"
+MODEL_FILENAME = "Qwen3.5-4B-Q4_K_M.gguf"
 
 LLM_BASE_URL = os.getenv("DDS_LLM_BASE_URL", "http://127.0.0.1:8081/v1")
 LLM_MODEL = os.getenv("DDS_LLM_MODEL", "dds-qwen")

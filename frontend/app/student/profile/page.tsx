@@ -52,7 +52,7 @@ export interface UserProfile {
 interface SavedAdvice { advice_id: string; analysis_text: string; date: string }
 
 interface StudentReport {
-  job_id: string; status: string; waiting_reason?: string | null; report_text?: string | null
+  job_id: string; status: string; waiting_reason?: string | null; report_text?: string | null; facts_text?: string | null
   period_start?: string | null; period_end?: string | null; snapshot_at?: string | null
 }
 
@@ -133,6 +133,7 @@ function StudentReports({demo = false}: {demo?: boolean}) {
       {report.status === "pending" && REPORT_WAIT_DETAILS[report.waiting_reason || ""] && <p className="text-sm text-muted-foreground">{REPORT_WAIT_DETAILS[report.waiting_reason || ""]}</p>}
       {report.period_start && report.period_end && <p className="text-xs text-muted-foreground">Период: {date(report.period_start)} — {date(new Date(new Date(report.period_end).getTime() - 1).toISOString())}</p>}
       {report.snapshot_at && <p className="text-xs text-muted-foreground">Данные на {new Date(report.snapshot_at).toLocaleString("ru-RU", {timeZone: "Europe/Moscow"})}</p>}
+      {report.facts_text && <p className="text-sm text-muted-foreground">{report.facts_text}</p>}
       {report.status === "completed" && <p className="whitespace-pre-wrap leading-relaxed">{report.report_text}</p>}
     </article>)}
   </section>

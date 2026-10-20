@@ -103,6 +103,13 @@ class MakefileTests(unittest.TestCase):
         self.assertNotEqual(result.returncode, 0)
         self.assertFalse(any(c["command"] == "docker" and "up" in c["args"] for c in self.calls()))
 
+    def test_gpu_runtime_is_rejected_before_any_external_command(self):
+        for target in ("up", "up-prod", "models", "llm-up"):
+            result = self.run_make(target, "LLM_RUNTIME=gpu")
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn("GPU access is disabled", result.stderr)
+            self.assertEqual(self.calls(), [])
+
     def test_production_does_not_download_models(self):
         result = self.run_make("up-prod", f"ENV_FILE={self.envfile}")
         self.assertEqual(result.returncode, 0, result.stderr)

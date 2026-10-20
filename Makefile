@@ -12,7 +12,7 @@ LLM_RUNTIME ?= cpu
 LLM_ENV_FILE ?= $(ROOT)/.env.llm
 # A prepared private configuration opts this installation into local inference.
 WITH_LLM ?= $(shell test -f "$(LLM_ENV_FILE)" && printf 1 || printf 0)
-LLM_COMPOSE = $(if $(filter gpu,$(LLM_RUNTIME)),llm.yml,llm-cpu.yml)
+LLM_COMPOSE = llm-cpu.yml
 LLM_ARGS = $(if $(filter 1,$(WITH_LLM)),--env-file "$(LLM_ENV_FILE)" --profile llm,)
 LLM_FILES = $(if $(filter 1,$(WITH_LLM)),-f "$(ROOT)/docker/compose/$(LLM_COMPOSE)" -f "$(ROOT)/docker/compose/reports.yml",)
 BASE = -f "$(ROOT)/docker/compose/base.yml"
@@ -20,9 +20,9 @@ DEV = $(COMPOSE) $(LLM_ARGS) $(BASE) -f "$(ROOT)/docker/compose/dev.yml" $(LLM_F
 PROD = $(COMPOSE) $(LLM_ARGS) $(BASE) -f "$(ROOT)/docker/compose/prod.yml" $(LLM_FILES)
 SETTINGS_COMPOSE = $(DEV)
 
-.PHONY: help install init models backend frontend test test-all build up up-prod down logs llm-up backup replace-dds-tickets package-offline deploy-offline check-python check-llm check-env
+.PHONY: help install init models backend frontend test test-all build up up-prod down logs llm-up backup replace-dds-tickets cutover-brief-reports package-offline deploy-offline check-python check-llm check-env
 help:
-	@printf '%s\n' 'Setup:   make install | init | check-env | models [WITH_LLM=1]' 'Develop: make backend [PORT=8000] | frontend' 'Verify:  make test | test-all' 'Docker:  make build | up | up-prod | down | logs' 'LLM:     .env.llm enables local CPU inference for ordinary up/down/logs' '         make up LLM_ENV_FILE=/private/file.env | WITH_LLM=0 to disable' 'Data:    make backup | replace-dds-tickets [ARGS=--apply]' 'Offline: make package-offline ARGS="--help"' '         make deploy-offline ARCHIVE=/path/bundle.tar.gz [ARGS="..."]' 'LLM_RUNTIME=cpu (default) | gpu' 'Options: ENV_FILE=/private/file.env PROJECT=existing_project VENV=/path/venv'
+	@printf '%s\n' 'Setup:   make install | init | check-env | models [WITH_LLM=1]' 'Develop: make backend [PORT=8000] | frontend' 'Verify:  make test | test-all' 'Docker:  make build | up | up-prod | down | logs' 'LLM:     .env.llm enables local CPU inference for ordinary up/down/logs' '         make up LLM_ENV_FILE=/private/file.env | WITH_LLM=0 to disable' 'Data:    make backup | replace-dds-tickets [ARGS=--apply]' 'Reports: make cutover-brief-reports ARGS="--env-file /private/settings.env [--apply]"' 'Offline: make package-offline ARGS="--help"' '         make deploy-offline ARCHIVE=/path/bundle.tar.gz [ARGS="..."]' 'LLM_RUNTIME=cpu only; GPU access is disabled' 'Options: ENV_FILE=/private/file.env PROJECT=existing_project VENV=/path/venv'
 
 install:
 	@cd "$(ROOT)" && "$(PYTHON)" -c 'import sys; assert sys.version_info[:2] == (3,11), "Use Python 3.11"'
@@ -62,7 +62,7 @@ build:
 	@cd "$(ROOT)" && docker build -f docker/images/frontend.Dockerfile -t "$${FRONTEND_IMAGE:-simulator_frontend:latest}" .
 
 check-llm:
-	@case "$(LLM_RUNTIME)" in cpu|gpu) ;; *) echo 'LLM_RUNTIME must be cpu or gpu.' >&2; exit 1;; esac
+	@case "$(LLM_RUNTIME)" in cpu) ;; *) echo 'Only LLM_RUNTIME=cpu is supported; GPU access is disabled.' >&2; exit 1;; esac
 	@if [ "$(WITH_LLM)" = 1 ]; then test -n "$(LLM_ENV_FILE)" && test -f "$(LLM_ENV_FILE)" || { echo 'Set LLM_ENV_FILE to an existing private env file.' >&2; exit 1; }; fi
 
 check-env: check-llm
@@ -101,6 +101,9 @@ backup: check-python
 
 replace-dds-tickets: check-python
 	@cd "$(ROOT)" && "$(PY)" -m backend.scripts.db.replace_dds_tickets --env-file "$(ENV_FILE)" $(ARGS)
+
+cutover-brief-reports: check-python
+	@cd "$(ROOT)" && "$(PY)" -m backend.scripts.db.cutover_brief_reports $(ARGS)
 
 package-offline:
 	@bash "$(ROOT)/docker/offline/package.sh" $(ARGS)

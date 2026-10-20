@@ -1,4 +1,4 @@
-# Optional bridge between the main stack and docker/compose/llm.yml.
+# Optional bridge between the main stack and the CPU-only report runtime.
 # make up prepares default weights before launch; custom GGUF paths must exist.
 services:
   backend:

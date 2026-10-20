@@ -234,9 +234,9 @@
       "reason": "Audited supported runtime and dependency security corrections"
     },
     "components/student/student-review.tsx": {
-      "sha256": "10afc8993ff7e17ffe2a2f2d68f87710246a8f5a454813ab24f8629a8d3b080a",
-      "source_revision": "UI review 2026-10-20 (base 1cc29c3)",
-      "reason": "User-requested browser testing reproduced stale active-lesson text after teacher stop and permanently halted personal report polling after temporary gateway errors; refresh active reviews and retry transient GET failures only."
+      "sha256": "41a6b77a57a185db5b44386a846f861f7650d1856a859c65b12306ccd4d9e8a6",
+      "source_revision": "user-approved brief_v1 CPU summary plan, 2026-10-20",
+      "reason": "Explicit user request: two-sentence CPU summaries, a separate facts_text line including on generation failure, and regressions for that behavior. Original frontend baseline preserved."
     },
     "lib/student-review.ts": {
       "sha256": "52119b200f83ed8d06468e31afd65eedcb1568506166fb04d86797c1c0b49501",
@@ -244,9 +244,9 @@
       "reason": "User-requested browser content review: label saved dispatch text as telephone message, since the prepared cycle records the received departure report, not the cadet oral task transmission."
     },
     "components/teacher/dds-lesson-report.tsx": {
-      "sha256": "33c411e921bbc8af46b48963bff1e88b4c3fc294c100c54899bef54468100857",
-      "source_revision": "user-request-report-repair-2026-10-20",
-      "reason": "Пользователь запросил исправить недоступные ИИ-отчёты занятия, группы и автоматический разбор DDS; сохранены проверки изоляции и исходная карта хешей."
+      "sha256": "507b6187fe5f12db7029a6054a42ab96c12e9855a640d16284326ebe8b51f116",
+      "source_revision": "user-approved brief_v1 CPU summary plan, 2026-10-20",
+      "reason": "Explicit user request: two-sentence CPU summaries, a separate facts_text line including on generation failure, and regressions for that behavior. Original frontend baseline preserved."
     },
     "components/dispatcher/caller-panel.tsx": {
       "sha256": "588b69e388980b0c17537011c039b98cc0df94c2166a889249750a209c390c5e",
