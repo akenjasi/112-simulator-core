@@ -77,7 +77,7 @@ class StudentLessonHistoryItem(BaseModel):
     start_time: Optional[datetime] = None
     end_time: Optional[datetime] = None
     tickets: List[StudentLessonHistoryTicket] = Field(default_factory=list)
-    report_mode: str = "queued"
+    report_mode: Optional[str] = None
 
     model_config = ConfigDict(from_attributes=True)
 

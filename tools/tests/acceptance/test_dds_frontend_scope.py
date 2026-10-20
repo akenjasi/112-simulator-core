@@ -80,6 +80,8 @@ REVIEWED_UPDATES = {
     'app/globals.css',
     'app/layout.tsx',
     'app/login/page.tsx',
+    # User-authorized release review: exact teacher entry hashes, not an allowlist.
+    'app/page.tsx',
     'app/operator/page.tsx',
     'components/dispatcher/dds-protocol.tsx',
     'components/dispatcher/dds-training-phone.tsx',

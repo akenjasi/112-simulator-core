@@ -179,9 +179,9 @@
       "reason": "Integrated local-font root layout from audited main"
     },
     "app/login/page.tsx": {
-      "sha256": "720f224936106a91bd139ff30db0934e2ce173c35d8684b43fba5be795e8d1f9",
-      "source_revision": "User request 2026-10-20 (base 70d2a84)",
-      "reason": "User explicitly restored the four hackathon credentials; all four accounts verified against the configured live database."
+      "sha256": "cae1fdd732d3b7448584a4660b5abeed19583049460d5c2118fa762c9367cf50",
+      "source_revision": "User request 2026-10-20 (base 70d2a84); 41327b3029525e1d1016fa36eee1dd8f2899f29c; user-authorized release acceptance 2026-10-20",
+      "reason": "User explicitly restored the four hackathon credentials; all four accounts verified against the configured live database. Release review approved by the user: pin the existing teacher entry at /teacher from login and authenticated root. The reviewed delta only changes the TEACHER destination; other role routes, token validation and failure routing remain unchanged. Preserve the original hash map and reject further unreviewed edits."
     },
     "app/operator/page.tsx": {
       "sha256": "be2ba159b3b75ecc69ba20c3f6cc3beb0a5523c877a0396cc4cfca7c47c725a1",
@@ -302,6 +302,11 @@
       "sha256": "51102e381b607b852946c80a76ffbe477c581260c8e623f02b8f41515402f7c2",
       "source_revision": "e4aaf89 + user-approved admin/teacher browser audit 2026-10-20",
       "reason": "Пользователь явно утвердил полный проход и исправления кабинетов: нейтральные подписи БД, фильтры сохранённых билетов ДДС и точный статус попыток без оценки. Исходная карта sha256 и независимые утверждения сохранены."
+    },
+    "app/page.tsx": {
+      "sha256": "f0e3e3579c9479bc81c56cc7429b4834fd4c0f5f644f1a7f28498edde2557ebc",
+      "source_revision": "41327b3029525e1d1016fa36eee1dd8f2899f29c; user-authorized release acceptance 2026-10-20",
+      "reason": "Release review approved by the user: pin the existing teacher entry at /teacher from login and authenticated root. The reviewed delta only changes the TEACHER destination; other role routes, token validation and failure routing remain unchanged. Preserve the original hash map and reject further unreviewed edits."
     }
   },
   "update_policy": "2026-10-19: explicitly reconciled under the user request to repair obsolete tests. Original sha256 values are unchanged. Exact supplemental hashes preserve the integrated changes; these paths are not open-ended exceptions. 2026-10-19: the user explicitly requested the DDS audio-only cycle and teacher review; only the three existing supplemental entries were updated, preserving the original map and guarded path set. 2026-10-19: background report implementation explicitly authorizes the teacher report screen; one exact supplemental hash added, original hash map preserved."

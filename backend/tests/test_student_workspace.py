@@ -16,6 +16,37 @@ async def self_start(d, user=None, key=None):
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize("mode", ["demo", "queued"])
+async def test_history_preserves_legacy_attempts_without_offering_unsupported_reports(monkeypatch, mode):
+    monkeypatch.setenv("DDS_REPORT_MODE", mode)
+    d = await setup_group()
+    user = d["cadets"][0]
+    training = await self_start(d)
+    assert training.status_code == 200, training.text
+    state = training.json()
+    async with AsyncSessionLocal() as db:
+        legacy = ExamSession(cadet_id=user[0], session_type="CARD_ACTIONS", status="COMPLETED")
+        operator_lesson = Assignment(target_role="OPERATOR_112")
+        db.add_all([legacy, operator_lesson])
+        await db.flush()
+        operator = ExamSession(cadet_id=user[0], assignment_id=operator_lesson.assignment_id,
+                               session_type="CARD_ACTIONS", status="COMPLETED")
+        wrong_type = ExamSession(cadet_id=user[0], assignment_id=state["lesson_id"],
+                                 session_type="CALL_SIMULATION", status="COMPLETED")
+        db.add_all([operator, wrong_type])
+        await db.commit()
+        unsupported = [legacy.session_id, operator.session_id, wrong_type.session_id]
+    response = await request("GET", "/api/v1/students/me/lessons", user)
+    assert response.status_code == 200, response.text
+    history = {item["session_id"]: item for item in response.json()}
+    assert history[state["session_id"]]["report_mode"] == mode
+    for session_id in unsupported:
+        assert history[session_id]["status"] == "COMPLETED"
+        assert history[session_id]["report_mode"] is None
+        assert (await request("GET", f"/api/ai-analytics/sessions/{session_id}/recommendation", user)).status_code == 404
+
+
+@pytest.mark.asyncio
 async def test_workspace_is_authenticated_own_and_excludes_finished_training():
     d = await setup_group()
     assert (await request("GET", "/api/dds/student-workspace")).status_code == 401
