@@ -28,17 +28,5 @@ with httpx.Client(timeout=float(os.getenv("DDS_LLM_TIMEOUT_SECONDS", "900")),tru
 print("CPU inference passed; no lesson data was used.")
 '
 echo 'Testing local Qwen TTS with an uncached synthetic phrase...'
-compose exec -T backend python -c '
-import io, os, sys, tempfile, wave
-if os.getenv("TTS_ENABLED", "true").strip().lower() not in {"true", "1", "yes", "on"}:
-    print("TTS explicitly disabled; synthesis check skipped.")
-    sys.exit(0)
-from backend.core.tts_v2 import QwenTTSV2
-with tempfile.TemporaryDirectory() as cache:
-    audio = QwenTTSV2(cache_dir=cache).synthesize("Проверка связи.")
-    with wave.open(io.BytesIO(audio), "rb") as wav:
-        assert (wav.getnchannels(), wav.getsampwidth(), wav.getframerate()) == (1, 2, 8000)
-        assert wav.getnframes() > 0
-print("Qwen TTS passed: PCM16, mono, 8000 Hz; no lesson data was used.")
-'
+compose exec -T backend python -m backend.scripts.speech.check_tts
 compose ps

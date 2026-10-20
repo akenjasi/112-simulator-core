@@ -124,6 +124,9 @@ for name in config.json inference.py model.safetensors tokenizer.json tokenizer_
     cp -- "$ROOT/models/classifier/$name" "$CONTEXT/models/classifier/$name"
   fi
 done
+# tar creates implicit parents under umask 077; COPY preserves those permissions.
+# All files here are explicitly selected public source/resources, never secrets.
+chmod -R a+rX "$CONTEXT"
 
 BACKEND_IMAGE="simulator112/backend:$VERSION"
 FRONTEND_IMAGE="simulator112/frontend:$VERSION"
@@ -132,6 +135,11 @@ LLM_IMAGE="simulator112/llm-cpu:$VERSION"
 log 'Building backend and frontend for Linux/amd64'
 docker build --platform linux/amd64 -f "$CONTEXT/docker/images/backend.Dockerfile" -t "$BACKEND_IMAGE" "$CONTEXT"
 docker build --platform linux/amd64 -f "$CONTEXT/docker/images/frontend.Dockerfile" -t "$FRONTEND_IMAGE" "$CONTEXT"
+log 'Checking real TTS in the backend image without network or application data'
+docker run --rm --network none \
+  -v "$TTS_DIR:/app/backend/core/qwen_tts/models:ro,z" \
+  -e TTS_ENABLED=true --entrypoint python "$BACKEND_IMAGE" \
+  -m backend.scripts.speech.check_tts
 log 'Fetching PostgreSQL and the CPU-only llama.cpp runtime'
 docker pull --platform linux/amd64 postgres:15-alpine
 docker pull --platform linux/amd64 ghcr.io/ggml-org/llama.cpp@sha256:951661b272f3ff206c499719d69864b9f53621786ff8e55ce1bb8996b4bf48a1

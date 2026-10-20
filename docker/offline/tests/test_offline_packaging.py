@@ -29,6 +29,10 @@ elif a[:1]==['build']:
     assert not (context/'data/certs').exists()
     assert not (context/'data/uploads/private.txt').exists()
     assert (context/'models/classifier/model.safetensors').is_file()
+    for path in (context/'backend', context/'backend/core', context/'models/classifier'):
+        assert path.stat().st_mode & 0o005 == 0o005, 'Container UID cannot traverse source directories'
+    assert (context/'backend/main.py').stat().st_mode & 0o004, 'Container UID cannot read source'
+    assert (context/'models/classifier/model.safetensors').stat().st_mode & 0o004, 'Container UID cannot read classifier'
     if os.getenv('FAIL_BUILD'): sys.exit(19)
 elif a[:2]==['image','inspect']:
     print(os.getenv('FAKE_PLATFORM','linux/amd64') if '{{.Os}}' in ' '.join(a) else 'sha256:synthetic-image')
@@ -38,6 +42,10 @@ elif a[:1]==['run'] and '--entrypoint' in a:
     entry=a[a.index('--entrypoint')+1]
     if entry=='python' and 'import secrets' in a[-1]:
         subprocess.run([sys.executable,'-c',a[-1]],check=True)
+    elif entry=='python' and 'backend.scripts.speech.check_tts' in a:
+        assert a[a.index('--network')+1]=='none'
+        assert 'TTS_ENABLED=true' in a
+        if os.getenv('FAIL_TTS_RUNTIME'): sys.exit(21)
     elif entry=='openssl':
         mount=a[a.index('--mount')+1]
         source=next(p.removeprefix('source=') for p in mount.split(',') if p.startswith('source='))
@@ -103,7 +111,7 @@ class OfflinePackagingTests(unittest.TestCase):
         for name in ("docker/images/backend.Dockerfile", "docker/images/frontend.Dockerfile", "docker/compose/base.yml", "docker/compose/dev.yml"):
             (self.repo / name).parent.mkdir(parents=True, exist_ok=True)
             (self.repo / name).write_text("# synthetic source\n")
-        for name in ("backend/main.py", "models/classifier/inference.py", "assets/reference/moscow_112_addresses.json",
+        for name in ("backend/main.py", "backend/scripts/speech/check_tts.py", "models/classifier/inference.py", "assets/reference/moscow_112_addresses.json",
                      ".env", "data/certs/server.key", "data/uploads/private.txt"):
             file = self.repo / name
             file.parent.mkdir(parents=True, exist_ok=True)
@@ -253,7 +261,7 @@ class OfflinePackagingTests(unittest.TestCase):
             self.assertEqual((bundle / "models/tts" / name).stat().st_mode & 0o777, 0o644)
         self.assertEqual((bundle / "models/tts").stat().st_mode & 0o777, 0o755)
         self.assertIn('TTS_ENABLED: "${TTS_ENABLED:-true}"', (bundle / "compose.yml").read_text())
-        self.assertIn('QwenTTSV2', (bundle / "verify.sh").read_text())
+        self.assertIn('backend.scripts.speech.check_tts', (bundle / "verify.sh").read_text())
         for line in (bundle / "SHA256SUMS").read_text().splitlines():
             digest, name = line.split("  ", 1)
             self.assertEqual(hashlib.sha256((bundle / name).read_bytes()).hexdigest(), digest)
@@ -299,6 +307,12 @@ class OfflinePackagingTests(unittest.TestCase):
         self.assertIn("Missing TTS runtime resource", result.stderr)
         self.assertFalse(self.curl_trace.exists())
         self.assertFalse(any(c[0] == "build" for c in self.calls()))
+
+    def test_failed_native_tts_never_yields_a_ready_archive(self):
+        result = self.run_pack(env={**self.env, "FAIL_TTS_RUNTIME": "1"})
+        self.assertNotEqual(result.returncode, 0)
+        self.assertFalse(self.output.exists())
+        self.assertFalse(any(c[:2] == ["image", "save"] for c in self.calls()))
 
     def test_legacy_release_creates_the_same_complete_archive(self):
         result = subprocess.run(["bash", str(self.repo / "docker/scripts/pack_release.sh"),
