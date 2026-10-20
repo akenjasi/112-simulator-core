@@ -1,7 +1,7 @@
 # ─────────────────────────────────────────────────────────────────────────────
 # 112 Simulator V2 — Frontend Dockerfile (Next.js 16 → Nginx)
 # Stage 1 (builder): npm ci + DOCKER_BUILD=true next build (static export)
-# Stage 2 (runner):  Nginx 1.27-alpine serves the /out directory
+# Stage 2 (runner):  Nginx stable-alpine serves the /out directory
 # ─────────────────────────────────────────────────────────────────────────────
 
 # ─── Stage 1: Build ───────────────────────────────────────────────────────────

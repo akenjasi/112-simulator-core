@@ -215,6 +215,7 @@ class DDSCriteriaComparison(BaseModel):
 class RecordDetailResponse(BaseModel):
     record_id: str
     session_id: Optional[str] = None
+    report_mode: Optional[str] = None
     cadet_id: Optional[str] = None
     cadet_name: Optional[str] = None
     ticket_id: Optional[str] = None

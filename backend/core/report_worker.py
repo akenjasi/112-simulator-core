@@ -156,7 +156,7 @@ class ReportWorker:
                     snapshot["period"] = {"start": aware(job.period_start).isoformat() if job.period_start else None,
                                           "end": aware(job.period_end).isoformat() if job.period_end else None}
                 kind = job.kind
-            result = await generate_report(snapshot, kind)
+            result = await generate_report(snapshot, "lesson" if kind == "group" else kind)
             await self.finish(job_id, attempt, status="completed", report_text=result["analysis_text"],
                 model_used=result["model_used"], error_code=None, error_message=None, waiting_reason=None)
         except asyncio.CancelledError:

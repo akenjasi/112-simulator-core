@@ -27,6 +27,8 @@ Makefile передаёт явные корень проекта и env-файл
 
 Backend работает под UID10001, PostgreSQL15 не публикуется наружу. Frontend и dev backend по умолчанию доступны с loopback; для сетевого доступа явно задайте bind и проверьте firewall/TLS/CORS. Production Compose не публикует backend. TESTING в deployment принудительно false. Старые volumes могут требовать проверки прав владельца — перед изменениями сделайте backup.
 
+Nginx использует Docker DNS `127.0.0.11` и общий upstream с `resolve` для HTTP/HTTPS API и WebSocket. Адрес backend перепроверяется каждые пять секунд, поэтому пересоздание только backend не требует перезапуска frontend. Нужен Nginx не ниже 1.27.3; frontend image собирается на `nginx:stable-alpine`. Если старая сборка после обновления backend возвращает HTML 502 и интерфейс показывает ошибку разбора JSON, пересоберите frontend через `make up` с теми же PROJECT/env/LLM-настройками. Проверяйте `/api/health` и `/api/auth/login` через порт интерфейса, а не только прямой `/health` backend.
+
 `postgres_data` содержит PG, `simulator_data` — uploads/cache/backups/reports. Внешние models/certs монтируются read-only с SELinux labeling. Локальные сертификаты находятся в data/certs. Локальная SQLite по умолчанию находится в data; явный DATABASE_URL имеет приоритет. `make down` сохраняет volumes; флаг -v удаляет данные и не является обычной командой обновления.
 
 ## Модели и утилиты

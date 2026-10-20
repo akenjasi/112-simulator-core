@@ -39,6 +39,7 @@ frontend/out
 data/112_simulator.db
 data/backups/
 data/tts_cache/
+data/llm_cache/
 data/uploads/
 
 # ─── GGUF model weights (provisioned separately; offline packager downloads Qwen)

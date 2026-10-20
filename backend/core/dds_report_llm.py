@@ -2,7 +2,7 @@
 
 Provides asynchronous generation of analytical teacher reports for completed
 DISPATCHER_DDS lessons using a local OpenAI-compatible llama.cpp inference server
-(Qwen3.5-9B-Q4_K_M.gguf).
+(Qwen3.5-4B-Q4_K_M.gguf).
 
 Key boundaries and invariants:
 - Input validated strictly through DDSLessonReportDataResponse (lesson status must be COMPLETED).
@@ -32,7 +32,7 @@ logger = logging.getLogger("dds_report_llm")
 
 DEFAULT_BASE_URL = "http://127.0.0.1:8081/v1"
 DEFAULT_MODEL = "dds-qwen"
-DEFAULT_TIMEOUT_SECONDS = 180.0
+DEFAULT_TIMEOUT_SECONDS = 900.0
 DEFAULT_MAX_INPUT_CHARS = 24000
 DEFAULT_MAX_TOKENS = 1200
 
@@ -61,12 +61,14 @@ class DDSLLMSettings:
         timeout_seconds: float = DEFAULT_TIMEOUT_SECONDS,
         max_input_chars: int = DEFAULT_MAX_INPUT_CHARS,
         max_tokens: int = DEFAULT_MAX_TOKENS,
+        slot_cache: bool = False,
     ) -> None:
         self.base_url = self._validate_base_url(base_url)
         self.model = self._validate_model(model)
         self.timeout_seconds = self._validate_timeout(timeout_seconds)
         self.max_input_chars = self._validate_max_input_chars(max_input_chars)
         self.max_tokens = self._validate_max_tokens(max_tokens)
+        self.slot_cache = slot_cache
 
     @staticmethod
     def _validate_base_url(url: Any) -> str:
@@ -176,6 +178,7 @@ def get_llm_settings() -> DDSLLMSettings:
         timeout_seconds=raw_timeout,
         max_input_chars=raw_max_chars,
         max_tokens=raw_max_tokens,
+        slot_cache=os.getenv("DDS_LLM_SLOT_CACHE", "true").strip().lower() == "true",
     )
 
 

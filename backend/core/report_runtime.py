@@ -148,5 +148,5 @@ class ResourceMonitor:
 def memory_required(sleeping):
     mib = 1024 * 1024
     reserve = int(os.getenv("DDS_REPORT_RAM_RESERVE_MB", "2048")) * mib
-    budget = int(os.getenv("DDS_REPORT_MODEL_BUDGET_MB", "8192")) * mib if sleeping else 0
+    budget = int(os.getenv("DDS_REPORT_MODEL_BUDGET_MB", "4608")) * mib if sleeping else 0
     return reserve + budget

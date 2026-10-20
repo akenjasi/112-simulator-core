@@ -53,7 +53,7 @@ def main():
     mode.add_argument('--init', action='store_true', help='Create a new .env with unique installation secrets; never overwrite')
     mode.add_argument('--check-compose', action='store_true', help='Validate resolved Compose JSON from stdin without displaying secrets')
     parser.add_argument('--output', type=Path, default=Path(__file__).resolve().parents[1] / '.env')
-    parser.add_argument('--models-dir', type=Path, default=Path('data/models'))
+    parser.add_argument('--models-dir', type=Path, help='Override the model directory for all optional model checks')
     args = parser.parse_args()
     if args.check_compose:
         check_compose(sys.stdin)
@@ -61,8 +61,9 @@ def main():
     if args.init:
         initialize(args.output)
         return
-    for name in ['Qwen3.5-9B-Q4_K_M.gguf', 'gigaam-v3-ctc-Q8_0.gguf']:
-        path = args.models_dir / name
+    for name, directory in [('Qwen3.5-4B-Q4_K_M.gguf', Path('models/llm')),
+                            ('gigaam-v3-ctc-Q8_0.gguf', Path('data/models'))]:
+        path = (args.models_dir or directory) / name
         print(f'{name}: {"present" if path.is_file() and path.stat().st_size else "missing (optional speech/LLM feature unavailable)"}')
     print('This check does not download models or validate their weights. See docs/operations/deployment.md.')
 

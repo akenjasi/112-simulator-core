@@ -6,6 +6,7 @@ from sqlalchemy import func, select, update
 from sqlalchemy.exc import IntegrityError
 
 from backend.core.report_data import aware, collect_report_snapshot, has_new_results, student_period
+from backend.core.report_data import digest
 from backend.models.dds_report_job import LegacyDDSReportJob
 from backend.models.domain_01 import User
 from backend.models.domain_03 import Assignment, ExamSession
@@ -62,6 +63,34 @@ async def request_student_report(db, owner_id, now=None):
         return previous
     return await insert_once(db, ReportJob(scope_key=key, kind="student", owner_id=owner_id,
         period_start=start, period_end=end, status="pending", waiting_reason="queued", created_at=now, updated_at=now))
+
+
+async def request_group_report(db, group, *, retry=False):
+    """One frozen report per revision of this teacher's completed group results."""
+    from fastapi import HTTPException
+    from backend.core.report_demo import demo_enabled, prepare, submit
+
+    snapshot = await collect_report_snapshot(db, group_id=group.group_id, teacher_id=group.teacher_id)
+    if not snapshot["summary"]["sessions"]:
+        raise HTTPException(409, "No completed DDS results for this group")
+    snapshot["group_id"] = group.group_id
+    key = f"group:{group.group_id}:{digest(snapshot['source_revisions'])}"
+    if demo_enabled():
+        job, launch = await prepare(db, key, "group", group.teacher_id, snapshot, retry=retry)
+        await db.commit()
+        if launch:
+            submit(job)
+        return job
+    job = await db.scalar(select(ReportJob).where(ReportJob.scope_key == key))
+    if job is None:
+        job = await insert_once(db, ReportJob(scope_key=key, kind="group", owner_id=group.teacher_id,
+            snapshot=snapshot, snapshot_at=utcnow(), status="pending", waiting_reason="queued"))
+    if job.status == "failed":
+        if not retry:
+            raise HTTPException(409, "Previous report generation failed. Specify retry=true")
+        job = await retry_report(db, job)
+    await db.commit()
+    return job
 
 
 async def supersede_student_jobs(db, end, now, owner_id=None):
@@ -136,7 +165,7 @@ async def retry_report(db, job):
 
 
 def compact_legacy(snapshot):
-    """Retain frozen teacher facts while excluding all historical free-text fields."""
+    """Retain frozen facts and explicitly projected semantic evidence, if present."""
     from collections import Counter
     checks, reasons, participants = Counter(), Counter(), {}
     examples, sessions = [], snapshot.get("sessions", [])
@@ -187,9 +216,12 @@ def compact_legacy(snapshot):
         warnings.append(f"Сессий без числовой оценки: {len(sessions) - graded}. Это не означает успешное выполнение.")
     if protocols_count == 0:
         warnings.append("Протоколы критериев отсутствуют; оценка ограничена сохранёнными результатами.")
-    return {"summary": {"sessions": len(sessions), "participants": len(participants), "total_cards": total_cards,
+    result = {"summary": {"sessions": len(sessions), "participants": len(participants), "total_cards": total_cards,
             "completed_cards": completed_cards, "incomplete_cards": max(0, total_cards - completed_cards),
             "mistakes": mistakes, "protocols": protocols_count, "sessions_with_score": graded},
             "participants": sorted(participants.values(), key=lambda p: p["cadet_id"] or ""),
             "criteria": dict(sorted(checks.items())), "mistakes": dict(sorted(reasons.items())),
             "examples": examples, "warnings": warnings, "source_revisions": {}}
+    if "semantic" in snapshot:
+        result["semantic"] = deepcopy(snapshot["semantic"])
+    return result

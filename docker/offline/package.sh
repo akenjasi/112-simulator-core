@@ -4,12 +4,12 @@ set -Eeuo pipefail
 umask 077
 ROOT="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../.." && pwd)"
 VERSION="$(date -u +%Y%m%d-%H%M%S)"
-LLM_MODEL="${DDS_LLM_MODEL_PATH:-$ROOT/models/Qwen3.5-9B-Q4_K_M.gguf}"
+LLM_MODEL="${DDS_LLM_MODEL_PATH:-$ROOT/models/llm/Qwen3.5-4B-Q4_K_M.gguf}"
 # Pinned Hugging Face LFS metadata; never use a moving main revision for weights.
-QWEN_REVISION=3885219b6810b007914f3a7950a8d1b469d598a5
-QWEN_SHA256=03b74727a860a56338e042c4420bb3f04b2fec5734175f4cb9fa853daf52b7e8
-QWEN_SIZE=5680522464
-QWEN_URL="https://huggingface.co/unsloth/Qwen3.5-9B-GGUF/resolve/$QWEN_REVISION/Qwen3.5-9B-Q4_K_M.gguf"
+QWEN_REVISION=e87f176479d0855a907a41277aca2f8ee7a09523
+QWEN_SHA256=00fe7986ff5f6b463e62455821146049db6f9313603938a70800d1fb69ef11a4
+QWEN_SIZE=2740937888
+QWEN_URL="https://huggingface.co/unsloth/Qwen3.5-4B-GGUF/resolve/$QWEN_REVISION/Qwen3.5-4B-Q4_K_M.gguf"
 DEFAULT_MODEL=1
 [[ -z "${DDS_LLM_MODEL_PATH:-}" ]] || DEFAULT_MODEL=0
 OUTPUT="" WORK_DIR="" CHECK=0 WITH_DATA=0 DOWNLOAD=1
@@ -99,7 +99,7 @@ if ((DEFAULT_MODEL && DOWNLOAD && ! CHECK)) && [[ ! -e "$LLM_MODEL" ]]; then
   exec 9>"${LLM_MODEL}.lock"
   flock 9
   if [[ ! -e "$LLM_MODEL" ]]; then
-    log 'Downloading Qwen3.5-9B Q4_K_M (5.7 GB); interrupted transfers can resume'
+    log 'Downloading Qwen3.5-4B Q4_K_M (2.74 GB); interrupted transfers can resume'
     # Start a fresh curl invocation per retry so -C - uses the latest file size.
     # curl's internal retries can discard bytes received by the failed attempt.
     for attempt in {1..6}; do

@@ -396,6 +396,15 @@ async def collect_lesson_report_data(
     if lesson.group_id and group_name is None:
         warnings.append(f"Группа '{lesson.group_id}' не найдена в базе данных.")
 
+    # Keep these pairs in the private job snapshot. The public response schema
+    # intentionally omits them; authorized reports consume them after compaction.
+    from backend.core.report_evidence import collect_semantic_evidence
+    semantic = {"version": 1, "comparisons": [], "limitations": []}
+    for session in completed_sessions:
+        evidence = collect_semantic_evidence(session)
+        semantic["comparisons"].extend(evidence["comparisons"])
+        semantic["limitations"].extend(evidence["limitations"])
+
     return {
         "lesson_id": lesson.assignment_id,
         "group_id": lesson.group_id,
@@ -405,6 +414,7 @@ async def collect_lesson_report_data(
         "students": students,
         "sessions": sessions_list,
         "warnings": warnings,
+        "semantic": semantic,
     }
 
 

@@ -38,13 +38,67 @@ import {
 } from "lucide-react"
 import {
   fetchUsers,
-  createUser,
+  getAuthHeaders,
   updateUser,
   deleteUser,
   resetUserPassword,
   AdminUser,
   CreateUserData,
 } from "@/lib/admin-api"
+
+const fieldNames: Record<string, string> = {
+  username: "Логин",
+  password: "Пароль",
+  role: "Роль",
+  full_name: "ФИО",
+  student_id: "Номер студенческого билета",
+}
+
+function errorMessage(detail: unknown): string | undefined {
+  if (typeof detail === "string") {
+    const minimum = detail.match(/^Password must be at least (\d+) characters$/)
+    return minimum ? `Пароль: не менее ${minimum[1]} символов` : detail.trim() || undefined
+  }
+  if (Array.isArray(detail)) {
+    const messages = detail.map(errorMessage).filter((item): item is string => Boolean(item))
+    return messages.length ? [...new Set(messages)].join("; ") : undefined
+  }
+  if (!detail || typeof detail !== "object") return undefined
+  const item = detail as Record<string, unknown>
+  const field = Array.isArray(item.loc) ? item.loc.at(-1) : undefined
+  const label = typeof field === "string" ? fieldNames[field] : undefined
+  const context = item.ctx && typeof item.ctx === "object"
+    ? item.ctx as Record<string, unknown> : {}
+  if (item.type === "string_too_short" && typeof context.min_length === "number") {
+    return `${label || "Поле"}: не менее ${context.min_length} символов`
+  }
+  if (item.type === "string_too_long" && typeof context.max_length === "number") {
+    return `${label || "Поле"}: не более ${context.max_length} символов`
+  }
+  if (item.type === "missing") return `${label || "Поле"}: заполните обязательное поле`
+  if (field === "password" && typeof item.msg === "string" && item.msg.includes("72 UTF-8 bytes")) {
+    return "Пароль слишком длинный: максимум 72 байта UTF-8"
+  }
+  const message = errorMessage(item.msg) || errorMessage(item.message) || errorMessage(item.detail)
+  return message && label ? `${label}: ${message}` : message
+}
+
+async function responseError(res: Response, fallback: string): Promise<Error> {
+  const body: unknown = await res.json().catch(() => undefined)
+  return new Error(errorMessage(body) || `${fallback}: ${res.status}`)
+}
+
+async function createUser(data: CreateUserData): Promise<AdminUser> {
+  const res = await fetch("/api/admin/users", {
+    method: "POST",
+    headers: getAuthHeaders(),
+    body: JSON.stringify(data),
+  })
+  if (!res.ok) {
+    throw await responseError(res, "Ошибка создания пользователя")
+  }
+  return res.json()
+}
 
 export default function AdminUsersPage() {
   const [users, setUsers] = useState<AdminUser[]>([])
@@ -533,10 +587,16 @@ export default function AdminUsersPage() {
                 <Input
                   required
                   type="password"
+                  minLength={8}
+                  autoComplete="new-password"
+                  aria-describedby="new-user-password-help"
                   placeholder="Введите пароль..."
                   value={newUser.password}
                   onChange={(e) => setNewUser({ ...newUser, password: e.target.value })}
                 />
+                <p id="new-user-password-help" className="text-xs text-muted-foreground mt-1">
+                  Не менее 8 символов. Настройки безопасности могут требовать более длинный пароль.
+                </p>
               </div>
 
               <div>

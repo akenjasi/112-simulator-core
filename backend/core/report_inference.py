@@ -151,6 +151,11 @@ PRACTICE_HINTS = {
 
 async def generate_report(snapshot, kind, *, client=None, settings=None, personal=False):
     settings = settings or get_llm_settings()
+    if snapshot.get("semantic", {}).get("version") == 1:
+        if not snapshot.get("summary", {}).get("sessions"):
+            raise DDSReportGenerationError("Недостаточно данных для отчета.")
+        from backend.core.report_semantic import generate_semantic_report
+        return await generate_semantic_report(snapshot, kind, settings, client=client)
     data = {k: v for k, v in snapshot.items() if k != "source_revisions"}
     structured = personal or kind == "lesson" and os.getenv("DDS_REPORT_MODE", "queued").strip().lower() == "demo"
     targets = personal_targets(data) if structured else None
@@ -181,7 +186,7 @@ async def generate_report(snapshot, kind, *, client=None, settings=None, persona
         "Обращайся к преподавателю; предложи дальнейшие упражнения для участников занятия.")
     structured_system = PERSONAL_SYSTEM if personal else PERSONAL_SYSTEM.replace("Дай курсанту", "Дай преподавателю").replace("обращайся к курсанту", "обращайся к преподавателю")
     payload = {"model": settings.model, "stream": True, "temperature": .2,
-        "return_progress": True, "sse_ping_interval": 1,
+        "return_progress": True, "sse_ping_interval": 1, "cache_prompt": True,
         "max_tokens": min(1200, settings.max_tokens), "chat_template_kwargs": {"enable_thinking": False},
         "messages": [{"role": "system", "content": structured_system + personal_context if structured else SYSTEM + audience}, {"role": "user", "content": text}]}
     if structured:
@@ -227,7 +232,7 @@ async def generate_report(snapshot, kind, *, client=None, settings=None, persona
             raise DDSReportGenerationError("Сервер вернул пустой текст отчета.")
         if structured:
             result = personal_recommendations(result, targets)
-        return {"analysis_text": report_facts(data, kind) + "\n\nРекомендации ИИ\n" + result, "model_used": settings.model}
+        return {"analysis_text": report_facts(data, kind) + "\n\nСтарый снимок содержит только статистику; содержание ответов не проверено.\n\nРекомендации ИИ\n" + result, "model_used": settings.model}
 
     if client is not None:
         return await asyncio.wait_for(consume(client), settings.timeout_seconds)

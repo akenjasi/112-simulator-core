@@ -3,8 +3,8 @@
 services:
   backend:
     environment:
-      DDS_LLM_BASE_URL: http://llm:8080/v1
-      DDS_LLM_MODEL: dds-qwen
+      DDS_LLM_BASE_URL: ${DDS_LLM_CONTAINER_BASE_URL:-http://llm:8080/v1}
+      DDS_LLM_MODEL: ${DDS_LLM_MODEL:-dds-qwen}
   llm:
     networks:
       - simulator_net

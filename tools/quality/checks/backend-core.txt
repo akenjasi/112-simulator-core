@@ -70,6 +70,10 @@ backend/tests/test_student_teacher_assessment.py
 
 backend/tests/test_dds_phone_v2.py
 backend/tests/test_report_scheduler.py
+backend/tests/test_report_repair.py
 
 # Teacher demo review regressions
 backend/tests/test_teacher_demo_review.py
+
+# Grounded local CPU report review
+backend/tests/test_report_semantic.py

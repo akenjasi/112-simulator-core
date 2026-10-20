@@ -232,7 +232,6 @@ export default function AnalyticsPage({ initialTab = "split" }: AnalyticsPagePro
   const [groupAiReports, setGroupAiReports] = useState<any[]>([])
   const [selectedAiGroup, setSelectedAiGroup] = useState<string>("")
   const [isLoadingAiReport, setIsLoadingAiReport] = useState<boolean>(false)
-  const [isTriggeringGroupAi, setIsTriggeringGroupAi] = useState<boolean>(false)
   const [groupAiNotice, setGroupAiNotice] = useState<string | null>(null)
 
   // Lesson history state
@@ -380,30 +379,6 @@ export default function AnalyticsPage({ initialTab = "split" }: AnalyticsPagePro
       setIsLoadingAiReport(false)
     }
   }, [])
-
-  const handleTriggerGroupAi = async () => {
-    if (!selectedAiGroup || selectedAiGroup === "ALL") return
-    setIsTriggeringGroupAi(true)
-    setGroupAiNotice(null)
-    try {
-      const res = await fetch(`/api/ai-analytics/trigger?group_id=${selectedAiGroup}&background=false`, {
-        method: "POST",
-      })
-      if (res.ok) {
-        const result = await res.json()
-        setGroupAiNotice(result.status === "unchanged"
-          ? "Завершённых занятий ДДС для нового отчёта пока нет."
-          : "Запрос принят. Отчёты по занятиям формируются вне учебной работы; открывайте их в результатах соответствующих занятий.")
-        await fetchGroupAiReports(selectedAiGroup)
-      } else {
-        setGroupAiNotice("Не удалось запросить отчёты. Повторите попытку.")
-      }
-    } catch (err) {
-      console.warn("Failed to trigger group AI analysis:", err)
-    } finally {
-      setIsTriggeringGroupAi(false)
-    }
-  }
 
   const loadRecordDetail = useCallback(async (recordId: string, cadetName?: string) => {
     const requestId = ++recordRequestRef.current
@@ -2292,7 +2267,7 @@ export default function AnalyticsPage({ initialTab = "split" }: AnalyticsPagePro
                   <CardTitle className="text-lg font-bold flex items-center gap-2">
                     Отчет ИИ по группе
                     <Badge variant="outline" className="border-amber-500/40 text-amber-600 dark:text-amber-400 text-xs">
-                      Qwen 3.5 9B
+                      ДДС
                     </Badge>
                   </CardTitle>
                   <CardDescription className="text-xs mt-0.5">
@@ -2320,30 +2295,16 @@ export default function AnalyticsPage({ initialTab = "split" }: AnalyticsPagePro
                   ))}
                 </select>
 
-                <Button
-                  size="sm"
-                  onClick={handleTriggerGroupAi}
-                  disabled={isTriggeringGroupAi || !selectedAiGroup}
-                  className="gap-2 text-xs font-semibold bg-primary hover:bg-primary/90 cursor-pointer"
-                >
-                  {isTriggeringGroupAi ? (
-                    <>
-                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                      <span>Анализ группы...</span>
-                    </>
-                  ) : (
-                    <>
-                      <Bot className="h-3.5 w-3.5" />
-                      <span>Сформировать отчет ИИ</span>
-                    </>
-                  )}
-                </Button>
+
               </div>
             </div>
           </CardHeader>
 
           <CardContent className="p-5">
             {groupAiNotice && <p role="status" className="mb-4 text-sm text-muted-foreground">{groupAiNotice}</p>}
+            {selectedAiGroup && selectedAiGroup !== "ALL" ? <DDSLessonReport key={selectedAiGroup} lessonId={selectedAiGroup} scope="groups" /> : <p className="text-sm text-muted-foreground">Выберите группу для нового нейроотчёта.</p>}
+            <details className="mt-5 rounded-xl border p-4">
+              <summary className="cursor-pointer text-sm font-medium">Прежние отчёты по группе · история</summary>
             {isLoadingAiReport ? (
               <div className="text-center py-12">
                 <Loader2 className="h-6 w-6 animate-spin mx-auto text-primary mb-2" />
@@ -2393,6 +2354,7 @@ export default function AnalyticsPage({ initialTab = "split" }: AnalyticsPagePro
                 ))}
               </div>
             )}
+            </details>
           </CardContent>
         </Card>
       )}

@@ -90,15 +90,15 @@ function StudentReports({demo = false}: {demo?: boolean}) {
         const data = await res.json()
         if (!Array.isArray(data)) throw new Error()
         if (!controller.signal.aborted) {
-          setReports(data); setError(null)
-          if (data.some(item => item.status === "pending" || item.status === "running")) timer = setTimeout(load, 10000)
+          setReports(demo ? data.filter(item => item.status === "completed" || item.status === "failed") : data); setError(null)
+          if (!demo && data.some(item => item.status === "pending" || item.status === "running")) timer = setTimeout(load, 10000)
         }
       } catch { if (!controller.signal.aborted) setError("Не удалось загрузить отчёты.") }
       finally { if (!controller.signal.aborted) setLoading(false) }
     }
     void load()
     return () => {controller.abort(); if (timer) clearTimeout(timer)}
-  }, [revision])
+  }, [revision, demo])
   const requestReport = async () => {
     if (postLock.current) return
     postLock.current = true

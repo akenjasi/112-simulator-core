@@ -12,7 +12,7 @@ from backend.core.report_data import aware
 from backend.core.dds_report_jobs import dds_report_job_worker
 from backend.core.reports import enqueue_lesson, import_legacy, request_student_report, retry_report
 from backend.database import get_db
-from backend.models.domain_01 import User
+from backend.models.domain_01 import User, StudentGroup
 from backend.models.domain_03 import Assignment
 from backend.models.report_job import ReportJob
 
@@ -25,6 +25,7 @@ class DDSReportJobResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
     job_id: str
     lesson_id: Optional[str] = None
+    group_id: Optional[str] = None
     kind: str
     status: str
     attempt: int
@@ -43,6 +44,8 @@ class DDSReportJobResponse(BaseModel):
 
 def format_job_response(job):
     result = DDSReportJobResponse.model_validate(job)
+    if job.kind == "group":
+        result.group_id = (job.snapshot or {}).get("group_id")
     from backend.core.report_demo import demo_enabled
     result.execution_mode = "demo" if job.kind == "session_demo" or job.status == "generating" or demo_enabled() else "queued"
     for name in ("created_at", "updated_at", "period_start", "period_end", "snapshot_at", "next_run_at"):
@@ -97,6 +100,41 @@ async def verify_lesson_access(
         )
 
     return lesson
+
+
+async def verify_group_access(db, group_id, user):
+    if user.role not in ("TEACHER", "ADMIN"):
+        raise HTTPException(403, "Group reports are available to teachers only")
+    group = await db.get(StudentGroup, group_id)
+    if not group:
+        raise HTTPException(404, "Group not found")
+    if user.role != "ADMIN" and group.teacher_id != user.user_id:
+        raise HTTPException(403, "Access denied to group")
+    return group
+
+
+@router.get("/groups/{group_id}/report", response_model=DDSReportJobResponse)
+async def get_group_report(group_id: str, db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)):
+    group = await verify_group_access(db, group_id, current_user)
+    job = await db.scalar(select(ReportJob).where(ReportJob.kind == "group",
+        ReportJob.owner_id == group.teacher_id,
+        ReportJob.scope_key.startswith(f"group:{group_id}:", autoescape=True)).order_by(
+            ReportJob.created_at.desc(), ReportJob.job_id.desc()).limit(1))
+    if job is None:
+        raise HTTPException(404, "Group report has not been requested")
+    return format_job_response(job)
+
+
+@router.post("/groups/{group_id}/report", response_model=DDSReportJobResponse)
+async def create_group_report(group_id: str, response: Response,
+    req: Optional[DDSReportJobCreateRequest] = Body(default=None), db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)):
+    from backend.core.reports import request_group_report
+    group = await verify_group_access(db, group_id, current_user)
+    job = await request_group_report(db, group, retry=bool(req and req.retry))
+    response.status_code = 200 if job.status == "completed" else 202
+    return format_job_response(job)
 
 
 

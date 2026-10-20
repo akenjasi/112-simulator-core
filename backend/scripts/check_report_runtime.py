@@ -24,10 +24,10 @@ def rss(container):
     return int(next(line.split()[1] for line in status.splitlines() if line.startswith("VmRSS:"))) * 1024
 
 
-async def check(base_url, container):
+async def check(base_url, container, expect_sleep=False):
     os.environ["DDS_LLM_BASE_URL"] = base_url
     root = base_url.rstrip("/").removesuffix("/v1")
-    settings = DDSLLMSettings(base_url=base_url, timeout_seconds=900)
+    settings = DDSLLMSettings(base_url=base_url, model=os.getenv("DDS_LLM_MODEL", "dds-qwen"), timeout_seconds=900)
     sample = {"summary": {"sessions": 1, "participants": 1, "total_cards": 1, "completed_cards": 1,
                           "incomplete_cards": 0, "mistakes": 1, "sessions_with_score": 0},
               "criteria": {"accuracy:not_completed": 1, "completion:completed": 1},
@@ -56,20 +56,22 @@ async def check(base_url, container):
             except asyncio.CancelledError:
                 pass
             assert await confirm_runtime_idle(), "Server kept computing after stream cancellation"
-            deadline = time.monotonic() + 40
-            while time.monotonic() < deadline:
-                props = (await client.get(root + "/props")).json()
-                if props.get("is_sleeping") is True:
-                    break
-                await asyncio.sleep(1)
-            else:
-                raise RuntimeError("Model did not unload after idle timeout")
-            sleeping_rss = rss(container)
-            if loaded_rss is not None:
-                assert sleeping_rss < loaded_rss * .5, "RSS did not fall substantially after unload"
+            sleeping_rss = None
+            if expect_sleep:
+                deadline = time.monotonic() + 40
+                while time.monotonic() < deadline:
+                    props = (await client.get(root + "/props")).json()
+                    if props.get("is_sleeping") is True:
+                        break
+                    await asyncio.sleep(1)
+                else:
+                    raise RuntimeError("Model did not unload after idle timeout")
+                sleeping_rss = rss(container)
+                if loaded_rss is not None:
+                    assert sleeping_rss < loaded_rss * .5, "RSS did not fall substantially after unload"
             result = await generate_report(sample, "student", settings=settings)
             assert result["analysis_text"].strip()
-            print(json.dumps({"cancelled_slot": True, "sleeping": True, "loaded_rss_bytes": loaded_rss,
+            print(json.dumps({"cancelled_slot": True, "sleeping_checked": expect_sleep, "loaded_rss_bytes": loaded_rss,
                 "sleeping_rss_bytes": sleeping_rss, "regenerated_chars": len(result["analysis_text"])}, ensure_ascii=False))
         finally:
             if not task.done():
@@ -84,5 +86,6 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--base-url", required=True)
     parser.add_argument("--container")
+    parser.add_argument("--expect-sleep", action="store_true", help="Require idle unloading (runtime must enable sleep)")
     arguments = parser.parse_args()
-    asyncio.run(check(arguments.base_url, arguments.container))
+    asyncio.run(check(arguments.base_url, arguments.container, arguments.expect_sleep))

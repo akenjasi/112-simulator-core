@@ -21,6 +21,7 @@ import {LessonPersonalRecommendations} from "@/components/student/student-review
 export interface DDSLessonReportJob {
   job_id?: string
   lesson_id?: string
+  group_id?: string
   status: "pending" | "running" | "completed" | "failed" | string
   attempt?: number
   created_at?: string
@@ -42,26 +43,30 @@ const WAIT_LABELS: Record<string, string> = {
   retry_wait: "Ожидает повторной попытки",
 }
 const WAIT_DETAILS: Record<string, string> = {
+  learning_active: "Это занятие уже завершено. Генерацию пока блокируют другие активные занятия или самотренировки на сервере.",
   memory_low: "Недостаточно свободной оперативной памяти для модели и резерва сервера.",
   cpu_busy: "Сервер занят вычислениями. Отчёт продолжит ожидание в очереди.",
 }
 
 export interface DDSLessonReportProps {
   lessonId: string
+  scope?: "lessons" | "groups"
 }
 
 const KNOWN_STATUSES = new Set(["pending", "running", "completed", "failed"])
 
 function validateReportPayload(
   data: any,
-  requestedLessonId: string
+  requestedLessonId: string,
+  scope: "lessons" | "groups" = "lessons"
 ): { valid: true; job: DDSLessonReportJob } | { valid: false; error: string } {
   if (!data || typeof data !== "object") {
     return { valid: false, error: "Получен некорректный формат ответа от сервера." }
   }
 
   // Validate lesson_id: strictly required and must match requestedLessonId
-  if (!data.lesson_id || typeof data.lesson_id !== "string" || data.lesson_id !== requestedLessonId) {
+  const id = scope === "groups" ? data.group_id : data.lesson_id
+  if (typeof id !== "string" || id !== requestedLessonId) {
     return { valid: false, error: "Получены некорректные данные отчёта или данные для другого занятия." }
   }
 
@@ -87,7 +92,7 @@ function validateReportPayload(
   }
 }
 
-export function DDSLessonReport({ lessonId }: DDSLessonReportProps) {
+export function DDSLessonReport({ lessonId, scope = "lessons" }: DDSLessonReportProps) {
   const [isLoading, setIsLoading] = useState(true)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [report, setReport] = useState<DDSLessonReportJob | null>(null)
@@ -138,7 +143,7 @@ export function DDSLessonReport({ lessonId }: DDSLessonReportProps) {
     activeAbortCtrlRef.current = controller
 
     try {
-      const res = await fetch(`/api/ai-analytics/lessons/${encodeURIComponent(targetLessonId)}/report`, {
+      const res = await fetch(`/api/ai-analytics/${scope}/${encodeURIComponent(targetLessonId)}/report`, {
         signal: controller.signal,
         headers: {
           Authorization: `Bearer ${token}`,
@@ -151,7 +156,7 @@ export function DDSLessonReport({ lessonId }: DDSLessonReportProps) {
         const rawData = await res.json()
         if (scopeGenRef.current !== gen || controller.signal.aborted) return
 
-        const validated = validateReportPayload(rawData, targetLessonId)
+        const validated = validateReportPayload(rawData, targetLessonId, scope)
         if (!validated.valid) {
           // Unknown, malformed or foreign payload -> safe error, NEVER not_started
           setJobStatus("error")
@@ -200,7 +205,7 @@ export function DDSLessonReport({ lessonId }: DDSLessonReportProps) {
     activeAbortCtrlRef.current = controller
 
     try {
-      const res = await fetch(`/api/ai-analytics/lessons/${encodeURIComponent(targetLessonId)}/report`, {
+      const res = await fetch(`/api/ai-analytics/${scope}/${encodeURIComponent(targetLessonId)}/report`, {
         signal: controller.signal,
         headers: {
           Authorization: `Bearer ${token}`,
@@ -221,7 +226,7 @@ export function DDSLessonReport({ lessonId }: DDSLessonReportProps) {
         const rawData = await res.json()
         if (scopeGenRef.current !== gen || controller.signal.aborted) return
 
-        const validated = validateReportPayload(rawData, targetLessonId)
+        const validated = validateReportPayload(rawData, targetLessonId, scope)
         if (!validated.valid) {
           setJobStatus("error")
           setErrorMessage(validated.error)
@@ -312,7 +317,7 @@ export function DDSLessonReport({ lessonId }: DDSLessonReportProps) {
       }
       isPostingRef.current = false
     }
-  }, [lessonId])
+  }, [lessonId, scope])
 
   // Handle manual refresh
   const handleRefresh = () => {
@@ -373,7 +378,7 @@ export function DDSLessonReport({ lessonId }: DDSLessonReportProps) {
     setPollingError(null)
 
     try {
-      const res = await fetch(`/api/ai-analytics/lessons/${encodeURIComponent(targetLessonId)}/report`, {
+      const res = await fetch(`/api/ai-analytics/${scope}/${encodeURIComponent(targetLessonId)}/report`, {
         method: "POST",
         signal: controller.signal,
         headers: {
@@ -389,7 +394,7 @@ export function DDSLessonReport({ lessonId }: DDSLessonReportProps) {
         const rawData = await res.json()
         if (scopeGenRef.current !== gen || controller.signal.aborted) return
 
-        const validated = validateReportPayload(rawData, targetLessonId)
+        const validated = validateReportPayload(rawData, targetLessonId, scope)
         if (!validated.valid) {
           setJobStatus("error")
           setErrorMessage(validated.error)
@@ -457,7 +462,7 @@ export function DDSLessonReport({ lessonId }: DDSLessonReportProps) {
       className="bg-card rounded-2xl border p-5 shadow-xs space-y-4"
       data-testid="dds-lesson-report"
     >
-      {report?.execution_mode === "demo" && <LessonPersonalRecommendations key={`${lessonId}:${report.attempt || 0}`} lessonId={lessonId}/>}
+      {scope === "lessons" && report?.execution_mode === "demo" && <LessonPersonalRecommendations key={`${lessonId}:${report.attempt || 0}`} lessonId={lessonId}/>}
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b pb-3">
         <div className="flex items-center gap-2.5">
@@ -467,7 +472,7 @@ export function DDSLessonReport({ lessonId }: DDSLessonReportProps) {
           <div>
             <div className="flex items-center gap-2">
               <h4 className="font-bold text-base text-foreground">
-                Нейроотчёт занятия (Диспетчер ДДС)
+                {scope === "groups" ? "Нейроотчёт группы (Диспетчер ДДС)" : "Нейроотчёт занятия (Диспетчер ДДС)"}
               </h4>
               {jobStatus === "completed" && (
                 <Badge variant="default" className="bg-emerald-600 hover:bg-emerald-700 text-xs font-semibold">
@@ -494,6 +499,7 @@ export function DDSLessonReport({ lessonId }: DDSLessonReportProps) {
         {/* Action button in header if not loading and not unauthorized */}
         {jobStatus !== "loading" && jobStatus !== "unauthorized" && (
           <div className="flex items-center gap-2 self-start sm:self-auto">
+            {scope === "groups" && jobStatus === "completed" && <Button size="sm" disabled={isSubmitting} onClick={() => void handleGenerate(false)}>Сформировать по актуальным результатам</Button>}
             <Button
               variant="outline"
               size="sm"
@@ -555,10 +561,10 @@ export function DDSLessonReport({ lessonId }: DDSLessonReportProps) {
         >
           <div className="space-y-1">
             <p className="text-sm font-semibold text-foreground">
-              Нейроотчёт по этому занятию ещё не сформирован
+              {scope === "groups" ? "Нейроотчёт по этой группе ещё не сформирован" : "Нейроотчёт по этому занятию ещё не сформирован"}
             </p>
             <p className="text-xs text-foreground/75 max-w-xl">
-              Отчёт формируется в фоне после завершения занятия. Можно запросить его кнопкой; генерация дождётся окончания учебной работы и свободных ресурсов.
+              {scope === "groups" ? "Сформируйте отчёт по актуальным завершённым занятиям группы. Старые отчёты сохраняются отдельно в истории." : "Отчёт формируется после завершения занятия. Можно запросить его кнопкой; состояние генерации будет показано здесь."}
             </p>
           </div>
 

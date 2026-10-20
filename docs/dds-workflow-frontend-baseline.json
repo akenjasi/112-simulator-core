@@ -234,9 +234,9 @@
       "reason": "Audited supported runtime and dependency security corrections"
     },
     "components/student/student-review.tsx": {
-      "sha256": "3abacb7bf3a57b3fbe1dbfc7b11ba2227cbb78a8098e6b8d86847e4744f34a8c",
-      "source_revision": "510c092 + user-requested immediate GPU demo recommendations, 2026-10-20",
-      "reason": "Explicit user request: immediate personal LLM recommendations after self-training and teacher-led lessons, progress, persisted results and retry; preserve ordinary queued reports. Exact authorized component changes; original baseline remains unchanged."
+      "sha256": "0b3f6b062e9a723aede43dc2148c638cea9d37fffc37a5d837088fd984906f69",
+      "source_revision": "user-request-report-repair-2026-10-20",
+      "reason": "Пользователь запросил исправить недоступные ИИ-отчёты занятия, группы и автоматический разбор DDS; сохранены проверки изоляции и исходная карта хешей."
     },
     "lib/student-review.ts": {
       "sha256": "d0aa3e444d90fb1234e97c9d3807fd9bf6579ed93c43867c6e7bf8b70870da97",
@@ -244,9 +244,9 @@
       "reason": "Explicit user request 2026-10-19: implement and verify autonomous DDS assessment and recommendations, keeping scripted tickets. Add immediate rule-based attempt feedback and saved incoming notes; preserve teacher grading and original baseline."
     },
     "components/teacher/dds-lesson-report.tsx": {
-      "sha256": "5031b0743e657b8e98071d18e96eb0755c738791902b53ddbee547d68788c015",
-      "source_revision": "a1e7e74 + explicit teacher demo fixes request, 2026-10-20",
-      "reason": "User explicitly requested the four manually reproduced demo fixes without simplifying the interface: truthful DDS protocol, submission-aware grading, primary assessment labels and explicit immediate launch for older queued reports. Original hash map and negative mutation probes remain unchanged."
+      "sha256": "33c411e921bbc8af46b48963bff1e88b4c3fc294c100c54899bef54468100857",
+      "source_revision": "user-request-report-repair-2026-10-20",
+      "reason": "Пользователь запросил исправить недоступные ИИ-отчёты занятия, группы и автоматический разбор DDS; сохранены проверки изоляции и исходная карта хешей."
     },
     "components/dispatcher/caller-panel.tsx": {
       "sha256": "eac133283f3ab39dcb8ae4981b2968db7869a09415eee883162b3d6713c65470",
@@ -289,9 +289,9 @@
       "reason": "User explicitly requested an immediate visible report after teacher-led lessons. Mount the existing DDS report component on the completed demo monitoring screen only; preserve all other monitoring logic and the original baseline."
     },
     "components/teacher/split-screen.tsx": {
-      "sha256": "ec8737a5bad38faee688e8bb95b44f7cc4b0bd2aa3eafff7c60a70f41067baff",
-      "source_revision": "a1e7e74 + explicit teacher demo fixes request, 2026-10-20",
-      "reason": "User explicitly requested the four manually reproduced demo fixes without simplifying the interface: truthful DDS protocol, submission-aware grading, primary assessment labels and explicit immediate launch for older queued reports. Original hash map and negative mutation probes remain unchanged."
+      "sha256": "6ded4f0570835489e5e4165b865b397dffd8df147447a2789ea9c49935ca5744",
+      "source_revision": "user-request-report-repair-2026-10-20",
+      "reason": "Пользователь запросил исправить недоступные ИИ-отчёты занятия, группы и автоматический разбор DDS; сохранены проверки изоляции и исходная карта хешей."
     }
   },
   "update_policy": "2026-10-19: explicitly reconciled under the user request to repair obsolete tests. Original sha256 values are unchanged. Exact supplemental hashes preserve the integrated changes; these paths are not open-ended exceptions. 2026-10-19: the user explicitly requested the DDS audio-only cycle and teacher review; only the three existing supplemental entries were updated, preserving the original map and guarded path set. 2026-10-19: background report implementation explicitly authorizes the teacher report screen; one exact supplemental hash added, original hash map preserved."

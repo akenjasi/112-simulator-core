@@ -1,4 +1,4 @@
-"""Bounded DDS summaries; no applicant data or free trainee notes enter the LLM."""
+"""DDS statistics and frozen source/answer pairs for local semantic review."""
 from collections import Counter
 from datetime import datetime, time, timedelta, timezone
 import hashlib
@@ -8,6 +8,7 @@ from zoneinfo import ZoneInfo
 from sqlalchemy import func, select
 
 from backend.core.dds_report_data import _exercise_protocols
+from backend.core.report_evidence import collect_semantic_evidence
 from backend.models.domain_03 import Assignment, ExamSession
 from backend.models.domain_04 import EvaluationResult, TicketResult
 
@@ -29,7 +30,7 @@ def digest(value):
     return hashlib.sha256(json.dumps(value, ensure_ascii=False, sort_keys=True, default=str).encode()).hexdigest()
 
 
-async def collect_report_snapshot(db, *, lesson_id=None, owner_id=None, session_id=None, period_start=None, period_end=None):
+async def collect_report_snapshot(db, *, lesson_id=None, owner_id=None, session_id=None, group_id=None, teacher_id=None, period_start=None, period_end=None):
     query = select(ExamSession).join(Assignment).where(
         Assignment.target_role == "DISPATCHER_DDS",
         func.upper(ExamSession.status) == "COMPLETED")
@@ -39,6 +40,9 @@ async def collect_report_snapshot(db, *, lesson_id=None, owner_id=None, session_
             query = query.where(ExamSession.cadet_id == owner_id)
     elif lesson_id:
         query = query.where(Assignment.assignment_id == lesson_id)
+    elif group_id:
+        query = query.where(Assignment.group_id == group_id, Assignment.status == "COMPLETED",
+                            Assignment.assigned_by == teacher_id)
     else:
         query = query.where(ExamSession.cadet_id == owner_id,
                             ExamSession.end_time >= period_start, ExamSession.end_time < period_end)
@@ -48,13 +52,26 @@ async def collect_report_snapshot(db, *, lesson_id=None, owner_id=None, session_
     evaluations = list((await db.scalars(select(EvaluationResult).where(EvaluationResult.session_id.in_(ids)))).all()) if ids else []
     checks, reasons, participants, revisions = Counter(), Counter(), {}, {}
     examples, warnings = [], []
+    semantic = {"version": 1, "comparisons": [], "limitations": []}
     total_cards = completed_cards = errors_count = assessed = protocol_count = 0
     for session in sessions:
         data = (session.dynamic_state or {}).get("dds", {})
+        session_evidence = collect_semantic_evidence(session)
+        semantic["comparisons"].extend(session_evidence["comparisons"])
+        semantic["limitations"].extend(session_evidence["limitations"])
+        # Legacy attempts may contain several saved ticket results without a
+        # modern DDS queue. Count those records, rather than inventing one card.
+        latest_results = {}
+        for result in sorted((r for r in results if r.session_id == session.session_id),
+                             key=lambda r: (bool(r.is_appealed), str(r.updated_at or r.created_at), r.result_id)):
+            latest_results[result.ticket_id] = result
         protocols = _exercise_protocols(data)
         protocol_count += len(protocols)
-        cards = len(data.get("queue") or []) or 1
+        cards = len(data.get("queue") or []) or len(latest_results) or 1
         done = len(data.get("completed_cards") or []) or int(bool(data.get("submitted_at")))
+        if not data.get("queue") and latest_results and not data.get("completed_cards") and not data.get("submitted_at"):
+            done = sum((r.status or "").upper() in {"COMPLETED", "EVALUATED", "FINISHED", "PASSED", "FAILED"}
+                       for r in latest_results.values())
         total_cards += cards
         completed_cards += done
         learner = participants.setdefault(session.cadet_id, {"cadet_id": session.cadet_id,
@@ -94,10 +111,6 @@ async def collect_report_snapshot(db, *, lesson_id=None, owner_id=None, session_
                     examples.append(evidence)
             safe_protocols.append({"checks": safe_checks, "events": safe_events})
         # Select the last saved result for each ticket, rather than counting revisions twice.
-        latest_results = {}
-        for result in sorted((r for r in results if r.session_id == session.session_id),
-                             key=lambda r: (bool(r.is_appealed), str(r.updated_at or r.created_at), r.result_id)):
-            latest_results[result.ticket_id] = result
         evs = [e for e in evaluations if e.session_id == session.session_id]
         saved_results = [{"id": r.result_id, "updated_at": str(r.updated_at), "status": r.status,
                           "score": r.score_total, "errors_count": r.errors_count}
@@ -115,7 +128,8 @@ async def collect_report_snapshot(db, *, lesson_id=None, owner_id=None, session_
             errors_count += legacy_errors
             learner["mistakes"] += legacy_errors
         revisions[session.session_id] = digest({"end": str(session.end_time), "cards": cards, "done": done,
-            "protocols": safe_protocols, "results": saved_results, "evaluations": saved_evals})
+            "protocols": safe_protocols, "results": saved_results, "evaluations": saved_evals,
+            "semantic": session_evidence})
     if assessed < len(sessions):
         warnings.append(f"Сессий без числовой оценки: {len(sessions) - assessed}. Это не означает успешное выполнение.")
     if not protocol_count:
@@ -125,7 +139,7 @@ async def collect_report_snapshot(db, *, lesson_id=None, owner_id=None, session_
                "sessions_with_score": assessed, "protocols": protocol_count, "mistakes": errors_count}
     return {"summary": summary, "criteria": dict(sorted(checks.items())), "mistakes": dict(sorted(reasons.items())),
             "participants": sorted(participants.values(), key=lambda p: p["cadet_id"] or ""),
-            "examples": examples, "warnings": warnings, "source_revisions": revisions}
+            "examples": examples, "warnings": warnings, "source_revisions": revisions, "semantic": semantic}
 
 
 def has_new_results(snapshot, previous):

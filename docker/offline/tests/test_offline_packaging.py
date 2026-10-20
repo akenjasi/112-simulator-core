@@ -80,9 +80,9 @@ class OfflinePackagingTests(unittest.TestCase):
         # Replace only pinned metadata for small, deterministic transfer fixtures.
         script = (ROOT / "docker/offline/package.sh").read_text()
         self.download_bytes = b"GGUFsynthetic pinned Qwen"
-        script = script.replace('QWEN_SHA256=03b74727a860a56338e042c4420bb3f04b2fec5734175f4cb9fa853daf52b7e8',
+        script = script.replace('QWEN_SHA256=00fe7986ff5f6b463e62455821146049db6f9313603938a70800d1fb69ef11a4',
                                 'QWEN_SHA256=' + hashlib.sha256(self.download_bytes).hexdigest())
-        script = script.replace('QWEN_SIZE=5680522464', 'QWEN_SIZE=' + str(len(self.download_bytes)))
+        script = script.replace('QWEN_SIZE=2740937888', 'QWEN_SIZE=' + str(len(self.download_bytes)))
         shutil.copy(ROOT / ".gitignore", self.repo)
         shutil.copy(ROOT / ".dockerignore", self.repo)
         shutil.copytree(ROOT / "docker/offline", self.repo / "docker/offline")
@@ -150,10 +150,10 @@ class OfflinePackagingTests(unittest.TestCase):
     def test_default_download_is_verified_cached_ignored_and_included(self):
         result = self.run_pack(default_model=True)
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
-        cached = self.repo / "models/Qwen3.5-9B-Q4_K_M.gguf"
+        cached = self.repo / "models/llm/Qwen3.5-4B-Q4_K_M.gguf"
         self.assertEqual(cached.read_bytes(), self.download_bytes)
         self.assertEqual((self.unpack() / "models/report.gguf").read_bytes(), self.download_bytes)
-        self.assertIn('/resolve/3885219b6810b007914f3a7950a8d1b469d598a5/', self.curl_trace.read_text())
+        self.assertIn('/resolve/e87f176479d0855a907a41277aca2f8ee7a09523/', self.curl_trace.read_text())
         checked = self.run_pack("--check", "--output", str(self.base / "unused.tar.gz"), default_model=True)
         self.assertEqual(checked.returncode, 0, checked.stderr)
         self.assertEqual(len(self.curl_trace.read_text().splitlines()), 1)
@@ -186,7 +186,8 @@ class OfflinePackagingTests(unittest.TestCase):
         self.assertEqual((self.unpack() / "models/report.gguf").read_bytes(), self.download_bytes)
 
     def test_completed_partial_is_verified_without_requesting_invalid_range(self):
-        part = self.repo / "models/Qwen3.5-9B-Q4_K_M.gguf.part"
+        part = self.repo / "models/llm/Qwen3.5-4B-Q4_K_M.gguf.part"
+        part.parent.mkdir(parents=True, exist_ok=True)
         part.write_bytes(self.download_bytes)
         result = self.run_pack(default_model=True)
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
@@ -201,7 +202,8 @@ class OfflinePackagingTests(unittest.TestCase):
             self.assertFalse(self.output.exists())
 
     def test_damaged_cached_default_is_rejected_without_overwriting(self):
-        cached = self.repo / "models/Qwen3.5-9B-Q4_K_M.gguf"
+        cached = self.repo / "models/llm/Qwen3.5-4B-Q4_K_M.gguf"
+        cached.parent.mkdir(parents=True, exist_ok=True)
         cached.write_bytes(b"GGUFdamaged cache")
         result = self.run_pack(default_model=True)
         self.assertNotEqual(result.returncode, 0)

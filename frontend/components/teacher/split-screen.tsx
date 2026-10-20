@@ -3,6 +3,7 @@
 import { apiFetch as fetch } from "@/lib/api-fetch"
 import { DDSProtocol } from "@/components/dispatcher/dds-protocol"
 import type { DDSCriterion, DDSEvent } from "@/lib/dds-cycle"
+import {PersonalRecommendations} from "@/components/student/student-review"
 
 import React, { useState } from "react"
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from "@/components/ui/card"
@@ -115,6 +116,8 @@ export interface DDSCriteriaComparisonData {
 
 export interface RecordDetail {
   record_id: string
+  session_id?: string | null
+  report_mode?: string | null
   cadet_id?: string
   cadet_name?: string
   ticket_id?: string
@@ -807,7 +810,7 @@ export function SplitScreen({ record, onAppeal, onClose, className = "" }: Split
               <div className="flex items-center gap-2 border-b pb-3">
                 <Bot className="h-5 w-5 text-purple-600 dark:text-purple-400" />
                 <h4 className="font-bold text-base text-foreground">
-                  {record.dds_criteria?.length ? "4. Автоматическая проверка ДДС" : "4. Автоматическая проверка ИИ"}
+                  {record.dds_criteria?.length || record.report_mode ? "4. Автоматическая проверка ДДС" : "4. Автоматическая проверка ИИ"}
                 </h4>
               </div>
 
@@ -841,9 +844,11 @@ export function SplitScreen({ record, onAppeal, onClose, className = "" }: Split
               ) : (
                 <div className="p-4 rounded-md bg-muted/30 border border-border/50 text-muted-foreground text-sm flex items-center gap-2">
                   <Bot className="h-4 w-4 shrink-0 text-muted-foreground" />
-                  <span>{record.dds_criteria?.length ? "Числовая оценка ИИ не применяется к пяти критериям ДДС" : "Оценка ИИ отсутствует"}</span>
+                  <span>{record.dds_criteria?.length ? "Числовая оценка ИИ не применяется к пяти критериям ДДС" : record.report_mode ? "Числовая нейрооценка для ДДС не рассчитывается. Рекомендации по попытке приведены ниже." : "Оценка ИИ отсутствует"}</span>
                 </div>
               )}
+
+              {record.report_mode === "demo" && record.session_id && <PersonalRecommendations sessionId={record.session_id}/>}
 
               {normalizedErrors.length > 0 && (
                 <div className="pt-2 border-t space-y-2">

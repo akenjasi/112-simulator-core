@@ -26,6 +26,14 @@ it('shows the real DDS criteria instead of treating protocol metadata as two err
   expect(document.body.textContent).not.toContain('[dds_mistakes]')
 })
 
+it('shows saved neural recommendations in the DDS answer review without inventing a numeric AI grade', async () => {
+  vi.stubGlobal('fetch', vi.fn(async () => reply({session_id: 'attempt', mode: 'demo', status: 'completed', report_text: 'Сверяйте номер бригады с докладом.'})))
+  render(<SplitScreen record={base({session_id: 'attempt', report_mode: 'demo'})} />)
+  expect(await screen.findByText('Сверяйте номер бригады с докладом.')).toBeInTheDocument()
+  expect(screen.queryByText('Оценка ИИ отсутствует')).not.toBeInTheDocument()
+  expect(screen.queryByText('Оценка ИИ:')).not.toBeInTheDocument()
+})
+
 it('does not offer a writable grading action or a failed mark for an unsubmitted card', () => {
   render(<SplitScreen record={base({status: 'pending', can_grade: false,
     grading_block_reason: 'Карточка не завершена и не сдана.'})} />)

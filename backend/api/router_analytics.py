@@ -12,6 +12,7 @@ from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm.attributes import flag_modified
 
+from backend.core.report_demo import demo_enabled
 from backend.core.dds_cycle import build_dds_cadet_stats
 from backend.core.gradebook_records import attempt_is_submitted, build_attempt_records, dds_state_for_card, historical_record_snapshot, latest_evaluation, resolve_attempt_score_and_status
 from backend.core.analytics_engine import build_error_heatmap, calculate_trends
@@ -939,7 +940,8 @@ async def get_record_detail(
         has_cadet_actions=bool(cadet_actions_list),
     )
 
-    is_dds = bool(card and card.card_origin == "DDS") or bool(exam_session and isinstance(exam_session.dynamic_state, dict) and "dds" in exam_session.dynamic_state)
+    lesson = await db.get(Assignment, exam_session.assignment_id) if exam_session and exam_session.assignment_id else None
+    is_dds = bool(lesson and lesson.target_role == "DISPATCHER_DDS") or bool(card and card.card_origin == "DDS") or bool(exam_session and isinstance(exam_session.dynamic_state, dict) and "dds" in exam_session.dynamic_state)
     student_answer: Dict[str, Any] = {}
     if is_dds:
         if cadet_actions_list:
@@ -1022,6 +1024,7 @@ async def get_record_detail(
         revision_reason=revision_reason, is_grade_revision=bool(is_grade_revision),
         dds_criteria=dds_criteria, dds_events=dds_events,
         session_id=session_id,
+        report_mode=("demo" if demo_enabled() else "queued") if is_dds else None,
         cadet_id=cadet_id,
         cadet_name=cadet_name,
         ticket_id=scenario_id,

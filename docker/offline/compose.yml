@@ -23,6 +23,7 @@ services:
     pull_policy: never
     restart: unless-stopped
     volumes:
+      - llm_prompt_cache:/cache
       - type: bind
         source: ./models/report.gguf
         target: /models/report.gguf
@@ -31,8 +32,10 @@ services:
     command: [--model, /models/report.gguf, --alias, dds-qwen, --offline,
               --host, 0.0.0.0, --port, "8080", --n-gpu-layers, "0",
               --threads, "${LLM_THREADS:-4}", --ctx-size, "${LLM_CONTEXT:-8192}",
-              --batch-size, "32", --ubatch-size, "32", --slots,
-              --parallel, "1", --sleep-idle-seconds, "10", --n-predict, "1200"]
+              --batch-size, "256", --ubatch-size, "128", --slots,
+              --parallel, "1", --sleep-idle-seconds, "${DDS_LLM_SLEEP_IDLE_SECONDS:--1}",
+              --cache-prompt, --slot-save-path, /cache/, --cache-ram, "${DDS_LLM_CACHE_RAM_MB:-512}",
+              --ctx-checkpoints, "16", --checkpoint-min-step, "256", --no-context-shift, --jinja, --n-predict, "1200"]
     networks: [local]
 
   backend:
@@ -48,12 +51,13 @@ services:
       INITIAL_ADMIN_FULL_NAME: Администратор системы 112
       DDS_LLM_BASE_URL: http://llm:8080/v1
       DDS_LLM_MODEL: dds-qwen
+      DDS_LLM_SLOT_CACHE: ${DDS_LLM_SLOT_CACHE:-true}
       DDS_REPORT_MODE: ${DDS_REPORT_MODE:-queued}
       DDS_REPORT_CPU_MAX_PERCENT: ${DDS_REPORT_CPU_MAX_PERCENT:-40}
       DDS_REPORT_IDLE_SECONDS: ${DDS_REPORT_IDLE_SECONDS:-30}
       DDS_REPORT_RAM_RESERVE_MB: ${DDS_REPORT_RAM_RESERVE_MB:-2048}
       DDS_REPORT_CANCEL_TIMEOUT_SECONDS: ${DDS_REPORT_CANCEL_TIMEOUT_SECONDS:-30}
-      DDS_REPORT_MODEL_BUDGET_MB: ${DDS_REPORT_MODEL_BUDGET_MB:-8192}
+      DDS_REPORT_MODEL_BUDGET_MB: ${DDS_REPORT_MODEL_BUDGET_MB:-4608}
       DDS_LLM_TIMEOUT_SECONDS: ${LLM_TIMEOUT_SECONDS:-900}
       FACTOIDS_LLM_BASE_URL: http://llm:8080/v1
       FACTOIDS_LLM_MODEL: dds-qwen
@@ -94,6 +98,7 @@ services:
     networks: [ingress, local]
 
 volumes:
+  llm_prompt_cache:
   database:
   application:
 networks:
