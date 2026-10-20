@@ -27,4 +27,6 @@ with httpx.Client(timeout=float(os.getenv("DDS_LLM_TIMEOUT_SECONDS", "900")),tru
     assert r.json()["choices"][0]["message"]["content"].strip(), "Model returned no text"
 print("CPU inference passed; no lesson data was used.")
 '
+echo 'Testing local Qwen TTS with an uncached synthetic phrase...'
+compose exec -T backend python -m backend.scripts.speech.check_tts
 compose ps

@@ -4,9 +4,9 @@
 
 ## Подготовка и запуск
 
-Вес: `models/llm/Qwen3.5-4B-Q4_K_M.gguf`, 2 740 937 888 байт. Источник — [Unsloth Qwen3.5-4B-GGUF](https://huggingface.co/unsloth/Qwen3.5-4B-GGUF), закреплённая ревизия `e87f176479d0855a907a41277aca2f8ee7a09523`. SHA-256: `00fe7986ff5f6b463e62455821146049db6f9313603938a70800d1fb69ef11a4`. Offline-упаковщик скачивает и проверяет именно этот файл; startup приложения веса не скачивает.
+Вес: `models/llm/Qwen3.5-4B-Q4_K_M.gguf`, 2 740 937 888 байт. Источник — [Unsloth Qwen3.5-4B-GGUF](https://huggingface.co/unsloth/Qwen3.5-4B-GGUF), закреплённая ревизия `e87f176479d0855a907a41277aca2f8ee7a09523`. SHA-256: `00fe7986ff5f6b463e62455821146049db6f9313603938a70800d1fb69ef11a4`. `make up` с включённым LLM, `make llm-up`, `make models WITH_LLM=1` и offline-упаковщик скачивают отсутствующий стандартный файл и проверяют его; startup приложения веса не скачивает.
 
-Создайте приватный `.env.llm` в корне проекта из `.env.llm.example` и задайте существующий абсолютный `DDS_LLM_MODEL_PATH`. Его наличие включает CPU inference в обычные `make up`, `make up-prod`, `make down` и `make logs`. `WITH_LLM=0` явно отключает это подключение; без подготовленного файла базовый запуск не требует модели. Для backend на хосте адрес — `http://127.0.0.1:8081/v1`; внутри Compose bridge задаёт `http://llm:8080/v1`. Алиас `DDS_LLM_MODEL` должен совпадать у backend и runtime; в примере это `dds-qwen`. Сохранённое поле model_used содержит этот алиас.
+Создайте приватный `.env.llm` в корне проекта из `.env.llm.example`. Оставьте стандартный путь `./models/llm/Qwen3.5-4B-Q4_K_M.gguf` для автозагрузки или задайте существующий пользовательский `DDS_LLM_MODEL_PATH`. Наличие `.env.llm` включает CPU inference в обычные `make up`, `make up-prod`, `make down` и `make logs`. `WITH_LLM=0` явно отключает это подключение; без подготовленного файла базовый запуск не требует LLM. Для backend на хосте адрес — `http://127.0.0.1:8081/v1`; внутри Compose bridge задаёт `http://llm:8080/v1`. Алиас `DDS_LLM_MODEL` должен совпадать у backend и runtime; в примере это `dds-qwen`. Сохранённое поле model_used содержит этот алиас.
 
 ```bash
 make up

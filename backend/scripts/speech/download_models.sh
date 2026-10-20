@@ -15,8 +15,6 @@ download_if_missing() {
     test -s "$dest.part"
     mv "$dest.part" "$dest"
 }
-HF_BASE='https://huggingface.co/Serveurperso/Qwen3-TTS-GGUF/resolve/main'
-download_if_missing "$TTS_MODELS_DIR/qwen-tokenizer-12hz-Q4_K_M.gguf" "$HF_BASE/qwen-tokenizer-12hz-Q4_K_M.gguf?download=true"
-download_if_missing "$TTS_MODELS_DIR/qwen-talker-0.6b-base-Q4_K_M.gguf" "$HF_BASE/qwen-talker-0.6b-base-Q4_K_M.gguf?download=true"
+python3 "$REPO_ROOT/tools/provision_models.py" --tts-dir "$TTS_MODELS_DIR"
 download_if_missing "$MODELS_DIR/gigaam-v3-ctc-Q8_0.gguf" 'https://huggingface.co/salute-developers/GigaAM/resolve/main/gigaam-v3-ctc-Q8_0.gguf?download=true'
 echo 'Downloads completed. Qwen report GGUF is supplied separately; the running app never downloads weights.'

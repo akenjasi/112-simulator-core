@@ -63,7 +63,8 @@ services:
       FACTOIDS_LLM_MODEL: dds-qwen
       FACTOIDS_LLM_TIMEOUT_SECONDS: ${LLM_TIMEOUT_SECONDS:-900}
       ASR_ENABLED: "false"
-      TTS_ENABLED: "false"
+      TTS_ENABLED: "${TTS_ENABLED:-true}"
+      TTS_MODELS_DIR: /app/backend/core/qwen_tts/models
       HF_HUB_OFFLINE: "1"
       TRANSFORMERS_OFFLINE: "1"
       HF_HUB_DISABLE_TELEMETRY: "1"
@@ -71,7 +72,11 @@ services:
       LDAP_ENABLED: "false"
     volumes:
       - application:/app/data
-      - ./models/tts:/app/backend/core/qwen_tts/models:ro
+      - type: bind
+        source: ./models/tts
+        target: /app/backend/core/qwen_tts/models
+        read_only: true
+        bind: {create_host_path: false, selinux: z}
     depends_on:
       postgres: {condition: service_healthy}
       llm: {condition: service_started}

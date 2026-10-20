@@ -27,7 +27,9 @@ services:
         POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB:-simulator112}
       CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:3000,http://127.0.0.1:3000}
       SECRET_KEY: ${SECRET_KEY:?Set a unique SECRET_KEY in .env}
-      TTS_ENABLED: ${TTS_ENABLED:-false}
+      TTS_ENABLED: ${TTS_ENABLED:-true}
+      ASR_ENABLED: ${ASR_ENABLED:-false}
+      TTS_MODELS_DIR: /app/backend/core/qwen_tts/models
       TESTING: 'false'
       INITIAL_ADMIN_USERNAME: ${INITIAL_ADMIN_USERNAME:-admin}
       INITIAL_ADMIN_PASSWORD: ${INITIAL_ADMIN_PASSWORD:-}
@@ -50,7 +52,13 @@ services:
     volumes:
     - simulator_data:/app/data
     - ./data/models:/app/models:ro,z
-    - ./data/tts_models:/app/backend/core/qwen_tts/models:ro,z
+    - type: bind
+      source: ${TTS_MODELS_DIR:-./data/tts_models}
+      target: /app/backend/core/qwen_tts/models
+      read_only: true
+      bind:
+        create_host_path: false
+        selinux: z
     healthcheck:
       test:
       - CMD

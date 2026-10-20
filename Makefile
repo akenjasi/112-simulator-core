@@ -20,9 +20,9 @@ DEV = $(COMPOSE) $(LLM_ARGS) $(BASE) -f "$(ROOT)/docker/compose/dev.yml" $(LLM_F
 PROD = $(COMPOSE) $(LLM_ARGS) $(BASE) -f "$(ROOT)/docker/compose/prod.yml" $(LLM_FILES)
 SETTINGS_COMPOSE = $(DEV)
 
-.PHONY: help install init backend frontend test test-all build up up-prod down logs llm-up backup replace-dds-tickets package-offline deploy-offline check-python check-llm check-env
+.PHONY: help install init models backend frontend test test-all build up up-prod down logs llm-up backup replace-dds-tickets package-offline deploy-offline check-python check-llm check-env
 help:
-	@printf '%s\n' 'Setup:   make install | init | check-env' 'Develop: make backend [PORT=8000] | frontend' 'Verify:  make test | test-all' 'Docker:  make build | up | up-prod | down | logs' 'LLM:     .env.llm enables local CPU inference for ordinary up/down/logs' '         make up LLM_ENV_FILE=/private/file.env | WITH_LLM=0 to disable' 'Data:    make backup | replace-dds-tickets [ARGS=--apply]' 'Offline: make package-offline ARGS="--help"' '         make deploy-offline ARCHIVE=/path/bundle.tar.gz [ARGS="..."]' 'LLM_RUNTIME=cpu (default) | gpu' 'Options: ENV_FILE=/private/file.env PROJECT=existing_project VENV=/path/venv'
+	@printf '%s\n' 'Setup:   make install | init | check-env | models [WITH_LLM=1]' 'Develop: make backend [PORT=8000] | frontend' 'Verify:  make test | test-all' 'Docker:  make build | up | up-prod | down | logs' 'LLM:     .env.llm enables local CPU inference for ordinary up/down/logs' '         make up LLM_ENV_FILE=/private/file.env | WITH_LLM=0 to disable' 'Data:    make backup | replace-dds-tickets [ARGS=--apply]' 'Offline: make package-offline ARGS="--help"' '         make deploy-offline ARCHIVE=/path/bundle.tar.gz [ARGS="..."]' 'LLM_RUNTIME=cpu (default) | gpu' 'Options: ENV_FILE=/private/file.env PROJECT=existing_project VENV=/path/venv'
 
 install:
 	@cd "$(ROOT)" && "$(PYTHON)" -c 'import sys; assert sys.version_info[:2] == (3,11), "Use Python 3.11"'
@@ -68,7 +68,17 @@ check-llm:
 check-env: check-llm
 	@$(SETTINGS_COMPOSE) config --format json | python3 "$(ROOT)/tools/setup_env.py" --check-compose
 
+models: check-llm
+	@if [ -f "$(ENV_FILE)" ]; then \
+	 $(DEV) config --format json | python3 "$(ROOT)/tools/provision_models.py" --compose; \
+	 else \
+	  if [ "$(WITH_LLM)" = 1 ]; then \
+	   docker compose --project-directory "$(ROOT)" --env-file "$(LLM_ENV_FILE)" -f "$(ROOT)/docker/compose/$(LLM_COMPOSE)" --profile llm config --format json | python3 "$(ROOT)/tools/provision_models.py" --compose --only-llm || exit $$?; \
+	  fi; \
+	  python3 "$(ROOT)/tools/provision_models.py"; fi
+
 up: check-env
+	@$(DEV) config --format json | python3 "$(ROOT)/tools/provision_models.py" --compose
 	@$(DEV) up -d --build
 
 up-prod: SETTINGS_COMPOSE = $(PROD)
@@ -83,6 +93,7 @@ logs: check-llm
 
 llm-up: check-llm
 	@test -n "$(LLM_ENV_FILE)" && test -f "$(LLM_ENV_FILE)" || { echo 'Set LLM_ENV_FILE to an existing private env file.' >&2; exit 1; }
+	@docker compose --project-directory "$(ROOT)" --env-file "$(LLM_ENV_FILE)" -f "$(ROOT)/docker/compose/$(LLM_COMPOSE)" --profile llm config --format json | python3 "$(ROOT)/tools/provision_models.py" --compose --only-llm
 	@docker compose --project-directory "$(ROOT)" --env-file "$(LLM_ENV_FILE)" -p "$(if $(PROJECT),$(PROJECT),imba-llm)" -f "$(ROOT)/docker/compose/$(LLM_COMPOSE)" --profile llm up -d
 
 backup: check-python

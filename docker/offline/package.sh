@@ -5,13 +5,7 @@ umask 077
 ROOT="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/../.." && pwd)"
 VERSION="$(date -u +%Y%m%d-%H%M%S)"
 LLM_MODEL="${DDS_LLM_MODEL_PATH:-$ROOT/models/llm/Qwen3.5-4B-Q4_K_M.gguf}"
-# Pinned Hugging Face LFS metadata; never use a moving main revision for weights.
-QWEN_REVISION=e87f176479d0855a907a41277aca2f8ee7a09523
-QWEN_SHA256=00fe7986ff5f6b463e62455821146049db6f9313603938a70800d1fb69ef11a4
-QWEN_SIZE=2740937888
-QWEN_URL="https://huggingface.co/unsloth/Qwen3.5-4B-GGUF/resolve/$QWEN_REVISION/Qwen3.5-4B-Q4_K_M.gguf"
-DEFAULT_MODEL=1
-[[ -z "${DDS_LLM_MODEL_PATH:-}" ]] || DEFAULT_MODEL=0
+TTS_DIR="${TTS_MODELS_DIR:-$ROOT/data/tts_models}"
 OUTPUT="" WORK_DIR="" CHECK=0 WITH_DATA=0 DOWNLOAD=1
 SOURCE_PROJECT="$(basename "$ROOT")"
 STAGE="" PART=""
@@ -21,7 +15,7 @@ usage() {
 Usage: ./docker/offline/package.sh [options]
 
 Create a Linux/amd64 CPU-only offline installation (Docker Engine + Compose).
-Downloads pinned Qwen if absent, builds images, includes weights in the archive.
+Downloads pinned Qwen 4B and TTS if absent, builds images, includes weights in the archive.
 Speech recognition is disabled; no ASR weights are included.
 No current .env, TLS private key, database or uploads are copied by default.
 
@@ -37,7 +31,7 @@ No current .env, TLS private key, database or uploads are copied by default.
 
 Example:
   ./docker/offline/package.sh --output /srv/export/simulator112.tar.gz
-See docs/operations/offline.md. Downloads stay in models/ (ignored by Git). Live stack is unchanged.
+See docs/operations/offline.md. Report weights stay in models/llm/, TTS in data/tts_models/ (ignored by Git). Live stack is unchanged.
 HELP
 }
 die() { printf 'ERROR: %s\n' "$*" >&2; exit 1; }
@@ -54,7 +48,7 @@ while (($#)); do
     --llm-model|--output|--version|--work-dir|--source-project)
       (($# >= 2)) || die "Missing value for $1"
       case "$1" in
-        --llm-model) LLM_MODEL="$2"; DEFAULT_MODEL=0;;
+        --llm-model) LLM_MODEL="$2";;
         --output) OUTPUT="$2";; --version) VERSION="$2";;
         --work-dir) WORK_DIR="$2";; --source-project) SOURCE_PROJECT="$2";;
       esac
@@ -76,7 +70,7 @@ fi
 [[ "$OUTPUT" == *.tar.gz ]] || die '--output must end with .tar.gz'
 [[ ! -e "$OUTPUT" ]] || die "Output already exists: $OUTPUT"
 [[ ! -e "${OUTPUT}.sha256" ]] || die "Checksum already exists: ${OUTPUT}.sha256"
-for tool in docker git tar gzip sha256sum find sort xargs head od tr cut; do
+for tool in python3 docker git tar gzip sha256sum find sort xargs head od tr cut; do
   command -v "$tool" >/dev/null || die "Required command is missing: $tool"
 done
 
@@ -86,70 +80,22 @@ for file in config.json inference.py model.safetensors tokenizer.json tokenizer_
   [[ -s "$ROOT/models/classifier/$file" ]] || { printf 'Missing classifier file: %s\n' "$file" >&2; missing=1; }
 done
 ((missing == 0)) || die 'Prepare the classifier files first; nothing has been downloaded or built.'
+for file in backend/core/qwen_tts/qwen-tts backend/bin/libggml.so.0 \
+  backend/bin/libggml-base.so.0 backend/bin/libggml-cpu.so.0 \
+  backend/core/qwen_tts/voices/references/{male_1_dmitri,female_1_irina,female_3_jenny,male_2_denis}.wav; do
+  [[ -s "$ROOT/$file" ]] || die "Missing TTS runtime resource: $file"
+done
 git -C "$ROOT" rev-parse --is-inside-work-tree >/dev/null
 docker info >/dev/null
 docker compose version >/dev/null
 
-if ((DEFAULT_MODEL && DOWNLOAD && ! CHECK)) && [[ ! -e "$LLM_MODEL" ]]; then
-  for tool in curl flock stat; do
-    command -v "$tool" >/dev/null || die "Required for downloading Qwen: $tool"
-  done
-  mkdir -p -- "$(dirname "$LLM_MODEL")"
-  # Concurrent packagers share the cache. A failed download leaves only .part.
-  exec 9>"${LLM_MODEL}.lock"
-  flock 9
-  if [[ ! -e "$LLM_MODEL" ]]; then
-    log 'Downloading Qwen3.5-4B Q4_K_M (2.74 GB); interrupted transfers can resume'
-    # Start a fresh curl invocation per retry so -C - uses the latest file size.
-    # curl's internal retries can discard bytes received by the failed attempt.
-    for attempt in {1..6}; do
-      if [[ -f "${LLM_MODEL}.part" ]] && \
-         [[ "$(stat -c %s -- "${LLM_MODEL}.part")" == "$QWEN_SIZE" ]]; then
-        break  # A previous connection may have closed after the last byte.
-      fi
-      if curl --fail --location --show-error --progress-bar \
-        --proto '=https' --proto-redir '=https' --connect-timeout 30 \
-        --speed-time 120 --speed-limit 1024 --continue-at - \
-        --output "${LLM_MODEL}.part" "$QWEN_URL"; then
-        break
-      else
-        curl_status=$?
-      fi
-      case "$curl_status" in
-        5|6|7|16|18|22|28|35|52|55|56|92|95)
-          if ((attempt < 6)); then
-            log "Download interrupted (curl $curl_status); resuming saved bytes, retry $attempt/5"
-            sleep 2
-            continue
-          fi;;
-      esac
-      die "Download failed (curl $curl_status). Saved bytes remain in ${LLM_MODEL}.part; rerun ./docker/offline/package.sh to resume."
-    done
-    if [[ "$(stat -c %s -- "${LLM_MODEL}.part")" != "$QWEN_SIZE" ]] || \
-       [[ "$(sha256sum -- "${LLM_MODEL}.part" | cut -d ' ' -f 1)" != "$QWEN_SHA256" ]]; then
-      rm -f -- "${LLM_MODEL}.part"
-      die 'Downloaded Qwen failed size/SHA-256 validation; rerun to download a fresh copy.'
-    fi
-    mv -- "${LLM_MODEL}.part" "$LLM_MODEL"
-  fi
-  exec 9>&-
-fi
-
-# Validate before expensive builds; a missing model must never yield a "ready" archive.
-for file in "$LLM_MODEL"; do
-  if [[ ! -f "$file" || ! -s "$file" ]]; then
-    printf 'Missing model: %s\n' "$file" >&2; missing=1
-  elif [[ "$(head -c 4 -- "$file")" != GGUF ]]; then
-    printf 'Not a GGUF file: %s\n' "$file" >&2; missing=1
-  elif [[ "$(basename "$file")" == *-of-*.gguf ]]; then
-    printf 'Use a merged, single-file GGUF: %s\n' "$file" >&2; missing=1
-  fi
-done
-((missing == 0)) || die 'Weights are missing/invalid. Run without --check to download default Qwen, or supply an existing --llm-model FILE.'
-if ((DEFAULT_MODEL)); then
-  [[ "$(sha256sum -- "$LLM_MODEL" | cut -d ' ' -f 1)" == "$QWEN_SHA256" ]] \
-    || die "Cached Qwen SHA-256 mismatch: $LLM_MODEL. Remove the damaged file and rerun."
-fi
+# All launch/packaging entry points use the same pinned downloader and cache.
+[[ "$LLM_MODEL" == /* ]] || LLM_MODEL="$ROOT/$LLM_MODEL"
+[[ "$TTS_DIR" == /* ]] || TTS_DIR="$ROOT/$TTS_DIR"
+model_args=(--llm-model "$LLM_MODEL" --tts-dir "$TTS_DIR")
+((DOWNLOAD)) || model_args+=(--no-download)
+((CHECK == 0)) || model_args+=(--check)
+python3 "$ROOT/tools/provision_models.py" "${model_args[@]}"
 if ((CHECK)); then
   log 'Inputs and Docker are ready. Target: linux/amd64, CPU only. No archive created.'
   exit 0
@@ -178,6 +124,9 @@ for name in config.json inference.py model.safetensors tokenizer.json tokenizer_
     cp -- "$ROOT/models/classifier/$name" "$CONTEXT/models/classifier/$name"
   fi
 done
+# tar creates implicit parents under umask 077; COPY preserves those permissions.
+# All files here are explicitly selected public source/resources, never secrets.
+chmod -R a+rX "$CONTEXT"
 
 BACKEND_IMAGE="simulator112/backend:$VERSION"
 FRONTEND_IMAGE="simulator112/frontend:$VERSION"
@@ -186,6 +135,11 @@ LLM_IMAGE="simulator112/llm-cpu:$VERSION"
 log 'Building backend and frontend for Linux/amd64'
 docker build --platform linux/amd64 -f "$CONTEXT/docker/images/backend.Dockerfile" -t "$BACKEND_IMAGE" "$CONTEXT"
 docker build --platform linux/amd64 -f "$CONTEXT/docker/images/frontend.Dockerfile" -t "$FRONTEND_IMAGE" "$CONTEXT"
+log 'Checking real TTS in the backend image without network or application data'
+docker run --rm --network none \
+  -v "$TTS_DIR:/app/backend/core/qwen_tts/models:ro,z" \
+  -e TTS_ENABLED=true --entrypoint python "$BACKEND_IMAGE" \
+  -m backend.scripts.speech.check_tts
 log 'Fetching PostgreSQL and the CPU-only llama.cpp runtime'
 docker pull --platform linux/amd64 postgres:15-alpine
 docker pull --platform linux/amd64 ghcr.io/ggml-org/llama.cpp@sha256:951661b272f3ff206c499719d69864b9f53621786ff8e55ce1bb8996b4bf48a1
@@ -203,13 +157,12 @@ for file in README.txt backup.sh common.sh compose.yml install.sh restore-data.s
 done
 cp -- "$LLM_MODEL" "$BUNDLE/models/report.gguf"
 chmod 644 "$BUNDLE/models/"*.gguf
-# TTS is currently disabled in tts_v2.py. Carry its weights if already available.
 mkdir -p "$BUNDLE/models/tts"
 for name in qwen-tokenizer-12hz-Q4_K_M.gguf qwen-talker-0.6b-base-Q4_K_M.gguf; do
-  if [[ -s "$ROOT/backend/core/qwen_tts/models/$name" ]]; then
-    cp -- "$ROOT/backend/core/qwen_tts/models/$name" "$BUNDLE/models/tts/$name"
-  fi
+  cp -- "$TTS_DIR/$name" "$BUNDLE/models/tts/$name"
 done
+chmod 644 "$BUNDLE/models/tts/"*.gguf
+chmod 755 "$BUNDLE/models" "$BUNDLE/models/tts"
 cat > "$BUNDLE/images.env" <<EOF
 BACKEND_IMAGE=$BACKEND_IMAGE
 FRONTEND_IMAGE=$FRONTEND_IMAGE
@@ -218,7 +171,7 @@ LLM_IMAGE=$LLM_IMAGE
 EOF
 chmod +x "$BUNDLE/"*.sh
 {
-  printf 'release=%s\nplatform=linux/amd64\ncompute=cpu\nspeech_recognition=disabled\n' "$VERSION"
+  printf 'release=%s\nplatform=linux/amd64\ncompute=cpu\nspeech_synthesis=enabled\nspeech_recognition=disabled\n' "$VERSION"
   printf 'source_commit=%s\n' "$(git -C "$ROOT" rev-parse HEAD)"
   if ! git -C "$ROOT" diff --quiet HEAD --; then printf 'tracked_worktree=modified\n'; fi
   printf 'includes_database=%s\n' "$WITH_DATA"

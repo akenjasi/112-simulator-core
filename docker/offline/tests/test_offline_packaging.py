@@ -29,6 +29,10 @@ elif a[:1]==['build']:
     assert not (context/'data/certs').exists()
     assert not (context/'data/uploads/private.txt').exists()
     assert (context/'models/classifier/model.safetensors').is_file()
+    for path in (context/'backend', context/'backend/core', context/'models/classifier'):
+        assert path.stat().st_mode & 0o005 == 0o005, 'Container UID cannot traverse source directories'
+    assert (context/'backend/main.py').stat().st_mode & 0o004, 'Container UID cannot read source'
+    assert (context/'models/classifier/model.safetensors').stat().st_mode & 0o004, 'Container UID cannot read classifier'
     if os.getenv('FAIL_BUILD'): sys.exit(19)
 elif a[:2]==['image','inspect']:
     print(os.getenv('FAKE_PLATFORM','linux/amd64') if '{{.Os}}' in ' '.join(a) else 'sha256:synthetic-image')
@@ -38,6 +42,10 @@ elif a[:1]==['run'] and '--entrypoint' in a:
     entry=a[a.index('--entrypoint')+1]
     if entry=='python' and 'import secrets' in a[-1]:
         subprocess.run([sys.executable,'-c',a[-1]],check=True)
+    elif entry=='python' and 'backend.scripts.speech.check_tts' in a:
+        assert a[a.index('--network')+1]=='none'
+        assert 'TTS_ENABLED=true' in a
+        if os.getenv('FAIL_TTS_RUNTIME'): sys.exit(21)
     elif entry=='openssl':
         mount=a[a.index('--mount')+1]
         source=next(p.removeprefix('source=') for p in mount.split(',') if p.startswith('source='))
@@ -77,20 +85,33 @@ class OfflinePackagingTests(unittest.TestCase):
         self.base = Path(self.temp.name)
         self.repo = self.base / "project with spaces"
         self.repo.mkdir()
-        # Replace only pinned metadata for small, deterministic transfer fixtures.
-        script = (ROOT / "docker/offline/package.sh").read_text()
         self.download_bytes = b"GGUFsynthetic pinned Qwen"
-        script = script.replace('QWEN_SHA256=00fe7986ff5f6b463e62455821146049db6f9313603938a70800d1fb69ef11a4',
-                                'QWEN_SHA256=' + hashlib.sha256(self.download_bytes).hexdigest())
-        script = script.replace('QWEN_SIZE=2740937888', 'QWEN_SIZE=' + str(len(self.download_bytes)))
         shutil.copy(ROOT / ".gitignore", self.repo)
         shutil.copy(ROOT / ".dockerignore", self.repo)
         shutil.copytree(ROOT / "docker/offline", self.repo / "docker/offline")
-        (self.repo / "docker/offline/package.sh").write_text(script)
+        (self.repo / "tools").mkdir()
+        shutil.copy(ROOT / "tools/provision_models.py", self.repo / "tools/provision_models.py")
+        manifest = json.loads((ROOT / "tools/models.json").read_text())
+        for spec in manifest.values():
+            spec.update(size=len(self.download_bytes), sha256=hashlib.sha256(self.download_bytes).hexdigest())
+        (self.repo / "tools/models.json").write_text(json.dumps(manifest))
+        for key in ("talker", "tokenizer"):
+            dest = self.repo / "data/tts_models" / manifest[key]["name"]
+            dest.parent.mkdir(parents=True, exist_ok=True)
+            dest.write_bytes(self.download_bytes)
+        for name in ("backend/core/qwen_tts/qwen-tts", "backend/bin/libggml.so.0",
+                     "backend/bin/libggml-base.so.0", "backend/bin/libggml-cpu.so.0",
+                     *["backend/core/qwen_tts/voices/references/" + name + ".wav" for name in
+                       ("male_1_dmitri", "female_1_irina", "female_3_jenny", "male_2_denis")]):
+            dest = self.repo / name
+            dest.parent.mkdir(parents=True, exist_ok=True)
+            dest.write_text("synthetic runtime")
+        (self.repo / "docker/scripts").mkdir()
+        shutil.copy(ROOT / "docker/scripts/pack_release.sh", self.repo / "docker/scripts/pack_release.sh")
         for name in ("docker/images/backend.Dockerfile", "docker/images/frontend.Dockerfile", "docker/compose/base.yml", "docker/compose/dev.yml"):
             (self.repo / name).parent.mkdir(parents=True, exist_ok=True)
             (self.repo / name).write_text("# synthetic source\n")
-        for name in ("backend/main.py", "models/classifier/inference.py", "assets/reference/moscow_112_addresses.json",
+        for name in ("backend/main.py", "backend/scripts/speech/check_tts.py", "models/classifier/inference.py", "assets/reference/moscow_112_addresses.json",
                      ".env", "data/certs/server.key", "data/uploads/private.txt"):
             file = self.repo / name
             file.parent.mkdir(parents=True, exist_ok=True)
@@ -101,6 +122,7 @@ class OfflinePackagingTests(unittest.TestCase):
         # Provisioned classifier weights are deliberately outside Git.
         for name in ("config.json", "model.safetensors", "tokenizer.json", "tokenizer_config.json"):
             (self.repo / "models/classifier" / name).write_text("fixture")
+        (self.repo / "models/llm").mkdir()
         self.llm = self.base / "report weights.gguf"
         self.llm.write_bytes(b"GGUFsynthetic report weights")
         self.bin = self.base / "bin"
@@ -174,7 +196,7 @@ class OfflinePackagingTests(unittest.TestCase):
         self.assertNotEqual(result.returncode, 0)
         self.assertIn("SHA-256", result.stderr)
         self.assertFalse(self.output.exists())
-        self.assertFalse(list((self.repo / "models").glob("*.gguf*part")))
+        self.assertFalse(list((self.repo / "models").rglob("*.gguf*part")))
         self.assertFalse(any(c[0] == "build" for c in self.calls()))
 
     def test_ssl_eof_automatically_resumes_with_new_curl_invocation(self):
@@ -234,6 +256,12 @@ class OfflinePackagingTests(unittest.TestCase):
         bundle = self.unpack()
         self.assertEqual((bundle / "models/report.gguf").read_bytes(), self.llm.read_bytes())
         self.assertFalse((bundle / "models/asr.gguf").exists())
+        for name in ("qwen-talker-0.6b-base-Q4_K_M.gguf", "qwen-tokenizer-12hz-Q4_K_M.gguf"):
+            self.assertEqual((bundle / "models/tts" / name).read_bytes(), self.download_bytes)
+            self.assertEqual((bundle / "models/tts" / name).stat().st_mode & 0o777, 0o644)
+        self.assertEqual((bundle / "models/tts").stat().st_mode & 0o777, 0o755)
+        self.assertIn('TTS_ENABLED: "${TTS_ENABLED:-true}"', (bundle / "compose.yml").read_text())
+        self.assertIn('backend.scripts.speech.check_tts', (bundle / "verify.sh").read_text())
         for line in (bundle / "SHA256SUMS").read_text().splitlines():
             digest, name = line.split("  ", 1)
             self.assertEqual(hashlib.sha256((bundle / name).read_bytes()).hexdigest(), digest)
@@ -254,6 +282,48 @@ class OfflinePackagingTests(unittest.TestCase):
         checked = subprocess.run(["sha256sum", "-c", self.output.name + ".sha256"],
             cwd=self.output.parent, capture_output=True, text=True)
         self.assertEqual(checked.returncode, 0, checked.stderr)
+
+    def test_missing_tts_is_downloaded_and_required_even_with_custom_llm(self):
+        shutil.rmtree(self.repo / "data/tts_models")
+        result = self.run_pack()
+        self.assertEqual(result.returncode, 0, result.stderr)
+        bundle = self.unpack()
+        self.assertEqual(len(list((bundle / "models/tts").glob("*.gguf"))), 2)
+        self.assertEqual(len(self.curl_trace.read_text().splitlines()), 2)
+
+    def test_check_and_no_download_require_tts_without_writes_or_network(self):
+        shutil.rmtree(self.repo / "data/tts_models")
+        for option in ("--check", "--no-download"):
+            result = self.run_pack(option)
+            self.assertNotEqual(result.returncode, 0)
+            self.assertFalse(self.curl_trace.exists())
+            self.assertFalse((self.repo / "data/tts_models").exists())
+            self.assertFalse(self.output.exists())
+
+    def test_missing_tts_binary_stops_before_download_and_build(self):
+        (self.repo / "backend/core/qwen_tts/qwen-tts").unlink()
+        result = self.run_pack()
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("Missing TTS runtime resource", result.stderr)
+        self.assertFalse(self.curl_trace.exists())
+        self.assertFalse(any(c[0] == "build" for c in self.calls()))
+
+    def test_failed_native_tts_never_yields_a_ready_archive(self):
+        result = self.run_pack(env={**self.env, "FAIL_TTS_RUNTIME": "1"})
+        self.assertNotEqual(result.returncode, 0)
+        self.assertFalse(self.output.exists())
+        self.assertFalse(any(c[:2] == ["image", "save"] for c in self.calls()))
+
+    def test_legacy_release_creates_the_same_complete_archive(self):
+        result = subprocess.run(["bash", str(self.repo / "docker/scripts/pack_release.sh"),
+                                "--llm-model", str(self.llm), "--version", "legacy", "--output", str(self.output)],
+                               env={**self.env, "RELEASE_DIR": str(self.base / "release")},
+                               capture_output=True, text=True, timeout=30)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        bundle = self.unpack()
+        self.assertEqual(len(list((bundle / "models/tts").glob("*.gguf"))), 2)
+        self.assertTrue((bundle / "models/report.gguf").is_file())
+        self.assertTrue(Path(str(self.output) + ".sha256").is_file())
 
     def test_live_data_export_is_opt_in_and_read_only(self):
         result = self.run_pack("--with-data", "--source-project", "source_stack")

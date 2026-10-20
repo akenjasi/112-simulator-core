@@ -88,6 +88,7 @@ RUN python -m backend.core.integrity generate --root /app --output /app/backend_
 # the container. Linux dynamic linker falls back to LD_LIBRARY_PATH when the
 # RUNPATH doesn't exist — so setting it here is the correct fix.
 ENV LD_LIBRARY_PATH="/app/backend/bin" \
+    TTS_MODELS_DIR="/app/backend/core/qwen_tts/models" \
     DATABASE_URL="sqlite+aiosqlite:////app/data/112_simulator.db" \
     PYTHONPATH="/app"
 

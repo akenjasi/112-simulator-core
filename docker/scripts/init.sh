@@ -31,7 +31,7 @@ fi
 
 
 # ─── 2. Models are supplied separately ────────────────────────────────────
-echo "🤖 External speech models are optional; missing models are reported by speech status APIs."
+echo "🤖 Models are provisioned before launch by make models/up or the offline packager; no runtime downloads."
 
 # ─── 3. Export LD_LIBRARY_PATH for native shared libs ────────────────────────
 export LD_LIBRARY_PATH="/app/backend/bin:${LD_LIBRARY_PATH:-}"
