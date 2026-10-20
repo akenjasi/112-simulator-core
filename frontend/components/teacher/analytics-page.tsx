@@ -215,7 +215,7 @@ export interface AnalyticsPageProps {
 
 const HIDE_COMPLETED_LESSONS_KEY = "teacher.analytics.hideCompletedLessons"
 
-export default function AnalyticsPage({ initialTab = "split" }: AnalyticsPageProps = {}) {
+export default function AnalyticsPage({ initialTab = "all" }: AnalyticsPageProps = {}) {
   const [activeTab, setActiveTab] = useState<"history" | "split" | "all" | "ai_report" | "charts">(initialTab)
   const [sessionId, setSessionId] = useState<string>("")
   const [selectedLessonId, setSelectedLessonId] = useState<string>("")
@@ -957,6 +957,7 @@ export default function AnalyticsPage({ initialTab = "split" }: AnalyticsPagePro
           <button
             type="button"
             onClick={() => setActiveTab("all")}
+            aria-pressed={activeTab === "all"}
             className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-semibold transition-all ${
               activeTab === "all"
                 ? "bg-white dark:bg-card text-foreground shadow-xs font-bold"
@@ -969,6 +970,7 @@ export default function AnalyticsPage({ initialTab = "split" }: AnalyticsPagePro
           <button
             type="button"
             onClick={() => setActiveTab("history")}
+            aria-pressed={activeTab === "history"}
             className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-semibold transition-all ${
               activeTab === "history"
                 ? "bg-white dark:bg-card text-foreground shadow-xs font-bold"
@@ -985,6 +987,7 @@ export default function AnalyticsPage({ initialTab = "split" }: AnalyticsPagePro
           <button
             type="button"
             onClick={() => setActiveTab("split")}
+            aria-pressed={activeTab === "split"}
             className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-semibold transition-all ${
               activeTab === "split"
                 ? "bg-white dark:bg-card text-foreground shadow-xs font-bold"
@@ -998,6 +1001,7 @@ export default function AnalyticsPage({ initialTab = "split" }: AnalyticsPagePro
           <button
             type="button"
             onClick={() => setActiveTab("charts")}
+            aria-pressed={activeTab === "charts"}
             className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-semibold transition-all cursor-pointer ${
               activeTab === "charts"
                 ? "bg-white dark:bg-card text-foreground shadow-xs font-bold"
@@ -1012,6 +1016,7 @@ export default function AnalyticsPage({ initialTab = "split" }: AnalyticsPagePro
           <button
             type="button"
             onClick={() => setActiveTab("ai_report")}
+            aria-pressed={activeTab === "ai_report"}
             className={`flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-semibold transition-all cursor-pointer ${
               activeTab === "ai_report"
                 ? "bg-white dark:bg-card text-foreground shadow-xs font-bold"

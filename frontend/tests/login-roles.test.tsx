@@ -13,7 +13,7 @@ beforeEach(() => {
 it.each([
   ['CADET', '/student/profile'],
   ['STUDENT', '/student/profile'],
-  ['TEACHER', '/teacher/sessions'],
+  ['TEACHER', '/teacher'],
   ['ADMIN', '/admin'],
 ])('opens the server-selected %s cabinet without submitting a role', async (role, destination) => {
   const fetchMock = vi.fn().mockResolvedValue({

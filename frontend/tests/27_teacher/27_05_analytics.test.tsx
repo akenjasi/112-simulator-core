@@ -152,13 +152,29 @@ describe('27.5: Пост-аналитика и Апелляция', () => {
   });
 
   const loadTestSession = async () => {
+    fireEvent.click(screen.getByRole('button', { name: /Журнал разбора/ }));
     fireEvent.change(screen.getByLabelText(/Идентификатор сессии/i), { target: { value: 'session-test-100' } });
     fireEvent.click(screen.getByRole('button', { name: 'Обновить' }));
     await waitFor(() => expect(screen.getByText(/50% успеха/i)).toBeInTheDocument());
   };
 
+  it('opens all sections by default and allows selecting a single section', async () => {
+    render(<AnalyticsPage />);
+    expect(screen.getByRole('button', { name: 'Все разделы', pressed: true })).toBeInTheDocument();
+    expect(screen.getByTestId('analytics-dashboards')).toBeInTheDocument();
+    expect(screen.getByLabelText('Идентификатор сессии')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /Журнал разбора/ }));
+    expect(screen.getByRole('button', { name: /Журнал разбора/, pressed: true })).toBeInTheDocument();
+    expect(screen.queryByTestId('analytics-dashboards')).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Все разделы' }));
+    expect(screen.getByRole('button', { name: 'Все разделы', pressed: true })).toBeInTheDocument();
+    expect(screen.getByTestId('analytics-dashboards')).toBeInTheDocument();
+    await screen.findByText(/Пока нет сохраненных уроков/);
+  });
+
   it('should render split screen and appeal button', async () => {
     render(<AnalyticsPage />);
+    fireEvent.click(screen.getByRole('button', { name: /Журнал разбора/ }));
     expect(global.fetch).not.toHaveBeenCalledWith('/api/v1/analytics/sessions', expect.anything());
     fireEvent.click(screen.getByRole('button', { name: 'Обновить' }));
     expect(global.fetch).not.toHaveBeenCalledWith('/api/v1/analytics/sessions', expect.anything());

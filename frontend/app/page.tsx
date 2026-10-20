@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation"
 
 const roleDestinations: Record<string, string> = {
   ADMIN: "/admin",
-  TEACHER: "/teacher/sessions",
+  TEACHER: "/teacher",
   CADET: "/student/profile",
   STUDENT: "/student/profile",
 }

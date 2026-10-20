@@ -18,6 +18,7 @@ const ancillary = (url: string) => {
   return reply({ daily_dynamics: [] })
 }
 function loadSession(id = 'session-1') {
+  fireEvent.click(screen.getByRole('button', { name: /Журнал разбора/ }))
   fireEvent.change(screen.getByLabelText('Идентификатор сессии'), { target: { value: id } })
   fireEvent.click(screen.getByRole('button', { name: 'Обновить' }))
 }

@@ -27,6 +27,9 @@ describe('27.0: Навигация и главная страница препо
     expect(screen.getByRole('link', { name: /База билетов/i })).toBeInTheDocument();
     expect(screen.getByRole('link', { name: /Справочник/i })).toBeInTheDocument();
     expect(screen.getByText('Content')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /Главная страница/i })).toHaveAttribute('aria-current', 'page');
+    expect(screen.getByRole('link', { name: /Начать урок/i })).not.toHaveAttribute('aria-current');
+    expect(screen.getByRole('link', { name: /Начать урок/i })).toHaveAttribute('href', '/teacher/sessions/new');
   });
 
   it('should expose the primary lesson action and the other teacher sections', async () => {

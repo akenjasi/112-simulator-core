@@ -141,7 +141,7 @@ export default function LoginPage() {
     if (userRole === "ADMIN") {
       router.push("/admin")
     } else if (userRole === "TEACHER") {
-      router.push("/teacher/sessions")
+      router.push("/teacher")
     } else {
       router.push("/student/profile")
     }

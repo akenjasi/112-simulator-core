@@ -46,4 +46,15 @@ describe("точка входа", () => {
     await waitFor(() => expect(replaceMock).toHaveBeenCalledWith("/login"))
     expect(localStorage.getItem("access_token")).toBeNull()
   })
+
+  it("с действующим токеном преподавателя открывает главную страницу кабинета", async () => {
+    localStorage.setItem("access_token", "teacher-token")
+    global.fetch = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ role: "TEACHER" }), { status: 200 })
+    )
+
+    render(<LandingPage />)
+
+    await waitFor(() => expect(replaceMock).toHaveBeenCalledWith("/teacher"))
+  })
 })
