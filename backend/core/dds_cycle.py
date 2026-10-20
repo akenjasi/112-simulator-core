@@ -11,6 +11,7 @@ Handles:
 import math
 from copy import deepcopy
 from datetime import datetime, timezone, timedelta
+from zoneinfo import ZoneInfo
 from typing import Any, Dict, List, Optional
 
 from fastapi import HTTPException, status
@@ -26,6 +27,10 @@ from backend.schemas.dds_cycle import DispatcherData, DDSActionPayload
 from backend.schemas.lessons import CadetLessonStats, CadetTicketDetail
 from backend.core.dds_service_policy import action_error, allowed_statuses, current_service_statuses, context as policy_context
 from backend.core.dds_queue import archived_cards, card_progress, completion_blockers, has_dispatch, queue_ticket_details
+
+
+# Source operator from the teaching manual, not the cadet processing the DDS card.
+TEACHING_SOURCE_OPERATOR = "Опер. 14, АРМ 7, Рожкова О. И."
 
 
 def sanitize_incoming_card(content: Any) -> Dict[str, Any]:
@@ -59,7 +64,7 @@ def build_incoming_card(
     Requirements:
     - connection = "Установлено"
     - phones = {"aon": phone, "provided": phone, "onSite": ""}
-    - incident = {"number": f"A{seq}-112", "savedAt": now, "operator": "112"}
+    - incident contains the training number, source save time, and teaching source operator.
     - caller = {"name": fio, "role": caller_role, "address": address}
     - description = plot (non-empty!)
     - statuses = {"injured": "нет", "ambulanceRefusal": "нет", "blocked": "нет"}
@@ -69,8 +74,11 @@ def build_incoming_card(
     """
     gt = ground_truth if isinstance(ground_truth, dict) else {}
     now_dt = now or datetime.now(timezone.utc)
-    now_str = now_dt.strftime("%d.%m.%Y %H:%M")
-    now_time = now_dt.strftime("%H:%M")
+    if now_dt.tzinfo is None:
+        now_dt = now_dt.replace(tzinfo=timezone.utc)
+    source_time = now_dt.astimezone(ZoneInfo("Europe/Moscow"))
+    now_str = source_time.isoformat(timespec="seconds")
+    now_time = source_time.strftime("%H:%M")
 
     seq_str = str(seq).strip() if seq is not None and str(seq).strip() else "001"
     incident_number = f"A{seq_str}-112"
@@ -163,7 +171,7 @@ def build_incoming_card(
     card_dict = {
         "connection": "Установлено",
         "phones": {"aon": phone, "provided": phone, "onSite": ""},
-        "incident": {"number": incident_number, "savedAt": now_str, "operator": "112"},
+        "incident": {"number": incident_number, "savedAt": now_str, "operator": TEACHING_SOURCE_OPERATOR},
         "caller": {"name": fio, "role": caller_role or "очевидец", "address": address},
         "description": desc,
         "statuses": {"injured": injured, "ambulanceRefusal": ambulance_refusal, "blocked": blocked},

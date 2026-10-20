@@ -14,7 +14,6 @@ import { getDDSWorkingCard } from "@/lib/dds-working-card"
 
 import type {DDSHelpTopic} from "@/lib/dds-interface-help"
 import {Tutorial} from "@/components/tutorial"
-import {DDSHelp} from "@/components/dds-help"
 import {DDSWorkspaceContent} from "./dds-workspace-content"
 import {DDSTrainingPhone} from "./dds-training-phone"
 
@@ -244,10 +243,8 @@ export function DDSAssignedConsole({sessionId, ticketId, cardId}: Props) {
         </div>
         <div className="flex flex-wrap items-center gap-2">
           <button type="button" disabled={isSaving || hasPending || helpOpen} onClick={event => {event.currentTarget.focus(); setHelpTopic(null); setHelpOpen(true)}} className="min-h-8 rounded border border-white/40 px-2 text-xs font-semibold disabled:opacity-50">Помощь по интерфейсу</button>
-          <DDSHelp topic="timing" />
           <span className="text-xs">Карточка {displayedIndex + 1} из {sessionState.total_cards ?? 1} · Закрыто: {sessionState.completed_cards ?? 0}</span>
           <Link href="/student/profile" className="px-3 py-1.5 text-xs bg-slate-700 hover:bg-slate-600 text-white rounded font-medium">← В личный кабинет</Link>
-          <DDSHelp topic="finish" />
           <button data-dds-help="finish" type="button" onClick={handleFinish} disabled={mutationDisabled}
             className="px-4 py-1.5 text-xs 2xl:text-sm bg-red-600 hover:bg-red-700 text-white rounded font-bold transition shadow disabled:opacity-50">
             {sessionState.exercise ? "Завершить занятие досрочно" : "Завершить смену"}

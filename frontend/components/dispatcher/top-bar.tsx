@@ -4,17 +4,46 @@ import {
   Phone,
   PhoneOff,
   MessageSquare,
-  HelpCircle,
   MapPin,
   Globe,
 } from "lucide-react"
-import {DDSHelp} from "@/components/dds-help"
 import type { DispatcherData } from "@/lib/dispatcher-data"
 
 type Props = {
   data: DispatcherData
   slaTimer?: number | null
   slaViolated?: boolean
+}
+
+/** Format Russian subscriber numbers without changing short numbers or source labels. */
+export function formatCallerPhone(value: string) {
+  const digits = value.replace(/[\s()+.\-]/g, "")
+  const national = /^\d{10}$/.test(digits) ? digits : /^[78]\d{10}$/.test(digits) ? digits.slice(1) : null
+  return national ? `+7 (${national.slice(0, 3)}) ${national.slice(3, 6)}-${national.slice(6, 8)}-${national.slice(8)}` : value
+}
+
+export function formatCardSavedAt(value: string) {
+  const raw = value.replace(/^сохр[.\s]*/i, "").trim()
+  if (!raw) return "Сохр. не указано"
+  // Legacy source times have no timezone or seconds: retain their actual precision.
+  const legacy = raw.match(/^(\d{2}\.\d{2}\.\d{4})\s+(?:в\s+)?(\d{2}:\d{2}(?::\d{2})?)$/)
+  if (legacy) return `Сохр. ${legacy[1]} в ${legacy[2]}`
+  if (/^\d{4}-\d{2}-\d{2}T.*(?:Z|[+-]\d{2}:\d{2})$/.test(raw)) {
+    const date = new Date(raw)
+    if (!Number.isNaN(date.getTime())) {
+      const parts = new Intl.DateTimeFormat("ru-RU", {timeZone: "Europe/Moscow", day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit", second: "2-digit", hourCycle: "h23"}).formatToParts(date)
+      const part = (type: string) => parts.find(p => p.type === type)?.value
+      return `Сохр. ${part("day")}.${part("month")}.${part("year")} в ${part("hour")}:${part("minute")}:${part("second")}`
+    }
+  }
+  return `Сохр. ${raw}`
+}
+
+export function formatSourceOperator(value: string) {
+  // Approved teaching-manual identity for old cards carrying only the "112" placeholder.
+  if (!value.trim() || value.trim() === "112") return "Опер. 14, АРМ 7, Рожкова О. И."
+  return value.replace(/^(Опер\.\s*[^,]+,\s*АРМ\s*[^,]+,\s*)([А-ЯЁа-яё-]+)\s+([А-ЯЁа-яё-]+)\s+([А-ЯЁа-яё-]+)$/u,
+    (_, prefix, surname, name, patronymic) => `${prefix}${surname} ${name[0]}. ${patronymic[0]}.`)
 }
 
 function MsgIcon() {
@@ -43,7 +72,7 @@ export function TopBar({ data, slaTimer, slaViolated }: Props) {
 
       {/* Connection + buttons */}
       <div className="flex flex-1 flex-col justify-center gap-2 2xl:gap-2 rounded-sm border border-[#c9ced1] bg-[#fbfdfe] px-5 2xl:px-5 py-3 2xl:py-2">
-        <span className="flex items-center gap-1 text-base 2xl:text-sm text-[#49555d]">{data.connection}<DDSHelp topic="overview" /></span>
+        <span className="flex items-center gap-1 text-base 2xl:text-sm text-[#49555d]">{data.connection}</span>
         <div className="flex items-center gap-2 2xl:gap-2">
           <button
             type="button"
@@ -71,17 +100,16 @@ export function TopBar({ data, slaTimer, slaViolated }: Props) {
       </div>
 
       {/* АОН заявителя, не номер вызываемой службы */}
-      <div aria-label="АОН заявителя" title="Номер заявителя, определённый при приёме сообщения в 112" className="flex flex-1 flex-col justify-center rounded-sm border border-[#c9ced1] bg-[#fbfdfe] px-2 2xl:px-5 py-2 2xl:py-2 min-w-0">
+      <div aria-label="АОН заявителя" title="Номер заявителя, определённый при приёме сообщения в 112" className="flex flex-1 flex-col justify-center rounded-sm border border-[#c9ced1] bg-[#fbfdfe] px-2 2xl:px-3 py-2 min-w-0">
         <div className="flex items-center justify-between">
           <span className="text-[11px] 2xl:text-sm text-[#8a949b]">АОН</span>
           <div className="flex items-center gap-1 2xl:gap-2 text-[#49555d]">
-            <HelpCircle className="h-4 w-4 2xl:h-5 2xl:w-5 text-gray-400" />
             <MapPin className="h-4 w-4 2xl:h-5 2xl:w-5 text-gray-400" fill="currentColor" strokeWidth={1} />
             <Globe className="h-4 w-4 2xl:h-5 2xl:w-5 text-gray-400" />
           </div>
         </div>
-        <div className="border-b border-dashed border-[#c9ced1] pb-0.5 text-sm 2xl:text-sm font-medium tracking-tight text-[#303335] whitespace-nowrap">
-          {data.phones.aon}
+        <div title={data.phones.aon} className="border-b border-dotted border-[#c9ced1] pb-0.5 text-xl 2xl:text-2xl leading-tight tabular-nums text-[#303335] truncate">
+          {formatCallerPhone(data.phones.aon)}
         </div>
       </div>
 
@@ -92,18 +120,18 @@ export function TopBar({ data, slaTimer, slaViolated }: Props) {
       </div>
 
       {/* предоставленный */}
-      <div aria-label="Предоставленный номер заявителя" title="Контактный номер, указанный заявителем" className="flex flex-1 flex-col justify-center rounded-sm border border-[#c9ced1] bg-[#fbfdfe] px-2 2xl:px-5 py-2 2xl:py-2 min-w-0">
+      <div aria-label="Предоставленный номер заявителя" title="Контактный номер, указанный заявителем" className="flex flex-1 flex-col justify-center rounded-sm border border-[#c9ced1] bg-[#fbfdfe] px-2 2xl:px-3 py-2 min-w-0">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-1 2xl:gap-2">
             <span className="text-[11px] 2xl:text-sm text-[#8a949b] truncate">предоставленный</span>
-            <span className="rounded-sm border border-[#c9ced1] bg-white px-1 2xl:px-3 py-0.5 2xl:py-0.5 text-[10px] 2xl:text-sm uppercase text-[#8a949b]">
-              АОН
-            </span>
           </div>
           <Globe className="h-4 w-4 2xl:h-5 2xl:w-5 text-gray-400" />
         </div>
-        <div className="border-b border-dashed border-[#c9ced1] pb-0.5 text-sm 2xl:text-sm font-medium tracking-tight text-[#303335] whitespace-nowrap">
-          {data.phones.provided}
+        <div className="mt-1 flex items-center gap-1">
+          <div title={data.phones.provided} className="min-w-0 flex-1 border-b border-dotted border-[#c9ced1] pb-0.5 text-xl 2xl:text-2xl leading-tight tabular-nums text-[#303335] truncate">
+            {formatCallerPhone(data.phones.provided)}
+          </div>
+          <span className="shrink-0 rounded-sm border border-[#c9ced1] bg-white px-2 py-0.5 text-[10px] 2xl:text-xs uppercase text-[#8a949b]">АОН</span>
         </div>
       </div>
 
@@ -116,14 +144,14 @@ export function TopBar({ data, slaTimer, slaViolated }: Props) {
       {/* телефон на место */}
       <div aria-label="Телефон на место происшествия" title="Контактный телефон на месте происшествия" className="flex flex-1 flex-col rounded-sm border border-[#c9ced1] bg-[#fbfdfe] px-5 2xl:px-5 py-3 2xl:py-2">
         <span className="text-base 2xl:text-sm text-[#8a949b]">телефон на место</span>
-        <span className="mt-1 text-sm font-medium text-[#303335]">{data.phones.onSite}</span>
+        <span title={data.phones.onSite} className="mt-1 text-xl 2xl:text-2xl tabular-nums text-[#303335]">{formatCallerPhone(data.phones.onSite)}</span>
       </div>
 
       {/* Incident info */}
-      <div aria-label="Сведения о происшествии" className="flex flex-1 flex-col justify-center rounded-sm border border-[#c9ced1] bg-[#fbfdfe] px-3 2xl:px-5 py-2 2xl:py-2">
-        <span className="text-sm 2xl:text-sm font-bold text-[#303335] leading-tight">{/^происшествие(?:\s|$)/i.test(data.incident.number) ? data.incident.number : `Происшествие ${data.incident.number}`}</span>
-        <span className="text-xs 2xl:text-sm text-[#49555d] leading-tight mt-0.5">{data.incident.savedAt && (/^сохр[.\s]/i.test(data.incident.savedAt) ? data.incident.savedAt : `Сохр. ${data.incident.savedAt}`)}</span>
-        <span className="text-xs 2xl:text-sm text-[#49555d] leading-tight mt-0.5">{data.incident.operator}</span>
+      <div aria-label="Сведения о происшествии" className="flex flex-1 flex-col justify-center rounded-sm border border-[#c9ced1] bg-[#fbfdfe] px-3 py-2">
+        <span className="text-base 2xl:text-lg font-bold text-[#303335] leading-tight">{/^происшествие(?:\s|$)/i.test(data.incident.number) ? data.incident.number : `Происшествие ${data.incident.number}`}</span>
+        <span className="text-xs 2xl:text-sm text-[#49555d] leading-tight mt-0.5">{formatCardSavedAt(data.incident.savedAt)}</span>
+        <span title={formatSourceOperator(data.incident.operator)} className="text-xs 2xl:text-sm text-[#49555d] leading-tight mt-0.5">{formatSourceOperator(data.incident.operator)}</span>
       </div>
 
 

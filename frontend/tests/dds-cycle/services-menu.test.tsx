@@ -1,5 +1,5 @@
 import React from 'react'
-import {act, cleanup, fireEvent, render, screen} from '@testing-library/react'
+import {act, cleanup, fireEvent, render, screen, within} from '@testing-library/react'
 import {afterEach, describe, expect, it, vi} from 'vitest'
 import {ServicesBar} from '@/components/dispatcher/services-bar'
 import {dispatcherData} from '@/lib/dispatcher-data'
@@ -7,6 +7,34 @@ import {dispatcherData} from '@/lib/dispatcher-data'
 afterEach(cleanup)
 
 describe('DDS service menu', () => {
+  it('keeps exactly the two manual controls and submits through the message icon', () => {
+    const next = vi.fn()
+    render(<ServicesBar data={dispatcherData} onNextCard={next}/> )
+    const controls = within(screen.getByRole('group', {name: 'Действия с карточкой'}))
+    expect(controls.getAllByRole('button')).toHaveLength(1)
+    expect(controls.getAllByRole('link')).toHaveLength(1)
+    expect(controls.queryByText('отработана')).toBeNull()
+    for (const name of ['Связи', 'Таймер', 'Оповещения', 'Сообщения']) {
+      expect(controls.queryByRole('button', {name})).toBeNull()
+    }
+    expect(controls.getByRole('link', {name: 'Закрыть карточку и открыть список происшествий'})).toHaveAttribute('href', '/dds/journal')
+    expect(next).not.toHaveBeenCalled()
+    fireEvent.click(controls.getByRole('button', {name: 'Отработана'}))
+    expect(next).toHaveBeenCalledTimes(1)
+  })
+
+  it('explains a blocked submission and keeps closing separate from completion', () => {
+    const next = vi.fn()
+    render(<ServicesBar data={dispatcherData} onNextCard={next} completionDisabled completionReason="Ожидается доклад"/> )
+    const submit = screen.getByRole('button', {name: 'Отработана'})
+    expect(submit).toBeDisabled()
+    expect(submit).toHaveAttribute('title', 'Ожидается доклад')
+    expect(submit).toHaveAttribute('aria-description', 'Ожидается доклад')
+    fireEvent.click(submit)
+    expect(next).not.toHaveBeenCalled()
+    expect(screen.getByRole('link', {name: 'Закрыть карточку и открыть список происшествий'})).not.toHaveAttribute('aria-disabled')
+  })
+
   it('keeps one usable pencil for every active service', () => {
     render(<ServicesBar data={dispatcherData}/>)
     const pencils=screen.getAllByRole('button',{name:'Редактировать статус'})

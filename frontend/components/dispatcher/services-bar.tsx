@@ -1,9 +1,8 @@
 "use client"
 
-import {DDSHelp} from "@/components/dds-help"
 import { useEffect, useRef, useState } from "react"
 import NextLink from "next/link"
-import { Link, Timer, Bell, MessageSquareWarning, X, Check, Pencil } from "lucide-react"
+import { MessageSquareWarning, X, Check, Pencil } from "lucide-react"
 import type { DispatcherData, ServiceStatus } from "@/lib/dispatcher-data"
 
 type Props = {
@@ -20,7 +19,7 @@ type Props = {
   completionReason?: string
 }
 
-export function ServicesBar({ data, onStatusChange, onAccept, onNextCard, disabled = false, allowedStatuses, closeHref, closeLabel, disabledReason, completionDisabled = false, completionReason }: Props) {
+export function ServicesBar({ data, onStatusChange, onAccept, onNextCard, disabled = false, allowedStatuses, closeHref = "/dds/journal", closeLabel, disabledReason, completionDisabled = false, completionReason }: Props) {
   const barRef = useRef<HTMLDivElement>(null)
   const submittingRef = useRef(false)
   const editingStatusRef = useRef<string | null>(null)
@@ -39,6 +38,9 @@ export function ServicesBar({ data, onStatusChange, onAccept, onNextCard, disabl
 
   const activeService = data.services.find((s) => s.id === activeId)
   const editingService = data.services.find((s) => s.id === editingServiceId)
+  const completionHint = disabled ? disabledReason || "Действие временно недоступно"
+    : isSubmitting ? "Дождитесь сохранения"
+    : completionReason || "Отработана — отправить карточку на проверку завершения"
 
   useEffect(() => {
     // A successful server retry may update the service after this editor returned.
@@ -201,7 +203,6 @@ export function ServicesBar({ data, onStatusChange, onAccept, onNextCard, disabl
               placeholder="Номер наряда"
               className="w-full text-sm 2xl:text-sm text-[#111827] placeholder:text-[#6b7280] outline-none border-b border-transparent focus:border-[#0078d4]"
             />
-            <DDSHelp topic="order" />
           </div>
 
           {/* Поле комментария / "Комментарий..." */}
@@ -214,7 +215,6 @@ export function ServicesBar({ data, onStatusChange, onAccept, onNextCard, disabl
               placeholder={isRejection ? "Причина отказа (обязательно)" : isSupplement ? "Комментарий (обязательно)" : requiresResult ? "Результат работ (обязательно)" : "Комментарий..."}
               className="w-full text-sm 2xl:text-sm text-[#111827] placeholder:text-[#6b7280] outline-none border-b border-transparent focus:border-[#0078d4]"
             />
-            <DDSHelp topic="comment" />
           </div>
 
           {/* Кнопка подтверждения ✓ с оранжевой рамкой фокуса */}
@@ -310,7 +310,7 @@ export function ServicesBar({ data, onStatusChange, onAccept, onNextCard, disabl
                   )}
 
       {/* 3. Нижняя панель служб (Футер) */}
-      <div className="flex h-[52px] 2xl:h-[73px] items-stretch bg-[#303335] border-t border-[#b4b9bc]">
+      <div className="flex h-[52px] 2xl:h-[73px] items-stretch bg-[#49555d] border-t border-[#b4b9bc]">
         <div className="flex w-[80px] 2xl:w-[112px] items-center px-3 2xl:px-4 text-sm 2xl:text-sm font-semibold text-white/90">
           <span data-dds-help="services-label">Службы:</span>
         </div>
@@ -374,69 +374,28 @@ export function ServicesBar({ data, onStatusChange, onAccept, onNextCard, disabl
           </div>
         </div>
 
-        {/* Правые системные кнопки */}
-        <div className="flex items-stretch shrink-0 border-l border-[#49555d]">
-          <div className="flex items-center text-white"><DDSHelp topic="services" /><DDSHelp topic="cycle" /><DDSHelp topic="status" /></div>
+        {/* Two controls from the manual: submit the processed card and close its view. */}
+        <div role="group" aria-label="Действия с карточкой" className="flex shrink-0 items-center gap-1 px-2">
           <button
             type="button"
             aria-label="Отработана"
+            aria-description={completionHint}
             data-dds-help="complete"
             onClick={onNextCard}
-            disabled={disabled || isSubmitting || completionDisabled}
-            className="flex items-center justify-center px-4 2xl:px-5 border-r border-[#49555d] text-sm 2xl:text-sm font-bold text-white bg-[#157dbd] hover:bg-[#136ba3] transition-colors"
-            title={completionReason || "Отработана"}
+            disabled={disabled || isSubmitting || completionDisabled || !onNextCard}
+            className="flex h-10 w-10 2xl:h-11 2xl:w-11 items-center justify-center border border-[#c9ced1] text-white hover:bg-white/10 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white disabled:cursor-not-allowed disabled:opacity-50"
+            title={completionHint}
           >
-            отработана
+            <MessageSquareWarning className="h-6 w-6" aria-hidden="true" />
           </button>
-          <div className="flex items-center text-white"><DDSHelp topic="complete" /></div>
-          <button
-            type="button"
-            aria-label="Связи"
-            className="flex w-[46px] 2xl:w-[64px] items-center justify-center border-r border-[#49555d] text-white/80 hover:text-white hover:bg-white/10 transition-colors"
-            title="Связи"
-          >
-            <Link className="h-5 2xl:h-5 w-5 2xl:w-5" />
-          </button>
-          <button
-            type="button"
-            aria-label="Таймер"
-            className="flex w-[46px] 2xl:w-[64px] items-center justify-center border-r border-[#49555d] text-white/80 hover:text-white hover:bg-white/10 transition-colors"
-            title="Таймер"
-          >
-            <Timer className="h-5 2xl:h-5 w-5 2xl:w-5" />
-          </button>
-          <button
-            type="button"
-            aria-label="Оповещения"
-            className="flex w-[46px] 2xl:w-[64px] items-center justify-center border-r border-[#49555d] text-white/80 hover:text-white hover:bg-white/10 transition-colors"
-            title="Оповещения"
-          >
-            <Bell className="h-5 2xl:h-5 w-5 2xl:w-5" />
-          </button>
-          <button
-            type="button"
-            aria-label="Сообщения"
-            className="flex w-[46px] 2xl:w-[64px] items-center justify-center border-r border-[#49555d] text-white/80 hover:text-white hover:bg-white/10 transition-colors"
-            title="Сообщения"
-          >
-            <MessageSquareWarning className="h-5 2xl:h-5 w-5 2xl:w-5" />
-          </button>
-          {closeHref ? <NextLink href={closeHref}
+          <NextLink href={closeHref}
             aria-label={closeLabel || "Закрыть карточку и открыть список происшествий"}
+            aria-disabled={isSubmitting || undefined}
             onClick={event => {if (isSubmitting) event.preventDefault()}}
-            className="flex w-[46px] 2xl:w-[64px] items-center justify-center text-white/80 hover:text-white hover:bg-red-600/80 transition-colors"
-            title={closeLabel || "К списку происшествий"}>
-            <X className="h-5 2xl:h-5 w-5 2xl:w-5" />
-          </NextLink> : <button
-            type="button"
-            aria-label="Закрыть"
-            onClick={onNextCard}
-            disabled={disabled || isSubmitting || completionDisabled}
-            className="flex w-[46px] 2xl:w-[64px] items-center justify-center text-white/80 hover:text-white hover:bg-red-600/80 transition-colors"
-            title="Закрыть"
-          >
-            <X className="h-5 2xl:h-5 w-5 2xl:w-5" />
-          </button>}
+            className="flex h-10 w-10 2xl:h-11 2xl:w-11 items-center justify-center border border-[#c9ced1] text-white hover:bg-white/10 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white"
+            title={closeLabel || "Закрыть карточку без сдачи и вернуться в журнал"}>
+            <X className="h-6 w-6" aria-hidden="true" />
+          </NextLink>
         </div>
       </div>
     </div>

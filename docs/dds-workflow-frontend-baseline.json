@@ -179,9 +179,9 @@
       "reason": "Integrated local-font root layout from audited main"
     },
     "app/login/page.tsx": {
-      "sha256": "b0001dfd61b323cc269f40883d4e6fd4d718d2bb678d4ed4053920e83bb3b812",
-      "source_revision": "UI review 2026-10-20 (base 1cc29c3)",
-      "reason": "User-requested browser testing and fixes: handle reproduced HTML gateway login failure and remove nonexistent demo account credentials."
+      "sha256": "720f224936106a91bd139ff30db0934e2ce173c35d8684b43fba5be795e8d1f9",
+      "source_revision": "User request 2026-10-20 (base 70d2a84)",
+      "reason": "User explicitly restored the four hackathon credentials; all four accounts verified against the configured live database."
     },
     "app/operator/page.tsx": {
       "sha256": "be2ba159b3b75ecc69ba20c3f6cc3beb0a5523c877a0396cc4cfca7c47c725a1",
@@ -194,9 +194,9 @@
       "reason": "Explicit user feedback 2026-10-19: distinguish saved inaccurate records from rejected actions in instructor protocol."
     },
     "components/dispatcher/dds-training-phone.tsx": {
-      "sha256": "8e3a1a18aff3a5254ca1fe4d392cee56d9948bd5158793d4a3b77bdc7fd8e5fe",
-      "source_revision": "74793c1+user-approved-dds-interface-guide",
-      "reason": "User requested up-to-date DDS help after pulling the new UI: movable phone window, number-based dialing, audio-only v2 reports, three report fields and manual service stages. Exact implementation pin; original baseline unchanged."
+      "sha256": "f73a036ebc59672e677794ed074107abc36b365b2e6e3e029119d1c144cdddbb",
+      "source_revision": "User request 2026-10-20 (base 70d2a84)",
+      "reason": "User explicitly requested removal of inline question icons and reference-manual phone/incident presentation, including operator 14, ARM 7, Rozhkova O. I. Preserve original baseline and pin this exact implementation."
     },
     "components/dispatcher/dispatch-panel.tsx": {
       "sha256": "9ed4c3fd8e5d0ce4c06e079819e633aef38f458c27e56bbb023f19d322b8244e",
@@ -204,9 +204,9 @@
       "reason": "Prepared phone exercise and protocol integration already present before audit"
     },
     "components/dispatcher/top-bar.tsx": {
-      "sha256": "1b9a29a3354eb3ee0e9cd837aae683287f7f60efd232671e25642b18810a1bfa",
-      "source_revision": "74793c1+user-approved-dds-interface-guide",
-      "reason": "User requested up-to-date DDS help after pulling the new UI: movable phone window, number-based dialing, audio-only v2 reports, three report fields and manual service stages. Exact implementation pin; original baseline unchanged."
+      "sha256": "d7b27e562c1b7f53dcae8d825b310f4226d7161c58c19809b80081ce349c91e8",
+      "source_revision": "User request 2026-10-20 (base 70d2a84)",
+      "reason": "User explicitly requested removal of inline question icons and reference-manual phone/incident presentation, including operator 14, ARM 7, Rozhkova O. I. Preserve original baseline and pin this exact implementation."
     },
     "components/teacher/dds-exercise-editor.tsx": {
       "sha256": "74f1ab01fbd785237dfc91348afd7c46a003e22ac2bdacd155f00babe66afb87",
@@ -249,19 +249,19 @@
       "reason": "Пользователь запросил исправить недоступные ИИ-отчёты занятия, группы и автоматический разбор DDS; сохранены проверки изоляции и исходная карта хешей."
     },
     "components/dispatcher/caller-panel.tsx": {
-      "sha256": "eac133283f3ab39dcb8ae4981b2968db7869a09415eee883162b3d6713c65470",
-      "source_revision": "74793c1+user-approved-dds-interface-guide",
-      "reason": "User requested up-to-date DDS help after pulling the new UI: movable phone window, number-based dialing, audio-only v2 reports, three report fields and manual service stages. Exact implementation pin; original baseline unchanged."
+      "sha256": "588b69e388980b0c17537011c039b98cc0df94c2166a889249750a209c390c5e",
+      "source_revision": "User request 2026-10-20 (base 70d2a84)",
+      "reason": "User explicitly requested removal of inline question icons and reference-manual phone/incident presentation, including operator 14, ARM 7, Rozhkova O. I. Preserve original baseline and pin this exact implementation."
     },
     "components/dispatcher/incident-panel.tsx": {
-      "sha256": "66ec7e01c19b434278c871d74de19be62654edf637a1cd0f46e261992d0f3338",
-      "source_revision": "74793c1+user-approved-dds-interface-guide",
-      "reason": "User requested up-to-date DDS help after pulling the new UI: movable phone window, number-based dialing, audio-only v2 reports, three report fields and manual service stages. Exact implementation pin; original baseline unchanged."
+      "sha256": "5b926c3f2807c94239389cab346af06155ac654700606bf0049c3815d415ab62",
+      "source_revision": "User request 2026-10-20 (base 70d2a84)",
+      "reason": "User explicitly requested removal of inline question icons and reference-manual phone/incident presentation, including operator 14, ARM 7, Rozhkova O. I. Preserve original baseline and pin this exact implementation."
     },
     "components/tutorial.tsx": {
-      "sha256": "4879be1c33b0d32b5fa128c575a6ec53e927866e3f4299bec1d6bf8aebfd195e",
-      "source_revision": "74793c1+user-approved-dds-interface-guide",
-      "reason": "User requested up-to-date DDS help after pulling the new UI: movable phone window, number-based dialing, audio-only v2 reports, three report fields and manual service stages. Exact implementation pin; original baseline unchanged."
+      "sha256": "936ce4db1d999e9b465589c6f6942ab1c86cc4d930cf0711923aae38f5cdb3c6",
+      "source_revision": "User request 2026-10-20 (base 70d2a84)",
+      "reason": "User explicitly requested removal of inline question icons and reference-manual phone/incident presentation, including operator 14, ARM 7, Rozhkova O. I. Preserve original baseline and pin this exact implementation."
     },
     "components/dds-help.tsx": {
       "sha256": "87faeeab1f75796db7e27120c28264a981ba59baef315ecf3c0fac5372547355",
@@ -279,9 +279,9 @@
       "reason": "User requested up-to-date DDS help after pulling the new UI: movable phone window, number-based dialing, audio-only v2 reports, three report fields and manual service stages. Exact implementation pin; original baseline unchanged."
     },
     "lib/dds-interface-help.ts": {
-      "sha256": "3a4448d80b67d3c86c653924468e07de46686ec6b35fa8e393a26284af311917",
-      "source_revision": "74793c1+user-approved-dds-interface-guide",
-      "reason": "User requested up-to-date DDS help after pulling the new UI: movable phone window, number-based dialing, audio-only v2 reports, three report fields and manual service stages. Exact implementation pin; original baseline unchanged."
+      "sha256": "64db9b265ca091e14ea9c723f8fbcbd403926fa32994b3a4169b32a78b93eadf",
+      "source_revision": "User request 2026-10-20 (base 70d2a84)",
+      "reason": "User requested exactly the two lower-right manual icons. The message icon submits the processed card with the existing completion rules; X returns to the incident list without submitting. Pin the matching tour copy."
     },
     "components/teacher/live-dashboard.tsx": {
       "sha256": "9a6cdc0741143ea8910586f5a102341355f0ffaa8ccd30dc42b91de285f6a1b6",

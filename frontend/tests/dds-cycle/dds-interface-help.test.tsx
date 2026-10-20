@@ -50,6 +50,7 @@ describe("Interface familiarization", () => {
   it("opens the current workspace without creating a lesson, playing audio, or saving actions", async () => {
     const audio = vi.fn(), audioContext = vi.fn(); vi.stubGlobal("Audio", audio); vi.stubGlobal("AudioContext", audioContext)
     render(<DDSPage />); await flush()
+    expect(screen.queryByRole("button", {name: /^Справка:/})).toBeNull()
     expect(screen.getByTestId("dds-interface-guide")).toBeTruthy()
     expect(screen.getByRole("heading", {name: "Знакомство с интерфейсом ДДС"})).toBeTruthy()
     expect(screen.queryByRole("dialog", {name: "Учебный телефон ДДС"})).toBeNull()
@@ -154,6 +155,7 @@ describe("Interface familiarization", () => {
     vi.useFakeTimers(); vi.setSystemTime(new Date("2026-01-01T12:00:15Z"))
     render(<DDSAssignedConsole sessionId="s1" />); await flush()
     expect(screen.getByText("15 сек")).toBeTruthy()
+    expect(screen.queryByRole("button", {name: /^Справка:/})).toBeNull()
     fireEvent.click(screen.getByRole("button", {name: "Помощь по интерфейсу"}))
     await act(async () => {vi.advanceTimersByTime(2000)})
     expect(screen.getByText("13 сек")).toBeTruthy()

@@ -33,7 +33,7 @@ export function Tutorial({run, onFinish, context = "demo", onTopicChange}: Props
     previousFocus.current = document.activeElement instanceof HTMLElement ? document.activeElement : null
     const introduction = context === "lesson"
       ? "Справка объясняет окна и кнопки и не выполняет действия за вас. Время занятия продолжает идти. Можно закрыть справку по Escape или кнопкой «Пропустить»."
-      : "Познакомьтесь с рабочим местом диспетчера ДДС на учебном примере. Звонки и действия не отправляются, оценки не выставляются. Подсказки со знаком вопроса можно открывать мышью, с клавиатуры или касанием."
+      : "Познакомьтесь с рабочим местом диспетчера ДДС на учебном примере. Звонки и действия не отправляются, оценки не выставляются. Пояснения доступны в этом пошаговом знакомстве; его можно закрыть и запустить повторно."
     const prepare = async (topic: DDSHelpTopic | null) => {
       if (completed.current) return
       topicRef.current?.(topic)

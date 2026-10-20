@@ -328,11 +328,26 @@ export default function LoginPage() {
       <section aria-labelledby="account-access-title" className="border-t border-border bg-muted/30 p-6 text-card-foreground md:border-t-0 md:border-l sm:p-8">
         <h2 id="account-access-title" className="text-xl font-semibold">Доступ к тренажёру</h2>
         <p className="mt-2 text-sm text-muted-foreground">
-          Используйте учётную запись, выданную администратором. После входа система откроет кабинет согласно вашей роли.
+          Учётные записи учебного стенда. Введите логин и пароль — система откроет кабинет согласно вашей роли.
         </p>
-        <p className="mt-4 text-sm text-muted-foreground">
-          Если у вас ещё нет логина или не подходит пароль, обратитесь к администратору вашей организации.
-        </p>
+        <div className="mt-5 grid gap-3 sm:grid-cols-2">
+          {[
+            { role: "Курсант 1", login: "petrov@student.ru", password: "12345" },
+            { role: "Курсант 2", login: "sidorov@student.ru", password: "12345" },
+            { role: "Преподаватель", login: "teacher", password: "teacher123" },
+            { role: "Администратор", login: "admin", password: "admin123" },
+          ].map((account) => (
+            <div key={account.login} className="rounded-lg border border-border bg-muted/40 p-3">
+              <h3 className="text-sm font-semibold">{account.role}</h3>
+              <dl className="mt-2 grid grid-cols-1 gap-y-1 text-sm">
+                <dt className="text-muted-foreground">Логин</dt>
+                <dd className="min-w-0"><code className="select-all break-all font-mono">{account.login}</code></dd>
+                <dt className="text-muted-foreground">Пароль</dt>
+                <dd><code className="select-all font-mono">{account.password}</code></dd>
+              </dl>
+            </div>
+          ))}
+        </div>
       </section>
       </div>
       </div>

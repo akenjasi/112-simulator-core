@@ -2,7 +2,6 @@
 import {useEffect, useRef, useState, type ReactNode, type PointerEvent, type KeyboardEvent, type Dispatch, type SetStateAction} from "react"
 import {createPortal} from "react-dom"
 import {GripHorizontal, Minus, Phone, PhoneIncoming, Volume2, VolumeX} from "lucide-react"
-import {DDSHelp} from "@/components/dds-help"
 import type {DDSHelpTopic} from "@/lib/dds-interface-help"
 import type {DDSExercise, DDSPhonePayload} from "@/lib/dds-cycle"
 
@@ -68,7 +67,6 @@ function ReportForm({fields, onChange, disabled, saved, saveDisabled, onSave, fi
     </label>
     {tooLong && <p role="alert" className="text-xs text-red-700">Сократите запись до 1000 символов с учётом подписей полей.</p>}
     <div className="flex flex-wrap items-center justify-between gap-2">
-      <DDSHelp topic="record" />
       <span className="text-xs text-slate-500">{saved ? "Запись сохранена" : "Запишите сведения из доклада"}</span>
       <button type="button" disabled={saveDisabled} onClick={onSave}
         className="min-h-10 rounded bg-[#157dbd] px-4 py-2 text-sm font-semibold text-white disabled:opacity-50">
@@ -315,7 +313,6 @@ export function DDSTrainingPhone({exercise, selectedService, onServiceChange, di
     <div className="flex flex-wrap items-center gap-3">
       <button ref={launcher} type="button" aria-expanded={phoneVisible} className="rounded bg-green-700 px-3 py-2 font-semibold text-white"
         onClick={() => setOpened(value => !value)}>☎ Телефон</button>
-      <DDSHelp topic="phone" />
       {ringing && !phoneVisible && <div role="status" className="flex min-w-0 flex-1 flex-wrap items-center justify-between gap-2 rounded border border-green-500 bg-green-50 px-3 py-2">
         <span>Входящий: {incoming!.contact.service_name}</span>{answerButton}
       </div>}
@@ -325,10 +322,8 @@ export function DDSTrainingPhone({exercise, selectedService, onServiceChange, di
         <div data-dds-help="directory" className="flex items-center gap-2">
           <button type="button" aria-pressed={visibleView === "call"} className={button} onClick={() => setView("call")}>Телефон</button>
           <button type="button" aria-pressed={visibleView === "directory"} className={button} onClick={() => setView("directory")}>Справочник</button>
-          <DDSHelp topic="directory" />
-          <DDSHelp topic="phoneWindow" />
         </div>
-        <div data-dds-help="sound" className="flex items-center gap-1"><DDSHelp topic="sound" />
+        <div data-dds-help="sound" className="flex items-center gap-1">
         <button type="button" disabled={disabled} aria-label="Звук входящего звонка" aria-pressed={!ring.muted} onClick={ring.toggle}
           className="flex min-h-9 items-center gap-2 rounded px-2 text-xs text-slate-600 hover:bg-slate-100">
           {ring.muted ? <VolumeX size={16}/> : <Volume2 size={16}/>}{ring.muted ? "Звонок без звука" : "Звук звонка"}
@@ -357,7 +352,7 @@ export function DDSTrainingPhone({exercise, selectedService, onServiceChange, di
         </div>}
       </div> : <div className="grid grid-cols-1 gap-5 md:grid-cols-[250px_minmax(0,1fr)]">
         <div data-dds-help="dial" className="space-y-3">
-          <div className="flex items-center justify-between"><span className="text-xs font-medium">Набор номера</span><DDSHelp topic="dial" /></div>
+          <div className="flex items-center justify-between"><span className="text-xs font-medium">Набор номера</span></div>
           <label className="block text-xs font-medium">Номер телефона
             <input aria-label="Номер учебного телефона" placeholder="Введите номер" value={number} maxLength={24} disabled={disabled}
               onChange={event=>setNumber(event.target.value)} onKeyDown={event=>{if(event.key==="Enter") void dial()}}

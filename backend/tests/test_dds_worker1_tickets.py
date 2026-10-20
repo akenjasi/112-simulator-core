@@ -84,6 +84,21 @@ def test_build_incoming_card_strict_validation():
     assert sanitized["services"][0]["status"] == "Получена службой"
 
 
+@pytest.mark.parametrize("source_time", [
+    datetime(2026, 10, 20, 8, 57, 19, tzinfo=timezone.utc),
+    datetime(2026, 10, 20, 8, 57, 19),
+])
+def test_new_card_records_source_save_time_and_teaching_operator(source_time):
+    card = build_incoming_card(plot="Учебное происшествие", seq=42, now=source_time)
+    assert card["incident"] == {
+        "number": "A42-112",
+        "savedAt": "2026-10-20T11:57:19+03:00",
+        "operator": "Опер. 14, АРМ 7, Рожкова О. И.",
+    }
+    assert card["services"][0]["time"] == "11:57"
+    assert sanitize_incoming_card({"incoming_card": card}) == card
+
+
 @pytest.mark.asyncio
 async def test_ticket_lifecycle_and_approval(users_fixture):
     """Test full ticket lifecycle: DRAFT/UNDER_REVIEW -> APPROVED -> PATCH(downgrade) -> APPROVED."""
