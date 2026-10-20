@@ -13,6 +13,7 @@ tests/74_2fa_frontend.test.tsx
 tests/48_student/48_student.test.tsx
 tests/27_teacher/27_01_groups.test.tsx
 tests/27_teacher/27_02_tickets.test.tsx
+tests/27_teacher/catalog-filters.test.tsx
 tests/27_teacher/27_06_knowledge.test.tsx
 tests/27_teacher/dds-lesson-report.test.tsx
 tests/27_teacher/dds-lesson-report.acceptance.test.tsx
