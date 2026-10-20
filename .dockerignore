@@ -47,6 +47,9 @@ data/uploads/
 *.gguf
 *.gguf.part
 *.gguf.lock
+**/*.gguf
+**/*.gguf.part
+**/*.gguf.lock
 backend/core/qwen_tts/models/
 
 # ─── IDE / OS artifacts ───────────────────────────────────────────────────────

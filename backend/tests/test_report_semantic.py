@@ -127,6 +127,14 @@ async def test_report_contains_sources_correct_facts_correction_and_real_compari
         assert payload["chat_template_kwargs"] == {"enable_thinking": False}
         assert payload["response_format"]["type"] == "json_schema"
         assert "Бригада 2 прибыла" in payload["messages"][1]["content"]
+        sent = json.loads(payload["messages"][1]["content"])
+        original_unit = original["semantic"]["comparisons"][0]
+        assert sent["actual"]["text"] == original_unit["actual"]["text"]
+        assert sent["expected"]["text"] == original_unit["expected"]["text"]
+        for name in ("card", "etalon"):
+            assert sent["context"][name]["text"] == original_unit["context"][name]["text"]
+        assert sent["context"]["limits"] == original_unit["context"]["limits"]
+        assert all(identifier not in payload["messages"][1]["content"] for identifier in ("session-1", "cadet-1", "received-1"))
         assert "Аудитория: курсант" in payload["messages"][0]["content"]
         return sse(review())
     async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
@@ -194,6 +202,65 @@ async def test_all_pairs_are_checked_and_truncated_output_is_never_published():
         with pytest.raises(DDSReportGenerationError, match="не завершён"):
             await generate_report(data, "lesson", client=client, settings=DDSLLMSettings())
     assert count == 2
+
+
+@pytest.mark.asyncio
+async def test_unverifiable_record_is_explicit_and_other_records_are_still_checked():
+    data = snapshot()
+    first = data["semantic"]["comparisons"][0]
+    data["semantic"]["comparisons"] = [deepcopy(first) for _ in range(3)]
+    for index, unit in enumerate(data["semantic"]["comparisons"]):
+        unit["comparison_id"] = f"comparison-{index}"
+        unit["actual"]["ref"] = f"note/record-{index}"
+    count = 0
+    def handler(request):
+        nonlocal count
+        count += 1
+        value = review()
+        if count == 2:
+            value["issues"][0]["actual_quote"] = "FABRICATED_QUOTE"
+            value["issues"][0]["explanation"] = "UNVERIFIED_CADET_ERROR"
+        return sse(value)
+    async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+        result = await generate_report(data, "lesson", client=client, settings=DDSLLMSettings())
+    text = result["analysis_text"]
+    assert count == 3
+    assert "получен для 2 из 3 записей" in text
+    assert "без проверяемого ИИ-разбора: 1" in text
+    assert "Это не означает ошибку курсанта" in text
+    assert all(f"note/record-{index}" in text for index in range(3))
+    assert text.count("Замечание ИИ:") == 2
+    assert "FABRICATED_QUOTE" not in text and "UNVERIFIED_CADET_ERROR" not in text
+
+
+@pytest.mark.asyncio
+async def test_connection_loss_is_not_hidden_by_previously_verified_records():
+    data = snapshot()
+    data["semantic"]["comparisons"] *= 2
+    count = 0
+    def handler(request):
+        nonlocal count
+        count += 1
+        if count == 2:
+            raise httpx.ConnectError("inference offline", request=request)
+        return sse(review())
+    async with httpx.AsyncClient(transport=httpx.MockTransport(handler)) as client:
+        with pytest.raises(httpx.ConnectError):
+            await generate_report(data, "lesson", client=client, settings=DDSLLMSettings())
+    assert count == 2
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("only_limitation", [False, True])
+async def test_no_verified_record_cannot_be_published_as_a_completed_ai_report(only_limitation):
+    data = snapshot()
+    value = review()
+    value["issues"][0]["actual_quote"] = "FABRICATED_QUOTE"
+    if only_limitation:
+        value = {"correct": [], "issues": [], "limitations": ["needs_teacher_review"]}
+    async with httpx.AsyncClient(transport=httpx.MockTransport(lambda request: sse(value))) as client:
+        with pytest.raises(DDSReportGenerationError, match="Ни для одной записи"):
+            await generate_report(data, "student", client=client, settings=DDSLLMSettings())
 
 
 @pytest.mark.asyncio

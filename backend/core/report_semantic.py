@@ -16,6 +16,10 @@ _inference_lock = asyncio.Lock()
 PROMPTS = Path(__file__).resolve().parents[1] / "prompts" / "reports"
 
 
+class ReviewValidationError(DDSReportGenerationError):
+    """A completed model answer contains unpublishable structure or quotations."""
+
+
 @lru_cache(maxsize=4)
 def system_prompt(task, audience):
     if task not in ("dispatch", "report") or audience not in ("teacher", "student"):
@@ -85,13 +89,21 @@ def validate_review(raw, unit):
                 value["verified_matches"] = list(dict.fromkeys(matches))[:2]
         return value
     except (ValueError, TypeError, KeyError):
-        raise DDSReportGenerationError("ИИ-разбор не прошёл проверку формата или цитат исходных записей.") from None
+        raise ReviewValidationError("ИИ-разбор не прошёл проверку формата или цитат исходных записей.") from None
 
 
 async def infer_review(http, unit, audience, settings, *, metrics=None):
-    content = json.dumps(unit, ensure_ascii=False, separators=(",", ":"))
-    if len(content) > settings.max_input_chars:
+    if len(json.dumps(unit, ensure_ascii=False, separators=(",", ":"))) > settings.max_input_chars:
         raise DDSReportGenerationError("Пара исходного доклада и ответа превышает максимально допустимый лимит; данные не обрезаны.")
+    # References, database IDs and timestamps are attached by render_review.
+    # Sending opaque UUIDs repeatedly spends CPU without helping this comparison.
+    context = unit.get("context", {})
+    model_input = {"service": unit.get("service"),
+        "expected": {"text": unit["expected"]["text"]}, "actual": {"text": unit["actual"]["text"]},
+        "context": {"card": {"text": context.get("card", {}).get("text", "")},
+                    "etalon": {"text": context.get("etalon", {}).get("text", "")},
+                    "limits": context.get("limits", [])}}
+    content = json.dumps(model_input, ensure_ascii=False, separators=(",", ":"))
     prompt = system_prompt(unit["task"], audience)
     # A single hybrid-model slot can lose its recurrent state when task prompts
     # alternate. Save/restore each prompt family instead of allocating four
@@ -212,13 +224,29 @@ async def generate_semantic_report(snapshot, kind, settings, client=None):
         limits.extend(unit.get("context", {}).get("limits", []))
     lines = [report_facts(snapshot, kind), "Содержательный разбор ИИ\nМетодические выводы модели; оценки и программные критерии не изменены."]
 
+    checked, unverified = 0, 0
+
     async def consume(http):
+        nonlocal checked, unverified
         # One CPU request at a time, including demos. Release between pairs so
         # a large group report cannot starve all individual reports.
         for unit in sorted(units, key=lambda u: u["task"]):
-            async with _inference_lock:
-                value = await asyncio.wait_for(infer_review(http, unit, "student" if kind == "student" else "teacher", settings),
-                                               settings.timeout_seconds)
+            try:
+                async with _inference_lock:
+                    value = await asyncio.wait_for(infer_review(http, unit, "student" if kind == "student" else "teacher", settings),
+                                                   settings.timeout_seconds)
+            except ReviewValidationError:
+                unverified += 1
+                logger.warning("DDS review rejected task=%s comparison=%s; no unverified output published",
+                               unit["task"], unit.get("comparison_id"))
+                lines.append(render_review(unit, {"correct": [], "issues": [], "limitations": ["needs_teacher_review"]}) +
+                    "\nИИ-разбор этой записи не опубликован: ответ модели не прошёл проверку формата или цитат. "
+                    "Это не означает ошибку курсанта. Сопоставьте указанные исходные записи вручную.")
+                continue
+            if value["correct"] or value["issues"] or value.get("verified_matches"):
+                checked += 1
+            else:
+                unverified += 1
             lines.append(render_review(unit, value))
 
     if units:
@@ -227,6 +255,10 @@ async def generate_semantic_report(snapshot, kind, settings, client=None):
         else:
             async with httpx.AsyncClient(trust_env=False, follow_redirects=False, timeout=settings.timeout_seconds) as http:
                 await consume(http)
+        if not checked:
+            raise ReviewValidationError("Ни для одной записи не получен проверяемый ИИ-разбор. Требуется проверка преподавателем.")
+        lines.insert(2, f"Разбор с подтверждёнными цитатами получен для {checked} из {len(units)} записей. "
+                     f"Записей без проверяемого ИИ-разбора: {unverified}.")
     else:
         limits.append("Содержательный ИИ-разбор недоступен: нет исходного доклада и сохранённого ответа для сопоставления. Модель не вызывалась.")
     if limits:
